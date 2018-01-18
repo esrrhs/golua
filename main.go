@@ -1,9 +1,9 @@
-package main
+package fk
 
 import (
 	"fmt"
 )
 
-func main() {
-	fmt.Print("start")
+func Parse(file string) {
+	fmt.Print("parse " + file)
 }
