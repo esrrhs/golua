@@ -1,0 +1,5 @@
+/[ \t\n]/     { /* Skip spaces and tabs. */ }
+/\-\-[^\n]*/  { /* Comments. */ }
+/(var)/ { return VAR_BEGIN }
+//
+package fk
