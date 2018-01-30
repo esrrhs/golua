@@ -11,12 +11,142 @@ type yySymType struct {
 }
 
 const VAR_BEGIN = 57346
+const RETURN = 57347
+const BREAK = 57348
+const FUNC = 57349
+const WHILE = 57350
+const FTRUE = 57351
+const FFALSE = 57352
+const IF = 57353
+const THEN = 57354
+const ELSE = 57355
+const END = 57356
+const STRING_DEFINITION = 57357
+const IDENTIFIER = 57358
+const NUMBER = 57359
+const SINGLE_LINE_COMMENT = 57360
+const DIVIDE_MOD = 57361
+const ARG_SPLITTER = 57362
+const PLUS = 57363
+const MINUS = 57364
+const DIVIDE = 57365
+const MULTIPLY = 57366
+const ASSIGN = 57367
+const MORE = 57368
+const LESS = 57369
+const MORE_OR_EQUAL = 57370
+const LESS_OR_EQUAL = 57371
+const EQUAL = 57372
+const NOT_EQUAL = 57373
+const OPEN_BRACKET = 57374
+const CLOSE_BRACKET = 57375
+const AND = 57376
+const OR = 57377
+const FKFLOAT = 57378
+const PLUS_ASSIGN = 57379
+const MINUS_ASSIGN = 57380
+const DIVIDE_ASSIGN = 57381
+const MULTIPLY_ASSIGN = 57382
+const DIVIDE_MOD_ASSIGN = 57383
+const COLON = 57384
+const FOR = 57385
+const INC = 57386
+const FAKE = 57387
+const FKUUID = 57388
+const OPEN_SQUARE_BRACKET = 57389
+const CLOSE_SQUARE_BRACKET = 57390
+const FCONST = 57391
+const PACKAGE = 57392
+const INCLUDE = 57393
+const IDENTIFIER_DOT = 57394
+const IDENTIFIER_POINTER = 57395
+const STRUCT = 57396
+const IS = 57397
+const NOT = 57398
+const CONTINUE = 57399
+const YIELD = 57400
+const SLEEP = 57401
+const SWITCH = 57402
+const CASE = 57403
+const DEFAULT = 57404
+const NEW_ASSIGN = 57405
+const ELSEIF = 57406
+const RIGHT_POINTER = 57407
+const STRING_CAT = 57408
+const OPEN_BIG_BRACKET = 57409
+const CLOSE_BIG_BRACKET = 57410
+const NULL = 57411
 
 var yyToknames = [...]string{
 	"$end",
 	"error",
 	"$unk",
 	"VAR_BEGIN",
+	"RETURN",
+	"BREAK",
+	"FUNC",
+	"WHILE",
+	"FTRUE",
+	"FFALSE",
+	"IF",
+	"THEN",
+	"ELSE",
+	"END",
+	"STRING_DEFINITION",
+	"IDENTIFIER",
+	"NUMBER",
+	"SINGLE_LINE_COMMENT",
+	"DIVIDE_MOD",
+	"ARG_SPLITTER",
+	"PLUS",
+	"MINUS",
+	"DIVIDE",
+	"MULTIPLY",
+	"ASSIGN",
+	"MORE",
+	"LESS",
+	"MORE_OR_EQUAL",
+	"LESS_OR_EQUAL",
+	"EQUAL",
+	"NOT_EQUAL",
+	"OPEN_BRACKET",
+	"CLOSE_BRACKET",
+	"AND",
+	"OR",
+	"FKFLOAT",
+	"PLUS_ASSIGN",
+	"MINUS_ASSIGN",
+	"DIVIDE_ASSIGN",
+	"MULTIPLY_ASSIGN",
+	"DIVIDE_MOD_ASSIGN",
+	"COLON",
+	"FOR",
+	"INC",
+	"FAKE",
+	"FKUUID",
+	"OPEN_SQUARE_BRACKET",
+	"CLOSE_SQUARE_BRACKET",
+	"FCONST",
+	"PACKAGE",
+	"INCLUDE",
+	"IDENTIFIER_DOT",
+	"IDENTIFIER_POINTER",
+	"STRUCT",
+	"IS",
+	"NOT",
+	"CONTINUE",
+	"YIELD",
+	"SLEEP",
+	"SWITCH",
+	"CASE",
+	"DEFAULT",
+	"NEW_ASSIGN",
+	"ELSEIF",
+	"RIGHT_POINTER",
+	"STRING_CAT",
+	"OPEN_BIG_BRACKET",
+	"CLOSE_BIG_BRACKET",
+	"NULL",
 }
 var yyStatenames = [...]string{}
 
@@ -24,7 +154,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line ../yacc.y:15
+//line ../yacc.y:80
 //line yacctab:1
 var yyExca = [...]int{
 	-1, 1,
@@ -70,7 +200,13 @@ var yyTok1 = [...]int{
 }
 var yyTok2 = [...]int{
 
-	2, 3, 4,
+	2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+	12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+	22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+	32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
+	42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+	52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
+	62, 63, 64, 65, 66, 67, 68, 69,
 }
 var yyTok3 = [...]int{
 	0,

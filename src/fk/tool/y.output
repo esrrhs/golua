@@ -3,7 +3,7 @@ state 0
 	$accept: .input $end 
 	input: .    (1)
 
-	.  reduce 1 (src line 12)
+	.  reduce 1 (src line 77)
 
 	input  goto 1
 
@@ -14,7 +14,7 @@ state 1
 	.  error
 
 
-4 terminals, 2 nonterminals
+69 terminals, 2 nonterminals
 2 grammar rules, 2/8000 states
 0 shift/reduce, 0 reduce/reduce conflicts reported
 51 working sets used

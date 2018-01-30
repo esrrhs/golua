@@ -1,5 +1,34 @@
 /[ \t\n]/     { /* Skip spaces and tabs. */ }
 /\-\-[^\n]*/  { /* Comments. */ }
 /(var)/ { Debug("VAR_BEGIN"); return VAR_BEGIN }
+/(return)/ { Debug("RETURN"); return RETURN }
+/(break)/ { Debug("BREAK"); return BREAK }
+/(func)/ { Debug("FUNC"); return FUNC }
+/(fake)/ { Debug("FAKE"); return FAKE }
+/(while)/ { Debug("WHILE"); return WHILE }
+/(for)/ { Debug("FOR"); return FOR }
+/(true)/ { Debug("FTRUE"); return FTRUE }
+/(false)/ { Debug("FFALSE"); return FFALSE }
+/(if)/ { Debug("IF"); return IF }
+/(then)/ { Debug("THEN"); return THEN }
+/(else)/ { Debug("ELSE"); return ELSE }
+/(elseif)/ { Debug("ELSEIF"); return ELSEIF }
+/(end)/ { Debug("END"); return END }
+/(const)/ { Debug("FCONST"); return FCONST }
+/(package)/ { Debug("PACKAGE"); return PACKAGE }
+/(null)/ { Debug("NULL"); return NULL }
+/(include)/ { Debug("INCLUDE"); return INCLUDE }
+/(struct)/ { Debug("STRUCT"); return STRUCT }
+/(and)/ { Debug("AND"); return AND }
+/(or)/ { Debug("OR"); return OR }
+/(is)/ { Debug("IS"); return IS }
+/(not)/ { Debug("NOT"); return NOT }
+/(continue)/ { Debug("CONTINUE"); return CONTINUE }
+/(yield)/ { Debug("YIELD"); return YIELD }
+/(sleep)/ { Debug("SLEEP"); return SLEEP }
+/(switch)/ { Debug("SWITCH"); return SWITCH }
+/(case)/ { Debug("CASE"); return CASE }
+/(default)/ { Debug("DEFAULT"); return DEFAULT }
+
 //
 package fk

@@ -6,7 +6,7 @@ import (
 )
 
 func Parse(file string) {
-	Debug("parse " + file)
+	Debug("start parse " + file)
 
 	f, err := os.OpenFile(file, os.O_RDONLY, os.ModeType)
 	if err != nil {
