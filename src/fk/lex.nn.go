@@ -377,6 +377,7 @@ OUTER0:
 			}
 		case 2:
 			{
+				Debug("VAR_BEGIN")
 				return VAR_BEGIN
 			}
 		default:

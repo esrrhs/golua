@@ -1,13 +1,12 @@
 package fk
 
 import (
-	"fmt"
 	"os"
 	"bufio"
 )
 
 func Parse(file string) {
-	fmt.Println("parse " + file)
+	Debug("parse " + file)
 
 	f, err := os.OpenFile(file, os.O_RDONLY, os.ModeType)
 	if err != nil {
