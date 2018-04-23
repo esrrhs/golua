@@ -1,28 +1,57 @@
 
 state 0
-	$accept: .input $end 
-	input: .    (1)
+	$accept: .program $end 
+	package_head: .    (2)
 
-	.  reduce 1 (src line 77)
+	PACKAGE  shift 3
+	.  reduce 2 (src line 87)
 
-	input  goto 1
+	program  goto 1
+	package_head  goto 2
 
 state 1
-	$accept:  input.$end 
+	$accept:  program.$end 
 
 	$end  accept
 	.  error
 
 
-69 terminals, 2 nonterminals
-2 grammar rules, 2/8000 states
+state 2
+	program:  package_head.    (1)
+
+	.  reduce 1 (src line 84)
+
+
+state 3
+	package_head:  PACKAGE.IDENTIFIER 
+	package_head:  PACKAGE.IDENTIFIER_DOT 
+
+	IDENTIFIER  shift 4
+	IDENTIFIER_DOT  shift 5
+	.  error
+
+
+state 4
+	package_head:  PACKAGE IDENTIFIER.    (3)
+
+	.  reduce 3 (src line 91)
+
+
+state 5
+	package_head:  PACKAGE IDENTIFIER_DOT.    (4)
+
+	.  reduce 4 (src line 98)
+
+
+69 terminals, 3 nonterminals
+5 grammar rules, 6/8000 states
 0 shift/reduce, 0 reduce/reduce conflicts reported
-51 working sets used
-memory: parser 0/120000
+52 working sets used
+memory: parser 1/120000
 0 extra closures
-0 shift entries, 1 exceptions
-1 goto entries
+3 shift entries, 1 exceptions
+2 goto entries
 0 entries saved by goto default
-Optimizer space used: output 1/120000
-1 table entries, 0 zero
-maximum spread: 0, maximum offset: 0
+Optimizer space used: output 37/120000
+37 table entries, 32 zero
+maximum spread: 52, maximum offset: 50

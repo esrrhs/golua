@@ -154,7 +154,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line ../yacc.y:80
+//line ../yacc.y:107
 //line yacctab:1
 var yyExca = [...]int{
 	-1, 1,
@@ -164,35 +164,38 @@ var yyExca = [...]int{
 
 const yyPrivate = 57344
 
-const yyLast = 1
+const yyLast = 37
 
 var yyAct = [...]int{
 
-	1,
+	4, 3, 2, 1, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 5,
 }
 var yyPact = [...]int{
 
-	-1000, -1000,
+	-49, -1000, -1000, -16, -1000, -1000,
 }
 var yyPgo = [...]int{
 
-	0, 0,
+	0, 3, 2,
 }
 var yyR1 = [...]int{
 
-	0, 1,
+	0, 1, 2, 2, 2,
 }
 var yyR2 = [...]int{
 
-	0, 0,
+	0, 1, 0, 2, 2,
 }
 var yyChk = [...]int{
 
-	-1000, -1,
+	-1000, -1, -2, 50, 16, 52,
 }
 var yyDef = [...]int{
 
-	1, -2,
+	2, -2, 1, 0, 3, 4,
 }
 var yyTok1 = [...]int{
 
@@ -549,6 +552,27 @@ yydefault:
 	// dummy call; replaced with literal code
 	switch yynt {
 
+	case 2:
+		yyDollar = yyS[yypt-0 : yypt+1]
+		//line ../yacc.y:89
+		{
+		}
+	case 3:
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:93
+		{
+			Debug("[yacc]: package ", yyDollar[2].s)
+			//myflexer *l = (myflexer *)parm;
+			//l->set_package($2.c_str());
+		}
+	case 4:
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:100
+		{
+			Debug("[yacc]: package ", yyDollar[2].s)
+			//myflexer *l = (myflexer *)parm;
+			//l->set_package($2.c_str());
+		}
 	}
 	goto yystack /* stack new state and value */
 }

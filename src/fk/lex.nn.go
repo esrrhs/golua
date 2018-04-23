@@ -2682,6 +2682,55 @@ var dfas = []dfa{
 			return -1
 		},
 	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1, -1, -1, -1}, nil},
+
+	// [a-zA-Z_][a-zA-Z0-9_]*
+	{[]bool{false, true, true}, []func(rune) int{ // Transitions
+		func(r rune) int {
+			switch r {
+			case 95:
+				return 1
+			}
+			switch {
+			case 48 <= r && r <= 57:
+				return -1
+			case 65 <= r && r <= 90:
+				return 1
+			case 97 <= r && r <= 122:
+				return 1
+			}
+			return -1
+		},
+		func(r rune) int {
+			switch r {
+			case 95:
+				return 2
+			}
+			switch {
+			case 48 <= r && r <= 57:
+				return 2
+			case 65 <= r && r <= 90:
+				return 2
+			case 97 <= r && r <= 122:
+				return 2
+			}
+			return -1
+		},
+		func(r rune) int {
+			switch r {
+			case 95:
+				return 2
+			}
+			switch {
+			case 48 <= r && r <= 57:
+				return 2
+			case 65 <= r && r <= 90:
+				return 2
+			case 97 <= r && r <= 122:
+				return 2
+			}
+			return -1
+		},
+	}, []int{ /* Start-of-input transitions */ -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1}, nil},
 }
 
 func NewLexer(in io.Reader) *Lexer {
@@ -2896,6 +2945,12 @@ OUTER0:
 			{
 				Debug("DEFAULT")
 				return DEFAULT
+			}
+		case 31:
+			{
+				Debug("IDENTIFIER")
+				lval.s = yylex.Text()
+				return IDENTIFIER
 			}
 		default:
 			break OUTER0

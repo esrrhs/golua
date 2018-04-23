@@ -73,8 +73,35 @@ package fk
 %token CLOSE_BIG_BRACKET;
 %token NULL;
 
-%%
-input: /* empty */
-       
+%left PLUS MINUS
+%left DIVIDE MULTIPLY DIVIDE_MOD
+%left STRING_CAT
 
+%%
+  
+
+/* Top level rules */
+program: package_head
+	;
+	
+package_head:
+	/* empty */
+	{
+	}
+	|
+	PACKAGE IDENTIFIER
+	{
+		Debug("[yacc]: package ", $2.s);
+		//myflexer *l = (myflexer *)parm;
+		//l->set_package($2.c_str());
+	}
+	|
+	PACKAGE IDENTIFIER_DOT
+	{
+		Debug("[yacc]: package ", $2.s);
+		//myflexer *l = (myflexer *)parm;
+		//l->set_package($2.c_str());
+	}
+	
+	
 %%
