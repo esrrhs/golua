@@ -270,43 +270,43 @@ state 32
 state 33
 	explicit_value:  FTRUE.    (130)
 
-	.  reduce 130 (src line 1217)
+	.  reduce 130 (src line 1219)
 
 
 state 34
 	explicit_value:  FFALSE.    (131)
 
-	.  reduce 131 (src line 1226)
+	.  reduce 131 (src line 1228)
 
 
 state 35
 	explicit_value:  NUMBER.    (132)
 
-	.  reduce 132 (src line 1235)
+	.  reduce 132 (src line 1237)
 
 
 state 36
 	explicit_value:  FKUUID.    (133)
 
-	.  reduce 133 (src line 1244)
+	.  reduce 133 (src line 1246)
 
 
 state 37
 	explicit_value:  STRING_DEFINITION.    (134)
 
-	.  reduce 134 (src line 1253)
+	.  reduce 134 (src line 1255)
 
 
 state 38
 	explicit_value:  FKFLOAT.    (135)
 
-	.  reduce 135 (src line 1262)
+	.  reduce 135 (src line 1264)
 
 
 state 39
 	explicit_value:  FNULL.    (136)
 
-	.  reduce 136 (src line 1271)
+	.  reduce 136 (src line 1273)
 
 
 40: shift/reduce conflict (shift 33(0), red'n 139(0)) on FTRUE
@@ -331,7 +331,7 @@ state 40
 	OPEN_SQUARE_BRACKET  shift 41
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 139 (src line 1302)
+	.  reduce 139 (src line 1304)
 
 	explicit_value  goto 47
 	const_map_list_value  goto 45
@@ -359,7 +359,7 @@ state 41
 	OPEN_SQUARE_BRACKET  shift 41
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 143 (src line 1339)
+	.  reduce 143 (src line 1341)
 
 	explicit_value  goto 49
 	const_array_list_value  goto 48
@@ -408,7 +408,7 @@ state 45
 state 46
 	const_map_list_value:  const_map_value.    (140)
 
-	.  reduce 140 (src line 1309)
+	.  reduce 140 (src line 1311)
 
 
 state 47
@@ -439,7 +439,7 @@ state 48
 state 49
 	const_array_list_value:  explicit_value.    (144)
 
-	.  reduce 144 (src line 1346)
+	.  reduce 144 (src line 1348)
 
 
 state 50
@@ -509,13 +509,13 @@ state 51
 state 52
 	explicit_value:  OPEN_BIG_BRACKET const_map_list_value CLOSE_BIG_BRACKET.    (137)
 
-	.  reduce 137 (src line 1280)
+	.  reduce 137 (src line 1282)
 
 
 state 53
 	const_map_list_value:  const_map_list_value const_map_value.    (141)
 
-	.  reduce 141 (src line 1317)
+	.  reduce 141 (src line 1319)
 
 
 state 54
@@ -537,13 +537,13 @@ state 54
 state 55
 	explicit_value:  OPEN_SQUARE_BRACKET const_array_list_value CLOSE_SQUARE_BRACKET.    (138)
 
-	.  reduce 138 (src line 1290)
+	.  reduce 138 (src line 1292)
 
 
 state 56
 	const_array_list_value:  const_array_list_value explicit_value.    (145)
 
-	.  reduce 145 (src line 1354)
+	.  reduce 145 (src line 1356)
 
 
 state 57
@@ -813,7 +813,7 @@ state 78
 
 	ASSIGN  shift 117
 	NEW_ASSIGN  shift 118
-	.  reduce 100 (src line 957)
+	.  reduce 100 (src line 958)
 
 
 state 79
@@ -830,13 +830,13 @@ state 79
 state 80
 	break:  BREAK.    (146)
 
-	.  reduce 146 (src line 1365)
+	.  reduce 146 (src line 1367)
 
 
 state 81
 	continue:  CONTINUE.    (147)
 
-	.  reduce 147 (src line 1374)
+	.  reduce 147 (src line 1376)
 
 
 state 82
@@ -872,28 +872,28 @@ state 83
 	expr:  function_call.    (117)
 	expr_value:  function_call.    (128)
 
-	DIVIDE_MOD  reduce 128 (src line 1203)
-	PLUS  reduce 128 (src line 1203)
-	MINUS  reduce 128 (src line 1203)
-	DIVIDE  reduce 128 (src line 1203)
-	MULTIPLY  reduce 128 (src line 1203)
+	DIVIDE_MOD  reduce 128 (src line 1205)
+	PLUS  reduce 128 (src line 1205)
+	MINUS  reduce 128 (src line 1205)
+	DIVIDE  reduce 128 (src line 1205)
+	MULTIPLY  reduce 128 (src line 1205)
 	OPEN_BRACKET  shift 125
 	COLON  shift 126
-	STRING_CAT  reduce 128 (src line 1203)
-	.  reduce 117 (src line 1109)
+	STRING_CAT  reduce 128 (src line 1205)
+	.  reduce 117 (src line 1111)
 
 
 state 84
 	expr:  math_expr.    (118)
 	expr_value:  math_expr.    (126)
 
-	DIVIDE_MOD  reduce 126 (src line 1191)
-	PLUS  reduce 126 (src line 1191)
-	MINUS  reduce 126 (src line 1191)
-	DIVIDE  reduce 126 (src line 1191)
-	MULTIPLY  reduce 126 (src line 1191)
-	STRING_CAT  reduce 126 (src line 1191)
-	.  reduce 118 (src line 1115)
+	DIVIDE_MOD  reduce 126 (src line 1193)
+	PLUS  reduce 126 (src line 1193)
+	MINUS  reduce 126 (src line 1193)
+	DIVIDE  reduce 126 (src line 1193)
+	MULTIPLY  reduce 126 (src line 1193)
+	STRING_CAT  reduce 126 (src line 1193)
+	.  reduce 118 (src line 1117)
 
 
 state 85
@@ -907,8 +907,8 @@ state 85
 	var:  variable.    (111)
 	expr_value:  variable.    (129)
 
-	ARG_SPLITTER  reduce 111 (src line 1060)
-	ASSIGN  reduce 111 (src line 1060)
+	ARG_SPLITTER  reduce 111 (src line 1062)
+	ASSIGN  reduce 111 (src line 1062)
 	PLUS_ASSIGN  shift 128
 	MINUS_ASSIGN  shift 129
 	DIVIDE_ASSIGN  shift 130
@@ -916,8 +916,8 @@ state 85
 	DIVIDE_MOD_ASSIGN  shift 132
 	COLON  shift 127
 	INC  shift 133
-	NEW_ASSIGN  reduce 111 (src line 1060)
-	.  reduce 129 (src line 1209)
+	NEW_ASSIGN  reduce 111 (src line 1062)
+	.  reduce 129 (src line 1211)
 
 
 state 86
@@ -1079,7 +1079,7 @@ state 92
 
 	OPEN_BRACKET  shift 145
 	OPEN_SQUARE_BRACKET  shift 146
-	.  reduce 112 (src line 1068)
+	.  reduce 112 (src line 1070)
 
 
 93: shift/reduce conflict (shift 147(0), red'n 115(0)) on OPEN_BRACKET
@@ -1088,7 +1088,7 @@ state 93
 	variable:  IDENTIFIER_DOT.    (115)
 
 	OPEN_BRACKET  shift 147
-	.  reduce 115 (src line 1093)
+	.  reduce 115 (src line 1095)
 
 
 state 94
@@ -1111,13 +1111,13 @@ state 94
 state 95
 	variable:  IDENTIFIER_POINTER.    (114)
 
-	.  reduce 114 (src line 1085)
+	.  reduce 114 (src line 1087)
 
 
 state 96
 	expr_value:  explicit_value.    (127)
 
-	.  reduce 127 (src line 1197)
+	.  reduce 127 (src line 1199)
 
 
 state 97
@@ -1129,7 +1129,7 @@ state 97
 state 98
 	const_map_value:  explicit_value COLON explicit_value.    (142)
 
-	.  reduce 142 (src line 1328)
+	.  reduce 142 (src line 1330)
 
 
 state 99
@@ -1213,7 +1213,7 @@ state 104
 	CLOSE_BRACKET  reduce 81 (src line 786)
 	AND  reduce 81 (src line 786)
 	OR  reduce 81 (src line 786)
-	.  reduce 130 (src line 1217)
+	.  reduce 130 (src line 1219)
 
 
 state 105
@@ -1225,7 +1225,7 @@ state 105
 	CLOSE_BRACKET  reduce 82 (src line 796)
 	AND  reduce 82 (src line 796)
 	OR  reduce 82 (src line 796)
-	.  reduce 131 (src line 1226)
+	.  reduce 131 (src line 1228)
 
 
 state 106
@@ -1284,12 +1284,12 @@ state 108
 	cmp_value:  explicit_value.    (85)
 	expr_value:  explicit_value.    (127)
 
-	DIVIDE_MOD  reduce 127 (src line 1197)
-	PLUS  reduce 127 (src line 1197)
-	MINUS  reduce 127 (src line 1197)
-	DIVIDE  reduce 127 (src line 1197)
-	MULTIPLY  reduce 127 (src line 1197)
-	STRING_CAT  reduce 127 (src line 1197)
+	DIVIDE_MOD  reduce 127 (src line 1199)
+	PLUS  reduce 127 (src line 1199)
+	MINUS  reduce 127 (src line 1199)
+	DIVIDE  reduce 127 (src line 1199)
+	MULTIPLY  reduce 127 (src line 1199)
+	STRING_CAT  reduce 127 (src line 1199)
 	.  reduce 85 (src line 828)
 
 
@@ -1298,13 +1298,13 @@ state 109
 	cmp_value:  variable.    (86)
 	expr_value:  variable.    (129)
 
-	DIVIDE_MOD  reduce 129 (src line 1209)
-	PLUS  reduce 129 (src line 1209)
-	MINUS  reduce 129 (src line 1209)
-	DIVIDE  reduce 129 (src line 1209)
-	MULTIPLY  reduce 129 (src line 1209)
+	DIVIDE_MOD  reduce 129 (src line 1211)
+	PLUS  reduce 129 (src line 1211)
+	MINUS  reduce 129 (src line 1211)
+	DIVIDE  reduce 129 (src line 1211)
+	MULTIPLY  reduce 129 (src line 1211)
 	COLON  shift 127
-	STRING_CAT  reduce 129 (src line 1209)
+	STRING_CAT  reduce 129 (src line 1211)
 	.  reduce 86 (src line 834)
 
 
@@ -1345,13 +1345,13 @@ state 114
 	return_value:  explicit_value.    (92)
 	expr_value:  explicit_value.    (127)
 
-	DIVIDE_MOD  reduce 127 (src line 1197)
-	PLUS  reduce 127 (src line 1197)
-	MINUS  reduce 127 (src line 1197)
-	DIVIDE  reduce 127 (src line 1197)
-	MULTIPLY  reduce 127 (src line 1197)
-	STRING_CAT  reduce 127 (src line 1197)
-	.  reduce 92 (src line 884)
+	DIVIDE_MOD  reduce 127 (src line 1199)
+	PLUS  reduce 127 (src line 1199)
+	MINUS  reduce 127 (src line 1199)
+	DIVIDE  reduce 127 (src line 1199)
+	MULTIPLY  reduce 127 (src line 1199)
+	STRING_CAT  reduce 127 (src line 1199)
+	.  reduce 92 (src line 885)
 
 
 state 115
@@ -1359,20 +1359,20 @@ state 115
 	return_value:  variable.    (93)
 	expr_value:  variable.    (129)
 
-	DIVIDE_MOD  reduce 129 (src line 1209)
-	PLUS  reduce 129 (src line 1209)
-	MINUS  reduce 129 (src line 1209)
-	DIVIDE  reduce 129 (src line 1209)
-	MULTIPLY  reduce 129 (src line 1209)
+	DIVIDE_MOD  reduce 129 (src line 1211)
+	PLUS  reduce 129 (src line 1211)
+	MINUS  reduce 129 (src line 1211)
+	DIVIDE  reduce 129 (src line 1211)
+	MULTIPLY  reduce 129 (src line 1211)
 	COLON  shift 127
-	STRING_CAT  reduce 129 (src line 1209)
-	.  reduce 93 (src line 890)
+	STRING_CAT  reduce 129 (src line 1211)
+	.  reduce 93 (src line 891)
 
 
 state 116
 	return_value:  expr.    (94)
 
-	.  reduce 94 (src line 896)
+	.  reduce 94 (src line 897)
 
 
 state 117
@@ -1474,14 +1474,14 @@ state 123
 	math_expr:  OPEN_BRACKET math_expr.CLOSE_BRACKET 
 	expr_value:  math_expr.    (126)
 
-	MORE  reduce 118 (src line 1115)
-	LESS  reduce 118 (src line 1115)
-	MORE_OR_EQUAL  reduce 118 (src line 1115)
-	LESS_OR_EQUAL  reduce 118 (src line 1115)
-	EQUAL  reduce 118 (src line 1115)
-	NOT_EQUAL  reduce 118 (src line 1115)
+	MORE  reduce 118 (src line 1117)
+	LESS  reduce 118 (src line 1117)
+	MORE_OR_EQUAL  reduce 118 (src line 1117)
+	LESS_OR_EQUAL  reduce 118 (src line 1117)
+	EQUAL  reduce 118 (src line 1117)
+	NOT_EQUAL  reduce 118 (src line 1117)
 	CLOSE_BRACKET  shift 181
-	.  reduce 126 (src line 1191)
+	.  reduce 126 (src line 1193)
 
 
 state 124
@@ -1489,7 +1489,7 @@ state 124
 	expr_value:  variable.    (129)
 
 	COLON  shift 127
-	.  reduce 129 (src line 1209)
+	.  reduce 129 (src line 1211)
 
 
 state 125
@@ -1666,7 +1666,7 @@ state 132
 state 133
 	math_assign_stmt:  variable INC.    (109)
 
-	.  reduce 109 (src line 1036)
+	.  reduce 109 (src line 1038)
 
 
 state 134
@@ -1736,7 +1736,7 @@ state 135
 
 	ASSIGN  shift 193
 	NEW_ASSIGN  shift 118
-	.  reduce 100 (src line 957)
+	.  reduce 100 (src line 958)
 
 
 136: shift/reduce conflict (shift 125(0), red'n 55(0)) on OPEN_BRACKET
@@ -1772,13 +1772,13 @@ state 138
 	DIVIDE  shift 151
 	MULTIPLY  shift 150
 	STRING_CAT  shift 153
-	.  reduce 148 (src line 1383)
+	.  reduce 148 (src line 1385)
 
 
 state 139
 	expr_value:  math_expr.    (126)
 
-	.  reduce 126 (src line 1191)
+	.  reduce 126 (src line 1193)
 
 
 140: shift/reduce conflict (shift 125(0), red'n 128(0)) on OPEN_BRACKET
@@ -1789,7 +1789,7 @@ state 140
 
 	OPEN_BRACKET  shift 125
 	COLON  shift 126
-	.  reduce 128 (src line 1203)
+	.  reduce 128 (src line 1205)
 
 
 state 141
@@ -1831,7 +1831,7 @@ state 142
 	DIVIDE  shift 151
 	MULTIPLY  shift 150
 	STRING_CAT  shift 153
-	.  reduce 149 (src line 1392)
+	.  reduce 149 (src line 1394)
 
 
 state 143
@@ -1847,7 +1847,7 @@ state 143
 state 144
 	var:  VAR_BEGIN IDENTIFIER.    (110)
 
-	.  reduce 110 (src line 1052)
+	.  reduce 110 (src line 1054)
 
 
 state 145
@@ -2462,20 +2462,20 @@ state 168
 state 169
 	assign_stmt:  var ASSIGN assign_value.    (95)
 
-	.  reduce 95 (src line 904)
+	.  reduce 95 (src line 905)
 
 
 state 170
 	assign_value:  explicit_value.    (101)
 	expr_value:  explicit_value.    (127)
 
-	DIVIDE_MOD  reduce 127 (src line 1197)
-	PLUS  reduce 127 (src line 1197)
-	MINUS  reduce 127 (src line 1197)
-	DIVIDE  reduce 127 (src line 1197)
-	MULTIPLY  reduce 127 (src line 1197)
-	STRING_CAT  reduce 127 (src line 1197)
-	.  reduce 101 (src line 966)
+	DIVIDE_MOD  reduce 127 (src line 1199)
+	PLUS  reduce 127 (src line 1199)
+	MINUS  reduce 127 (src line 1199)
+	DIVIDE  reduce 127 (src line 1199)
+	MULTIPLY  reduce 127 (src line 1199)
+	STRING_CAT  reduce 127 (src line 1199)
+	.  reduce 101 (src line 968)
 
 
 state 171
@@ -2483,26 +2483,26 @@ state 171
 	assign_value:  variable.    (102)
 	expr_value:  variable.    (129)
 
-	DIVIDE_MOD  reduce 129 (src line 1209)
-	PLUS  reduce 129 (src line 1209)
-	MINUS  reduce 129 (src line 1209)
-	DIVIDE  reduce 129 (src line 1209)
-	MULTIPLY  reduce 129 (src line 1209)
+	DIVIDE_MOD  reduce 129 (src line 1211)
+	PLUS  reduce 129 (src line 1211)
+	MINUS  reduce 129 (src line 1211)
+	DIVIDE  reduce 129 (src line 1211)
+	MULTIPLY  reduce 129 (src line 1211)
 	COLON  shift 127
-	STRING_CAT  reduce 129 (src line 1209)
-	.  reduce 102 (src line 972)
+	STRING_CAT  reduce 129 (src line 1211)
+	.  reduce 102 (src line 974)
 
 
 state 172
 	assign_value:  expr.    (103)
 
-	.  reduce 103 (src line 978)
+	.  reduce 103 (src line 980)
 
 
 state 173
 	assign_stmt:  var NEW_ASSIGN assign_value.    (96)
 
-	.  reduce 96 (src line 914)
+	.  reduce 96 (src line 915)
 
 
 174: shift/reduce conflict (shift 125(0), red'n 97(0)) on OPEN_BRACKET
@@ -2513,7 +2513,7 @@ state 174
 
 	OPEN_BRACKET  shift 125
 	COLON  shift 126
-	.  reduce 97 (src line 926)
+	.  reduce 97 (src line 927)
 
 
 175: shift/reduce conflict (shift 125(0), red'n 98(0)) on OPEN_BRACKET
@@ -2524,19 +2524,19 @@ state 175
 
 	OPEN_BRACKET  shift 125
 	COLON  shift 126
-	.  reduce 98 (src line 936)
+	.  reduce 98 (src line 937)
 
 
 state 176
 	var_list:  var_list ARG_SPLITTER var.    (99)
 
-	.  reduce 99 (src line 948)
+	.  reduce 99 (src line 949)
 
 
 state 177
 	var:  variable.    (111)
 
-	.  reduce 111 (src line 1060)
+	.  reduce 111 (src line 1062)
 
 
 state 178
@@ -2544,25 +2544,25 @@ state 178
 	variable:  IDENTIFIER.OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET 
 
 	OPEN_SQUARE_BRACKET  shift 146
-	.  reduce 112 (src line 1068)
+	.  reduce 112 (src line 1070)
 
 
 state 179
 	variable:  IDENTIFIER_DOT.    (115)
 
-	.  reduce 115 (src line 1093)
+	.  reduce 115 (src line 1095)
 
 
 state 180
 	expr:  OPEN_BRACKET expr CLOSE_BRACKET.    (116)
 
-	.  reduce 116 (src line 1103)
+	.  reduce 116 (src line 1105)
 
 
 state 181
 	math_expr:  OPEN_BRACKET math_expr CLOSE_BRACKET.    (119)
 
-	.  reduce 119 (src line 1123)
+	.  reduce 119 (src line 1125)
 
 
 state 182
@@ -2615,31 +2615,31 @@ state 186
 state 187
 	math_assign_stmt:  variable PLUS_ASSIGN assign_value.    (104)
 
-	.  reduce 104 (src line 986)
+	.  reduce 104 (src line 988)
 
 
 state 188
 	math_assign_stmt:  variable MINUS_ASSIGN assign_value.    (105)
 
-	.  reduce 105 (src line 996)
+	.  reduce 105 (src line 998)
 
 
 state 189
 	math_assign_stmt:  variable DIVIDE_ASSIGN assign_value.    (106)
 
-	.  reduce 106 (src line 1006)
+	.  reduce 106 (src line 1008)
 
 
 state 190
 	math_assign_stmt:  variable MULTIPLY_ASSIGN assign_value.    (107)
 
-	.  reduce 107 (src line 1016)
+	.  reduce 107 (src line 1018)
 
 
 state 191
 	math_assign_stmt:  variable DIVIDE_MOD_ASSIGN assign_value.    (108)
 
-	.  reduce 108 (src line 1026)
+	.  reduce 108 (src line 1028)
 
 
 state 192
@@ -2705,7 +2705,7 @@ state 194
 	expr_value:  math_expr.    (126)
 
 	CLOSE_BRACKET  shift 181
-	.  reduce 126 (src line 1191)
+	.  reduce 126 (src line 1193)
 
 
 state 195
@@ -2722,7 +2722,7 @@ state 195
 state 196
 	switch_case_list:  switch_case_define.    (152)
 
-	.  reduce 152 (src line 1424)
+	.  reduce 152 (src line 1426)
 
 
 state 197
@@ -2802,7 +2802,7 @@ state 201
 	DIVIDE  shift 151
 	MULTIPLY  shift 150
 	STRING_CAT  shift 153
-	.  reduce 120 (src line 1129)
+	.  reduce 120 (src line 1131)
 
 
 state 202
@@ -2818,7 +2818,7 @@ state 202
 	DIVIDE  shift 151
 	MULTIPLY  shift 150
 	STRING_CAT  shift 153
-	.  reduce 121 (src line 1139)
+	.  reduce 121 (src line 1141)
 
 
 state 203
@@ -2831,7 +2831,7 @@ state 203
 	math_expr:  expr_value.STRING_CAT expr_value 
 
 	STRING_CAT  shift 153
-	.  reduce 122 (src line 1149)
+	.  reduce 122 (src line 1151)
 
 
 state 204
@@ -2844,7 +2844,7 @@ state 204
 	math_expr:  expr_value.STRING_CAT expr_value 
 
 	STRING_CAT  shift 153
-	.  reduce 123 (src line 1159)
+	.  reduce 123 (src line 1161)
 
 
 state 205
@@ -2857,7 +2857,7 @@ state 205
 	math_expr:  expr_value.STRING_CAT expr_value 
 
 	STRING_CAT  shift 153
-	.  reduce 124 (src line 1169)
+	.  reduce 124 (src line 1171)
 
 
 state 206
@@ -2869,7 +2869,7 @@ state 206
 	math_expr:  expr_value.STRING_CAT expr_value 
 	math_expr:  expr_value STRING_CAT expr_value.    (125)
 
-	.  reduce 125 (src line 1179)
+	.  reduce 125 (src line 1181)
 
 
 state 207
@@ -3215,7 +3215,7 @@ state 228
 	assign_stmt:  var ASSIGN assign_value.    (95)
 
 	RIGHT_POINTER  shift 245
-	.  reduce 95 (src line 904)
+	.  reduce 95 (src line 905)
 
 
 state 229
@@ -3277,7 +3277,7 @@ state 229
 state 230
 	switch_case_list:  switch_case_list switch_case_define.    (153)
 
-	.  reduce 153 (src line 1432)
+	.  reduce 153 (src line 1434)
 
 
 state 231
@@ -3297,7 +3297,7 @@ state 232
 state 233
 	variable:  IDENTIFIER OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET.    (113)
 
-	.  reduce 113 (src line 1076)
+	.  reduce 113 (src line 1078)
 
 
 state 234
@@ -3568,7 +3568,7 @@ state 246
 state 247
 	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT END.    (151)
 
-	.  reduce 151 (src line 1412)
+	.  reduce 151 (src line 1414)
 
 
 state 248
@@ -3599,7 +3599,7 @@ state 248
 	SWITCH  shift 90
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 155 (src line 1452)
+	.  reduce 155 (src line 1454)
 
 	explicit_value  goto 96
 	block  goto 258
@@ -3827,7 +3827,7 @@ state 256
 state 257
 	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT block END.    (150)
 
-	.  reduce 150 (src line 1402)
+	.  reduce 150 (src line 1404)
 
 
 state 258
@@ -3858,7 +3858,7 @@ state 258
 	SWITCH  shift 90
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 154 (src line 1443)
+	.  reduce 154 (src line 1445)
 
 	explicit_value  goto 96
 	function_call  goto 83

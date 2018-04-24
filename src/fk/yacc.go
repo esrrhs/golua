@@ -1,14 +1,13 @@
-
 //line ../yacc.y:1
-
 package fk
+
 import __yyfmt__ "fmt"
+
 //line ../yacc.y:3
-		
 //line ../yacc.y:5
 type yySymType struct {
 	yys int
-  s string
+	s   string
 }
 
 const VAR_BEGIN = 57346
@@ -155,8 +154,11 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line ../yacc.y:1463
+//line ../yacc.y:1465
 
+func init() {
+	yyErrorVerbose = true // set the global that enables showing full errors
+}
 
 //line yacctab:1
 var yyExca = [...]int{
@@ -548,8 +550,7 @@ var yyErrorMessages = [...]struct {
 	state int
 	token int
 	msg   string
-}{
-}
+}{}
 
 //line yaccpar:1
 
@@ -883,1402 +884,1404 @@ yydefault:
 	switch yynt {
 
 	case 2:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:93
 		{
 		}
 	case 3:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:97
 		{
-			FKLOG("[bison]: package %s", yyDollar[2].c_str());
-			myflexer *l = (myflexer *)parm;
-			l->set_package(yyDollar[2].c_str());
+			Debug("[yacc]: package %v", yyDollar[2].s)
+			//myflexer *l = (myflexer *)parm;
+			//l->set_package($2.s);
 		}
 	case 4:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:104
 		{
-			FKLOG("[bison]: package %s", yyDollar[2].c_str());
-			myflexer *l = (myflexer *)parm;
-			l->set_package(yyDollar[2].c_str());
+			Debug("[yacc]: package %v", yyDollar[2].s)
+			//myflexer *l = (myflexer *)parm;
+			//l->set_package($2.s);
 		}
 	case 5:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:112
 		{
 		}
 	case 8:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:122
 		{
-			FKLOG("[bison]: include %s", yyDollar[2].c_str());
-			myflexer *l = (myflexer *)parm;
-			l->add_include(yyDollar[2].c_str());
+			Debug("[yacc]: include %v", yyDollar[2].s)
+			//myflexer *l = (myflexer *)parm;
+			//l->add_include($2.s);
 		}
 	case 9:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:131
 		{
 		}
 	case 12:
-		yyDollar = yyS[yypt-4:yypt+1]
+		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ../yacc.y:141
 		{
-			FKLOG("[bison]: struct_define %s", yyDollar[2].c_str());
-			myflexer *l = (myflexer *)parm;
-			struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>(yyDollar[3]);
-			l->add_struct_desc(yyDollar[2].c_str(), p);
+			Debug("[yacc]: struct_define %v", yyDollar[2].s)
+			//myflexer *l = (myflexer *)parm;
+			//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($3);
+			//l->add_struct_desc($2.s, p);
 		}
 	case 13:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:151
 		{
-			yyVAL = 0;
+			//$$ = 0;
 		}
 	case 14:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:156
 		{
-			FKLOG("[bison]: struct_mem_declaration <- IDENTIFIER struct_mem_declaration");
-			assert(yyDollar[1]->gettype() == est_struct_memlist);
-			struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>(yyDollar[1]);
-			p->add_arg(yyDollar[2]);
-			yyVAL = p;
+			Debug("[yacc]: struct_mem_declaration <- IDENTIFIER struct_mem_declaration")
+			//assert($1->gettype() == est_struct_memlist);
+			//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($1);
+			//p->add_arg($2);
+			//$$ = p;
 		}
 	case 15:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:165
 		{
-			FKLOG("[bison]: struct_mem_declaration <- IDENTIFIER");
-			NEWTYPE(p, struct_desc_memlist_node);
-			p->add_arg(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: struct_mem_declaration <- IDENTIFIER")
+			//NEWTYPE(p, struct_desc_memlist_node);
+			//p->add_arg($1);
+			//$$ = p;
 		}
 	case 16:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:175
 		{
 		}
 	case 19:
-		yyDollar = yyS[yypt-4:yypt+1]
+		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ../yacc.y:185
 		{
-			FKLOG("[bison]: const_define %s", yyDollar[2].c_str());
-			myflexer *l = (myflexer *)parm;
-			l->add_const_desc(yyDollar[2].c_str(), yyDollar[4]);
+			Debug("[yacc]: const_define %v", yyDollar[2].s)
+			//myflexer *l = (myflexer *)parm;
+			//l->add_const_desc($2.s, $4);
 		}
 	case 20:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:194
 		{
 		}
 	case 23:
-		yyDollar = yyS[yypt-7:yypt+1]
+		yyDollar = yyS[yypt-7 : yypt+1]
 		//line ../yacc.y:206
 		{
-			FKLOG("[bison]: function_declaration <- block %s %d", yyDollar[2].c_str(), yylloc.first_line);
-			NEWTYPE(p, func_desc_node);
-			p->funcname = yyDollar[2];
-			p->arglist = dynamic_cast<func_desc_arglist_node*>(yyDollar[4]);
-			p->block = dynamic_cast<block_node*>(yyDollar[6]);
-			p->endline = yylloc.first_line;
-			myflexer *l = (myflexer *)parm;
-			l->add_func_desc(p);
+			Debug("[yacc]: function_declaration <- block %v", yyDollar[2].s)
+			//NEWTYPE(p, func_desc_node);
+			//p->funcname = $2;
+			//p->arglist = dynamic_cast<func_desc_arglist_node*>($4);
+			//p->block = dynamic_cast<block_node*>($6);
+			//p->endline = yylloc.first_line;
+			//myflexer *l = (myflexer *)parm;
+			//l->add_func_desc(p);
 		}
 	case 24:
-		yyDollar = yyS[yypt-6:yypt+1]
+		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ../yacc.y:218
 		{
-			FKLOG("[bison]: function_declaration <- empty %s %d", yyDollar[2].c_str(), yylloc.first_line);
-			NEWTYPE(p, func_desc_node);
-			p->funcname = yyDollar[2];
-			p->arglist = 0;
-			p->block = 0;
-			p->endline = yylloc.first_line;
-			myflexer *l = (myflexer *)parm;
-			l->add_func_desc(p);
+			Debug("[yacc]: function_declaration <- empty %v", yyDollar[2].s)
+			//NEWTYPE(p, func_desc_node);
+			//p->funcname = $2;
+			//p->arglist = 0;
+			//p->block = 0;
+			//p->endline = yylloc.first_line;
+			//myflexer *l = (myflexer *)parm;
+			//l->add_func_desc(p);
 		}
 	case 25:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:232
 		{
-			yyVAL = 0;
+			//$$ = 0;
 		}
 	case 26:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:237
 		{
-			FKLOG("[bison]: function_declaration_arguments <- arg function_declaration_arguments");
-			assert(yyDollar[1]->gettype() == est_arglist);
-			func_desc_arglist_node * p = dynamic_cast<func_desc_arglist_node*>(yyDollar[1]);
-			p->add_arg(yyDollar[3]);
-			yyVAL = p;
+			Debug("[yacc]: function_declaration_arguments <- arg function_declaration_arguments")
+			//assert($1->gettype() == est_arglist);
+			//func_desc_arglist_node * p = dynamic_cast<func_desc_arglist_node*>($1);
+			//p->add_arg($3);
+			//$$ = p;
 		}
 	case 27:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:246
 		{
-			FKLOG("[bison]: function_declaration_arguments <- arg");
-			NEWTYPE(p, func_desc_arglist_node);
-			p->add_arg(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: function_declaration_arguments <- arg")
+			//NEWTYPE(p, func_desc_arglist_node);
+			//p->add_arg($1);
+			//$$ = p;
 		}
 	case 28:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:256
 		{
-			FKLOG("[bison]: arg <- IDENTIFIER %s", yyDollar[1].c_str());
-			NEWTYPE(p, identifier_node);
-			p->str = yyDollar[1];
-			yyVAL = p;
+			Debug("[yacc]: arg <- IDENTIFIER %v", yyDollar[1].s)
+			//NEWTYPE(p, identifier_node);
+			//p->str = $1;
+			//$$ = p;
 		}
 	case 29:
-		yyDollar = yyS[yypt-4:yypt+1]
+		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ../yacc.y:266
 		{
-			FKLOG("[bison]: function_call <- function_call_arguments %s", yyDollar[1].c_str());
-			NEWTYPE(p, function_call_node);
-			p->fuc = yyDollar[1];
-			p->prefunc = 0;
-			p->arglist = dynamic_cast<function_call_arglist_node*>(yyDollar[3]);
-			p->fakecall = false;
-			p->classmem_call = false;
-			yyVAL = p;
+			Debug("[yacc]: function_call <- function_call_arguments %v", yyDollar[1].s)
+			//NEWTYPE(p, function_call_node);
+			//p->fuc = $1;
+			//p->prefunc = 0;
+			//p->arglist = dynamic_cast<function_call_arglist_node*>($3);
+			//p->fakecall = false;
+			//p->classmem_call = false;
+			//$$ = p;
 		}
 	case 30:
-		yyDollar = yyS[yypt-4:yypt+1]
+		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ../yacc.y:278
 		{
-			FKLOG("[bison]: function_call <- function_call_arguments %s", yyDollar[1].c_str());
-			NEWTYPE(p, function_call_node);
-			p->fuc = yyDollar[1];
-			p->prefunc = 0;
-			p->arglist = dynamic_cast<function_call_arglist_node*>(yyDollar[3]);
-			p->fakecall = false;
-			p->classmem_call = false;
-			yyVAL = p;
+			Debug("[yacc]: function_call <- function_call_arguments %v", yyDollar[1].s)
+			//NEWTYPE(p, function_call_node);
+			//p->fuc = $1;
+			//p->prefunc = 0;
+			//p->arglist = dynamic_cast<function_call_arglist_node*>($3);
+			//p->fakecall = false;
+			//p->classmem_call = false;
+			//$$ = p;
 		}
 	case 31:
-		yyDollar = yyS[yypt-4:yypt+1]
+		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ../yacc.y:290
 		{
-			FKLOG("[bison]: function_call <- function_call_arguments");
-			NEWTYPE(p, function_call_node);
-			p->fuc = "";
-			p->prefunc = yyDollar[1];
-			p->arglist = dynamic_cast<function_call_arglist_node*>(yyDollar[3]);
-			p->fakecall = false;
-			p->classmem_call = false;
-			yyVAL = p;
+			Debug("[yacc]: function_call <- function_call_arguments")
+			//NEWTYPE(p, function_call_node);
+			//p->fuc = "";
+			//p->prefunc = $1;
+			//p->arglist = dynamic_cast<function_call_arglist_node*>($3);
+			//p->fakecall = false;
+			//p->classmem_call = false;
+			//$$ = p;
 		}
 	case 32:
-		yyDollar = yyS[yypt-6:yypt+1]
+		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ../yacc.y:302
 		{
-			FKLOG("[bison]: function_call <- mem function_call_arguments %s", yyDollar[3].c_str());
-			NEWTYPE(p, function_call_node);
-			p->fuc = yyDollar[3];
-			p->prefunc = 0;
-			p->arglist = dynamic_cast<function_call_arglist_node*>(yyDollar[5]);
-			if (p->arglist == 0)
-			{
-				NEWTYPE(pa, function_call_arglist_node);
-				p->arglist = pa;
-			}
-			p->arglist->add_arg(yyDollar[1]);
-			p->fakecall = false;
-			p->classmem_call = true;
-			yyVAL = p;
+			Debug("[yacc]: function_call <- mem function_call_arguments %v", yyDollar[3].s)
+			//NEWTYPE(p, function_call_node);
+			//p->fuc = $3;
+			//p->prefunc = 0;
+			//p->arglist = dynamic_cast<function_call_arglist_node*>($5);
+			//if (p->arglist == 0)
+			//{
+			//	NEWTYPE(pa, function_call_arglist_node);
+			//	p->arglist = pa;
+			//}
+			//p->arglist->add_arg($1);
+			//p->fakecall = false;
+			//p->classmem_call = true;
+			//$$ = p;
 		}
 	case 33:
-		yyDollar = yyS[yypt-6:yypt+1]
+		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ../yacc.y:320
 		{
-			FKLOG("[bison]: function_call <- mem function_call_arguments %s", yyDollar[3].c_str());
-			NEWTYPE(p, function_call_node);
-			p->fuc = yyDollar[3];
-			p->prefunc = 0;
-			p->arglist = dynamic_cast<function_call_arglist_node*>(yyDollar[5]);
-			if (p->arglist == 0)
-			{
-				NEWTYPE(pa, function_call_arglist_node);
-				p->arglist = pa;
-			}
-			p->arglist->add_arg(yyDollar[1]);
-			p->fakecall = false;
-			p->classmem_call = true;
-			yyVAL = p;
+			Debug("[yacc]: function_call <- mem function_call_arguments %v", yyDollar[3].s)
+			//NEWTYPE(p, function_call_node);
+			//p->fuc = $3;
+			//p->prefunc = 0;
+			//p->arglist = dynamic_cast<function_call_arglist_node*>($5);
+			//if (p->arglist == 0)
+			//{
+			//	NEWTYPE(pa, function_call_arglist_node);
+			//	p->arglist = pa;
+			//}
+			//p->arglist->add_arg($1);
+			//p->fakecall = false;
+			//p->classmem_call = true;
+			//$$ = p;
 		}
 	case 34:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:340
 		{
-			yyVAL = 0;
+			//$$ = 0;
 		}
 	case 35:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:345
 		{
-			FKLOG("[bison]: function_call_arguments <- arg_expr function_call_arguments");
-			assert(yyDollar[1]->gettype() == est_call_arglist);
-			function_call_arglist_node * p = dynamic_cast<function_call_arglist_node*>(yyDollar[1]);
-			p->add_arg(yyDollar[3]);
-			yyVAL = p;
+			Debug("[yacc]: function_call_arguments <- arg_expr function_call_arguments")
+			//assert($1->gettype() == est_call_arglist);
+			//function_call_arglist_node * p = dynamic_cast<function_call_arglist_node*>($1);
+			//p->add_arg($3);
+			//$$ = p;
 		}
 	case 36:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:354
 		{
-			FKLOG("[bison]: function_call_arguments <- arg_expr");
-			NEWTYPE(p, function_call_arglist_node);
-			p->add_arg(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: function_call_arguments <- arg_expr")
+			//NEWTYPE(p, function_call_arglist_node);
+			//p->add_arg($1);
+			//$$ = p;
 		}
 	case 37:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:364
 		{
-			FKLOG("[bison]: arg_expr <- expr_value");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: arg_expr <- expr_value")
+			//$$ = $1;
 		}
 	case 38:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:374
 		{
-			FKLOG("[bison]: block <- block stmt");
-			assert(yyDollar[1]->gettype() == est_block);
-			block_node * p = dynamic_cast<block_node*>(yyDollar[1]);
-			p->add_stmt(yyDollar[2]);
-			yyVAL = p;
+			Debug("[yacc]: block <- block stmt")
+			//assert($1->gettype() == est_block);
+			//block_node * p = dynamic_cast<block_node*>($1);
+			//p->add_stmt($2);
+			//$$ = p;
 		}
 	case 39:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:383
 		{
-			FKLOG("[bison]: block <- stmt");
-			NEWTYPE(p, block_node);
-			p->add_stmt(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: block <- stmt")
+			//NEWTYPE(p, block_node);
+			//p->add_stmt($1);
+			//$$ = p;
 		}
 	case 40:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:393
 		{
-			FKLOG("[bison]: stmt <- while_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- while_stmt")
+			//$$ = $1;
 		}
 	case 41:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:399
 		{
-			FKLOG("[bison]: stmt <- if_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- if_stmt")
+			//$$ = $1;
 		}
 	case 42:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:405
 		{
-			FKLOG("[bison]: stmt <- return_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- return_stmt")
+			//$$ = $1;
 		}
 	case 43:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:411
 		{
-			FKLOG("[bison]: stmt <- assign_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- assign_stmt")
+			//$$ = $1;
 		}
 	case 44:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:417
 		{
-			FKLOG("[bison]: stmt <- multi_assign_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- multi_assign_stmt")
+			//$$ = $1;
 		}
 	case 45:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:423
 		{
-			FKLOG("[bison]: stmt <- break");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- break")
+			//$$ = $1;
 		}
 	case 46:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:429
 		{
-			FKLOG("[bison]: stmt <- continue");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- continue")
+			//$$ = $1;
 		}
 	case 47:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:435
 		{
-			FKLOG("[bison]: stmt <- expr");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- expr")
+			//$$ = $1;
 		}
 	case 48:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:441
 		{
-			FKLOG("[bison]: stmt <- math_assign_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- math_assign_stmt")
+			//$$ = $1;
 		}
 	case 49:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:447
 		{
-			FKLOG("[bison]: stmt <- for_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- for_stmt")
+			//$$ = $1;
 		}
 	case 50:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:453
 		{
-			FKLOG("[bison]: stmt <- for_loop_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- for_loop_stmt")
+			//$$ = $1;
 		}
 	case 51:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:459
 		{
-			FKLOG("[bison]: stmt <- fake_call_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- fake_call_stmt")
+			//$$ = $1;
 		}
 	case 52:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:465
 		{
-			FKLOG("[bison]: stmt <- sleep_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- sleep_stmt")
+			//$$ = $1;
 		}
 	case 53:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:471
 		{
-			FKLOG("[bison]: stmt <- yield_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- yield_stmt")
+			//$$ = $1;
 		}
 	case 54:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:477
 		{
-			FKLOG("[bison]: stmt <- switch_stmt");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: stmt <- switch_stmt")
+			//$$ = $1;
 		}
 	case 55:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:485
 		{
-			FKLOG("[bison]: fake_call_stmt <- fake function_call");
-			function_call_node * p = dynamic_cast<function_call_node*>(yyDollar[2]);
-			p->fakecall = true;
-			yyVAL = p;
+			Debug("[yacc]: fake_call_stmt <- fake function_call")
+			//function_call_node * p = dynamic_cast<function_call_node*>($2);
+			//p->fakecall = true;
+			//$$ = p;
 		}
 	case 56:
-		yyDollar = yyS[yypt-9:yypt+1]
+		yyDollar = yyS[yypt-9 : yypt+1]
 		//line ../yacc.y:495
 		{
-			FKLOG("[bison]: for_stmt <- block cmp block");
-			NEWTYPE(p, for_stmt);
-			p->cmp = dynamic_cast<cmp_stmt*>(yyDollar[4]);
-			p->beginblock = dynamic_cast<block_node*>(yyDollar[2]);
-			p->endblock = dynamic_cast<block_node*>(yyDollar[6]);
-			p->block = dynamic_cast<block_node*>(yyDollar[8]);
-			yyVAL = p;
+			Debug("[yacc]: for_stmt <- block cmp block")
+			//NEWTYPE(p, for_stmt);
+			//p->cmp = dynamic_cast<cmp_stmt*>($4);
+			//p->beginblock = dynamic_cast<block_node*>($2);
+			//p->endblock = dynamic_cast<block_node*>($6);
+			//p->block = dynamic_cast<block_node*>($8);
+			//$$ = p;
 		}
 	case 57:
-		yyDollar = yyS[yypt-8:yypt+1]
+		yyDollar = yyS[yypt-8 : yypt+1]
 		//line ../yacc.y:506
 		{
-			FKLOG("[bison]: for_stmt <- block cmp");
-			NEWTYPE(p, for_stmt);
-			p->cmp = dynamic_cast<cmp_stmt*>(yyDollar[4]);
-			p->beginblock = dynamic_cast<block_node*>(yyDollar[2]);
-			p->endblock = dynamic_cast<block_node*>(yyDollar[6]);
-			p->block = 0;
-			yyVAL = p;
+			Debug("[yacc]: for_stmt <- block cmp")
+			//NEWTYPE(p, for_stmt);
+			//p->cmp = dynamic_cast<cmp_stmt*>($4);
+			//p->beginblock = dynamic_cast<block_node*>($2);
+			//p->endblock = dynamic_cast<block_node*>($6);
+			//p->block = 0;
+			//$$ = p;
 		}
 	case 58:
-		yyDollar = yyS[yypt-11:yypt+1]
+		yyDollar = yyS[yypt-11 : yypt+1]
 		//line ../yacc.y:519
 		{
-			FKLOG("[bison]: for_loop_stmt <- block");
-			NEWTYPE(p, for_stmt);
-			
-			syntree_node * pi = yyDollar[2];
-			if (pi->gettype() == est_var)
-			{
-				NEWTYPE(pvar, variable_node);
-				pvar->str = (dynamic_cast<var_node*>(pi))->str;
-				pi = pvar;
-			}
-			
-			NEWTYPE(pcmp, cmp_stmt);
-			pcmp->cmp = "<";
-			pcmp->left = pi;
-			pcmp->right = yyDollar[6];
-			p->cmp = pcmp;
-			
-			NEWTYPE(pbeginblockassign, assign_stmt);
-			pbeginblockassign->var = yyDollar[2];
-			pbeginblockassign->value = yyDollar[4];
-			pbeginblockassign->isnew = false;
-			NEWTYPE(pbeginblock, block_node);
-			pbeginblock->add_stmt(pbeginblockassign);
-			p->beginblock = pbeginblock;
-			
-			NEWTYPE(pendblockassign, math_assign_stmt);
-			pendblockassign->var = pi;
-			pendblockassign->oper = "+=";
-			pendblockassign->value = yyDollar[8];
-			NEWTYPE(pendblock, block_node);
-			pendblock->add_stmt(pendblockassign);
-			p->endblock = pendblock;
-			
-			p->block = dynamic_cast<block_node*>(yyDollar[10]);
-			yyVAL = p;
+			Debug("[yacc]: for_loop_stmt <- block")
+			//NEWTYPE(p, for_stmt);
+			//
+			//syntree_node * pi = $2;
+			//if (pi->gettype() == est_var)
+			//{
+			//	NEWTYPE(pvar, variable_node);
+			//	pvar->str = (dynamic_cast<var_node*>(pi))->str;
+			//	pi = pvar;
+			//}
+			//
+			//NEWTYPE(pcmp, cmp_stmt);
+			//pcmp->cmp = "<";
+			//pcmp->left = pi;
+			//pcmp->right = $6;
+			//p->cmp = pcmp;
+			//
+			//NEWTYPE(pbeginblockassign, assign_stmt);
+			//pbeginblockassign->var = $2;
+			//pbeginblockassign->value = $4;
+			//pbeginblockassign->isnew = false;
+			//NEWTYPE(pbeginblock, block_node);
+			//pbeginblock->add_stmt(pbeginblockassign);
+			//p->beginblock = pbeginblock;
+			//
+			//NEWTYPE(pendblockassign, math_assign_stmt);
+			//pendblockassign->var = pi;
+			//pendblockassign->oper = "+=";
+			//pendblockassign->value = $8;
+			//NEWTYPE(pendblock, block_node);
+			//pendblock->add_stmt(pendblockassign);
+			//p->endblock = pendblock;
+			//
+			//p->block = dynamic_cast<block_node*>($10);
+			//$$ = p;
 		}
 	case 59:
-		yyDollar = yyS[yypt-10:yypt+1]
+		yyDollar = yyS[yypt-10 : yypt+1]
 		//line ../yacc.y:558
 		{
-			FKLOG("[bison]: for_loop_stmt <- empty");
-			NEWTYPE(p, for_stmt);
-			
-			NEWTYPE(pcmp, cmp_stmt);
-			pcmp->cmp = "<";
-			pcmp->left = yyDollar[2];
-			pcmp->right = yyDollar[6];
-			p->cmp = pcmp;
-			
-			NEWTYPE(pbeginblockassign, assign_stmt);
-			pbeginblockassign->var = yyDollar[2];
-			pbeginblockassign->value = yyDollar[4];
-			pbeginblockassign->isnew = false;
-			NEWTYPE(pbeginblock, block_node);
-			pbeginblock->add_stmt(pbeginblockassign);
-			p->beginblock = pbeginblock;
-			
-			NEWTYPE(pendblockassign, math_assign_stmt);
-			pendblockassign->var = yyDollar[2];
-			pendblockassign->oper = "+=";
-			pendblockassign->value = yyDollar[8];
-			NEWTYPE(pendblock, block_node);
-			pendblock->add_stmt(pendblockassign);
-			p->endblock = pendblock;
-			
-			p->block = 0;
-			yyVAL = p;
+			Debug("[yacc]: for_loop_stmt <- empty")
+			//NEWTYPE(p, for_stmt);
+			//
+			//NEWTYPE(pcmp, cmp_stmt);
+			//pcmp->cmp = "<";
+			//pcmp->left = $2;
+			//pcmp->right = $6;
+			//p->cmp = pcmp;
+			//
+			//NEWTYPE(pbeginblockassign, assign_stmt);
+			//pbeginblockassign->var = $2;
+			//pbeginblockassign->value = $4;
+			//pbeginblockassign->isnew = false;
+			//NEWTYPE(pbeginblock, block_node);
+			//pbeginblock->add_stmt(pbeginblockassign);
+			//p->beginblock = pbeginblock;
+			//
+			//NEWTYPE(pendblockassign, math_assign_stmt);
+			//pendblockassign->var = $2;
+			//pendblockassign->oper = "+=";
+			//pendblockassign->value = $8;
+			//NEWTYPE(pendblock, block_node);
+			//pendblock->add_stmt(pendblockassign);
+			//p->endblock = pendblock;
+			//
+			//p->block = 0;
+			//$$ = p;
 		}
 	case 60:
-		yyDollar = yyS[yypt-5:yypt+1]
+		yyDollar = yyS[yypt-5 : yypt+1]
 		//line ../yacc.y:591
 		{
-			FKLOG("[bison]: while_stmt <- cmp block");
-			NEWTYPE(p, while_stmt);
-			p->cmp = dynamic_cast<cmp_stmt*>(yyDollar[2]);
-			p->block = dynamic_cast<block_node*>(yyDollar[4]);
-			yyVAL = p;
+			Debug("[yacc]: while_stmt <- cmp block")
+			//NEWTYPE(p, while_stmt);
+			//p->cmp = dynamic_cast<cmp_stmt*>($2);
+			//p->block = dynamic_cast<block_node*>($4);
+			//$$ = p;
 		}
 	case 61:
-		yyDollar = yyS[yypt-4:yypt+1]
+		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ../yacc.y:600
 		{
-			FKLOG("[bison]: while_stmt <- cmp");
-			NEWTYPE(p, while_stmt);
-			p->cmp = dynamic_cast<cmp_stmt*>(yyDollar[2]);
-			p->block = 0;
-			yyVAL = p;
+			Debug("[yacc]: while_stmt <- cmp")
+			//NEWTYPE(p, while_stmt);
+			//p->cmp = dynamic_cast<cmp_stmt*>($2);
+			//p->block = 0;
+			//$$ = p;
 		}
 	case 62:
-		yyDollar = yyS[yypt-7:yypt+1]
+		yyDollar = yyS[yypt-7 : yypt+1]
 		//line ../yacc.y:611
 		{
-			FKLOG("[bison]: if_stmt <- cmp block");
-			NEWTYPE(p, if_stmt);
-			p->cmp = dynamic_cast<cmp_stmt*>(yyDollar[2]);
-			p->block = dynamic_cast<block_node*>(yyDollar[4]);
-			p->elseifs = dynamic_cast<elseif_stmt_list*>(yyDollar[5]);
-			p->elses = dynamic_cast<else_stmt*>(yyDollar[6]);
-			yyVAL = p;
+			Debug("[yacc]: if_stmt <- cmp block")
+			//NEWTYPE(p, if_stmt);
+			//p->cmp = dynamic_cast<cmp_stmt*>($2);
+			//p->block = dynamic_cast<block_node*>($4);
+			//p->elseifs = dynamic_cast<elseif_stmt_list*>($5);
+			//p->elses = dynamic_cast<else_stmt*>($6);
+			//$$ = p;
 		}
 	case 63:
-		yyDollar = yyS[yypt-6:yypt+1]
+		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ../yacc.y:622
 		{
-			FKLOG("[bison]: if_stmt <- cmp");
-			NEWTYPE(p, if_stmt);
-			p->cmp = dynamic_cast<cmp_stmt*>(yyDollar[2]);
-			p->block = 0;
-			p->elseifs = dynamic_cast<elseif_stmt_list*>(yyDollar[4]);
-			p->elses = dynamic_cast<else_stmt*>(yyDollar[5]);
-			yyVAL = p;
+			Debug("[yacc]: if_stmt <- cmp")
+			//NEWTYPE(p, if_stmt);
+			//p->cmp = dynamic_cast<cmp_stmt*>($2);
+			//p->block = 0;
+			//p->elseifs = dynamic_cast<elseif_stmt_list*>($4);
+			//p->elses = dynamic_cast<else_stmt*>($5);
+			//$$ = p;
 		}
 	case 64:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:635
 		{
-			yyVAL = 0;
+			//$$ = 0;
 		}
 	case 65:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:640
 		{
-			FKLOG("[bison]: elseif_stmt_list <- elseif_stmt_list elseif_stmt");
-			assert(yyDollar[1]->gettype() == est_elseif_stmt_list);
-			elseif_stmt_list * p = dynamic_cast<elseif_stmt_list*>(yyDollar[1]);
-			p->add_stmt(yyDollar[2]);
-			yyVAL = p;
+			Debug("[yacc]: elseif_stmt_list <- elseif_stmt_list elseif_stmt")
+			//assert($1->gettype() == est_elseif_stmt_list);
+			//elseif_stmt_list * p = dynamic_cast<elseif_stmt_list*>($1);
+			//p->add_stmt($2);
+			//$$ = p;
 		}
 	case 66:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:649
 		{
-			FKLOG("[bison]: elseif_stmt_list <- elseif_stmt");
-			NEWTYPE(p, elseif_stmt_list);
-			p->add_stmt(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: elseif_stmt_list <- elseif_stmt")
+			//NEWTYPE(p, elseif_stmt_list);
+			//p->add_stmt($1);
+			//$$ = p;
 		}
 	case 67:
-		yyDollar = yyS[yypt-4:yypt+1]
+		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ../yacc.y:659
 		{
-			FKLOG("[bison]: elseif_stmt <- ELSEIF cmp THEN block");
-			NEWTYPE(p, elseif_stmt);
-			p->cmp = dynamic_cast<cmp_stmt*>(yyDollar[2]);
-			p->block = yyDollar[4];
-			yyVAL = p;
+			Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
+			//NEWTYPE(p, elseif_stmt);
+			//p->cmp = dynamic_cast<cmp_stmt*>($2);
+			//p->block = $4;
+			//$$ = p;
 		}
 	case 68:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:668
 		{
-			FKLOG("[bison]: elseif_stmt <- ELSEIF cmp THEN block");
-			NEWTYPE(p, elseif_stmt);
-			p->cmp = dynamic_cast<cmp_stmt*>(yyDollar[2]);
-			p->block = 0;
-			yyVAL = p;
+			Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
+			//NEWTYPE(p, elseif_stmt);
+			//p->cmp = dynamic_cast<cmp_stmt*>($2);
+			//p->block = 0;
+			//$$ = p;
 		}
 	case 69:
-		yyDollar = yyS[yypt-0:yypt+1]
+		yyDollar = yyS[yypt-0 : yypt+1]
 		//line ../yacc.y:679
 		{
-			yyVAL = 0;
+			//$$ = 0;
 		}
 	case 70:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:684
 		{
-			FKLOG("[bison]: else_stmt <- block");
-			NEWTYPE(p, else_stmt);
-			p->block = dynamic_cast<block_node*>(yyDollar[2]);
-			yyVAL = p;
+			Debug("[yacc]: else_stmt <- block")
+			//NEWTYPE(p, else_stmt);
+			//p->block = dynamic_cast<block_node*>($2);
+			//$$ = p;
 		}
 	case 71:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:692
 		{
-			FKLOG("[bison]: else_stmt <- empty");
-			NEWTYPE(p, else_stmt);
-			p->block = 0;
-			yyVAL = p;
+			Debug("[yacc]: else_stmt <- empty")
+			//NEWTYPE(p, else_stmt);
+			//p->block = 0;
+			//$$ = p;
 		}
 	case 72:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:702
 		{
-			FKLOG("[bison]: cmp <- ( cmp )");
-			yyVAL = yyDollar[2];
+			Debug("[yacc]: cmp <- ( cmp )")
+			//$$ = $2;
 		}
 	case 73:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:708
 		{
-			FKLOG("[bison]: cmp <- cmp AND cmp");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = "&&";
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp AND cmp")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = "&&";
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 74:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:718
 		{
-			FKLOG("[bison]: cmp <- cmp OR cmp");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = "||";
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp OR cmp")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = "||";
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 75:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:728
 		{
-			FKLOG("[bison]: cmp <- cmp_value LESS cmp_value");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = yyDollar[2];
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp_value LESS cmp_value")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = $2;
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 76:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:738
 		{
-			FKLOG("[bison]: cmp <- cmp_value MORE cmp_value");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = yyDollar[2];
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp_value MORE cmp_value")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = $2;
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 77:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:748
 		{
-			FKLOG("[bison]: cmp <- cmp_value EQUAL cmp_value");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = yyDollar[2];
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp_value EQUAL cmp_value")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = $2;
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 78:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:758
 		{
-			FKLOG("[bison]: cmp <- cmp_value MORE_OR_EQUAL cmp_value");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = yyDollar[2];
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = $2;
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 79:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:768
 		{
-			FKLOG("[bison]: cmp <- cmp_value LESS_OR_EQUAL cmp_value");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = yyDollar[2];
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = $2;
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 80:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:778
 		{
-			FKLOG("[bison]: cmp <- cmp_value NOT_EQUAL cmp_value");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = yyDollar[2];
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = $2;
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 81:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:788
 		{
-			FKLOG("[bison]: cmp <- true");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = "true";
-			p->left = 0;
-			p->right = 0;
-			yyVAL = p;
+			Debug("[yacc]: cmp <- true")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = "true";
+			//p->left = 0;
+			//p->right = 0;
+			//$$ = p;
 		}
 	case 82:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:798
 		{
-			FKLOG("[bison]: cmp <- false");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = "false";
-			p->left = 0;
-			p->right = 0;
-			yyVAL = p;
+			Debug("[yacc]: cmp <- false")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = "false";
+			//p->left = 0;
+			//p->right = 0;
+			//$$ = p;
 		}
 	case 83:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:808
 		{
-			FKLOG("[bison]: cmp <- cmp_value IS cmp_value");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = "is";
-			p->left = yyDollar[2];
-			p->right = 0;
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp_value IS cmp_value")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = "is";
+			//p->left = $2;
+			//p->right = 0;
+			//$$ = p;
 		}
 	case 84:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:818
 		{
-			FKLOG("[bison]: cmp <- cmp_value NOT cmp_value");
-			NEWTYPE(p, cmp_stmt);
-			p->cmp = "not";
-			p->left = yyDollar[2];
-			p->right = 0;
-			yyVAL = p;
+			Debug("[yacc]: cmp <- cmp_value NOT cmp_value")
+			//NEWTYPE(p, cmp_stmt);
+			//p->cmp = "not";
+			//p->left = $2;
+			//p->right = 0;
+			//$$ = p;
 		}
 	case 85:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:830
 		{
-			FKLOG("[bison]: cmp_value <- explicit_value");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: cmp_value <- explicit_value")
+			//$$ = $1;
 		}
 	case 86:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:836
 		{
-			FKLOG("[bison]: cmp_value <- variable");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: cmp_value <- variable")
+			//$$ = $1;
 		}
 	case 87:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:842
 		{
-			FKLOG("[bison]: cmp_value <- expr");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: cmp_value <- expr")
+			//$$ = $1;
 		}
 	case 88:
-		yyDollar = yyS[yypt-2:yypt+1]
+		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:850
 		{
-			FKLOG("[bison]: return_stmt <- RETURN return_value_list");
-			NEWTYPE(p, return_stmt);
-			p->returnlist = dynamic_cast<return_value_list_node*>(yyDollar[2]);
-			yyVAL = p;
+			Debug("[yacc]: return_stmt <- RETURN return_value_list")
+			//NEWTYPE(p, return_stmt);
+			//p->returnlist = dynamic_cast<return_value_list_node*>($2);
+			//$$ = p;
 		}
 	case 89:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:858
 		{
-			FKLOG("[bison]: return_stmt <- RETURN");
-			NEWTYPE(p, return_stmt);
-			p->returnlist = 0;
-			yyVAL = p;
+			Debug("[yacc]: return_stmt <- RETURN")
+			//NEWTYPE(p, return_stmt);
+			//p->returnlist = 0;
+			//$$ = p;
 		}
 	case 90:
-		yyDollar = yyS[yypt-3:yypt+1]
+		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:868
 		{
-			FKLOG("[bison]: return_value_list <- return_value_list return_value");
-			assert(yyDollar[1]->gettype() == est_return_value_list);
-			return_value_list_node * p = dynamic_cast<return_value_list_node*>(yyDollar[1]);
-			p->add_arg(yyDollar[3]);
-			yyVAL = p;
+			Debug("[yacc]: return_value_list <- return_value_list return_value")
+			//assert($1->gettype() == est_return_value_list);
+			//return_value_list_node * p = dynamic_cast<return_value_list_node*>($1);
+			//p->add_arg($3);
+			//$$ = p;
 		}
 	case 91:
-		yyDollar = yyS[yypt-1:yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:877
 		{
-			NEWTYPE(p, return_value_list_node);
-			p->add_arg(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: return_value_list <- return_value")
+			//NEWTYPE(p, return_value_list_node);
+			//p->add_arg($1);
+			//$$ = p;
 		}
 	case 92:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:886
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:887
 		{
-			FKLOG("[bison]: return_value <- explicit_value");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: return_value <- explicit_value")
+			//$$ = $1;
 		}
 	case 93:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:892
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:893
 		{
-			FKLOG("[bison]: return_value <- variable");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: return_value <- variable")
+			//$$ = $1;
 		}
 	case 94:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:898
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:899
 		{
-			FKLOG("[bison]: return_value <- expr");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: return_value <- expr")
+			//$$ = $1;
 		}
 	case 95:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:906
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:907
 		{
-			FKLOG("[bison]: assign_stmt <- var assign_value");
-			NEWTYPE(p, assign_stmt);
-			p->var = yyDollar[1];
-			p->value = yyDollar[3];
-			p->isnew = false;
-			yyVAL = p;
+			Debug("[yacc]: assign_stmt <- var assign_value")
+			//NEWTYPE(p, assign_stmt);
+			//p->var = $1;
+			//p->value = $3;
+			//p->isnew = false;
+			//$$ = p;
 		}
 	case 96:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:916
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:917
 		{
-			FKLOG("[bison]: new assign_stmt <- var assign_value");
-			NEWTYPE(p, assign_stmt);
-			p->var = yyDollar[1];
-			p->value = yyDollar[3];
-			p->isnew = true;
-			yyVAL = p;
+			Debug("[yacc]: new assign_stmt <- var assign_value")
+			//NEWTYPE(p, assign_stmt);
+			//p->var = $1;
+			//p->value = $3;
+			//p->isnew = true;
+			//$$ = p;
 		}
 	case 97:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:928
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:929
 		{
-			FKLOG("[bison]: multi_assign_stmt <- var_list function_call");
-			NEWTYPE(p, multi_assign_stmt);
-			p->varlist = dynamic_cast<var_list_node*>(yyDollar[1]);
-			p->value = yyDollar[3];
-			p->isnew = false;
-			yyVAL = p;
+			Debug("[yacc]: multi_assign_stmt <- var_list function_call")
+			//NEWTYPE(p, multi_assign_stmt);
+			//p->varlist = dynamic_cast<var_list_node*>($1);
+			//p->value = $3;
+			//p->isnew = false;
+			//$$ = p;
 		}
 	case 98:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:938
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:939
 		{
-			FKLOG("[bison]: new multi_assign_stmt <- var_list function_call");
-			NEWTYPE(p, multi_assign_stmt);
-			p->varlist = dynamic_cast<var_list_node*>(yyDollar[1]);
-			p->value = yyDollar[3];
-			p->isnew = true;
-			yyVAL = p;
+			Debug("[yacc]: new multi_assign_stmt <- var_list function_call")
+			//NEWTYPE(p, multi_assign_stmt);
+			//p->varlist = dynamic_cast<var_list_node*>($1);
+			//p->value = $3;
+			//p->isnew = true;
+			//$$ = p;
 		}
 	case 99:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:950
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:951
 		{
-			FKLOG("[bison]: var_list <- var_list var");
-			assert(yyDollar[1]->gettype() == est_var_list);
-			var_list_node * p = dynamic_cast<var_list_node*>(yyDollar[1]);
-			p->add_arg(yyDollar[3]);
-			yyVAL = p;
+			Debug("[yacc]: var_list <- var_list var")
+			//assert($1->gettype() == est_var_list);
+			//var_list_node * p = dynamic_cast<var_list_node*>($1);
+			//p->add_arg($3);
+			//$$ = p;
 		}
 	case 100:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:959
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:960
 		{
-			NEWTYPE(p, var_list_node);
-			p->add_arg(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: var_list <- var")
+			//NEWTYPE(p, var_list_node);
+			//p->add_arg($1);
+			//$$ = p;
 		}
 	case 101:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:968
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:970
 		{
-			FKLOG("[bison]: assign_value <- explicit_value");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: assign_value <- explicit_value")
+			//$$ = $1;
 		}
 	case 102:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:974
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:976
 		{
-			FKLOG("[bison]: assign_value <- variable");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: assign_value <- variable")
+			//$$ = $1;
 		}
 	case 103:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:980
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:982
 		{
-			FKLOG("[bison]: assign_value <- expr");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: assign_value <- expr")
+			//$$ = $1;
 		}
 	case 104:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:988
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:990
 		{
-			FKLOG("[bison]: math_assign_stmt <- variable assign_value");
-			NEWTYPE(p, math_assign_stmt);
-			p->var = yyDollar[1];
-			p->oper = "+=";
-			p->value = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			//NEWTYPE(p, math_assign_stmt);
+			//p->var = $1;
+			//p->oper = "+=";
+			//p->value = $3;
+			//$$ = p;
 		}
 	case 105:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:998
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1000
 		{
-			FKLOG("[bison]: math_assign_stmt <- variable assign_value");
-			NEWTYPE(p, math_assign_stmt);
-			p->var = yyDollar[1];
-			p->oper = "-=";
-			p->value = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			//NEWTYPE(p, math_assign_stmt);
+			//p->var = $1;
+			//p->oper = "-=";
+			//p->value = $3;
+			//$$ = p;
 		}
 	case 106:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1008
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1010
 		{
-			FKLOG("[bison]: math_assign_stmt <- variable assign_value");
-			NEWTYPE(p, math_assign_stmt);
-			p->var = yyDollar[1];
-			p->oper = "/=";
-			p->value = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			//NEWTYPE(p, math_assign_stmt);
+			//p->var = $1;
+			//p->oper = "/=";
+			//p->value = $3;
+			//$$ = p;
 		}
 	case 107:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1018
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1020
 		{
-			FKLOG("[bison]: math_assign_stmt <- variable assign_value");
-			NEWTYPE(p, math_assign_stmt);
-			p->var = yyDollar[1];
-			p->oper = "*=";
-			p->value = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			//NEWTYPE(p, math_assign_stmt);
+			//p->var = $1;
+			//p->oper = "*=";
+			//p->value = $3;
+			//$$ = p;
 		}
 	case 108:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1028
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1030
 		{
-			FKLOG("[bison]: math_assign_stmt <- variable assign_value");
-			NEWTYPE(p, math_assign_stmt);
-			p->var = yyDollar[1];
-			p->oper = "%=";
-			p->value = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			//NEWTYPE(p, math_assign_stmt);
+			//p->var = $1;
+			//p->oper = "%=";
+			//p->value = $3;
+			//$$ = p;
 		}
 	case 109:
-		yyDollar = yyS[yypt-2:yypt+1]
-		//line ../yacc.y:1038
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:1040
 		{
-			FKLOG("[bison]: math_assign_stmt <- variable INC");
-			NEWTYPE(pp, explicit_value_node);
-			pp->str = "1";
-			pp->type = explicit_value_node::EVT_NUM;
-			
-			NEWTYPE(p, math_assign_stmt);
-			p->var = yyDollar[1];
-			p->oper = "+=";
-			p->value = pp;
-			yyVAL = p;
+			Debug("[yacc]: math_assign_stmt <- variable INC")
+			//NEWTYPE(pp, explicit_value_node);
+			//pp->str = "1";
+			//pp->type = explicit_value_node::EVT_NUM;
+			//
+			//NEWTYPE(p, math_assign_stmt);
+			//p->var = $1;
+			//p->oper = "+=";
+			//p->value = pp;
+			//$$ = p;
 		}
 	case 110:
-		yyDollar = yyS[yypt-2:yypt+1]
-		//line ../yacc.y:1054
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:1056
 		{
-			FKLOG("[bison]: var <- VAR_BEGIN IDENTIFIER %s", yyDollar[2].c_str());
-			NEWTYPE(p, var_node);
-			p->str = yyDollar[2];
-			yyVAL = p;
+			Debug("[yacc]: var <- VAR_BEGIN IDENTIFIER %v", yyDollar[2].s)
+			//NEWTYPE(p, var_node);
+			//p->str = $2;
+			//$$ = p;
 		}
 	case 111:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1062
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1064
 		{
-			FKLOG("[bison]: var <- variable");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: var <- variable")
+			//$$ = $1;
 		}
 	case 112:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1070
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1072
 		{
-			FKLOG("[bison]: variable <- IDENTIFIER %s", yyDollar[1].c_str());
-			NEWTYPE(p, variable_node);
-			p->str = yyDollar[1];
-			yyVAL = p;
+			Debug("[yacc]: variable <- IDENTIFIER %v", yyDollar[1].s)
+			//NEWTYPE(p, variable_node);
+			//p->str = $1;
+			//$$ = p;
 		}
 	case 113:
-		yyDollar = yyS[yypt-4:yypt+1]
-		//line ../yacc.y:1078
+		yyDollar = yyS[yypt-4 : yypt+1]
+		//line ../yacc.y:1080
 		{
-			FKLOG("[bison]: container_get_node <- IDENTIFIER[expr_value] %s", yyDollar[1].c_str());
-			NEWTYPE(p, container_get_node);
-			p->container = yyDollar[1];
-			p->key = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: container_get_node <- IDENTIFIER[expr_value] %v", yyDollar[1].s)
+			//NEWTYPE(p, container_get_node);
+			//p->container = $1;
+			//p->key = $3;
+			//$$ = p;
 		}
 	case 114:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1087
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1089
 		{
-			FKLOG("[bison]: variable <- IDENTIFIER_POINTER %s", yyDollar[1].c_str());
-			NEWTYPE(p, struct_pointer_node);
-			p->str = yyDollar[1];
-			yyVAL = p;
+			Debug("[yacc]: variable <- IDENTIFIER_POINTER %v", yyDollar[1].s)
+			//NEWTYPE(p, struct_pointer_node);
+			//p->str = $1;
+			//$$ = p;
 		}
 	case 115:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1095
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1097
 		{
-			FKLOG("[bison]: variable <- IDENTIFIER_DOT %s", yyDollar[1].c_str());
-			NEWTYPE(p, variable_node);
-			p->str = yyDollar[1];
-			yyVAL = p;
+			Debug("[yacc]: variable <- IDENTIFIER_DOT %v", yyDollar[1].s)
+			//NEWTYPE(p, variable_node);
+			//p->str = $1;
+			//$$ = p;
 		}
 	case 116:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1105
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1107
 		{
-			FKLOG("[bison]: expr <- (expr)");
-			yyVAL = yyDollar[2];
+			Debug("[yacc]: expr <- (expr)")
+			//$$ = $2;
 		}
 	case 117:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1111
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1113
 		{
-			FKLOG("[bison]: expr <- function_call");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: expr <- function_call")
+			//$$ = $1;
 		}
 	case 118:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1117
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1119
 		{
-			FKLOG("[bison]: expr <- math_expr");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: expr <- math_expr")
+			//$$ = $1;
 		}
 	case 119:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1125
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1127
 		{
-			FKLOG("[bison]: math_expr <- (math_expr)");
-			yyVAL = yyDollar[2];
+			Debug("[yacc]: math_expr <- (math_expr)")
+			//$$ = $2;
 		}
 	case 120:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1131
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1133
 		{
-			FKLOG("[bison]: math_expr <- expr_value %s expr_value", yyDollar[2].c_str());
-			NEWTYPE(p, math_expr_node);
-			p->oper = "+";
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			//NEWTYPE(p, math_expr_node);
+			//p->oper = "+";
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 121:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1141
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1143
 		{
-			FKLOG("[bison]: math_expr <- expr_value %s expr_value", yyDollar[2].c_str());
-			NEWTYPE(p, math_expr_node);
-			p->oper = "-";
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			//NEWTYPE(p, math_expr_node);
+			//p->oper = "-";
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 122:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1151
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1153
 		{
-			FKLOG("[bison]: math_expr <- expr_value %s expr_value", yyDollar[2].c_str());
-			NEWTYPE(p, math_expr_node);
-			p->oper = "*";
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			//NEWTYPE(p, math_expr_node);
+			//p->oper = "*";
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 123:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1161
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1163
 		{
-			FKLOG("[bison]: math_expr <- expr_value %s expr_value", yyDollar[2].c_str());
-			NEWTYPE(p, math_expr_node);
-			p->oper = "/";
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			//NEWTYPE(p, math_expr_node);
+			//p->oper = "/";
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 124:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1171
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1173
 		{
-			FKLOG("[bison]: math_expr <- expr_value %s expr_value", yyDollar[2].c_str());
-			NEWTYPE(p, math_expr_node);
-			p->oper = "%";
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			//NEWTYPE(p, math_expr_node);
+			//p->oper = "%";
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 125:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1181
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1183
 		{
-			FKLOG("[bison]: math_expr <- expr_value %s expr_value", yyDollar[2].c_str());
-			NEWTYPE(p, math_expr_node);
-			p->oper = "..";
-			p->left = yyDollar[1];
-			p->right = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			//NEWTYPE(p, math_expr_node);
+			//p->oper = "..";
+			//p->left = $1;
+			//p->right = $3;
+			//$$ = p;
 		}
 	case 126:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1193
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1195
 		{
-			FKLOG("[bison]: expr_value <- math_expr");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: expr_value <- math_expr")
+			//$$ = $1;
 		}
 	case 127:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1199
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1201
 		{
-			FKLOG("[bison]: expr_value <- explicit_value");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: expr_value <- explicit_value")
+			//$$ = $1;
 		}
 	case 128:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1205
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1207
 		{
-			FKLOG("[bison]: expr_value <- function_call");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: expr_value <- function_call")
+			//$$ = $1;
 		}
 	case 129:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1211
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1213
 		{
-			FKLOG("[bison]: expr_value <- variable");
-			yyVAL = yyDollar[1];
+			Debug("[yacc]: expr_value <- variable")
+			//$$ = $1;
 		}
 	case 130:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1219
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1221
 		{
-			FKLOG("[bison]: explicit_value <- FTRUE");
-			NEWTYPE(p, explicit_value_node);
-			p->str = yyDollar[1];
-			p->type = explicit_value_node::EVT_TRUE;
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- FTRUE")
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = $1;
+			//p->type = explicit_value_node::EVT_TRUE;
+			//$$ = p;
 		}
 	case 131:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1228
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1230
 		{
-			FKLOG("[bison]: explicit_value <- FFALSE");
-			NEWTYPE(p, explicit_value_node);
-			p->str = yyDollar[1];
-			p->type = explicit_value_node::EVT_FALSE;
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- FFALSE")
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = $1;
+			//p->type = explicit_value_node::EVT_FALSE;
+			//$$ = p;
 		}
 	case 132:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1237
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1239
 		{
-			FKLOG("[bison]: explicit_value <- NUMBER %s", yyDollar[1].c_str());
-			NEWTYPE(p, explicit_value_node);
-			p->str = yyDollar[1];
-			p->type = explicit_value_node::EVT_NUM;
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- NUMBER %v", yyDollar[1].s)
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = $1;
+			//p->type = explicit_value_node::EVT_NUM;
+			//$$ = p;
 		}
 	case 133:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1246
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1248
 		{
-			FKLOG("[bison]: explicit_value <- FKUUID %s", yyDollar[1].c_str());
-			NEWTYPE(p, explicit_value_node);
-			p->str = yyDollar[1];
-			p->type = explicit_value_node::EVT_UUID;
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- FKUUID %v", yyDollar[1].s)
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = $1;
+			//p->type = explicit_value_node::EVT_UUID;
+			//$$ = p;
 		}
 	case 134:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1255
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1257
 		{
-			FKLOG("[bison]: explicit_value <- STRING_DEFINITION %s", yyDollar[1].c_str());
-			NEWTYPE(p, explicit_value_node);
-			p->str = yyDollar[1];
-			p->type = explicit_value_node::EVT_STR;
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- STRING_DEFINITION %v", yyDollar[1].s)
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = $1;
+			//p->type = explicit_value_node::EVT_STR;
+			//$$ = p;
 		}
 	case 135:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1264
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1266
 		{
-			FKLOG("[bison]: explicit_value <- FKFLOAT %s", yyDollar[1].c_str());
-			NEWTYPE(p, explicit_value_node);
-			p->str = yyDollar[1];
-			p->type = explicit_value_node::EVT_FLOAT;
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- FKFLOAT %v", yyDollar[1].s)
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = $1;
+			//p->type = explicit_value_node::EVT_FLOAT;
+			//$$ = p;
 		}
 	case 136:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1273
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1275
 		{
-			FKLOG("[bison]: explicit_value <- FNULL %s", yyDollar[1].c_str());
-			NEWTYPE(p, explicit_value_node);
-			p->str = yyDollar[1];
-			p->type = explicit_value_node::EVT_NULL;
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- FNULL %v", yyDollar[1].s)
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = $1;
+			//p->type = explicit_value_node::EVT_NULL;
+			//$$ = p;
 		}
 	case 137:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1282
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1284
 		{
-			FKLOG("[bison]: explicit_value <- const_map_list_value");
-			NEWTYPE(p, explicit_value_node);
-			p->str = "";
-			p->type = explicit_value_node::EVT_MAP;
-			p->v = yyDollar[2];
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- const_map_list_value")
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = "";
+			//p->type = explicit_value_node::EVT_MAP;
+			//p->v = $2;
+			//$$ = p;
 		}
 	case 138:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1292
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1294
 		{
-			FKLOG("[bison]: explicit_value <- const_array_list_value");
-			NEWTYPE(p, explicit_value_node);
-			p->str = "";
-			p->type = explicit_value_node::EVT_ARRAY;
-			p->v = yyDollar[2];
-			yyVAL = p;
+			Debug("[yacc]: explicit_value <- const_array_list_value")
+			//NEWTYPE(p, explicit_value_node);
+			//p->str = "";
+			//p->type = explicit_value_node::EVT_ARRAY;
+			//p->v = $2;
+			//$$ = p;
 		}
 	case 139:
-		yyDollar = yyS[yypt-0:yypt+1]
-		//line ../yacc.y:1304
+		yyDollar = yyS[yypt-0 : yypt+1]
+		//line ../yacc.y:1306
 		{
-			FKLOG("[bison]: const_map_list_value <- null");
-			NEWTYPE(p, const_map_list_value_node);
-			yyVAL = p;
+			Debug("[yacc]: const_map_list_value <- null")
+			//NEWTYPE(p, const_map_list_value_node);
+			//$$ = p;
 		}
 	case 140:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1311
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1313
 		{
-			FKLOG("[bison]: const_map_list_value <- const_map_value");
-			NEWTYPE(p, const_map_list_value_node);
-			p->add_ele(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: const_map_list_value <- const_map_value")
+			//NEWTYPE(p, const_map_list_value_node);
+			//p->add_ele($1);
+			//$$ = p;
 		}
 	case 141:
-		yyDollar = yyS[yypt-2:yypt+1]
-		//line ../yacc.y:1319
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:1321
 		{
-			FKLOG("[bison]: const_map_list_value <- const_map_list_value const_map_value");
-			assert(yyDollar[1]->gettype() == est_constmaplist);
-			const_map_list_value_node * p = dynamic_cast<const_map_list_value_node*>(yyDollar[1]);
-			p->add_ele(yyDollar[2]);
-			yyVAL = p;
+			Debug("[yacc]: const_map_list_value <- const_map_list_value const_map_value")
+			//assert($1->gettype() == est_constmaplist);
+			//const_map_list_value_node * p = dynamic_cast<const_map_list_value_node*>($1);
+			//p->add_ele($2);
+			//$$ = p;
 		}
 	case 142:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1330
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1332
 		{
-			FKLOG("[bison]: const_map_value <- explicit_value");
-			NEWTYPE(p, const_map_value_node);
-			p->k = yyDollar[1];
-			p->v = yyDollar[3];
-			yyVAL = p;
+			Debug("[yacc]: const_map_value <- explicit_value")
+			//NEWTYPE(p, const_map_value_node);
+			//p->k = $1;
+			//p->v = $3;
+			//$$ = p;
 		}
 	case 143:
-		yyDollar = yyS[yypt-0:yypt+1]
-		//line ../yacc.y:1341
+		yyDollar = yyS[yypt-0 : yypt+1]
+		//line ../yacc.y:1343
 		{
-			FKLOG("[bison]: const_array_list_value <- null");
-			NEWTYPE(p, const_array_list_value_node);
-			yyVAL = p;
+			Debug("[yacc]: const_array_list_value <- null")
+			//NEWTYPE(p, const_array_list_value_node);
+			//$$ = p;
 		}
 	case 144:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1348
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1350
 		{
-			FKLOG("[bison]: const_array_list_value <- explicit_value");
-			NEWTYPE(p, const_array_list_value_node);
-			p->add_ele(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: const_array_list_value <- explicit_value")
+			//NEWTYPE(p, const_array_list_value_node);
+			//p->add_ele($1);
+			//$$ = p;
 		}
 	case 145:
-		yyDollar = yyS[yypt-2:yypt+1]
-		//line ../yacc.y:1356
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:1358
 		{
-			FKLOG("[bison]: const_array_list_value <- const_array_list_value explicit_value");
-			assert(yyDollar[1]->gettype() == est_constarraylist);
-			const_array_list_value_node * p = dynamic_cast<const_array_list_value_node*>(yyDollar[1]);
-			p->add_ele(yyDollar[2]);
-			yyVAL = p;
+			Debug("[yacc]: const_array_list_value <- const_array_list_value explicit_value")
+			//assert($1->gettype() == est_constarraylist);
+			//const_array_list_value_node * p = dynamic_cast<const_array_list_value_node*>($1);
+			//p->add_ele($2);
+			//$$ = p;
 		}
 	case 146:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1367
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1369
 		{
-			FKLOG("[bison]: break <- BREAK");
-			NEWTYPE(p, break_stmt);
-			yyVAL = p;
+			Debug("[yacc]: break <- BREAK")
+			//NEWTYPE(p, break_stmt);
+			//$$ = p;
 		}
 	case 147:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1376
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1378
 		{
-			FKLOG("[bison]: CONTINUE");
-			NEWTYPE(p, continue_stmt);
-			yyVAL = p;
+			Debug("[yacc]: CONTINUE")
+			//NEWTYPE(p, continue_stmt);
+			//$$ = p;
 		}
 	case 148:
-		yyDollar = yyS[yypt-2:yypt+1]
-		//line ../yacc.y:1385
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:1387
 		{
-			FKLOG("[bison]: SLEEP");
-			NEWTYPE(p, sleep_stmt);
-			p->time = yyDollar[2];
-			yyVAL = p;
+			Debug("[yacc]: SLEEP")
+			//NEWTYPE(p, sleep_stmt);
+			//p->time = $2;
+			//$$ = p;
 		}
 	case 149:
-		yyDollar = yyS[yypt-2:yypt+1]
-		//line ../yacc.y:1394
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:1396
 		{
-			FKLOG("[bison]: YIELD");
-			NEWTYPE(p, yield_stmt);
-			p->time = yyDollar[2];
-			yyVAL = p;
+			Debug("[yacc]: YIELD")
+			//NEWTYPE(p, yield_stmt);
+			//p->time = $2;
+			//$$ = p;
 		}
 	case 150:
-		yyDollar = yyS[yypt-6:yypt+1]
-		//line ../yacc.y:1404
+		yyDollar = yyS[yypt-6 : yypt+1]
+		//line ../yacc.y:1406
 		{
-			FKLOG("[bison]: switch_stmt");
-			NEWTYPE(p, switch_stmt);
-			p->cmp = yyDollar[2];
-			p->caselist = yyDollar[3];
-			p->def = yyDollar[5];
-			yyVAL = p;
+			Debug("[yacc]: switch_stmt")
+			//NEWTYPE(p, switch_stmt);
+			//p->cmp = $2;
+			//p->caselist = $3;
+			//p->def = $5;
+			//$$ = p;
 		}
 	case 151:
-		yyDollar = yyS[yypt-5:yypt+1]
-		//line ../yacc.y:1414
+		yyDollar = yyS[yypt-5 : yypt+1]
+		//line ../yacc.y:1416
 		{
-			FKLOG("[bison]: switch_stmt");
-			NEWTYPE(p, switch_stmt);
-			p->cmp = yyDollar[2];
-			p->caselist = yyDollar[3];
-			p->def = 0;
-			yyVAL = p;
+			Debug("[yacc]: switch_stmt")
+			//NEWTYPE(p, switch_stmt);
+			//p->cmp = $2;
+			//p->caselist = $3;
+			//p->def = 0;
+			//$$ = p;
 		}
 	case 152:
-		yyDollar = yyS[yypt-1:yypt+1]
-		//line ../yacc.y:1426
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:1428
 		{
-			FKLOG("[bison]: switch_case_list <- switch_case_define");
-			NEWTYPE(p, switch_caselist_node);
-			p->add_case(yyDollar[1]);
-			yyVAL = p;
+			Debug("[yacc]: switch_case_list <- switch_case_define")
+			//NEWTYPE(p, switch_caselist_node);
+			//p->add_case($1);
+			//$$ = p;
 		}
 	case 153:
-		yyDollar = yyS[yypt-2:yypt+1]
-		//line ../yacc.y:1434
+		yyDollar = yyS[yypt-2 : yypt+1]
+		//line ../yacc.y:1436
 		{
-			FKLOG("[bison]: switch_case_list <- switch_case_list switch_case_define");
-			assert(yyDollar[2]->gettype() == est_switch_case_node);
-			switch_caselist_node * p = dynamic_cast<switch_caselist_node*>(yyDollar[1]);
-			p->add_case(yyDollar[2]);
-			yyVAL = p;
+			Debug("[yacc]: switch_case_list <- switch_case_list switch_case_define")
+			//assert($2->gettype() == est_switch_case_node);
+			//switch_caselist_node * p = dynamic_cast<switch_caselist_node*>($1);
+			//p->add_case($2);
+			//$$ = p;
 		}
 	case 154:
-		yyDollar = yyS[yypt-4:yypt+1]
-		//line ../yacc.y:1445
+		yyDollar = yyS[yypt-4 : yypt+1]
+		//line ../yacc.y:1447
 		{
-			FKLOG("[bison]: switch_case_define");
-			NEWTYPE(p, switch_case_node);
-			p->cmp = yyDollar[2];
-			p->block = yyDollar[4];
-			yyVAL = p;
+			Debug("[yacc]: switch_case_define")
+			//NEWTYPE(p, switch_case_node);
+			//p->cmp = $2;
+			//p->block = $4;
+			//$$ = p;
 		}
 	case 155:
-		yyDollar = yyS[yypt-3:yypt+1]
-		//line ../yacc.y:1454
+		yyDollar = yyS[yypt-3 : yypt+1]
+		//line ../yacc.y:1456
 		{
-			FKLOG("[bison]: switch_case_define");
-			NEWTYPE(p, switch_case_node);
-			p->cmp = yyDollar[2];
-			p->block = 0;
-			yyVAL = p;
+			Debug("[yacc]: switch_case_define")
+			//NEWTYPE(p, switch_case_node);
+			//p->cmp = $2;
+			//p->block = 0;
+			//$$ = p;
 		}
 	}
 	goto yystack /* stack new state and value */

@@ -16,7 +16,7 @@
 /(end)/ { Debug("END"); return END }
 /(const)/ { Debug("FCONST"); return FCONST }
 /(package)/ { Debug("PACKAGE"); return PACKAGE }
-/(null)/ { Debug("NULL"); return NULL }
+/(null)/ { Debug("NULL"); return FNULL }
 /(include)/ { Debug("INCLUDE"); return INCLUDE }
 /(struct)/ { Debug("STRUCT"); return STRUCT }
 /(and)/ { Debug("AND"); return AND }
@@ -29,7 +29,40 @@
 /(switch)/ { Debug("SWITCH"); return SWITCH }
 /(case)/ { Debug("CASE"); return CASE }
 /(default)/ { Debug("DEFAULT"); return DEFAULT }
-/(null)/ { Debug("FNULL"); return FNULL }
 /[a-zA-Z_][a-zA-Z0-9_]*/ { Debug("IDENTIFIER"); lval.s = yylex.Text(); return IDENTIFIER;}
+/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+/ { Debug("IDENTIFIER_DOT"); lval.s = yylex.Text(); return IDENTIFIER_DOT;}
+/[a-zA-Z_][a-zA-Z0-9_]*(\-\>[a-zA-Z_][a-zA-Z0-9_]*)+/ { Debug("IDENTIFIER_POINTER"); lval.s = yylex.Text(); return IDENTIFIER_POINTER;}
+/[0-9]+u/ { Debug("FKUUID"); lval.s = yylex.Text(); return FKUUID;}
+/-?[0-9]+/ { Debug("NUMBER"); lval.s = yylex.Text(); return NUMBER;}
+/-?[0-9]+\.[0-9]+([Ee]-?[0-9]+)?/ { Debug("FKFLOAT"); lval.s = yylex.Text(); return FKFLOAT;}
+/(\%)/ { Debug("DIVIDE_MOD"); return DIVIDE_MOD }
+/(\,)/ { Debug("ARG_SPLITTER"); return ARG_SPLITTER }
+/(\-\>)/ { Debug("RIGHT_POINTER"); return RIGHT_POINTER }
+/(\+\+)/ { Debug("INC"); return INC }
+/(\+)/ { Debug("PLUS"); return PLUS }
+/(\-)/ { Debug("MINUS"); return MINUS }
+/(\/)/ { Debug("DIVIDE"); return DIVIDE }
+/(\*)/ { Debug("MULTIPLY"); return MULTIPLY }
+/(\:\=)/ { Debug("NEW_ASSIGN"); return NEW_ASSIGN }
+/(\+\=)/ { Debug("PLUS_ASSIGN"); return PLUS_ASSIGN }
+/(\-\=)/ { Debug("MINUS_ASSIGN"); return MINUS_ASSIGN }
+/(\/\=)/ { Debug("DIVIDE_ASSIGN"); return DIVIDE_ASSIGN }
+/(\*\=)/ { Debug("MULTIPLY_ASSIGN"); return MULTIPLY_ASSIGN }
+/(\%\=)/ { Debug("DIVIDE_MOD_ASSIGN"); return DIVIDE_MOD_ASSIGN }
+/(\=)/ { Debug("ASSIGN"); return ASSIGN }
+/(\>)/ { Debug("MORE"); return MORE }
+/(\<)/ { Debug("LESS"); return LESS }
+/(\>\=)/ { Debug("MORE_OR_EQUAL"); return MORE_OR_EQUAL }
+/(\<\=)/ { Debug("LESS_OR_EQUAL"); return LESS_OR_EQUAL }
+/(\=\=)/ { Debug("EQUAL"); return EQUAL }
+/(\!\=)/ { Debug("NOT_EQUAL"); return NOT_EQUAL }
+/(\()/ { Debug("OPEN_BRACKET"); return OPEN_BRACKET }
+/(\))/ { Debug("CLOSE_BRACKET"); return CLOSE_BRACKET }
+/(\:)/ { Debug("COLON"); return COLON }
+/(\[)/ { Debug("OPEN_SQUARE_BRACKET"); return OPEN_SQUARE_BRACKET }
+/(\])/ { Debug("CLOSE_SQUARE_BRACKET"); return CLOSE_SQUARE_BRACKET }
+/(\{)/ { Debug("OPEN_BIG_BRACKET"); return OPEN_BIG_BRACKET }
+/(\})/ { Debug("CLOSE_BIG_BRACKET"); return CLOSE_BIG_BRACKET }
+/(\.\.)/ { Debug("STRING_CAT"); return STRING_CAT }
 //
 package fk

@@ -2,6 +2,7 @@ package fk
 
 import "fmt"
 
-func Debug(str...interface{}) {
-	fmt.Println(str)
+func Debug(format string, param...interface{}) {
+	fmt.Printf(format, param...)
+	fmt.Println();
 }
