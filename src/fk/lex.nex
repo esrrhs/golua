@@ -29,6 +29,7 @@
 /(switch)/ { Debug("SWITCH"); return SWITCH }
 /(case)/ { Debug("CASE"); return CASE }
 /(default)/ { Debug("DEFAULT"); return DEFAULT }
+/(null)/ { Debug("FNULL"); return FNULL }
 /[a-zA-Z_][a-zA-Z0-9_]*/ { Debug("IDENTIFIER"); lval.s = yylex.Text(); return IDENTIFIER;}
 //
 package fk

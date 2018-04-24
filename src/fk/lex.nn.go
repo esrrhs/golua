@@ -2683,6 +2683,65 @@ var dfas = []dfa{
 		},
 	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1, -1, -1, -1}, nil},
 
+	// (null)
+	{[]bool{false, false, false, false, true}, []func(rune) int{ // Transitions
+		func(r rune) int {
+			switch r {
+			case 108:
+				return -1
+			case 110:
+				return 1
+			case 117:
+				return -1
+			}
+			return -1
+		},
+		func(r rune) int {
+			switch r {
+			case 108:
+				return -1
+			case 110:
+				return -1
+			case 117:
+				return 2
+			}
+			return -1
+		},
+		func(r rune) int {
+			switch r {
+			case 108:
+				return 3
+			case 110:
+				return -1
+			case 117:
+				return -1
+			}
+			return -1
+		},
+		func(r rune) int {
+			switch r {
+			case 108:
+				return 4
+			case 110:
+				return -1
+			case 117:
+				return -1
+			}
+			return -1
+		},
+		func(r rune) int {
+			switch r {
+			case 108:
+				return -1
+			case 110:
+				return -1
+			case 117:
+				return -1
+			}
+			return -1
+		},
+	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1}, nil},
+
 	// [a-zA-Z_][a-zA-Z0-9_]*
 	{[]bool{false, true, true}, []func(rune) int{ // Transitions
 		func(r rune) int {
@@ -2947,6 +3006,11 @@ OUTER0:
 				return DEFAULT
 			}
 		case 31:
+			{
+				Debug("FNULL")
+				return FNULL
+			}
+		case 32:
 			{
 				Debug("IDENTIFIER")
 				lval.s = yylex.Text()
