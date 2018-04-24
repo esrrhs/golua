@@ -2683,6 +2683,64 @@ var dfas = []dfa{
 		},
 	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1, -1, -1, -1}, nil},
 
+	// \"(\\"|[^\"])*\"
+	{[]bool{false, false, true, false, false, true}, []func(rune) int{ // Transitions
+		func(r rune) int {
+			switch r {
+			case 34:
+				return 1
+			case 92:
+				return -1
+			}
+			return -1
+		},
+		func(r rune) int {
+			switch r {
+			case 34:
+				return 2
+			case 92:
+				return 3
+			}
+			return 4
+		},
+		func(r rune) int {
+			switch r {
+			case 34:
+				return -1
+			case 92:
+				return -1
+			}
+			return -1
+		},
+		func(r rune) int {
+			switch r {
+			case 34:
+				return 5
+			case 92:
+				return 3
+			}
+			return 4
+		},
+		func(r rune) int {
+			switch r {
+			case 34:
+				return 2
+			case 92:
+				return 3
+			}
+			return 4
+		},
+		func(r rune) int {
+			switch r {
+			case 34:
+				return 2
+			case 92:
+				return 3
+			}
+			return 4
+		},
+	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1, -1}, nil},
+
 	// [a-zA-Z_][a-zA-Z0-9_]*
 	{[]bool{false, true, true}, []func(rune) int{ // Transitions
 		func(r rune) int {
@@ -4078,181 +4136,187 @@ OUTER0:
 			}
 		case 31:
 			{
+				Debug("STRING_DEFINITION")
+				lval.s = yylex.Text()
+				return STRING_DEFINITION
+			}
+		case 32:
+			{
 				Debug("IDENTIFIER")
 				lval.s = yylex.Text()
 				return IDENTIFIER
 			}
-		case 32:
+		case 33:
 			{
 				Debug("IDENTIFIER_DOT")
 				lval.s = yylex.Text()
 				return IDENTIFIER_DOT
 			}
-		case 33:
+		case 34:
 			{
 				Debug("IDENTIFIER_POINTER")
 				lval.s = yylex.Text()
 				return IDENTIFIER_POINTER
 			}
-		case 34:
+		case 35:
 			{
 				Debug("FKUUID")
 				lval.s = yylex.Text()
 				return FKUUID
 			}
-		case 35:
+		case 36:
 			{
 				Debug("NUMBER")
 				lval.s = yylex.Text()
 				return NUMBER
 			}
-		case 36:
+		case 37:
 			{
 				Debug("FKFLOAT")
 				lval.s = yylex.Text()
 				return FKFLOAT
 			}
-		case 37:
+		case 38:
 			{
 				Debug("DIVIDE_MOD")
 				return DIVIDE_MOD
 			}
-		case 38:
+		case 39:
 			{
 				Debug("ARG_SPLITTER")
 				return ARG_SPLITTER
 			}
-		case 39:
+		case 40:
 			{
 				Debug("RIGHT_POINTER")
 				return RIGHT_POINTER
 			}
-		case 40:
+		case 41:
 			{
 				Debug("INC")
 				return INC
 			}
-		case 41:
+		case 42:
 			{
 				Debug("PLUS")
 				return PLUS
 			}
-		case 42:
+		case 43:
 			{
 				Debug("MINUS")
 				return MINUS
 			}
-		case 43:
+		case 44:
 			{
 				Debug("DIVIDE")
 				return DIVIDE
 			}
-		case 44:
+		case 45:
 			{
 				Debug("MULTIPLY")
 				return MULTIPLY
 			}
-		case 45:
+		case 46:
 			{
 				Debug("NEW_ASSIGN")
 				return NEW_ASSIGN
 			}
-		case 46:
+		case 47:
 			{
 				Debug("PLUS_ASSIGN")
 				return PLUS_ASSIGN
 			}
-		case 47:
+		case 48:
 			{
 				Debug("MINUS_ASSIGN")
 				return MINUS_ASSIGN
 			}
-		case 48:
+		case 49:
 			{
 				Debug("DIVIDE_ASSIGN")
 				return DIVIDE_ASSIGN
 			}
-		case 49:
+		case 50:
 			{
 				Debug("MULTIPLY_ASSIGN")
 				return MULTIPLY_ASSIGN
 			}
-		case 50:
+		case 51:
 			{
 				Debug("DIVIDE_MOD_ASSIGN")
 				return DIVIDE_MOD_ASSIGN
 			}
-		case 51:
+		case 52:
 			{
 				Debug("ASSIGN")
 				return ASSIGN
 			}
-		case 52:
+		case 53:
 			{
 				Debug("MORE")
 				return MORE
 			}
-		case 53:
+		case 54:
 			{
 				Debug("LESS")
 				return LESS
 			}
-		case 54:
+		case 55:
 			{
 				Debug("MORE_OR_EQUAL")
 				return MORE_OR_EQUAL
 			}
-		case 55:
+		case 56:
 			{
 				Debug("LESS_OR_EQUAL")
 				return LESS_OR_EQUAL
 			}
-		case 56:
+		case 57:
 			{
 				Debug("EQUAL")
 				return EQUAL
 			}
-		case 57:
+		case 58:
 			{
 				Debug("NOT_EQUAL")
 				return NOT_EQUAL
 			}
-		case 58:
+		case 59:
 			{
 				Debug("OPEN_BRACKET")
 				return OPEN_BRACKET
 			}
-		case 59:
+		case 60:
 			{
 				Debug("CLOSE_BRACKET")
 				return CLOSE_BRACKET
 			}
-		case 60:
+		case 61:
 			{
 				Debug("COLON")
 				return COLON
 			}
-		case 61:
+		case 62:
 			{
 				Debug("OPEN_SQUARE_BRACKET")
 				return OPEN_SQUARE_BRACKET
 			}
-		case 62:
+		case 63:
 			{
 				Debug("CLOSE_SQUARE_BRACKET")
 				return CLOSE_SQUARE_BRACKET
 			}
-		case 63:
+		case 64:
 			{
 				Debug("OPEN_BIG_BRACKET")
 				return OPEN_BIG_BRACKET
 			}
-		case 64:
+		case 65:
 			{
 				Debug("CLOSE_BIG_BRACKET")
 				return CLOSE_BIG_BRACKET
 			}
-		case 65:
+		case 66:
 			{
 				Debug("STRING_CAT")
 				return STRING_CAT
