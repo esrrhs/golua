@@ -15,5 +15,13 @@ func Parse(file string) {
 	fr := bufio.NewReader(f)
 	lex := NewLexer(fr)
 
-	yyParse(lex)
+	mf := myflexer{
+	}
+
+	l := lexerwarpper{
+		lex,
+		mf,
+	}
+
+	yyParse(l)
 }

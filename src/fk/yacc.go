@@ -893,15 +893,15 @@ yydefault:
 		//line ../yacc.y:97
 		{
 			Debug("[yacc]: package %v", yyDollar[2].s)
-			//myflexer *l = (myflexer *)parm;
-			//l->set_package($2.s);
+			l := yylex.(lexerwarpper).mf
+			l.packageName = (yyDollar[2].s)
 		}
 	case 4:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:104
 		{
 			Debug("[yacc]: package %v", yyDollar[2].s)
-			//myflexer *l = (myflexer *)parm;
+			//l := yylex.(lexerwarpper).mf
 			//l->set_package($2.s);
 		}
 	case 5:
@@ -914,7 +914,7 @@ yydefault:
 		//line ../yacc.y:122
 		{
 			Debug("[yacc]: include %v", yyDollar[2].s)
-			//myflexer *l = (myflexer *)parm;
+			//l := yylex.(lexerwarpper).mf
 			//l->add_include($2.s);
 		}
 	case 9:
@@ -927,7 +927,7 @@ yydefault:
 		//line ../yacc.y:141
 		{
 			Debug("[yacc]: struct_define %v", yyDollar[2].s)
-			//myflexer *l = (myflexer *)parm;
+			//l := yylex.(lexerwarpper).mf
 			//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($3);
 			//l->add_struct_desc($2.s, p);
 		}
@@ -966,7 +966,7 @@ yydefault:
 		//line ../yacc.y:185
 		{
 			Debug("[yacc]: const_define %v", yyDollar[2].s)
-			//myflexer *l = (myflexer *)parm;
+			//l := yylex.(lexerwarpper).mf
 			//l->add_const_desc($2.s, $4);
 		}
 	case 20:
@@ -984,7 +984,7 @@ yydefault:
 			//p->arglist = dynamic_cast<func_desc_arglist_node*>($4);
 			//p->block = dynamic_cast<block_node*>($6);
 			//p->endline = yylloc.first_line;
-			//myflexer *l = (myflexer *)parm;
+			//l := yylex.(lexerwarpper).mf
 			//l->add_func_desc(p);
 		}
 	case 24:
@@ -997,7 +997,7 @@ yydefault:
 			//p->arglist = 0;
 			//p->block = 0;
 			//p->endline = yylloc.first_line;
-			//myflexer *l = (myflexer *)parm;
+			//l := yylex.(lexerwarpper).mf
 			//l->add_func_desc(p);
 		}
 	case 25:

@@ -96,14 +96,14 @@ package_head:
 	PACKAGE IDENTIFIER
 	{
 		Debug("[yacc]: package %v", $2.s);
-		//myflexer *l = (myflexer *)parm;
-		//l->set_package($2.s);
+		l := yylex.(lexerwarpper).mf
+		l.packageName = ($2.s);
 	}
 	|
 	PACKAGE IDENTIFIER_DOT
 	{
 		Debug("[yacc]: package %v", $2.s);
-		//myflexer *l = (myflexer *)parm;
+		//l := yylex.(lexerwarpper).mf
 		//l->set_package($2.s);
 	}
 	
@@ -121,7 +121,7 @@ include_define:
 	INCLUDE STRING_DEFINITION
 	{
 		Debug("[yacc]: include %v", $2.s);
-		//myflexer *l = (myflexer *)parm;
+		//l := yylex.(lexerwarpper).mf
 		//l->add_include($2.s);
 	}
 	;
@@ -140,7 +140,7 @@ struct_define:
 	STRUCT IDENTIFIER struct_mem_declaration END
 	{
 		Debug("[yacc]: struct_define %v", $2.s);
-		//myflexer *l = (myflexer *)parm;
+		//l := yylex.(lexerwarpper).mf
 		//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($3);
 		//l->add_struct_desc($2.s, p);
 	}
@@ -184,7 +184,7 @@ const_define:
 	FCONST IDENTIFIER ASSIGN explicit_value
 	{
 		Debug("[yacc]: const_define %v", $2.s);
-		//myflexer *l = (myflexer *)parm;
+		//l := yylex.(lexerwarpper).mf
 		//l->add_const_desc($2.s, $4);
 	}
 	;
@@ -210,7 +210,7 @@ function_declaration:
 		//p->arglist = dynamic_cast<func_desc_arglist_node*>($4);
 		//p->block = dynamic_cast<block_node*>($6);
 		//p->endline = yylloc.first_line;
-		//myflexer *l = (myflexer *)parm;
+		//l := yylex.(lexerwarpper).mf
 		//l->add_func_desc(p);
 	}
 	|
@@ -222,7 +222,7 @@ function_declaration:
 		//p->arglist = 0;
 		//p->block = 0;
 		//p->endline = yylloc.first_line;
-		//myflexer *l = (myflexer *)parm;
+		//l := yylex.(lexerwarpper).mf
 		//l->add_func_desc(p);
 	}
 	;
