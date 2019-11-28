@@ -10,6 +10,7 @@ import "github.com/esrrhs/go-engine/src/loggo"
 type yySymType struct {
 	yys int
 	s   string
+	sn  syntree_node
 }
 
 const VAR_BEGIN = 57346
@@ -156,7 +157,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line ../yacc.y:1468
+//line ../yacc.y:1469
 
 func init() {
 	yyErrorVerbose = true // set the global that enables showing full errors
@@ -887,12 +888,12 @@ yydefault:
 
 	case 2:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:96
+		//line ../yacc.y:97
 		{
 		}
 	case 3:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:100
+		//line ../yacc.y:101
 		{
 			loggo.Debug("[yacc]: package %v", yyDollar[2].s)
 			l := yylex.(lexerwarpper).mf
@@ -900,7 +901,7 @@ yydefault:
 		}
 	case 4:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:107
+		//line ../yacc.y:108
 		{
 			loggo.Debug("[yacc]: package %v", yyDollar[2].s)
 			l := yylex.(lexerwarpper).mf
@@ -908,12 +909,12 @@ yydefault:
 		}
 	case 5:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:115
+		//line ../yacc.y:116
 		{
 		}
 	case 8:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:125
+		//line ../yacc.y:126
 		{
 			loggo.Debug("[yacc]: include %v", yyDollar[2].s)
 			l := yylex.(lexerwarpper).mf
@@ -921,51 +922,51 @@ yydefault:
 		}
 	case 9:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:134
+		//line ../yacc.y:135
 		{
 		}
 	case 12:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:144
+		//line ../yacc.y:145
 		{
 			loggo.Debug("[yacc]: struct_define %v", yyDollar[2].s)
-			//l := yylex.(lexerwarpper).mf
-			//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($3);
-			//l->add_struct_desc($2.s, p);
+			l := yylex.(lexerwarpper).mf
+			if (yyDollar[3].sn) != nil {
+				p := (yyDollar[3].sn).(*struct_desc_memlist_node)
+				l.add_struct_desc(yyDollar[2].s, p)
+			}
 		}
 	case 13:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:154
+		//line ../yacc.y:157
 		{
-			//$$ = 0;
 		}
 	case 14:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:159
+		//line ../yacc.y:161
 		{
 			loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER struct_mem_declaration")
-			//assert($1->gettype() == est_struct_memlist);
-			//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($1);
-			//p->add_arg($2);
-			//$$ = p;
+			p := (yyDollar[1].sn).(*struct_desc_memlist_node)
+			p.add_arg(yyDollar[2].s)
+			yyVAL.sn = p
 		}
 	case 15:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:168
+		//line ../yacc.y:169
 		{
 			loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER")
-			//NEWTYPE(p, struct_desc_memlist_node);
-			//p->add_arg($1);
-			//$$ = p;
+			p := &struct_desc_memlist_node{}
+			p.add_arg(yyDollar[1].s)
+			yyVAL.sn = p
 		}
 	case 16:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:178
+		//line ../yacc.y:179
 		{
 		}
 	case 19:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:188
+		//line ../yacc.y:189
 		{
 			loggo.Debug("[yacc]: const_define %v", yyDollar[2].s)
 			//l := yylex.(lexerwarpper).mf
@@ -973,12 +974,12 @@ yydefault:
 		}
 	case 20:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:197
+		//line ../yacc.y:198
 		{
 		}
 	case 23:
 		yyDollar = yyS[yypt-7 : yypt+1]
-		//line ../yacc.y:209
+		//line ../yacc.y:210
 		{
 			loggo.Debug("[yacc]: function_declaration <- block %v", yyDollar[2].s)
 			//NEWTYPE(p, func_desc_node);
@@ -991,7 +992,7 @@ yydefault:
 		}
 	case 24:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:221
+		//line ../yacc.y:222
 		{
 			loggo.Debug("[yacc]: function_declaration <- empty %v", yyDollar[2].s)
 			//NEWTYPE(p, func_desc_node);
@@ -1004,13 +1005,13 @@ yydefault:
 		}
 	case 25:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:235
+		//line ../yacc.y:236
 		{
 			//$$ = 0;
 		}
 	case 26:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:240
+		//line ../yacc.y:241
 		{
 			loggo.Debug("[yacc]: function_declaration_arguments <- arg function_declaration_arguments")
 			//assert($1->gettype() == est_arglist);
@@ -1020,7 +1021,7 @@ yydefault:
 		}
 	case 27:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:249
+		//line ../yacc.y:250
 		{
 			loggo.Debug("[yacc]: function_declaration_arguments <- arg")
 			//NEWTYPE(p, func_desc_arglist_node);
@@ -1029,7 +1030,7 @@ yydefault:
 		}
 	case 28:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:259
+		//line ../yacc.y:260
 		{
 			loggo.Debug("[yacc]: arg <- IDENTIFIER %v", yyDollar[1].s)
 			//NEWTYPE(p, identifier_node);
@@ -1038,7 +1039,7 @@ yydefault:
 		}
 	case 29:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:269
+		//line ../yacc.y:270
 		{
 			loggo.Debug("[yacc]: function_call <- function_call_arguments %v", yyDollar[1].s)
 			//NEWTYPE(p, function_call_node);
@@ -1051,7 +1052,7 @@ yydefault:
 		}
 	case 30:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:281
+		//line ../yacc.y:282
 		{
 			loggo.Debug("[yacc]: function_call <- function_call_arguments %v", yyDollar[1].s)
 			//NEWTYPE(p, function_call_node);
@@ -1064,7 +1065,7 @@ yydefault:
 		}
 	case 31:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:293
+		//line ../yacc.y:294
 		{
 			loggo.Debug("[yacc]: function_call <- function_call_arguments")
 			//NEWTYPE(p, function_call_node);
@@ -1077,7 +1078,7 @@ yydefault:
 		}
 	case 32:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:305
+		//line ../yacc.y:306
 		{
 			loggo.Debug("[yacc]: function_call <- mem function_call_arguments %v", yyDollar[3].s)
 			//NEWTYPE(p, function_call_node);
@@ -1096,7 +1097,7 @@ yydefault:
 		}
 	case 33:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:323
+		//line ../yacc.y:324
 		{
 			loggo.Debug("[yacc]: function_call <- mem function_call_arguments %v", yyDollar[3].s)
 			//NEWTYPE(p, function_call_node);
@@ -1115,13 +1116,13 @@ yydefault:
 		}
 	case 34:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:343
+		//line ../yacc.y:344
 		{
 			//$$ = 0;
 		}
 	case 35:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:348
+		//line ../yacc.y:349
 		{
 			loggo.Debug("[yacc]: function_call_arguments <- arg_expr function_call_arguments")
 			//assert($1->gettype() == est_call_arglist);
@@ -1131,7 +1132,7 @@ yydefault:
 		}
 	case 36:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:357
+		//line ../yacc.y:358
 		{
 			loggo.Debug("[yacc]: function_call_arguments <- arg_expr")
 			//NEWTYPE(p, function_call_arglist_node);
@@ -1140,14 +1141,14 @@ yydefault:
 		}
 	case 37:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:367
+		//line ../yacc.y:368
 		{
 			loggo.Debug("[yacc]: arg_expr <- expr_value")
 			//$$ = $1;
 		}
 	case 38:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:377
+		//line ../yacc.y:378
 		{
 			loggo.Debug("[yacc]: block <- block stmt")
 			//assert($1->gettype() == est_block);
@@ -1157,7 +1158,7 @@ yydefault:
 		}
 	case 39:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:386
+		//line ../yacc.y:387
 		{
 			loggo.Debug("[yacc]: block <- stmt")
 			//NEWTYPE(p, block_node);
@@ -1166,112 +1167,112 @@ yydefault:
 		}
 	case 40:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:396
+		//line ../yacc.y:397
 		{
 			loggo.Debug("[yacc]: stmt <- while_stmt")
 			//$$ = $1;
 		}
 	case 41:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:402
+		//line ../yacc.y:403
 		{
 			loggo.Debug("[yacc]: stmt <- if_stmt")
 			//$$ = $1;
 		}
 	case 42:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:408
+		//line ../yacc.y:409
 		{
 			loggo.Debug("[yacc]: stmt <- return_stmt")
 			//$$ = $1;
 		}
 	case 43:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:414
+		//line ../yacc.y:415
 		{
 			loggo.Debug("[yacc]: stmt <- assign_stmt")
 			//$$ = $1;
 		}
 	case 44:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:420
+		//line ../yacc.y:421
 		{
 			loggo.Debug("[yacc]: stmt <- multi_assign_stmt")
 			//$$ = $1;
 		}
 	case 45:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:426
+		//line ../yacc.y:427
 		{
 			loggo.Debug("[yacc]: stmt <- break")
 			//$$ = $1;
 		}
 	case 46:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:432
+		//line ../yacc.y:433
 		{
 			loggo.Debug("[yacc]: stmt <- continue")
 			//$$ = $1;
 		}
 	case 47:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:438
+		//line ../yacc.y:439
 		{
 			loggo.Debug("[yacc]: stmt <- expr")
 			//$$ = $1;
 		}
 	case 48:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:444
+		//line ../yacc.y:445
 		{
 			loggo.Debug("[yacc]: stmt <- math_assign_stmt")
 			//$$ = $1;
 		}
 	case 49:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:450
+		//line ../yacc.y:451
 		{
 			loggo.Debug("[yacc]: stmt <- for_stmt")
 			//$$ = $1;
 		}
 	case 50:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:456
+		//line ../yacc.y:457
 		{
 			loggo.Debug("[yacc]: stmt <- for_loop_stmt")
 			//$$ = $1;
 		}
 	case 51:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:462
+		//line ../yacc.y:463
 		{
 			loggo.Debug("[yacc]: stmt <- fake_call_stmt")
 			//$$ = $1;
 		}
 	case 52:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:468
+		//line ../yacc.y:469
 		{
 			loggo.Debug("[yacc]: stmt <- sleep_stmt")
 			//$$ = $1;
 		}
 	case 53:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:474
+		//line ../yacc.y:475
 		{
 			loggo.Debug("[yacc]: stmt <- yield_stmt")
 			//$$ = $1;
 		}
 	case 54:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:480
+		//line ../yacc.y:481
 		{
 			loggo.Debug("[yacc]: stmt <- switch_stmt")
 			//$$ = $1;
 		}
 	case 55:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:488
+		//line ../yacc.y:489
 		{
 			loggo.Debug("[yacc]: fake_call_stmt <- fake function_call")
 			//function_call_node * p = dynamic_cast<function_call_node*>($2);
@@ -1280,7 +1281,7 @@ yydefault:
 		}
 	case 56:
 		yyDollar = yyS[yypt-9 : yypt+1]
-		//line ../yacc.y:498
+		//line ../yacc.y:499
 		{
 			loggo.Debug("[yacc]: for_stmt <- block cmp block")
 			//NEWTYPE(p, for_stmt);
@@ -1292,7 +1293,7 @@ yydefault:
 		}
 	case 57:
 		yyDollar = yyS[yypt-8 : yypt+1]
-		//line ../yacc.y:509
+		//line ../yacc.y:510
 		{
 			loggo.Debug("[yacc]: for_stmt <- block cmp")
 			//NEWTYPE(p, for_stmt);
@@ -1304,7 +1305,7 @@ yydefault:
 		}
 	case 58:
 		yyDollar = yyS[yypt-11 : yypt+1]
-		//line ../yacc.y:522
+		//line ../yacc.y:523
 		{
 			loggo.Debug("[yacc]: for_loop_stmt <- block")
 			//NEWTYPE(p, for_stmt);
@@ -1344,7 +1345,7 @@ yydefault:
 		}
 	case 59:
 		yyDollar = yyS[yypt-10 : yypt+1]
-		//line ../yacc.y:561
+		//line ../yacc.y:562
 		{
 			loggo.Debug("[yacc]: for_loop_stmt <- empty")
 			//NEWTYPE(p, for_stmt);
@@ -1376,7 +1377,7 @@ yydefault:
 		}
 	case 60:
 		yyDollar = yyS[yypt-5 : yypt+1]
-		//line ../yacc.y:594
+		//line ../yacc.y:595
 		{
 			loggo.Debug("[yacc]: while_stmt <- cmp block")
 			//NEWTYPE(p, while_stmt);
@@ -1386,7 +1387,7 @@ yydefault:
 		}
 	case 61:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:603
+		//line ../yacc.y:604
 		{
 			loggo.Debug("[yacc]: while_stmt <- cmp")
 			//NEWTYPE(p, while_stmt);
@@ -1396,7 +1397,7 @@ yydefault:
 		}
 	case 62:
 		yyDollar = yyS[yypt-7 : yypt+1]
-		//line ../yacc.y:614
+		//line ../yacc.y:615
 		{
 			loggo.Debug("[yacc]: if_stmt <- cmp block")
 			//NEWTYPE(p, if_stmt);
@@ -1408,7 +1409,7 @@ yydefault:
 		}
 	case 63:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:625
+		//line ../yacc.y:626
 		{
 			loggo.Debug("[yacc]: if_stmt <- cmp")
 			//NEWTYPE(p, if_stmt);
@@ -1420,13 +1421,13 @@ yydefault:
 		}
 	case 64:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:638
+		//line ../yacc.y:639
 		{
 			//$$ = 0;
 		}
 	case 65:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:643
+		//line ../yacc.y:644
 		{
 			loggo.Debug("[yacc]: elseif_stmt_list <- elseif_stmt_list elseif_stmt")
 			//assert($1->gettype() == est_elseif_stmt_list);
@@ -1436,7 +1437,7 @@ yydefault:
 		}
 	case 66:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:652
+		//line ../yacc.y:653
 		{
 			loggo.Debug("[yacc]: elseif_stmt_list <- elseif_stmt")
 			//NEWTYPE(p, elseif_stmt_list);
@@ -1445,7 +1446,7 @@ yydefault:
 		}
 	case 67:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:662
+		//line ../yacc.y:663
 		{
 			loggo.Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
 			//NEWTYPE(p, elseif_stmt);
@@ -1455,7 +1456,7 @@ yydefault:
 		}
 	case 68:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:671
+		//line ../yacc.y:672
 		{
 			loggo.Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
 			//NEWTYPE(p, elseif_stmt);
@@ -1465,13 +1466,13 @@ yydefault:
 		}
 	case 69:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:682
+		//line ../yacc.y:683
 		{
 			//$$ = 0;
 		}
 	case 70:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:687
+		//line ../yacc.y:688
 		{
 			loggo.Debug("[yacc]: else_stmt <- block")
 			//NEWTYPE(p, else_stmt);
@@ -1480,7 +1481,7 @@ yydefault:
 		}
 	case 71:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:695
+		//line ../yacc.y:696
 		{
 			loggo.Debug("[yacc]: else_stmt <- empty")
 			//NEWTYPE(p, else_stmt);
@@ -1489,14 +1490,14 @@ yydefault:
 		}
 	case 72:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:705
+		//line ../yacc.y:706
 		{
 			loggo.Debug("[yacc]: cmp <- ( cmp )")
 			//$$ = $2;
 		}
 	case 73:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:711
+		//line ../yacc.y:712
 		{
 			loggo.Debug("[yacc]: cmp <- cmp AND cmp")
 			//NEWTYPE(p, cmp_stmt);
@@ -1507,7 +1508,7 @@ yydefault:
 		}
 	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:721
+		//line ../yacc.y:722
 		{
 			loggo.Debug("[yacc]: cmp <- cmp OR cmp")
 			//NEWTYPE(p, cmp_stmt);
@@ -1518,7 +1519,7 @@ yydefault:
 		}
 	case 75:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:731
+		//line ../yacc.y:732
 		{
 			loggo.Debug("[yacc]: cmp <- cmp_value LESS cmp_value")
 			//NEWTYPE(p, cmp_stmt);
@@ -1529,7 +1530,7 @@ yydefault:
 		}
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:741
+		//line ../yacc.y:742
 		{
 			loggo.Debug("[yacc]: cmp <- cmp_value MORE cmp_value")
 			//NEWTYPE(p, cmp_stmt);
@@ -1540,7 +1541,7 @@ yydefault:
 		}
 	case 77:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:751
+		//line ../yacc.y:752
 		{
 			loggo.Debug("[yacc]: cmp <- cmp_value EQUAL cmp_value")
 			//NEWTYPE(p, cmp_stmt);
@@ -1551,7 +1552,7 @@ yydefault:
 		}
 	case 78:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:761
+		//line ../yacc.y:762
 		{
 			loggo.Debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value")
 			//NEWTYPE(p, cmp_stmt);
@@ -1562,7 +1563,7 @@ yydefault:
 		}
 	case 79:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:771
+		//line ../yacc.y:772
 		{
 			loggo.Debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value")
 			//NEWTYPE(p, cmp_stmt);
@@ -1573,7 +1574,7 @@ yydefault:
 		}
 	case 80:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:781
+		//line ../yacc.y:782
 		{
 			loggo.Debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value")
 			//NEWTYPE(p, cmp_stmt);
@@ -1584,7 +1585,7 @@ yydefault:
 		}
 	case 81:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:791
+		//line ../yacc.y:792
 		{
 			loggo.Debug("[yacc]: cmp <- true")
 			//NEWTYPE(p, cmp_stmt);
@@ -1595,7 +1596,7 @@ yydefault:
 		}
 	case 82:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:801
+		//line ../yacc.y:802
 		{
 			loggo.Debug("[yacc]: cmp <- false")
 			//NEWTYPE(p, cmp_stmt);
@@ -1606,7 +1607,7 @@ yydefault:
 		}
 	case 83:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:811
+		//line ../yacc.y:812
 		{
 			loggo.Debug("[yacc]: cmp <- cmp_value IS cmp_value")
 			//NEWTYPE(p, cmp_stmt);
@@ -1617,7 +1618,7 @@ yydefault:
 		}
 	case 84:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:821
+		//line ../yacc.y:822
 		{
 			loggo.Debug("[yacc]: cmp <- cmp_value NOT cmp_value")
 			//NEWTYPE(p, cmp_stmt);
@@ -1628,28 +1629,28 @@ yydefault:
 		}
 	case 85:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:833
+		//line ../yacc.y:834
 		{
 			loggo.Debug("[yacc]: cmp_value <- explicit_value")
 			//$$ = $1;
 		}
 	case 86:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:839
+		//line ../yacc.y:840
 		{
 			loggo.Debug("[yacc]: cmp_value <- variable")
 			//$$ = $1;
 		}
 	case 87:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:845
+		//line ../yacc.y:846
 		{
 			loggo.Debug("[yacc]: cmp_value <- expr")
 			//$$ = $1;
 		}
 	case 88:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:853
+		//line ../yacc.y:854
 		{
 			loggo.Debug("[yacc]: return_stmt <- RETURN return_value_list")
 			//NEWTYPE(p, return_stmt);
@@ -1658,7 +1659,7 @@ yydefault:
 		}
 	case 89:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:861
+		//line ../yacc.y:862
 		{
 			loggo.Debug("[yacc]: return_stmt <- RETURN")
 			//NEWTYPE(p, return_stmt);
@@ -1667,7 +1668,7 @@ yydefault:
 		}
 	case 90:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:871
+		//line ../yacc.y:872
 		{
 			loggo.Debug("[yacc]: return_value_list <- return_value_list return_value")
 			//assert($1->gettype() == est_return_value_list);
@@ -1677,7 +1678,7 @@ yydefault:
 		}
 	case 91:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:880
+		//line ../yacc.y:881
 		{
 			loggo.Debug("[yacc]: return_value_list <- return_value")
 			//NEWTYPE(p, return_value_list_node);
@@ -1686,28 +1687,28 @@ yydefault:
 		}
 	case 92:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:890
+		//line ../yacc.y:891
 		{
 			loggo.Debug("[yacc]: return_value <- explicit_value")
 			//$$ = $1;
 		}
 	case 93:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:896
+		//line ../yacc.y:897
 		{
 			loggo.Debug("[yacc]: return_value <- variable")
 			//$$ = $1;
 		}
 	case 94:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:902
+		//line ../yacc.y:903
 		{
 			loggo.Debug("[yacc]: return_value <- expr")
 			//$$ = $1;
 		}
 	case 95:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:910
+		//line ../yacc.y:911
 		{
 			loggo.Debug("[yacc]: assign_stmt <- var assign_value")
 			//NEWTYPE(p, assign_stmt);
@@ -1718,7 +1719,7 @@ yydefault:
 		}
 	case 96:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:920
+		//line ../yacc.y:921
 		{
 			loggo.Debug("[yacc]: new assign_stmt <- var assign_value")
 			//NEWTYPE(p, assign_stmt);
@@ -1729,7 +1730,7 @@ yydefault:
 		}
 	case 97:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:932
+		//line ../yacc.y:933
 		{
 			loggo.Debug("[yacc]: multi_assign_stmt <- var_list function_call")
 			//NEWTYPE(p, multi_assign_stmt);
@@ -1740,7 +1741,7 @@ yydefault:
 		}
 	case 98:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:942
+		//line ../yacc.y:943
 		{
 			loggo.Debug("[yacc]: new multi_assign_stmt <- var_list function_call")
 			//NEWTYPE(p, multi_assign_stmt);
@@ -1751,7 +1752,7 @@ yydefault:
 		}
 	case 99:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:954
+		//line ../yacc.y:955
 		{
 			loggo.Debug("[yacc]: var_list <- var_list var")
 			//assert($1->gettype() == est_var_list);
@@ -1761,7 +1762,7 @@ yydefault:
 		}
 	case 100:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:963
+		//line ../yacc.y:964
 		{
 			loggo.Debug("[yacc]: var_list <- var")
 			//NEWTYPE(p, var_list_node);
@@ -1770,28 +1771,28 @@ yydefault:
 		}
 	case 101:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:973
+		//line ../yacc.y:974
 		{
 			loggo.Debug("[yacc]: assign_value <- explicit_value")
 			//$$ = $1;
 		}
 	case 102:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:979
+		//line ../yacc.y:980
 		{
 			loggo.Debug("[yacc]: assign_value <- variable")
 			//$$ = $1;
 		}
 	case 103:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:985
+		//line ../yacc.y:986
 		{
 			loggo.Debug("[yacc]: assign_value <- expr")
 			//$$ = $1;
 		}
 	case 104:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:993
+		//line ../yacc.y:994
 		{
 			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
 			//NEWTYPE(p, math_assign_stmt);
@@ -1802,7 +1803,7 @@ yydefault:
 		}
 	case 105:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1003
+		//line ../yacc.y:1004
 		{
 			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
 			//NEWTYPE(p, math_assign_stmt);
@@ -1813,7 +1814,7 @@ yydefault:
 		}
 	case 106:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1013
+		//line ../yacc.y:1014
 		{
 			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
 			//NEWTYPE(p, math_assign_stmt);
@@ -1824,7 +1825,7 @@ yydefault:
 		}
 	case 107:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1023
+		//line ../yacc.y:1024
 		{
 			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
 			//NEWTYPE(p, math_assign_stmt);
@@ -1835,7 +1836,7 @@ yydefault:
 		}
 	case 108:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1033
+		//line ../yacc.y:1034
 		{
 			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
 			//NEWTYPE(p, math_assign_stmt);
@@ -1846,7 +1847,7 @@ yydefault:
 		}
 	case 109:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1043
+		//line ../yacc.y:1044
 		{
 			loggo.Debug("[yacc]: math_assign_stmt <- variable INC")
 			//NEWTYPE(pp, explicit_value_node);
@@ -1861,7 +1862,7 @@ yydefault:
 		}
 	case 110:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1059
+		//line ../yacc.y:1060
 		{
 			loggo.Debug("[yacc]: var <- VAR_BEGIN IDENTIFIER %v", yyDollar[2].s)
 			//NEWTYPE(p, var_node);
@@ -1870,14 +1871,14 @@ yydefault:
 		}
 	case 111:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1067
+		//line ../yacc.y:1068
 		{
 			loggo.Debug("[yacc]: var <- variable")
 			//$$ = $1;
 		}
 	case 112:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1075
+		//line ../yacc.y:1076
 		{
 			loggo.Debug("[yacc]: variable <- IDENTIFIER %v", yyDollar[1].s)
 			//NEWTYPE(p, variable_node);
@@ -1886,7 +1887,7 @@ yydefault:
 		}
 	case 113:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:1083
+		//line ../yacc.y:1084
 		{
 			loggo.Debug("[yacc]: container_get_node <- IDENTIFIER[expr_value] %v", yyDollar[1].s)
 			//NEWTYPE(p, container_get_node);
@@ -1896,7 +1897,7 @@ yydefault:
 		}
 	case 114:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1092
+		//line ../yacc.y:1093
 		{
 			loggo.Debug("[yacc]: variable <- IDENTIFIER_POINTER %v", yyDollar[1].s)
 			//NEWTYPE(p, struct_pointer_node);
@@ -1905,7 +1906,7 @@ yydefault:
 		}
 	case 115:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1100
+		//line ../yacc.y:1101
 		{
 			loggo.Debug("[yacc]: variable <- IDENTIFIER_DOT %v", yyDollar[1].s)
 			//NEWTYPE(p, variable_node);
@@ -1914,35 +1915,35 @@ yydefault:
 		}
 	case 116:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1110
+		//line ../yacc.y:1111
 		{
 			loggo.Debug("[yacc]: expr <- (expr)")
 			//$$ = $2;
 		}
 	case 117:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1116
+		//line ../yacc.y:1117
 		{
 			loggo.Debug("[yacc]: expr <- function_call")
 			//$$ = $1;
 		}
 	case 118:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1122
+		//line ../yacc.y:1123
 		{
 			loggo.Debug("[yacc]: expr <- math_expr")
 			//$$ = $1;
 		}
 	case 119:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1130
+		//line ../yacc.y:1131
 		{
 			loggo.Debug("[yacc]: math_expr <- (math_expr)")
 			//$$ = $2;
 		}
 	case 120:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1136
+		//line ../yacc.y:1137
 		{
 			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			//NEWTYPE(p, math_expr_node);
@@ -1953,7 +1954,7 @@ yydefault:
 		}
 	case 121:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1146
+		//line ../yacc.y:1147
 		{
 			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			//NEWTYPE(p, math_expr_node);
@@ -1964,7 +1965,7 @@ yydefault:
 		}
 	case 122:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1156
+		//line ../yacc.y:1157
 		{
 			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			//NEWTYPE(p, math_expr_node);
@@ -1975,7 +1976,7 @@ yydefault:
 		}
 	case 123:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1166
+		//line ../yacc.y:1167
 		{
 			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			//NEWTYPE(p, math_expr_node);
@@ -1986,7 +1987,7 @@ yydefault:
 		}
 	case 124:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1176
+		//line ../yacc.y:1177
 		{
 			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			//NEWTYPE(p, math_expr_node);
@@ -1997,7 +1998,7 @@ yydefault:
 		}
 	case 125:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1186
+		//line ../yacc.y:1187
 		{
 			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			//NEWTYPE(p, math_expr_node);
@@ -2008,35 +2009,35 @@ yydefault:
 		}
 	case 126:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1198
+		//line ../yacc.y:1199
 		{
 			loggo.Debug("[yacc]: expr_value <- math_expr")
 			//$$ = $1;
 		}
 	case 127:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1204
+		//line ../yacc.y:1205
 		{
 			loggo.Debug("[yacc]: expr_value <- explicit_value")
 			//$$ = $1;
 		}
 	case 128:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1210
+		//line ../yacc.y:1211
 		{
 			loggo.Debug("[yacc]: expr_value <- function_call")
 			//$$ = $1;
 		}
 	case 129:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1216
+		//line ../yacc.y:1217
 		{
 			loggo.Debug("[yacc]: expr_value <- variable")
 			//$$ = $1;
 		}
 	case 130:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1224
+		//line ../yacc.y:1225
 		{
 			loggo.Debug("[yacc]: explicit_value <- FTRUE")
 			//NEWTYPE(p, explicit_value_node);
@@ -2046,7 +2047,7 @@ yydefault:
 		}
 	case 131:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1233
+		//line ../yacc.y:1234
 		{
 			loggo.Debug("[yacc]: explicit_value <- FFALSE")
 			//NEWTYPE(p, explicit_value_node);
@@ -2056,7 +2057,7 @@ yydefault:
 		}
 	case 132:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1242
+		//line ../yacc.y:1243
 		{
 			loggo.Debug("[yacc]: explicit_value <- NUMBER %v", yyDollar[1].s)
 			//NEWTYPE(p, explicit_value_node);
@@ -2066,7 +2067,7 @@ yydefault:
 		}
 	case 133:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1251
+		//line ../yacc.y:1252
 		{
 			loggo.Debug("[yacc]: explicit_value <- FKUUID %v", yyDollar[1].s)
 			//NEWTYPE(p, explicit_value_node);
@@ -2076,7 +2077,7 @@ yydefault:
 		}
 	case 134:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1260
+		//line ../yacc.y:1261
 		{
 			loggo.Debug("[yacc]: explicit_value <- STRING_DEFINITION %v", yyDollar[1].s)
 			//NEWTYPE(p, explicit_value_node);
@@ -2086,7 +2087,7 @@ yydefault:
 		}
 	case 135:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1269
+		//line ../yacc.y:1270
 		{
 			loggo.Debug("[yacc]: explicit_value <- FKFLOAT %v", yyDollar[1].s)
 			//NEWTYPE(p, explicit_value_node);
@@ -2096,7 +2097,7 @@ yydefault:
 		}
 	case 136:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1278
+		//line ../yacc.y:1279
 		{
 			loggo.Debug("[yacc]: explicit_value <- FNULL %v", yyDollar[1].s)
 			//NEWTYPE(p, explicit_value_node);
@@ -2106,7 +2107,7 @@ yydefault:
 		}
 	case 137:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1287
+		//line ../yacc.y:1288
 		{
 			loggo.Debug("[yacc]: explicit_value <- const_map_list_value")
 			//NEWTYPE(p, explicit_value_node);
@@ -2117,7 +2118,7 @@ yydefault:
 		}
 	case 138:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1297
+		//line ../yacc.y:1298
 		{
 			loggo.Debug("[yacc]: explicit_value <- const_array_list_value")
 			//NEWTYPE(p, explicit_value_node);
@@ -2128,7 +2129,7 @@ yydefault:
 		}
 	case 139:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:1309
+		//line ../yacc.y:1310
 		{
 			loggo.Debug("[yacc]: const_map_list_value <- null")
 			//NEWTYPE(p, const_map_list_value_node);
@@ -2136,7 +2137,7 @@ yydefault:
 		}
 	case 140:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1316
+		//line ../yacc.y:1317
 		{
 			loggo.Debug("[yacc]: const_map_list_value <- const_map_value")
 			//NEWTYPE(p, const_map_list_value_node);
@@ -2145,7 +2146,7 @@ yydefault:
 		}
 	case 141:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1324
+		//line ../yacc.y:1325
 		{
 			loggo.Debug("[yacc]: const_map_list_value <- const_map_list_value const_map_value")
 			//assert($1->gettype() == est_constmaplist);
@@ -2155,7 +2156,7 @@ yydefault:
 		}
 	case 142:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1335
+		//line ../yacc.y:1336
 		{
 			loggo.Debug("[yacc]: const_map_value <- explicit_value")
 			//NEWTYPE(p, const_map_value_node);
@@ -2165,7 +2166,7 @@ yydefault:
 		}
 	case 143:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:1346
+		//line ../yacc.y:1347
 		{
 			loggo.Debug("[yacc]: const_array_list_value <- null")
 			//NEWTYPE(p, const_array_list_value_node);
@@ -2173,7 +2174,7 @@ yydefault:
 		}
 	case 144:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1353
+		//line ../yacc.y:1354
 		{
 			loggo.Debug("[yacc]: const_array_list_value <- explicit_value")
 			//NEWTYPE(p, const_array_list_value_node);
@@ -2182,7 +2183,7 @@ yydefault:
 		}
 	case 145:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1361
+		//line ../yacc.y:1362
 		{
 			loggo.Debug("[yacc]: const_array_list_value <- const_array_list_value explicit_value")
 			//assert($1->gettype() == est_constarraylist);
@@ -2192,7 +2193,7 @@ yydefault:
 		}
 	case 146:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1372
+		//line ../yacc.y:1373
 		{
 			loggo.Debug("[yacc]: break <- BREAK")
 			//NEWTYPE(p, break_stmt);
@@ -2200,7 +2201,7 @@ yydefault:
 		}
 	case 147:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1381
+		//line ../yacc.y:1382
 		{
 			loggo.Debug("[yacc]: CONTINUE")
 			//NEWTYPE(p, continue_stmt);
@@ -2208,7 +2209,7 @@ yydefault:
 		}
 	case 148:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1390
+		//line ../yacc.y:1391
 		{
 			loggo.Debug("[yacc]: SLEEP")
 			//NEWTYPE(p, sleep_stmt);
@@ -2217,7 +2218,7 @@ yydefault:
 		}
 	case 149:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1399
+		//line ../yacc.y:1400
 		{
 			loggo.Debug("[yacc]: YIELD")
 			//NEWTYPE(p, yield_stmt);
@@ -2226,7 +2227,7 @@ yydefault:
 		}
 	case 150:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:1409
+		//line ../yacc.y:1410
 		{
 			loggo.Debug("[yacc]: switch_stmt")
 			//NEWTYPE(p, switch_stmt);
@@ -2237,7 +2238,7 @@ yydefault:
 		}
 	case 151:
 		yyDollar = yyS[yypt-5 : yypt+1]
-		//line ../yacc.y:1419
+		//line ../yacc.y:1420
 		{
 			loggo.Debug("[yacc]: switch_stmt")
 			//NEWTYPE(p, switch_stmt);
@@ -2248,7 +2249,7 @@ yydefault:
 		}
 	case 152:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1431
+		//line ../yacc.y:1432
 		{
 			loggo.Debug("[yacc]: switch_case_list <- switch_case_define")
 			//NEWTYPE(p, switch_caselist_node);
@@ -2257,7 +2258,7 @@ yydefault:
 		}
 	case 153:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1439
+		//line ../yacc.y:1440
 		{
 			loggo.Debug("[yacc]: switch_case_list <- switch_case_list switch_case_define")
 			//assert($2->gettype() == est_switch_case_node);
@@ -2267,7 +2268,7 @@ yydefault:
 		}
 	case 154:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:1450
+		//line ../yacc.y:1451
 		{
 			loggo.Debug("[yacc]: switch_case_define")
 			//NEWTYPE(p, switch_case_node);
@@ -2277,7 +2278,7 @@ yydefault:
 		}
 	case 155:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1459
+		//line ../yacc.y:1460
 		{
 			loggo.Debug("[yacc]: switch_case_define")
 			//NEWTYPE(p, switch_case_node);

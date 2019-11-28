@@ -7,6 +7,7 @@ import "github.com/esrrhs/go-engine/src/loggo"
 
 %union {
   s string
+  sn syntree_node
 }
 
 %token VAR_BEGIN;
@@ -143,33 +144,33 @@ struct_define:
 	STRUCT IDENTIFIER struct_mem_declaration END
 	{
 		loggo.Debug("[yacc]: struct_define %v", $2.s);
-		//l := yylex.(lexerwarpper).mf
-		//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($3);
-		//l->add_struct_desc($2.s, p);
+		l := yylex.(lexerwarpper).mf
+		if ($3.sn) != nil {
+			p := ($3.sn).(*struct_desc_memlist_node)
+			l.add_struct_desc($2.s, p)
+		}
 	}
 	;
 	
 struct_mem_declaration: 
 	/* empty */
 	{
-		//$$ = 0;
 	}
 	| 
 	struct_mem_declaration IDENTIFIER 
 	{
 		loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER struct_mem_declaration");
-		//assert($1->gettype() == est_struct_memlist);
-		//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($1);
-		//p->add_arg($2);
-		//$$ = p;
+		p := ($1.sn).(*struct_desc_memlist_node)
+		p.add_arg($2.s)
+		$$.sn = p
 	}
 	| 
 	IDENTIFIER
 	{
 		loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER");
-		//NEWTYPE(p, struct_desc_memlist_node);
-		//p->add_arg($1);
-		//$$ = p;
+		p := &struct_desc_memlist_node{}
+		p.add_arg($1.s)
+		$$.sn = p
 	}
 	;
 

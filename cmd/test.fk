@@ -3,6 +3,13 @@ package json
 include "file.fk"
 include "string.fk"
 
+-- struct define
+struct teststruct
+	sample_a
+	sample_b
+	sample_c
+end
+
 const ele_none = 0
 const obj_begin = 1
 const obj_end = 2
