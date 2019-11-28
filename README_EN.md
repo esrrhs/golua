@@ -2,7 +2,7 @@
 Lightweight embedded scripting language
 
 ## Brief introduction
-**fakego** is a lightweight embedded scripting language , using Java language, grammar lessons from lua, golang, erlang, based on nex, goyacc generative grammar tree , compiled into byte code interpreted.
+**fakego** is a lightweight embedded scripting language , using go language, grammar lessons from lua, golang, erlang, based on nex, goyacc generative grammar tree , compiled into byte code interpreted.
 <a href="https://github.com/esrrhs/fakescript">fakescript for C/C++</a>
 
 ## Script feature
