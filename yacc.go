@@ -903,8 +903,8 @@ yydefault:
 		//line ../yacc.y:107
 		{
 			loggo.Debug("[yacc]: package %v", yyDollar[2].s)
-			//l := yylex.(lexerwarpper).mf
-			//l->set_package($2.s);
+			l := yylex.(lexerwarpper).mf
+			l.packageName = (yyDollar[2].s)
 		}
 	case 5:
 		yyDollar = yyS[yypt-0 : yypt+1]
@@ -916,8 +916,8 @@ yydefault:
 		//line ../yacc.y:125
 		{
 			loggo.Debug("[yacc]: include %v", yyDollar[2].s)
-			//l := yylex.(lexerwarpper).mf
-			//l->add_include($2.s);
+			l := yylex.(lexerwarpper).mf
+			l.add_include(yyDollar[2].s)
 		}
 	case 9:
 		yyDollar = yyS[yypt-0 : yypt+1]

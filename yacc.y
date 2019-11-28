@@ -106,8 +106,8 @@ package_head:
 	PACKAGE IDENTIFIER_DOT
 	{
 		loggo.Debug("[yacc]: package %v", $2.s);
-		//l := yylex.(lexerwarpper).mf
-		//l->set_package($2.s);
+		l := yylex.(lexerwarpper).mf
+		l.packageName = ($2.s);
 	}
 	
 include_head:
@@ -124,8 +124,8 @@ include_define:
 	INCLUDE STRING_DEFINITION
 	{
 		loggo.Debug("[yacc]: include %v", $2.s);
-		//l := yylex.(lexerwarpper).mf
-		//l->add_include($2.s);
+		l := yylex.(lexerwarpper).mf
+		l.add_include($2.s);
 	}
 	;
 
