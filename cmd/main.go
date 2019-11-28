@@ -1,7 +1,7 @@
 package main
 
-import "fk"
+import "github.com/esrrhs/fakego"
 
 func main() {
-	fk.Parse("./main/test.fk")
+	fakego.Parse("./test.fk")
 }
