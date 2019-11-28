@@ -1,4 +1,4 @@
-package fake
+package fakego
 
 type fakeStruct struct {
 }

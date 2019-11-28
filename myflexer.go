@@ -1,4 +1,4 @@
-package fake
+package fakego
 
 type myflexer struct {
 	f           fakeStruct

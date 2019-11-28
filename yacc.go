@@ -1,5 +1,5 @@
 //line ../yacc.y:1
-package fake
+package fakego
 
 import __yyfmt__ "fmt"
 
