@@ -1,4 +1,4 @@
-package fk
+package fake
 
 type lexerwarpper struct {
 	yyLexer

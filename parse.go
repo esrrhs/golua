@@ -1,8 +1,8 @@
-package fk
+package fake
 
 import (
-	"os"
 	"bufio"
+	"os"
 )
 
 func Parse(file string) {
@@ -15,8 +15,7 @@ func Parse(file string) {
 	fr := bufio.NewReader(f)
 	lex := NewLexer(fr)
 
-	mf := myflexer{
-	}
+	mf := myflexer{}
 
 	l := lexerwarpper{
 		lex,

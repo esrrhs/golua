@@ -1,4 +1,4 @@
-package fk
+package fake
 
 import (
 	"bufio"
@@ -578,7 +578,7 @@ var dfas = []dfa{
 		},
 	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1}, nil},
 
-	// (fake)
+	// (fakeStruct)
 	{[]bool{false, false, false, false, true}, []func(rune) int{ // Transitions
 		func(r rune) int {
 			switch r {

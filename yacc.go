@@ -1,5 +1,5 @@
 //line ../yacc.y:1
-package fk
+package fake
 
 import __yyfmt__ "fmt"
 
@@ -1271,7 +1271,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:485
 		{
-			Debug("[yacc]: fake_call_stmt <- fake function_call")
+			Debug("[yacc]: fake_call_stmt <- fakeStruct function_call")
 			//function_call_node * p = dynamic_cast<function_call_node*>($2);
 			//p->fakecall = true;
 			//$$ = p;
