@@ -2,11 +2,12 @@ package fakego
 
 import (
 	"bufio"
+	"github.com/esrrhs/go-engine/src/loggo"
 	"os"
 )
 
 func Parse(file string) {
-	Debug("start parse " + file)
+	loggo.Debug("start parse " + file)
 
 	f, err := os.OpenFile(file, os.O_RDONLY, os.ModeType)
 	if err != nil {

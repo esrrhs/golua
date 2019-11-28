@@ -1,5 +1,8 @@
 %{
-package fk
+package fakego
+
+import "github.com/esrrhs/go-engine/src/loggo"
+
 %}
 
 %union {
@@ -95,14 +98,14 @@ package_head:
 	|
 	PACKAGE IDENTIFIER
 	{
-		Debug("[yacc]: package %v", $2.s);
+		loggo.Debug("[yacc]: package %v", $2.s);
 		l := yylex.(lexerwarpper).mf
 		l.packageName = ($2.s);
 	}
 	|
 	PACKAGE IDENTIFIER_DOT
 	{
-		Debug("[yacc]: package %v", $2.s);
+		loggo.Debug("[yacc]: package %v", $2.s);
 		//l := yylex.(lexerwarpper).mf
 		//l->set_package($2.s);
 	}
@@ -120,7 +123,7 @@ include_head:
 include_define:
 	INCLUDE STRING_DEFINITION
 	{
-		Debug("[yacc]: include %v", $2.s);
+		loggo.Debug("[yacc]: include %v", $2.s);
 		//l := yylex.(lexerwarpper).mf
 		//l->add_include($2.s);
 	}
@@ -139,7 +142,7 @@ struct_head:
 struct_define:
 	STRUCT IDENTIFIER struct_mem_declaration END
 	{
-		Debug("[yacc]: struct_define %v", $2.s);
+		loggo.Debug("[yacc]: struct_define %v", $2.s);
 		//l := yylex.(lexerwarpper).mf
 		//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($3);
 		//l->add_struct_desc($2.s, p);
@@ -154,7 +157,7 @@ struct_mem_declaration:
 	| 
 	struct_mem_declaration IDENTIFIER 
 	{
-		Debug("[yacc]: struct_mem_declaration <- IDENTIFIER struct_mem_declaration");
+		loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER struct_mem_declaration");
 		//assert($1->gettype() == est_struct_memlist);
 		//struct_desc_memlist_node * p = dynamic_cast<struct_desc_memlist_node*>($1);
 		//p->add_arg($2);
@@ -163,7 +166,7 @@ struct_mem_declaration:
 	| 
 	IDENTIFIER
 	{
-		Debug("[yacc]: struct_mem_declaration <- IDENTIFIER");
+		loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER");
 		//NEWTYPE(p, struct_desc_memlist_node);
 		//p->add_arg($1);
 		//$$ = p;
@@ -183,7 +186,7 @@ const_head:
 const_define:
 	FCONST IDENTIFIER ASSIGN explicit_value
 	{
-		Debug("[yacc]: const_define %v", $2.s);
+		loggo.Debug("[yacc]: const_define %v", $2.s);
 		//l := yylex.(lexerwarpper).mf
 		//l->add_const_desc($2.s, $4);
 	}
@@ -204,7 +207,7 @@ body:
 function_declaration:
 	FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET block END
 	{
-		Debug("[yacc]: function_declaration <- block %v", $2.s);
+		loggo.Debug("[yacc]: function_declaration <- block %v", $2.s);
 		//NEWTYPE(p, func_desc_node);
 		//p->funcname = $2;
 		//p->arglist = dynamic_cast<func_desc_arglist_node*>($4);
@@ -216,7 +219,7 @@ function_declaration:
 	|
 	FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET END
 	{
-		Debug("[yacc]: function_declaration <- empty %v", $2.s);
+		loggo.Debug("[yacc]: function_declaration <- empty %v", $2.s);
 		//NEWTYPE(p, func_desc_node);
 		//p->funcname = $2;
 		//p->arglist = 0;
@@ -235,7 +238,7 @@ function_declaration_arguments:
 	| 
 	function_declaration_arguments ARG_SPLITTER arg 
 	{
-		Debug("[yacc]: function_declaration_arguments <- arg function_declaration_arguments");
+		loggo.Debug("[yacc]: function_declaration_arguments <- arg function_declaration_arguments");
 		//assert($1->gettype() == est_arglist);
 		//func_desc_arglist_node * p = dynamic_cast<func_desc_arglist_node*>($1);
 		//p->add_arg($3);
@@ -244,7 +247,7 @@ function_declaration_arguments:
 	| 
 	arg
 	{
-		Debug("[yacc]: function_declaration_arguments <- arg");
+		loggo.Debug("[yacc]: function_declaration_arguments <- arg");
 		//NEWTYPE(p, func_desc_arglist_node);
 		//p->add_arg($1);
 		//$$ = p;
@@ -254,7 +257,7 @@ function_declaration_arguments:
 arg : 
 	IDENTIFIER
 	{
-		Debug("[yacc]: arg <- IDENTIFIER %v", $1.s);
+		loggo.Debug("[yacc]: arg <- IDENTIFIER %v", $1.s);
 		//NEWTYPE(p, identifier_node);
 		//p->str = $1;
 		//$$ = p;
@@ -264,7 +267,7 @@ arg :
 function_call:
 	IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
-		Debug("[yacc]: function_call <- function_call_arguments %v", $1.s);
+		loggo.Debug("[yacc]: function_call <- function_call_arguments %v", $1.s);
 		//NEWTYPE(p, function_call_node);
 		//p->fuc = $1;
 		//p->prefunc = 0;
@@ -276,7 +279,7 @@ function_call:
 	|
 	IDENTIFIER_DOT OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
-		Debug("[yacc]: function_call <- function_call_arguments %v", $1.s);
+		loggo.Debug("[yacc]: function_call <- function_call_arguments %v", $1.s);
 		//NEWTYPE(p, function_call_node);
 		//p->fuc = $1;
 		//p->prefunc = 0;
@@ -288,7 +291,7 @@ function_call:
 	|
 	function_call OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
-		Debug("[yacc]: function_call <- function_call_arguments");
+		loggo.Debug("[yacc]: function_call <- function_call_arguments");
 		//NEWTYPE(p, function_call_node);
 		//p->fuc = "";
 		//p->prefunc = $1;
@@ -300,7 +303,7 @@ function_call:
 	|
 	function_call COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
-		Debug("[yacc]: function_call <- mem function_call_arguments %v", $3.s);
+		loggo.Debug("[yacc]: function_call <- mem function_call_arguments %v", $3.s);
 		//NEWTYPE(p, function_call_node);
 		//p->fuc = $3;
 		//p->prefunc = 0;
@@ -318,7 +321,7 @@ function_call:
 	|
 	variable COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
-		Debug("[yacc]: function_call <- mem function_call_arguments %v", $3.s);
+		loggo.Debug("[yacc]: function_call <- mem function_call_arguments %v", $3.s);
 		//NEWTYPE(p, function_call_node);
 		//p->fuc = $3;
 		//p->prefunc = 0;
@@ -343,7 +346,7 @@ function_call_arguments:
 	| 
 	function_call_arguments ARG_SPLITTER arg_expr
 	{
-		Debug("[yacc]: function_call_arguments <- arg_expr function_call_arguments");
+		loggo.Debug("[yacc]: function_call_arguments <- arg_expr function_call_arguments");
 		//assert($1->gettype() == est_call_arglist);
 		//function_call_arglist_node * p = dynamic_cast<function_call_arglist_node*>($1);
 		//p->add_arg($3);
@@ -352,7 +355,7 @@ function_call_arguments:
 	| 
 	arg_expr
 	{
-		Debug("[yacc]: function_call_arguments <- arg_expr");
+		loggo.Debug("[yacc]: function_call_arguments <- arg_expr");
 		//NEWTYPE(p, function_call_arglist_node);
 		//p->add_arg($1);
 		//$$ = p;
@@ -362,7 +365,7 @@ function_call_arguments:
 arg_expr:
 	expr_value
 	{
-		Debug("[yacc]: arg_expr <- expr_value");
+		loggo.Debug("[yacc]: arg_expr <- expr_value");
 		//$$ = $1;
 	}
 	;
@@ -372,7 +375,7 @@ arg_expr:
 block:
 	block stmt 
 	{
-		Debug("[yacc]: block <- block stmt");
+		loggo.Debug("[yacc]: block <- block stmt");
 		//assert($1->gettype() == est_block);
 		//block_node * p = dynamic_cast<block_node*>($1);
 		//p->add_stmt($2);
@@ -381,7 +384,7 @@ block:
 	|
 	stmt 
 	{
-		Debug("[yacc]: block <- stmt");
+		loggo.Debug("[yacc]: block <- stmt");
 		//NEWTYPE(p, block_node);
 		//p->add_stmt($1);
 		//$$ = p;
@@ -391,91 +394,91 @@ block:
 stmt:
 	while_stmt
 	{
-		Debug("[yacc]: stmt <- while_stmt");
+		loggo.Debug("[yacc]: stmt <- while_stmt");
 		//$$ = $1;
 	}
 	|
 	if_stmt
 	{
-		Debug("[yacc]: stmt <- if_stmt");
+		loggo.Debug("[yacc]: stmt <- if_stmt");
 		//$$ = $1;
 	}
 	|
 	return_stmt
 	{
-		Debug("[yacc]: stmt <- return_stmt");
+		loggo.Debug("[yacc]: stmt <- return_stmt");
 		//$$ = $1;
 	}
 	|
 	assign_stmt
 	{
-		Debug("[yacc]: stmt <- assign_stmt");
+		loggo.Debug("[yacc]: stmt <- assign_stmt");
 		//$$ = $1;
 	}
 	|
 	multi_assign_stmt
 	{
-		Debug("[yacc]: stmt <- multi_assign_stmt");
+		loggo.Debug("[yacc]: stmt <- multi_assign_stmt");
 		//$$ = $1;
 	}
 	|
 	break
 	{
-		Debug("[yacc]: stmt <- break");
+		loggo.Debug("[yacc]: stmt <- break");
 		//$$ = $1;
 	}
 	|
 	continue
 	{
-		Debug("[yacc]: stmt <- continue");
+		loggo.Debug("[yacc]: stmt <- continue");
 		//$$ = $1;
 	}
 	|
 	expr
 	{
-		Debug("[yacc]: stmt <- expr");
+		loggo.Debug("[yacc]: stmt <- expr");
 		//$$ = $1;
 	}
 	|
 	math_assign_stmt
 	{
-		Debug("[yacc]: stmt <- math_assign_stmt");
+		loggo.Debug("[yacc]: stmt <- math_assign_stmt");
 		//$$ = $1;
 	}
 	|
 	for_stmt
 	{
-		Debug("[yacc]: stmt <- for_stmt");
+		loggo.Debug("[yacc]: stmt <- for_stmt");
 		//$$ = $1;
 	}
 	|
 	for_loop_stmt
 	{
-		Debug("[yacc]: stmt <- for_loop_stmt");
+		loggo.Debug("[yacc]: stmt <- for_loop_stmt");
 		//$$ = $1;
 	}
 	|
 	fake_call_stmt
 	{
-		Debug("[yacc]: stmt <- fake_call_stmt");
+		loggo.Debug("[yacc]: stmt <- fake_call_stmt");
 		//$$ = $1;
 	}
 	|
 	sleep
 	{
-		Debug("[yacc]: stmt <- sleep_stmt");
+		loggo.Debug("[yacc]: stmt <- sleep_stmt");
 		//$$ = $1;
 	}
 	|
 	yield
 	{
-		Debug("[yacc]: stmt <- yield_stmt");
+		loggo.Debug("[yacc]: stmt <- yield_stmt");
 		//$$ = $1;
 	}
 	|
 	switch_stmt
 	{
-		Debug("[yacc]: stmt <- switch_stmt");
+		loggo.Debug("[yacc]: stmt <- switch_stmt");
 		//$$ = $1;
 	}
 	;
@@ -483,7 +486,7 @@ stmt:
 fake_call_stmt:
 	FAKE function_call
 	{
-		Debug("[yacc]: fake_call_stmt <- fake function_call");
+		loggo.Debug("[yacc]: fake_call_stmt <- fake function_call");
 		//function_call_node * p = dynamic_cast<function_call_node*>($2);
 		//p->fakecall = true;
 		//$$ = p;
@@ -493,7 +496,7 @@ fake_call_stmt:
 for_stmt:
 	FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN block END
 	{
-		Debug("[yacc]: for_stmt <- block cmp block");
+		loggo.Debug("[yacc]: for_stmt <- block cmp block");
 		//NEWTYPE(p, for_stmt);
 		//p->cmp = dynamic_cast<cmp_stmt*>($4);
 		//p->beginblock = dynamic_cast<block_node*>($2);
@@ -504,7 +507,7 @@ for_stmt:
 	|
 	FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN END
 	{
-		Debug("[yacc]: for_stmt <- block cmp");
+		loggo.Debug("[yacc]: for_stmt <- block cmp");
 		//NEWTYPE(p, for_stmt);
 		//p->cmp = dynamic_cast<cmp_stmt*>($4);
 		//p->beginblock = dynamic_cast<block_node*>($2);
@@ -517,7 +520,7 @@ for_stmt:
 for_loop_stmt:
 	FOR var ASSIGN assign_value RIGHT_POINTER cmp_value ARG_SPLITTER expr_value THEN block END
 	{
-		Debug("[yacc]: for_loop_stmt <- block");
+		loggo.Debug("[yacc]: for_loop_stmt <- block");
 		//NEWTYPE(p, for_stmt);
 		//
 		//syntree_node * pi = $2;
@@ -556,7 +559,7 @@ for_loop_stmt:
 	|
 	FOR var ASSIGN assign_value RIGHT_POINTER cmp_value ARG_SPLITTER expr_value THEN END
 	{
-		Debug("[yacc]: for_loop_stmt <- empty");
+		loggo.Debug("[yacc]: for_loop_stmt <- empty");
 		//NEWTYPE(p, for_stmt);
 		//
 		//NEWTYPE(pcmp, cmp_stmt);
@@ -589,7 +592,7 @@ for_loop_stmt:
 while_stmt:
 	WHILE cmp THEN block END 
 	{
-		Debug("[yacc]: while_stmt <- cmp block");
+		loggo.Debug("[yacc]: while_stmt <- cmp block");
 		//NEWTYPE(p, while_stmt);
 		//p->cmp = dynamic_cast<cmp_stmt*>($2);
 		//p->block = dynamic_cast<block_node*>($4);
@@ -598,7 +601,7 @@ while_stmt:
 	|
 	WHILE cmp THEN END 
 	{
-		Debug("[yacc]: while_stmt <- cmp");
+		loggo.Debug("[yacc]: while_stmt <- cmp");
 		//NEWTYPE(p, while_stmt);
 		//p->cmp = dynamic_cast<cmp_stmt*>($2);
 		//p->block = 0;
@@ -609,7 +612,7 @@ while_stmt:
 if_stmt:
 	IF cmp THEN block elseif_stmt_list else_stmt END
 	{
-		Debug("[yacc]: if_stmt <- cmp block");
+		loggo.Debug("[yacc]: if_stmt <- cmp block");
 		//NEWTYPE(p, if_stmt);
 		//p->cmp = dynamic_cast<cmp_stmt*>($2);
 		//p->block = dynamic_cast<block_node*>($4);
@@ -620,7 +623,7 @@ if_stmt:
 	|
 	IF cmp THEN elseif_stmt_list else_stmt END
 	{
-		Debug("[yacc]: if_stmt <- cmp");
+		loggo.Debug("[yacc]: if_stmt <- cmp");
 		//NEWTYPE(p, if_stmt);
 		//p->cmp = dynamic_cast<cmp_stmt*>($2);
 		//p->block = 0;
@@ -638,7 +641,7 @@ elseif_stmt_list:
 	| 
 	elseif_stmt_list elseif_stmt
 	{
-		Debug("[yacc]: elseif_stmt_list <- elseif_stmt_list elseif_stmt");
+		loggo.Debug("[yacc]: elseif_stmt_list <- elseif_stmt_list elseif_stmt");
 		//assert($1->gettype() == est_elseif_stmt_list);
 		//elseif_stmt_list * p = dynamic_cast<elseif_stmt_list*>($1);
 		//p->add_stmt($2);
@@ -647,7 +650,7 @@ elseif_stmt_list:
 	| 
 	elseif_stmt
 	{
-		Debug("[yacc]: elseif_stmt_list <- elseif_stmt");
+		loggo.Debug("[yacc]: elseif_stmt_list <- elseif_stmt");
 		//NEWTYPE(p, elseif_stmt_list);
 		//p->add_stmt($1);
 		//$$ = p;
@@ -657,7 +660,7 @@ elseif_stmt_list:
 elseif_stmt:
 	ELSEIF cmp THEN block
 	{
-		Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block");
+		loggo.Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block");
 		//NEWTYPE(p, elseif_stmt);
 		//p->cmp = dynamic_cast<cmp_stmt*>($2);
 		//p->block = $4;
@@ -666,7 +669,7 @@ elseif_stmt:
 	|
 	ELSEIF cmp THEN
 	{
-		Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block");
+		loggo.Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block");
 		//NEWTYPE(p, elseif_stmt);
 		//p->cmp = dynamic_cast<cmp_stmt*>($2);
 		//p->block = 0;
@@ -682,7 +685,7 @@ else_stmt:
 	|
 	ELSE block
 	{
-		Debug("[yacc]: else_stmt <- block");
+		loggo.Debug("[yacc]: else_stmt <- block");
 		//NEWTYPE(p, else_stmt);
 		//p->block = dynamic_cast<block_node*>($2);
 		//$$ = p;
@@ -690,7 +693,7 @@ else_stmt:
 	|
 	ELSE
 	{
-		Debug("[yacc]: else_stmt <- empty");
+		loggo.Debug("[yacc]: else_stmt <- empty");
 		//NEWTYPE(p, else_stmt);
 		//p->block = 0;
 		//$$ = p;
@@ -700,13 +703,13 @@ else_stmt:
 cmp:
 	OPEN_BRACKET cmp CLOSE_BRACKET
 	{
-		Debug("[yacc]: cmp <- ( cmp )");
+		loggo.Debug("[yacc]: cmp <- ( cmp )");
 		//$$ = $2;
 	}
 	|
 	cmp AND cmp
 	{
-		Debug("[yacc]: cmp <- cmp AND cmp");
+		loggo.Debug("[yacc]: cmp <- cmp AND cmp");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = "&&";
 		//p->left = $1;
@@ -716,7 +719,7 @@ cmp:
 	|
 	cmp OR cmp
 	{
-		Debug("[yacc]: cmp <- cmp OR cmp");
+		loggo.Debug("[yacc]: cmp <- cmp OR cmp");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = "||";
 		//p->left = $1;
@@ -726,7 +729,7 @@ cmp:
 	|
 	cmp_value LESS cmp_value
 	{
-		Debug("[yacc]: cmp <- cmp_value LESS cmp_value");
+		loggo.Debug("[yacc]: cmp <- cmp_value LESS cmp_value");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = $2;
 		//p->left = $1;
@@ -736,7 +739,7 @@ cmp:
 	|
 	cmp_value MORE cmp_value
 	{
-		Debug("[yacc]: cmp <- cmp_value MORE cmp_value");
+		loggo.Debug("[yacc]: cmp <- cmp_value MORE cmp_value");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = $2;
 		//p->left = $1;
@@ -746,7 +749,7 @@ cmp:
 	|
 	cmp_value EQUAL cmp_value
 	{
-		Debug("[yacc]: cmp <- cmp_value EQUAL cmp_value");
+		loggo.Debug("[yacc]: cmp <- cmp_value EQUAL cmp_value");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = $2;
 		//p->left = $1;
@@ -756,7 +759,7 @@ cmp:
 	|
 	cmp_value MORE_OR_EQUAL cmp_value
 	{
-		Debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value");
+		loggo.Debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = $2;
 		//p->left = $1;
@@ -766,7 +769,7 @@ cmp:
 	|
 	cmp_value LESS_OR_EQUAL cmp_value
 	{
-		Debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value");
+		loggo.Debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = $2;
 		//p->left = $1;
@@ -776,7 +779,7 @@ cmp:
 	|
 	cmp_value NOT_EQUAL cmp_value
 	{
-		Debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value");
+		loggo.Debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = $2;
 		//p->left = $1;
@@ -786,7 +789,7 @@ cmp:
 	|
 	FTRUE
 	{
-		Debug("[yacc]: cmp <- true");
+		loggo.Debug("[yacc]: cmp <- true");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = "true";
 		//p->left = 0;
@@ -796,7 +799,7 @@ cmp:
 	|
 	FFALSE
 	{
-		Debug("[yacc]: cmp <- false");
+		loggo.Debug("[yacc]: cmp <- false");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = "false";
 		//p->left = 0;
@@ -806,7 +809,7 @@ cmp:
 	|
 	IS cmp_value
 	{
-		Debug("[yacc]: cmp <- cmp_value IS cmp_value");
+		loggo.Debug("[yacc]: cmp <- cmp_value IS cmp_value");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = "is";
 		//p->left = $2;
@@ -816,7 +819,7 @@ cmp:
 	|
 	NOT cmp_value
 	{
-		Debug("[yacc]: cmp <- cmp_value NOT cmp_value");
+		loggo.Debug("[yacc]: cmp <- cmp_value NOT cmp_value");
 		//NEWTYPE(p, cmp_stmt);
 		//p->cmp = "not";
 		//p->left = $2;
@@ -828,19 +831,19 @@ cmp:
 cmp_value:
 	explicit_value
 	{
-		Debug("[yacc]: cmp_value <- explicit_value");
+		loggo.Debug("[yacc]: cmp_value <- explicit_value");
 		//$$ = $1;
 	}
 	|
 	variable
 	{
-		Debug("[yacc]: cmp_value <- variable");
+		loggo.Debug("[yacc]: cmp_value <- variable");
 		//$$ = $1;
 	}
 	|
 	expr
 	{
-		Debug("[yacc]: cmp_value <- expr");
+		loggo.Debug("[yacc]: cmp_value <- expr");
 		//$$ = $1;
 	}
 	;
@@ -848,7 +851,7 @@ cmp_value:
 return_stmt:
 	RETURN return_value_list
 	{
-		Debug("[yacc]: return_stmt <- RETURN return_value_list");
+		loggo.Debug("[yacc]: return_stmt <- RETURN return_value_list");
 		//NEWTYPE(p, return_stmt);
 		//p->returnlist = dynamic_cast<return_value_list_node*>($2);
 		//$$ = p;
@@ -856,7 +859,7 @@ return_stmt:
 	|
 	RETURN
 	{
-		Debug("[yacc]: return_stmt <- RETURN");
+		loggo.Debug("[yacc]: return_stmt <- RETURN");
 		//NEWTYPE(p, return_stmt);
 		//p->returnlist = 0;
 		//$$ = p;
@@ -866,7 +869,7 @@ return_stmt:
 return_value_list:
 	return_value_list ARG_SPLITTER return_value
 	{
-		Debug("[yacc]: return_value_list <- return_value_list return_value");
+		loggo.Debug("[yacc]: return_value_list <- return_value_list return_value");
 		//assert($1->gettype() == est_return_value_list);
 		//return_value_list_node * p = dynamic_cast<return_value_list_node*>($1);
 		//p->add_arg($3);
@@ -875,7 +878,7 @@ return_value_list:
 	|
 	return_value
 	{
-		Debug("[yacc]: return_value_list <- return_value");
+		loggo.Debug("[yacc]: return_value_list <- return_value");
 		//NEWTYPE(p, return_value_list_node);
 		//p->add_arg($1);
 		//$$ = p;
@@ -885,19 +888,19 @@ return_value_list:
 return_value:
 	explicit_value
 	{
-		Debug("[yacc]: return_value <- explicit_value");
+		loggo.Debug("[yacc]: return_value <- explicit_value");
 		//$$ = $1;
 	}
 	|
 	variable
 	{
-		Debug("[yacc]: return_value <- variable");
+		loggo.Debug("[yacc]: return_value <- variable");
 		//$$ = $1;
 	}
 	|
 	expr
 	{
-		Debug("[yacc]: return_value <- expr");
+		loggo.Debug("[yacc]: return_value <- expr");
 		//$$ = $1;
 	}
 	;
@@ -905,7 +908,7 @@ return_value:
 assign_stmt:
 	var ASSIGN assign_value
 	{
-		Debug("[yacc]: assign_stmt <- var assign_value");
+		loggo.Debug("[yacc]: assign_stmt <- var assign_value");
 		//NEWTYPE(p, assign_stmt);
 		//p->var = $1;
 		//p->value = $3;
@@ -915,7 +918,7 @@ assign_stmt:
 	|
 	var NEW_ASSIGN assign_value
 	{
-		Debug("[yacc]: new assign_stmt <- var assign_value");
+		loggo.Debug("[yacc]: new assign_stmt <- var assign_value");
 		//NEWTYPE(p, assign_stmt);
 		//p->var = $1;
 		//p->value = $3;
@@ -927,7 +930,7 @@ assign_stmt:
 multi_assign_stmt:
 	var_list ASSIGN function_call
 	{
-		Debug("[yacc]: multi_assign_stmt <- var_list function_call");
+		loggo.Debug("[yacc]: multi_assign_stmt <- var_list function_call");
 		//NEWTYPE(p, multi_assign_stmt);
 		//p->varlist = dynamic_cast<var_list_node*>($1);
 		//p->value = $3;
@@ -937,7 +940,7 @@ multi_assign_stmt:
 	|
 	var_list NEW_ASSIGN function_call
 	{
-		Debug("[yacc]: new multi_assign_stmt <- var_list function_call");
+		loggo.Debug("[yacc]: new multi_assign_stmt <- var_list function_call");
 		//NEWTYPE(p, multi_assign_stmt);
 		//p->varlist = dynamic_cast<var_list_node*>($1);
 		//p->value = $3;
@@ -949,7 +952,7 @@ multi_assign_stmt:
 var_list:
 	var_list ARG_SPLITTER var
 	{
-		Debug("[yacc]: var_list <- var_list var");
+		loggo.Debug("[yacc]: var_list <- var_list var");
 		//assert($1->gettype() == est_var_list);
 		//var_list_node * p = dynamic_cast<var_list_node*>($1);
 		//p->add_arg($3);
@@ -958,7 +961,7 @@ var_list:
 	|
 	var
 	{
-		Debug("[yacc]: var_list <- var");
+		loggo.Debug("[yacc]: var_list <- var");
 		//NEWTYPE(p, var_list_node);
 		//p->add_arg($1);
 		//$$ = p;
@@ -968,19 +971,19 @@ var_list:
 assign_value:
 	explicit_value
 	{
-		Debug("[yacc]: assign_value <- explicit_value");
+		loggo.Debug("[yacc]: assign_value <- explicit_value");
 		//$$ = $1;
 	}
 	|
 	variable
 	{
-		Debug("[yacc]: assign_value <- variable");
+		loggo.Debug("[yacc]: assign_value <- variable");
 		//$$ = $1;
 	}
 	|
 	expr
 	{
-		Debug("[yacc]: assign_value <- expr");
+		loggo.Debug("[yacc]: assign_value <- expr");
 		//$$ = $1;
 	}
 	;
@@ -988,7 +991,7 @@ assign_value:
 math_assign_stmt :
 	variable PLUS_ASSIGN assign_value
 	{
-		Debug("[yacc]: math_assign_stmt <- variable assign_value");
+		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
 		//NEWTYPE(p, math_assign_stmt);
 		//p->var = $1;
 		//p->oper = "+=";
@@ -998,7 +1001,7 @@ math_assign_stmt :
 	|
 	variable MINUS_ASSIGN assign_value
 	{
-		Debug("[yacc]: math_assign_stmt <- variable assign_value");
+		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
 		//NEWTYPE(p, math_assign_stmt);
 		//p->var = $1;
 		//p->oper = "-=";
@@ -1008,7 +1011,7 @@ math_assign_stmt :
 	|
 	variable DIVIDE_ASSIGN assign_value
 	{
-		Debug("[yacc]: math_assign_stmt <- variable assign_value");
+		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
 		//NEWTYPE(p, math_assign_stmt);
 		//p->var = $1;
 		//p->oper = "/=";
@@ -1018,7 +1021,7 @@ math_assign_stmt :
 	|
 	variable MULTIPLY_ASSIGN assign_value
 	{
-		Debug("[yacc]: math_assign_stmt <- variable assign_value");
+		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
 		//NEWTYPE(p, math_assign_stmt);
 		//p->var = $1;
 		//p->oper = "*=";
@@ -1028,7 +1031,7 @@ math_assign_stmt :
 	|
 	variable DIVIDE_MOD_ASSIGN assign_value
 	{
-		Debug("[yacc]: math_assign_stmt <- variable assign_value");
+		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
 		//NEWTYPE(p, math_assign_stmt);
 		//p->var = $1;
 		//p->oper = "%=";
@@ -1038,7 +1041,7 @@ math_assign_stmt :
 	|
 	variable INC
 	{
-		Debug("[yacc]: math_assign_stmt <- variable INC");
+		loggo.Debug("[yacc]: math_assign_stmt <- variable INC");
 		//NEWTYPE(pp, explicit_value_node);
 		//pp->str = "1";
 		//pp->type = explicit_value_node::EVT_NUM;
@@ -1054,7 +1057,7 @@ math_assign_stmt :
 var:
 	VAR_BEGIN IDENTIFIER
 	{
-		Debug("[yacc]: var <- VAR_BEGIN IDENTIFIER %v", $2.s);
+		loggo.Debug("[yacc]: var <- VAR_BEGIN IDENTIFIER %v", $2.s);
 		//NEWTYPE(p, var_node);
 		//p->str = $2;
 		//$$ = p;
@@ -1062,7 +1065,7 @@ var:
 	|
 	variable
 	{
-		Debug("[yacc]: var <- variable");
+		loggo.Debug("[yacc]: var <- variable");
 		//$$ = $1;
 	}
 	;
@@ -1070,7 +1073,7 @@ var:
 variable:
 	IDENTIFIER
 	{
-		Debug("[yacc]: variable <- IDENTIFIER %v", $1.s);
+		loggo.Debug("[yacc]: variable <- IDENTIFIER %v", $1.s);
 		//NEWTYPE(p, variable_node);
 		//p->str = $1;
 		//$$ = p;
@@ -1078,7 +1081,7 @@ variable:
 	|
 	IDENTIFIER OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET
 	{
-		Debug("[yacc]: container_get_node <- IDENTIFIER[expr_value] %v", $1.s);
+		loggo.Debug("[yacc]: container_get_node <- IDENTIFIER[expr_value] %v", $1.s);
 		//NEWTYPE(p, container_get_node);
 		//p->container = $1;
 		//p->key = $3;
@@ -1087,7 +1090,7 @@ variable:
 	|
 	IDENTIFIER_POINTER
 	{
-		Debug("[yacc]: variable <- IDENTIFIER_POINTER %v", $1.s);
+		loggo.Debug("[yacc]: variable <- IDENTIFIER_POINTER %v", $1.s);
 		//NEWTYPE(p, struct_pointer_node);
 		//p->str = $1;
 		//$$ = p;
@@ -1095,7 +1098,7 @@ variable:
 	|
 	IDENTIFIER_DOT
 	{
-		Debug("[yacc]: variable <- IDENTIFIER_DOT %v", $1.s);
+		loggo.Debug("[yacc]: variable <- IDENTIFIER_DOT %v", $1.s);
 		//NEWTYPE(p, variable_node);
 		//p->str = $1;
 		//$$ = p;
@@ -1105,19 +1108,19 @@ variable:
 expr:
 	OPEN_BRACKET expr CLOSE_BRACKET
 	{
-		Debug("[yacc]: expr <- (expr)");
+		loggo.Debug("[yacc]: expr <- (expr)");
 		//$$ = $2;
 	}
 	|
 	function_call
 	{
-		Debug("[yacc]: expr <- function_call");
+		loggo.Debug("[yacc]: expr <- function_call");
 		//$$ = $1;
 	}
 	|
 	math_expr
 	{
-		Debug("[yacc]: expr <- math_expr");
+		loggo.Debug("[yacc]: expr <- math_expr");
 		//$$ = $1;
 	}
 	;
@@ -1125,13 +1128,13 @@ expr:
 math_expr:
 	OPEN_BRACKET math_expr CLOSE_BRACKET
 	{
-		Debug("[yacc]: math_expr <- (math_expr)");
+		loggo.Debug("[yacc]: math_expr <- (math_expr)");
 		//$$ = $2;
 	}
 	|
 	expr_value PLUS expr_value
 	{
-		Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
+		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
 		//NEWTYPE(p, math_expr_node);
 		//p->oper = "+";
 		//p->left = $1;
@@ -1141,7 +1144,7 @@ math_expr:
 	|
 	expr_value MINUS expr_value
 	{
-		Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
+		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
 		//NEWTYPE(p, math_expr_node);
 		//p->oper = "-";
 		//p->left = $1;
@@ -1151,7 +1154,7 @@ math_expr:
 	|
 	expr_value MULTIPLY expr_value
 	{
-		Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
+		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
 		//NEWTYPE(p, math_expr_node);
 		//p->oper = "*";
 		//p->left = $1;
@@ -1161,7 +1164,7 @@ math_expr:
 	|
 	expr_value DIVIDE expr_value
 	{
-		Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
+		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
 		//NEWTYPE(p, math_expr_node);
 		//p->oper = "/";
 		//p->left = $1;
@@ -1171,7 +1174,7 @@ math_expr:
 	|
 	expr_value DIVIDE_MOD expr_value
 	{
-		Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
+		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
 		//NEWTYPE(p, math_expr_node);
 		//p->oper = "%";
 		//p->left = $1;
@@ -1181,7 +1184,7 @@ math_expr:
 	|
 	expr_value STRING_CAT expr_value
 	{
-		Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
+		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
 		//NEWTYPE(p, math_expr_node);
 		//p->oper = "..";
 		//p->left = $1;
@@ -1193,25 +1196,25 @@ math_expr:
 expr_value:
 	math_expr
 	{
-		Debug("[yacc]: expr_value <- math_expr");
+		loggo.Debug("[yacc]: expr_value <- math_expr");
 		//$$ = $1;
 	}
 	|
 	explicit_value
 	{
-		Debug("[yacc]: expr_value <- explicit_value");
+		loggo.Debug("[yacc]: expr_value <- explicit_value");
 		//$$ = $1;
 	}
 	|
 	function_call
 	{
-		Debug("[yacc]: expr_value <- function_call");
+		loggo.Debug("[yacc]: expr_value <- function_call");
 		//$$ = $1;
 	}
 	|
 	variable
 	{
-		Debug("[yacc]: expr_value <- variable");
+		loggo.Debug("[yacc]: expr_value <- variable");
 		//$$ = $1;
 	}
 	;
@@ -1219,7 +1222,7 @@ expr_value:
 explicit_value:
 	FTRUE 
 	{
-		Debug("[yacc]: explicit_value <- FTRUE");
+		loggo.Debug("[yacc]: explicit_value <- FTRUE");
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = $1;
 		//p->type = explicit_value_node::EVT_TRUE;
@@ -1228,7 +1231,7 @@ explicit_value:
 	|
 	FFALSE 
 	{
-		Debug("[yacc]: explicit_value <- FFALSE");
+		loggo.Debug("[yacc]: explicit_value <- FFALSE");
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = $1;
 		//p->type = explicit_value_node::EVT_FALSE;
@@ -1237,7 +1240,7 @@ explicit_value:
 	|
 	NUMBER 
 	{
-		Debug("[yacc]: explicit_value <- NUMBER %v", $1.s);
+		loggo.Debug("[yacc]: explicit_value <- NUMBER %v", $1.s);
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = $1;
 		//p->type = explicit_value_node::EVT_NUM;
@@ -1246,7 +1249,7 @@ explicit_value:
 	|
 	FKUUID
 	{
-		Debug("[yacc]: explicit_value <- FKUUID %v", $1.s);
+		loggo.Debug("[yacc]: explicit_value <- FKUUID %v", $1.s);
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = $1;
 		//p->type = explicit_value_node::EVT_UUID;
@@ -1255,7 +1258,7 @@ explicit_value:
 	|
 	STRING_DEFINITION 
 	{
-		Debug("[yacc]: explicit_value <- STRING_DEFINITION %v", $1.s);
+		loggo.Debug("[yacc]: explicit_value <- STRING_DEFINITION %v", $1.s);
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = $1;
 		//p->type = explicit_value_node::EVT_STR;
@@ -1264,7 +1267,7 @@ explicit_value:
 	|
 	FKFLOAT
 	{
-		Debug("[yacc]: explicit_value <- FKFLOAT %v", $1.s);
+		loggo.Debug("[yacc]: explicit_value <- FKFLOAT %v", $1.s);
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = $1;
 		//p->type = explicit_value_node::EVT_FLOAT;
@@ -1273,7 +1276,7 @@ explicit_value:
 	|
 	FNULL
 	{
-		Debug("[yacc]: explicit_value <- FNULL %v", $1.s);
+		loggo.Debug("[yacc]: explicit_value <- FNULL %v", $1.s);
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = $1;
 		//p->type = explicit_value_node::EVT_NULL;
@@ -1282,7 +1285,7 @@ explicit_value:
 	|
 	OPEN_BIG_BRACKET const_map_list_value CLOSE_BIG_BRACKET
 	{
-		Debug("[yacc]: explicit_value <- const_map_list_value");
+		loggo.Debug("[yacc]: explicit_value <- const_map_list_value");
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = "";
 		//p->type = explicit_value_node::EVT_MAP;
@@ -1292,7 +1295,7 @@ explicit_value:
 	|
 	OPEN_SQUARE_BRACKET const_array_list_value CLOSE_SQUARE_BRACKET
 	{
-		Debug("[yacc]: explicit_value <- const_array_list_value");
+		loggo.Debug("[yacc]: explicit_value <- const_array_list_value");
 		//NEWTYPE(p, explicit_value_node);
 		//p->str = "";
 		//p->type = explicit_value_node::EVT_ARRAY;
@@ -1304,14 +1307,14 @@ explicit_value:
 const_map_list_value:
 	/* empty */
 	{
-		Debug("[yacc]: const_map_list_value <- null");
+		loggo.Debug("[yacc]: const_map_list_value <- null");
 		//NEWTYPE(p, const_map_list_value_node);
 		//$$ = p;
 	}
 	|
 	const_map_value
 	{
-		Debug("[yacc]: const_map_list_value <- const_map_value");
+		loggo.Debug("[yacc]: const_map_list_value <- const_map_value");
 		//NEWTYPE(p, const_map_list_value_node);
 		//p->add_ele($1);
 		//$$ = p;
@@ -1319,7 +1322,7 @@ const_map_list_value:
 	|
 	const_map_list_value const_map_value
 	{
-		Debug("[yacc]: const_map_list_value <- const_map_list_value const_map_value");
+		loggo.Debug("[yacc]: const_map_list_value <- const_map_list_value const_map_value");
 		//assert($1->gettype() == est_constmaplist);
 		//const_map_list_value_node * p = dynamic_cast<const_map_list_value_node*>($1);
 		//p->add_ele($2);
@@ -1330,7 +1333,7 @@ const_map_list_value:
 const_map_value:
 	explicit_value COLON explicit_value
 	{
-		Debug("[yacc]: const_map_value <- explicit_value");
+		loggo.Debug("[yacc]: const_map_value <- explicit_value");
 		//NEWTYPE(p, const_map_value_node);
 		//p->k = $1;
 		//p->v = $3;
@@ -1341,14 +1344,14 @@ const_map_value:
 const_array_list_value:
 	/* empty */
 	{
-		Debug("[yacc]: const_array_list_value <- null");
+		loggo.Debug("[yacc]: const_array_list_value <- null");
 		//NEWTYPE(p, const_array_list_value_node);
 		//$$ = p;
 	}
 	|
 	explicit_value
 	{
-		Debug("[yacc]: const_array_list_value <- explicit_value");
+		loggo.Debug("[yacc]: const_array_list_value <- explicit_value");
 		//NEWTYPE(p, const_array_list_value_node);
 		//p->add_ele($1);
 		//$$ = p;
@@ -1356,7 +1359,7 @@ const_array_list_value:
 	|
 	const_array_list_value explicit_value
 	{
-		Debug("[yacc]: const_array_list_value <- const_array_list_value explicit_value");
+		loggo.Debug("[yacc]: const_array_list_value <- const_array_list_value explicit_value");
 		//assert($1->gettype() == est_constarraylist);
 		//const_array_list_value_node * p = dynamic_cast<const_array_list_value_node*>($1);
 		//p->add_ele($2);
@@ -1367,7 +1370,7 @@ const_array_list_value:
 break:
 	BREAK 
 	{
-		Debug("[yacc]: break <- BREAK");
+		loggo.Debug("[yacc]: break <- BREAK");
 		//NEWTYPE(p, break_stmt);
 		//$$ = p;
 	}
@@ -1376,7 +1379,7 @@ break:
 continue:
 	CONTINUE 
 	{
-		Debug("[yacc]: CONTINUE");
+		loggo.Debug("[yacc]: CONTINUE");
 		//NEWTYPE(p, continue_stmt);
 		//$$ = p;
 	}
@@ -1385,7 +1388,7 @@ continue:
 sleep:
 	SLEEP expr_value 
 	{
-		Debug("[yacc]: SLEEP");
+		loggo.Debug("[yacc]: SLEEP");
 		//NEWTYPE(p, sleep_stmt);
 		//p->time = $2;
 		//$$ = p;
@@ -1394,7 +1397,7 @@ sleep:
 yield:
 	YIELD expr_value
 	{
-		Debug("[yacc]: YIELD");
+		loggo.Debug("[yacc]: YIELD");
 		//NEWTYPE(p, yield_stmt);
 		//p->time = $2;
 		//$$ = p;
@@ -1404,7 +1407,7 @@ yield:
 switch_stmt:
 	SWITCH cmp_value switch_case_list DEFAULT block END
 	{
-		Debug("[yacc]: switch_stmt");
+		loggo.Debug("[yacc]: switch_stmt");
 		//NEWTYPE(p, switch_stmt);
 		//p->cmp = $2;
 		//p->caselist = $3;
@@ -1414,7 +1417,7 @@ switch_stmt:
 	|
 	SWITCH cmp_value switch_case_list DEFAULT END
 	{
-		Debug("[yacc]: switch_stmt");
+		loggo.Debug("[yacc]: switch_stmt");
 		//NEWTYPE(p, switch_stmt);
 		//p->cmp = $2;
 		//p->caselist = $3;
@@ -1426,7 +1429,7 @@ switch_stmt:
 switch_case_list:
 	switch_case_define
 	{
-		Debug("[yacc]: switch_case_list <- switch_case_define");
+		loggo.Debug("[yacc]: switch_case_list <- switch_case_define");
 		//NEWTYPE(p, switch_caselist_node);
 		//p->add_case($1);
 		//$$ = p;
@@ -1434,7 +1437,7 @@ switch_case_list:
 	|
 	switch_case_list switch_case_define
 	{
-		Debug("[yacc]: switch_case_list <- switch_case_list switch_case_define");
+		loggo.Debug("[yacc]: switch_case_list <- switch_case_list switch_case_define");
 		//assert($2->gettype() == est_switch_case_node);
 		//switch_caselist_node * p = dynamic_cast<switch_caselist_node*>($1);
 		//p->add_case($2);
@@ -1445,7 +1448,7 @@ switch_case_list:
 switch_case_define:
 	CASE cmp_value THEN block
 	{
-		Debug("[yacc]: switch_case_define");
+		loggo.Debug("[yacc]: switch_case_define");
 		//NEWTYPE(p, switch_case_node);
 		//p->cmp = $2;
 		//p->block = $4;
@@ -1454,7 +1457,7 @@ switch_case_define:
 	|
 	CASE cmp_value THEN
 	{
-		Debug("[yacc]: switch_case_define");
+		loggo.Debug("[yacc]: switch_case_define");
 		//NEWTYPE(p, switch_case_node);
 		//p->cmp = $2;
 		//p->block = 0;
