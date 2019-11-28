@@ -168,7 +168,7 @@ struct_mem_declaration:
 	IDENTIFIER
 	{
 		loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER");
-		p := &struct_desc_memlist_node{}
+		p := &struct_desc_memlist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.add_arg($1.s)
 		$$.sn = p
 	}
@@ -188,8 +188,8 @@ const_define:
 	FCONST IDENTIFIER ASSIGN explicit_value
 	{
 		loggo.Debug("[yacc]: const_define %v", $2.s);
-		//l := yylex.(lexerwarpper).mf
-		//l->add_const_desc($2.s, $4);
+		l := yylex.(lexerwarpper).mf
+		l.add_const_desc($2.s, $4.sn)
 	}
 	;
 
@@ -209,13 +209,12 @@ function_declaration:
 	FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET block END
 	{
 		loggo.Debug("[yacc]: function_declaration <- block %v", $2.s);
-		//NEWTYPE(p, func_desc_node);
-		//p->funcname = $2;
-		//p->arglist = dynamic_cast<func_desc_arglist_node*>($4);
-		//p->block = dynamic_cast<block_node*>($6);
-		//p->endline = yylloc.first_line;
-		//l := yylex.(lexerwarpper).mf
-		//l->add_func_desc(p);
+		p := &func_desc_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.funcname = $2.s
+		p.arglist = $4.sn.(*func_desc_arglist_node)
+		p.block = $6.sn.(*block_node)
+		l := yylex.(lexerwarpper).mf
+		l.add_func_desc(p)
 	}
 	|
 	FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET END

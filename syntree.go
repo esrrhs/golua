@@ -150,6 +150,7 @@ func (sn *syntree_node_base) gentab(n int) string {
 	return ret
 }
 
+//////////////////////////////////////////////////////////////////
 type struct_desc_memlist_node struct {
 	syntree_node_base
 	memlist []string
@@ -172,3 +173,86 @@ func (sn *struct_desc_memlist_node) dump(indent int) string {
 func (sn *struct_desc_memlist_node) add_arg(mem string) {
 	sn.memlist = append(sn.memlist, mem)
 }
+
+//////////////////////////////////////////////////////////////////
+
+type func_desc_arglist_node struct {
+	syntree_node_base
+	arglist []string
+}
+
+func (sn *func_desc_arglist_node) gettype() int {
+	return est_arglist
+}
+func (sn *func_desc_arglist_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[func_desc_arglist]:\n"
+	for i, _ := range sn.arglist {
+		ret += sn.gentab(indent + 1)
+		ret += sn.arglist[i]
+		ret += "\n"
+	}
+	return ret
+}
+func (sn *func_desc_arglist_node) add_arg(mem string) {
+	sn.arglist = append(sn.arglist, mem)
+}
+
+//////////////////////////////////////////////////////////////////
+
+type block_node struct {
+	syntree_node_base
+	stmtlist []syntree_node
+}
+
+func (sn *block_node) gettype() int {
+	return est_block
+}
+func (sn *block_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[block]:\n"
+	for i, _ := range sn.stmtlist {
+		ret += sn.gentab(indent + 1)
+		ret += "[stmt"
+		ret += strconv.Itoa(i)
+		ret += "]:\n"
+		ret += sn.stmtlist[i].dump(indent + 2)
+	}
+	return ret
+}
+func (sn *block_node) add_stmt(stmt syntree_node) {
+	sn.stmtlist = append(sn.stmtlist, stmt)
+}
+
+//////////////////////////////////////////////////////////////////
+
+type func_desc_node struct {
+	syntree_node_base
+	memlist []string
+
+	funcname string
+	arglist  *func_desc_arglist_node
+	block    *block_node
+}
+
+func (sn *func_desc_node) gettype() int {
+	return est_func_desc
+}
+func (sn *func_desc_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[func_desc]:\n"
+	ret += sn.funcname
+	ret += "\n"
+	if sn.arglist != nil {
+		ret += sn.arglist.dump(indent + 1)
+	}
+	if sn.block != nil {
+		ret += sn.block.dump(indent + 1)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
