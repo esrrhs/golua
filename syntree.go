@@ -628,3 +628,49 @@ func (sn *elseif_stmt) dump(indent int) string {
 }
 
 //////////////////////////////////////////////////////////////////
+
+type return_stmt struct {
+	syntree_node_base
+	returnlist *return_value_list_node
+}
+
+func (sn *return_stmt) gettype() int {
+	return est_return_stmt
+}
+func (sn *return_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[return]:"
+	ret += "\n"
+	if sn.returnlist != nil {
+		ret += sn.returnlist.dump(indent + 1)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type return_value_list_node struct {
+	syntree_node_base
+	returnlist []syntree_node
+}
+
+func (sn *return_value_list_node) gettype() int {
+	return est_return_value_list
+}
+func (sn *return_value_list_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[return_value_list]:\n"
+	for i := range sn.returnlist {
+		ret += sn.gentab(indent + 1)
+		ret += sn.returnlist[i].dump(indent + 1)
+		ret += "\n"
+	}
+	return ret
+}
+func (sn *return_value_list_node) add_arg(arg syntree_node) {
+	sn.returnlist = append(sn.returnlist, arg)
+}
+
+//////////////////////////////////////////////////////////////////

@@ -673,23 +673,23 @@ elseif_stmt:
 else_stmt:
 	/*empty*/
 	{
-		//$$ = 0;
+		$$.sn = nil
 	}
 	|
 	ELSE block
 	{
 		loggo.Debug("[yacc]: else_stmt <- block");
-		//NEWTYPE(p, else_stmt);
-		//p->block = dynamic_cast<block_node*>($2);
-		//$$ = p;
+		p := &else_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.block = ($2.sn).(*block_node)
+                $$.sn = p
 	}
 	|
 	ELSE
 	{
 		loggo.Debug("[yacc]: else_stmt <- empty");
-		//NEWTYPE(p, else_stmt);
-		//p->block = 0;
-		//$$ = p;
+		p := &else_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.block = nil
+                $$.sn = p
 	}
 	;
 
@@ -697,127 +697,127 @@ cmp:
 	OPEN_BRACKET cmp CLOSE_BRACKET
 	{
 		loggo.Debug("[yacc]: cmp <- ( cmp )");
-		//$$ = $2;
+		$$.sn = $2.sn
 	}
 	|
 	cmp AND cmp
 	{
 		loggo.Debug("[yacc]: cmp <- cmp AND cmp");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = "&&";
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = "&&"
+		p.left = $1.sn
+		p.right = $3.sn
+                $$.sn = p
 	}
 	|
 	cmp OR cmp
 	{
 		loggo.Debug("[yacc]: cmp <- cmp OR cmp");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = "||";
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = "||"
+		p.left = $1.sn
+		p.right = $3.sn
+                $$.sn = p
 	}
 	|
 	cmp_value LESS cmp_value
 	{
 		loggo.Debug("[yacc]: cmp <- cmp_value LESS cmp_value");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = $2;
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.s
+		p.left = $1.sn
+		p.right = $3.sn
+                $$.sn = p
 	}
 	|
 	cmp_value MORE cmp_value
 	{
 		loggo.Debug("[yacc]: cmp <- cmp_value MORE cmp_value");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = $2;
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.s
+		p.left = $1.sn
+		p.right = $3.sn
+                $$.sn = p
 	}
 	|
 	cmp_value EQUAL cmp_value
 	{
 		loggo.Debug("[yacc]: cmp <- cmp_value EQUAL cmp_value");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = $2;
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.s
+		p.left = $1.sn
+		p.right = $3.sn
+                $$.sn = p
 	}
 	|
 	cmp_value MORE_OR_EQUAL cmp_value
 	{
 		loggo.Debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = $2;
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.s
+		p.left = $1.sn
+		p.right = $3.sn
+                $$.sn = p
 	}
 	|
 	cmp_value LESS_OR_EQUAL cmp_value
 	{
 		loggo.Debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = $2;
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.s
+		p.left = $1.sn
+		p.right = $3.sn
+                $$.sn = p
 	}
 	|
 	cmp_value NOT_EQUAL cmp_value
 	{
 		loggo.Debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = $2;
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.s
+		p.left = $1.sn
+		p.right = $3.sn
+                $$.sn = p
 	}
 	|
 	FTRUE
 	{
 		loggo.Debug("[yacc]: cmp <- true");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = "true";
-		//p->left = 0;
-		//p->right = 0;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = "true"
+		p.left = nil
+		p.right = nil
+                $$.sn = p
 	}
 	|
 	FFALSE
 	{
 		loggo.Debug("[yacc]: cmp <- false");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = "false";
-		//p->left = 0;
-		//p->right = 0;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = "false"
+		p.left = nil
+		p.right = nil
+                $$.sn = p
 	}
 	|
 	IS cmp_value
 	{
 		loggo.Debug("[yacc]: cmp <- cmp_value IS cmp_value");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = "is";
-		//p->left = $2;
-		//p->right = 0;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = "is"
+		p.left = $2.sn
+		p.right = nil
+                $$.sn = p
 	}
 	|
 	NOT cmp_value
 	{
 		loggo.Debug("[yacc]: cmp <- cmp_value NOT cmp_value");
-		//NEWTYPE(p, cmp_stmt);
-		//p->cmp = "not";
-		//p->left = $2;
-		//p->right = 0;
-		//$$ = p;
+		p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = "not";
+		p.left = $2.sn
+		p.right = nil
+                $$.sn = p
 	}
 	;
 
@@ -825,19 +825,19 @@ cmp_value:
 	explicit_value
 	{
 		loggo.Debug("[yacc]: cmp_value <- explicit_value");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	variable
 	{
 		loggo.Debug("[yacc]: cmp_value <- variable");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	expr
 	{
 		loggo.Debug("[yacc]: cmp_value <- expr");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	;
 	
@@ -845,17 +845,17 @@ return_stmt:
 	RETURN return_value_list
 	{
 		loggo.Debug("[yacc]: return_stmt <- RETURN return_value_list");
-		//NEWTYPE(p, return_stmt);
-		//p->returnlist = dynamic_cast<return_value_list_node*>($2);
-		//$$ = p;
+		p := &return_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.returnlist = ($2.sn).(*return_value_list_node)
+		$$.sn = p
 	}
 	|
 	RETURN
 	{
 		loggo.Debug("[yacc]: return_stmt <- RETURN");
-		//NEWTYPE(p, return_stmt);
-		//p->returnlist = 0;
-		//$$ = p;
+		p := &return_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.returnlist = nil
+		$$.sn = p
 	}
 	;
  
@@ -863,18 +863,17 @@ return_value_list:
 	return_value_list ARG_SPLITTER return_value
 	{
 		loggo.Debug("[yacc]: return_value_list <- return_value_list return_value");
-		//assert($1->gettype() == est_return_value_list);
-		//return_value_list_node * p = dynamic_cast<return_value_list_node*>($1);
-		//p->add_arg($3);
-		//$$ = p;
+		p := ($1.sn).(*return_value_list_node)
+		p.add_arg($3.sn)
+		$$.sn = p
 	}
 	|
 	return_value
 	{
 		loggo.Debug("[yacc]: return_value_list <- return_value");
-		//NEWTYPE(p, return_value_list_node);
-		//p->add_arg($1);
-		//$$ = p;
+		p := &return_value_list_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_arg($1.sn)
+		$$.sn = p
 	}
 	;
  
