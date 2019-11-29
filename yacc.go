@@ -1373,44 +1373,44 @@ yydefault:
 		//line ../yacc.y:588
 		{
 			loggo.Debug("[yacc]: while_stmt <- cmp block")
-			//NEWTYPE(p, while_stmt);
-			//p->cmp = dynamic_cast<cmp_stmt*>($2);
-			//p->block = dynamic_cast<block_node*>($4);
-			//$$ = p;
+			p := &while_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
+			p.block = (yyDollar[4].sn).(*block_node)
+			yyVAL.sn = p
 		}
 	case 61:
 		yyDollar = yyS[yypt-4 : yypt+1]
 		//line ../yacc.y:597
 		{
 			loggo.Debug("[yacc]: while_stmt <- cmp")
-			//NEWTYPE(p, while_stmt);
-			//p->cmp = dynamic_cast<cmp_stmt*>($2);
-			//p->block = 0;
-			//$$ = p;
+			p := &while_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
+			p.block = nil
+			yyVAL.sn = p
 		}
 	case 62:
 		yyDollar = yyS[yypt-7 : yypt+1]
 		//line ../yacc.y:608
 		{
 			loggo.Debug("[yacc]: if_stmt <- cmp block")
-			//NEWTYPE(p, if_stmt);
-			//p->cmp = dynamic_cast<cmp_stmt*>($2);
-			//p->block = dynamic_cast<block_node*>($4);
-			//p->elseifs = dynamic_cast<elseif_stmt_list*>($5);
-			//p->elses = dynamic_cast<else_stmt*>($6);
-			//$$ = p;
+			p := &if_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
+			p.block = (yyDollar[4].sn).(*block_node)
+			p.elseifs = (yyDollar[5].sn).(*elseif_stmt_list)
+			p.elses = (yyDollar[6].sn).(*else_stmt)
+			yyVAL.sn = p
 		}
 	case 63:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ../yacc.y:619
 		{
 			loggo.Debug("[yacc]: if_stmt <- cmp")
-			//NEWTYPE(p, if_stmt);
-			//p->cmp = dynamic_cast<cmp_stmt*>($2);
-			//p->block = 0;
-			//p->elseifs = dynamic_cast<elseif_stmt_list*>($4);
-			//p->elses = dynamic_cast<else_stmt*>($5);
-			//$$ = p;
+			p := &if_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
+			p.block = nil
+			p.elseifs = (yyDollar[4].sn).(*elseif_stmt_list)
+			p.elses = (yyDollar[5].sn).(*else_stmt)
+			yyVAL.sn = p
 		}
 	case 64:
 		yyDollar = yyS[yypt-0 : yypt+1]

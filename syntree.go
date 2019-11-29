@@ -501,3 +501,105 @@ func (sn *math_assign_stmt) dump(indent int) string {
 }
 
 //////////////////////////////////////////////////////////////////
+
+type while_stmt struct {
+	syntree_node_base
+	cmp   *cmp_stmt
+	block *block_node
+}
+
+func (sn *while_stmt) gettype() int {
+	return est_while_stmt
+}
+func (sn *while_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[while]:\n"
+	ret += sn.cmp.dump(indent + 1)
+	if sn.block != nil {
+		ret += sn.block.dump(indent + 1)
+	} else {
+		ret += sn.gentab(indent + 1)
+		ret += "nil\n"
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type elseif_stmt_list struct {
+	syntree_node_base
+	stmtlist []syntree_node
+}
+
+func (sn *elseif_stmt_list) gettype() int {
+	return est_elseif_stmt_list
+}
+func (sn *elseif_stmt_list) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[elseif_stmt_list]:\n"
+	for i := range sn.stmtlist {
+		ret += sn.gentab(indent + 1)
+		ret += "[stmt"
+		ret += strconv.Itoa(i)
+		ret += "]:\n"
+		ret += sn.stmtlist[i].dump(indent + 2)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type else_stmt struct {
+	syntree_node_base
+	block *block_node
+}
+
+func (sn *else_stmt) gettype() int {
+	return est_else_stmt
+}
+func (sn *else_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[else]:\n"
+	if sn.block != nil {
+		ret += sn.block.dump(indent + 1)
+	} else {
+		ret += sn.gentab(indent + 1)
+		ret += "nil\n"
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type if_stmt struct {
+	syntree_node_base
+	cmp     *cmp_stmt
+	block   *block_node
+	elseifs *elseif_stmt_list
+	elses   *else_stmt
+}
+
+func (sn *if_stmt) gettype() int {
+	return est_if_stmt
+}
+func (sn *if_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[if]:\n"
+	ret += sn.cmp.dump(indent + 1)
+	if sn.block != nil {
+		ret += sn.block.dump(indent + 1)
+	}
+	if sn.elseifs != nil {
+		ret += sn.elseifs.dump(indent + 1)
+	}
+	if sn.elses != nil {
+		ret += sn.elses.dump(indent)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
