@@ -411,3 +411,93 @@ func (sn *cmp_stmt) dump(indent int) string {
 }
 
 //////////////////////////////////////////////////////////////////
+
+type variable_node struct {
+	syntree_node_base
+	str string
+}
+
+func (sn *variable_node) gettype() int {
+	return est_variable
+}
+func (sn *variable_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[variable]:"
+	ret += sn.str
+	ret += "\n"
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type var_node struct {
+	syntree_node_base
+	str string
+}
+
+func (sn *var_node) gettype() int {
+	return est_var
+}
+func (sn *var_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[var]:"
+	ret += sn.str
+	ret += "\n"
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type assign_stmt struct {
+	syntree_node_base
+	vr    syntree_node
+	value syntree_node
+	isnew bool
+}
+
+func (sn *assign_stmt) gettype() int {
+	return est_assign_stmt
+}
+func (sn *assign_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[assign]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[var]:\n"
+	ret += sn.vr.dump(indent + 2)
+	ret += sn.gentab(indent + 1)
+	ret += "[value]:\n"
+	ret += sn.value.dump(indent + 2)
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type math_assign_stmt struct {
+	syntree_node_base
+	vr    syntree_node
+	oper  string
+	value syntree_node
+}
+
+func (sn *math_assign_stmt) gettype() int {
+	return est_math_assign_stmt
+}
+func (sn *math_assign_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[mathassign]:"
+	ret += sn.oper
+	ret += "\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[var]:\n"
+	ret += sn.vr.dump(indent + 2)
+	ret += sn.gentab(indent + 1)
+	ret += "[value]:\n"
+	ret += sn.value.dump(indent + 2)
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
