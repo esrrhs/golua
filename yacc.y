@@ -338,24 +338,23 @@ function_call:
 function_call_arguments: 
 	/* empty */
 	{
-		//$$ = 0;
+		$$.sn = nil
 	}
 	| 
 	function_call_arguments ARG_SPLITTER arg_expr
 	{
 		loggo.Debug("[yacc]: function_call_arguments <- arg_expr function_call_arguments");
-		//assert($1->gettype() == est_call_arglist);
-		//function_call_arglist_node * p = dynamic_cast<function_call_arglist_node*>($1);
-		//p->add_arg($3);
-		//$$ = p;
+		p := ($1.sn).(*function_call_arglist_node)
+		p.add_arg($3.sn)
+		$$.sn = p
 	}
 	| 
 	arg_expr
 	{
 		loggo.Debug("[yacc]: function_call_arguments <- arg_expr");
-		//NEWTYPE(p, function_call_arglist_node);
-		//p->add_arg($1);
-		//$$ = p;
+		p := &function_call_arglist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_arg($1.sn)
+		$$.sn = p
 	}
 	;  
 
@@ -363,7 +362,7 @@ arg_expr:
 	expr_value
 	{
 		loggo.Debug("[yacc]: arg_expr <- expr_value");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	;
 
@@ -373,18 +372,17 @@ block:
 	block stmt 
 	{
 		loggo.Debug("[yacc]: block <- block stmt");
-		//assert($1->gettype() == est_block);
-		//block_node * p = dynamic_cast<block_node*>($1);
-		//p->add_stmt($2);
-		//$$ = p;
+		p := ($1.sn).(*block_node)
+		p.add_stmt($2.sn)
+		$$.sn = p
 	}
 	|
 	stmt 
 	{
 		loggo.Debug("[yacc]: block <- stmt");
-		//NEWTYPE(p, block_node);
-		//p->add_stmt($1);
-		//$$ = p;
+		p := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_stmt($1.sn)
+		$$.sn = p
 	}
 	;
   
@@ -392,91 +390,91 @@ stmt:
 	while_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- while_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	if_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- if_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	return_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- return_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	assign_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- assign_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	multi_assign_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- multi_assign_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	break
 	{
 		loggo.Debug("[yacc]: stmt <- break");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	continue
 	{
 		loggo.Debug("[yacc]: stmt <- continue");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	expr
 	{
 		loggo.Debug("[yacc]: stmt <- expr");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	math_assign_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- math_assign_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	for_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- for_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	for_loop_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- for_loop_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	fake_call_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- fake_call_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	sleep
 	{
 		loggo.Debug("[yacc]: stmt <- sleep_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	yield
 	{
 		loggo.Debug("[yacc]: stmt <- yield_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	switch_stmt
 	{
 		loggo.Debug("[yacc]: stmt <- switch_stmt");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	;
 
