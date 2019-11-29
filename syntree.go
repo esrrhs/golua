@@ -674,3 +674,48 @@ func (sn *return_value_list_node) add_arg(arg syntree_node) {
 }
 
 //////////////////////////////////////////////////////////////////
+
+type var_list_node struct {
+	syntree_node_base
+	varlist []syntree_node
+}
+
+func (sn *var_list_node) gettype() int {
+	return est_var_list
+}
+func (sn *var_list_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[return_value_list]:\n"
+	for i := range sn.varlist {
+		ret += sn.varlist[i].dump(indent + 1)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type multi_assign_stmt struct {
+	syntree_node_base
+	varlist *var_list_node
+	value   syntree_node
+	isnew   bool
+}
+
+func (sn *multi_assign_stmt) gettype() int {
+	return est_multi_assign_stmt
+}
+func (sn *multi_assign_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[multi_assign]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[var]:\n"
+	ret += sn.varlist.dump(indent + 2)
+	ret += sn.gentab(indent + 1)
+	ret += "[value]:\n"
+	ret += sn.value.dump(indent + 2)
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////

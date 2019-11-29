@@ -1681,65 +1681,65 @@ yydefault:
 		//line ../yacc.y:882
 		{
 			loggo.Debug("[yacc]: return_value <- explicit_value")
-			//$$ = $1;
+			yyVAL.sn = yyDollar[1].sn
 		}
 	case 93:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:888
 		{
 			loggo.Debug("[yacc]: return_value <- variable")
-			//$$ = $1;
+			yyVAL.sn = yyDollar[1].sn
 		}
 	case 94:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:894
 		{
 			loggo.Debug("[yacc]: return_value <- expr")
-			//$$ = $1;
+			yyVAL.sn = yyDollar[1].sn
 		}
 	case 95:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:902
 		{
 			loggo.Debug("[yacc]: assign_stmt <- var assign_value")
-			//NEWTYPE(p, assign_stmt);
-			//p->var = $1;
-			//p->value = $3;
-			//p->isnew = false;
-			//$$ = p;
+			p := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.vr = yyDollar[1].sn
+			p.value = yyDollar[3].sn
+			p.isnew = false
+			yyVAL.sn = p
 		}
 	case 96:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:912
 		{
 			loggo.Debug("[yacc]: new assign_stmt <- var assign_value")
-			//NEWTYPE(p, assign_stmt);
-			//p->var = $1;
-			//p->value = $3;
-			//p->isnew = true;
-			//$$ = p;
+			p := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.vr = yyDollar[1].sn
+			p.value = yyDollar[3].sn
+			p.isnew = true
+			yyVAL.sn = p
 		}
 	case 97:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:924
 		{
 			loggo.Debug("[yacc]: multi_assign_stmt <- var_list function_call")
-			//NEWTYPE(p, multi_assign_stmt);
-			//p->varlist = dynamic_cast<var_list_node*>($1);
-			//p->value = $3;
-			//p->isnew = false;
-			//$$ = p;
+			p := &multi_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.varlist = (yyDollar[1].sn).(*var_list_node)
+			p.value = yyDollar[3].sn
+			p.isnew = false
+			yyVAL.sn = p
 		}
 	case 98:
 		yyDollar = yyS[yypt-3 : yypt+1]
 		//line ../yacc.y:934
 		{
 			loggo.Debug("[yacc]: new multi_assign_stmt <- var_list function_call")
-			//NEWTYPE(p, multi_assign_stmt);
-			//p->varlist = dynamic_cast<var_list_node*>($1);
-			//p->value = $3;
-			//p->isnew = true;
-			//$$ = p;
+			p := &multi_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.varlist = (yyDollar[1].sn).(*var_list_node)
+			p.value = yyDollar[3].sn
+			p.isnew = true
+			yyVAL.sn = p
 		}
 	case 99:
 		yyDollar = yyS[yypt-3 : yypt+1]

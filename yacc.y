@@ -881,19 +881,19 @@ return_value:
 	explicit_value
 	{
 		loggo.Debug("[yacc]: return_value <- explicit_value");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	variable
 	{
 		loggo.Debug("[yacc]: return_value <- variable");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	expr
 	{
 		loggo.Debug("[yacc]: return_value <- expr");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	;
 
@@ -901,21 +901,21 @@ assign_stmt:
 	var ASSIGN assign_value
 	{
 		loggo.Debug("[yacc]: assign_stmt <- var assign_value");
-		//NEWTYPE(p, assign_stmt);
-		//p->var = $1;
-		//p->value = $3;
-		//p->isnew = false;
-		//$$ = p;
+		p := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.vr = $1.sn
+		p.value = $3.sn
+		p.isnew = false
+		$$.sn = p
 	}
 	|
 	var NEW_ASSIGN assign_value
 	{
 		loggo.Debug("[yacc]: new assign_stmt <- var assign_value");
-		//NEWTYPE(p, assign_stmt);
-		//p->var = $1;
-		//p->value = $3;
-		//p->isnew = true;
-		//$$ = p;
+		p := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.vr = $1.sn
+		p.value = $3.sn
+		p.isnew = true;
+		$$.sn = p
 	}
 	;
 
@@ -923,21 +923,21 @@ multi_assign_stmt:
 	var_list ASSIGN function_call
 	{
 		loggo.Debug("[yacc]: multi_assign_stmt <- var_list function_call");
-		//NEWTYPE(p, multi_assign_stmt);
-		//p->varlist = dynamic_cast<var_list_node*>($1);
-		//p->value = $3;
-		//p->isnew = false;
-		//$$ = p;
+		p := &multi_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.varlist = ($1.sn).(*var_list_node)
+		p.value = $3.sn
+		p.isnew = false
+		$$.sn = p
 	}
 	|
 	var_list NEW_ASSIGN function_call
 	{
 		loggo.Debug("[yacc]: new multi_assign_stmt <- var_list function_call");
-		//NEWTYPE(p, multi_assign_stmt);
-		//p->varlist = dynamic_cast<var_list_node*>($1);
-		//p->value = $3;
-		//p->isnew = true;
-		//$$ = p;
+		p := &multi_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.varlist = ($1.sn).(*var_list_node)
+		p.value = $3.sn
+		p.isnew = true
+		$$.sn = p
 	}
 	;
 	
