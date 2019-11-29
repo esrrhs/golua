@@ -275,3 +275,67 @@ func (sn *identifier_node) dump(indent int) string {
 }
 
 //////////////////////////////////////////////////////////////////
+
+type function_call_arglist_node struct {
+	syntree_node_base
+	arglist []syntree_node
+}
+
+func (sn *function_call_arglist_node) gettype() int {
+	return est_call_arglist
+}
+func (sn *function_call_arglist_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[func_call_arglist]:\n"
+	for i, _ := range sn.arglist {
+		ret += sn.gentab(indent + 1)
+		ret += "[arg"
+		ret += strconv.Itoa(i)
+		ret += "]:\n"
+		ret += sn.arglist[i].dump(indent + 2)
+	}
+	return ret
+}
+func (sn *function_call_arglist_node) add_arg(arg syntree_node) {
+	sn.arglist = append(sn.arglist, arg)
+}
+
+//////////////////////////////////////////////////////////////////
+
+type function_call_node struct {
+	syntree_node_base
+	str           string
+	fakecall      bool
+	classmem_call bool
+	fuc           string
+	prefunc       syntree_node
+	arglist       *function_call_arglist_node
+}
+
+func (sn *function_call_node) gettype() int {
+	return est_function_call
+}
+func (sn *function_call_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	if sn.fakecall {
+		ret += "[func_fake_call]:"
+	} else if sn.classmem_call {
+		ret += "[class_mem_call]:"
+	} else {
+		ret += "[func_call]:"
+	}
+	if sn.prefunc != nil {
+		ret += sn.prefunc.dump(indent + 1)
+	} else {
+		ret += sn.fuc
+	}
+	ret += "\n"
+	if sn.arglist != nil {
+		ret += sn.arglist.dump(indent + 1)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////

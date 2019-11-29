@@ -155,6 +155,7 @@ struct_define:
 struct_mem_declaration: 
 	/* empty */
 	{
+		$$.sn = nil
 	}
 	| 
 	struct_mem_declaration IDENTIFIER 
@@ -223,6 +224,7 @@ function_declaration:
 		p := &func_desc_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.funcname = $2.s
                 p.arglist = $4.sn.(*func_desc_arglist_node)
+		p.block = nil
 		l := yylex.(lexerwarpper).mf
 		l.add_func_desc(p)
 	}
@@ -231,6 +233,7 @@ function_declaration:
 function_declaration_arguments: 
 	/* empty */
 	{
+		$$.sn = nil
 	}
 	| 
 	function_declaration_arguments ARG_SPLITTER arg 
@@ -264,73 +267,71 @@ function_call:
 	IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
 		loggo.Debug("[yacc]: function_call <- function_call_arguments %v", $1.s);
-		//NEWTYPE(p, function_call_node);
-		//p->fuc = $1;
-		//p->prefunc = 0;
-		//p->arglist = dynamic_cast<function_call_arglist_node*>($3);
-		//p->fakecall = false;
-		//p->classmem_call = false;
-		//$$ = p;
+		p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.fuc = $1.s
+		p.prefunc = nil
+		p.arglist = ($3.sn).(*function_call_arglist_node)
+		p.fakecall = false
+		p.classmem_call = false
+		$$.sn = p
 	} 
 	|
 	IDENTIFIER_DOT OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
 		loggo.Debug("[yacc]: function_call <- function_call_arguments %v", $1.s);
-		//NEWTYPE(p, function_call_node);
-		//p->fuc = $1;
-		//p->prefunc = 0;
-		//p->arglist = dynamic_cast<function_call_arglist_node*>($3);
-		//p->fakecall = false;
-		//p->classmem_call = false;
-		//$$ = p;
+		p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.fuc = $1.s
+		p.prefunc = nil
+		p.arglist = ($3.sn).(*function_call_arglist_node)
+		p.fakecall = false
+		p.classmem_call = false
+		$$.sn = p
 	} 
 	|
 	function_call OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
 		loggo.Debug("[yacc]: function_call <- function_call_arguments");
-		//NEWTYPE(p, function_call_node);
-		//p->fuc = "";
-		//p->prefunc = $1;
-		//p->arglist = dynamic_cast<function_call_arglist_node*>($3);
-		//p->fakecall = false;
-		//p->classmem_call = false;
-		//$$ = p;
+		p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.fuc = ""
+		p.prefunc = $1.sn;
+		p.arglist = ($3.sn).(*function_call_arglist_node)
+		p.fakecall = false
+		p.classmem_call = false
+		$$.sn = p
 	} 
 	|
 	function_call COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
 		loggo.Debug("[yacc]: function_call <- mem function_call_arguments %v", $3.s);
-		//NEWTYPE(p, function_call_node);
-		//p->fuc = $3;
-		//p->prefunc = 0;
-		//p->arglist = dynamic_cast<function_call_arglist_node*>($5);
-		//if (p->arglist == 0)
-		//{
-		//	NEWTYPE(pa, function_call_arglist_node);
-		//	p->arglist = pa;
-		//}
-		//p->arglist->add_arg($1);
-		//p->fakecall = false;
-		//p->classmem_call = true;
-		//$$ = p;
+		p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.fuc = $3.s
+		p.prefunc = nil
+		if $5.sn == nil {
+			p.arglist = &function_call_arglist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		} else {
+			p.arglist = ($5.sn).(*function_call_arglist_node)
+		}
+		p.arglist.add_arg($1.sn)
+		p.fakecall = false
+		p.classmem_call = true
+		$$.sn = p
 	}
 	|
 	variable COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	{
 		loggo.Debug("[yacc]: function_call <- mem function_call_arguments %v", $3.s);
-		//NEWTYPE(p, function_call_node);
-		//p->fuc = $3;
-		//p->prefunc = 0;
-		//p->arglist = dynamic_cast<function_call_arglist_node*>($5);
-		//if (p->arglist == 0)
-		//{
-		//	NEWTYPE(pa, function_call_arglist_node);
-		//	p->arglist = pa;
-		//}
-		//p->arglist->add_arg($1);
-		//p->fakecall = false;
-		//p->classmem_call = true;
-		//$$ = p;
+		p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.fuc = $3.s
+		p.prefunc = nil
+		if $5.sn == nil {
+			p.arglist = &function_call_arglist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		} else {
+			p.arglist = ($5.sn).(*function_call_arglist_node)
+		}
+		p.arglist.add_arg($1.sn)
+		p.fakecall = false
+		p.classmem_call = true
+		$$.sn = p
 	} 
 	;
 	
