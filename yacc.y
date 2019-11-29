@@ -630,24 +630,23 @@ if_stmt:
 elseif_stmt_list:
 	/* empty */
 	{
-		//$$ = 0;
+		$$.sn = nil
 	}
 	| 
 	elseif_stmt_list elseif_stmt
 	{
 		loggo.Debug("[yacc]: elseif_stmt_list <- elseif_stmt_list elseif_stmt");
-		//assert($1->gettype() == est_elseif_stmt_list);
-		//elseif_stmt_list * p = dynamic_cast<elseif_stmt_list*>($1);
-		//p->add_stmt($2);
-		//$$ = p;
+		p := ($1.sn).(*elseif_stmt_list)
+		p.add_stmt($2.sn)
+		$$.sn = p
 	}
 	| 
 	elseif_stmt
 	{
 		loggo.Debug("[yacc]: elseif_stmt_list <- elseif_stmt");
-		//NEWTYPE(p, elseif_stmt_list);
-		//p->add_stmt($1);
-		//$$ = p;
+		p := &elseif_stmt_list{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_stmt($1.sn)
+		$$.sn = p
 	}
 	;
 	
@@ -655,19 +654,19 @@ elseif_stmt:
 	ELSEIF cmp THEN block
 	{
 		loggo.Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block");
-		//NEWTYPE(p, elseif_stmt);
-		//p->cmp = dynamic_cast<cmp_stmt*>($2);
-		//p->block = $4;
-		//$$ = p;
+		p := &elseif_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = ($2.sn).(*cmp_stmt)
+		p.block = ($4.sn).(*block_node)
+		$$.sn = p
 	}
 	|
 	ELSEIF cmp THEN
 	{
 		loggo.Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block");
-		//NEWTYPE(p, elseif_stmt);
-		//p->cmp = dynamic_cast<cmp_stmt*>($2);
-		//p->block = 0;
-		//$$ = p;
+		p := &elseif_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = ($2.sn).(*cmp_stmt)
+		p.block = nil
+                $$.sn = p
 	}
 	;
 	

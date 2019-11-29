@@ -548,6 +548,9 @@ func (sn *elseif_stmt_list) dump(indent int) string {
 	}
 	return ret
 }
+func (sn *elseif_stmt_list) add_stmt(stmt syntree_node) {
+	sn.stmtlist = append(sn.stmtlist, stmt)
+}
 
 //////////////////////////////////////////////////////////////////
 
@@ -598,6 +601,28 @@ func (sn *if_stmt) dump(indent int) string {
 	}
 	if sn.elses != nil {
 		ret += sn.elses.dump(indent)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type elseif_stmt struct {
+	syntree_node_base
+	cmp   *cmp_stmt
+	block *block_node
+}
+
+func (sn *elseif_stmt) gettype() int {
+	return est_elseif_stmt
+}
+func (sn *elseif_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[elseif_stmt]:\n"
+	ret += sn.cmp.dump(indent + 1)
+	if sn.block != nil {
+		ret += sn.block.dump(indent + 1)
 	}
 	return ret
 }
