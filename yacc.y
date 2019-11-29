@@ -254,9 +254,9 @@ arg :
 	IDENTIFIER
 	{
 		loggo.Debug("[yacc]: arg <- IDENTIFIER %v", $1.s);
-		//NEWTYPE(p, identifier_node);
-		//p->str = $1;
-		//$$ = p;
+		p := &identifier_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		$$.sn = p
 	}
 	;
 	

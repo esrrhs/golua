@@ -1028,9 +1028,9 @@ yydefault:
 		//line ../yacc.y:255
 		{
 			loggo.Debug("[yacc]: arg <- IDENTIFIER %v", yyDollar[1].s)
-			//NEWTYPE(p, identifier_node);
-			//p->str = $1;
-			//$$ = p;
+			p := &identifier_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.str = yyDollar[1].s
+			yyVAL.sn = p
 		}
 	case 29:
 		yyDollar = yyS[yypt-4 : yypt+1]

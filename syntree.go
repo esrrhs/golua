@@ -257,4 +257,21 @@ func (sn *func_desc_node) dump(indent int) string {
 
 //////////////////////////////////////////////////////////////////
 
+type identifier_node struct {
+	syntree_node_base
+	str string
+}
+
+func (sn *identifier_node) gettype() int {
+	return est_identifier
+}
+func (sn *identifier_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[identifier]:\n"
+	ret += sn.str
+	ret += "\n"
+	return ret
+}
+
 //////////////////////////////////////////////////////////////////
