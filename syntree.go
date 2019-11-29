@@ -163,7 +163,7 @@ func (sn *struct_desc_memlist_node) dump(indent int) string {
 	ret := ""
 	ret += sn.gentab(indent)
 	ret += "[struct_desc_memlist_node]:\n"
-	for i, _ := range sn.memlist {
+	for i := range sn.memlist {
 		ret += sn.gentab(indent + 1)
 		ret += sn.memlist[i]
 		ret += "\n"
@@ -188,7 +188,7 @@ func (sn *func_desc_arglist_node) dump(indent int) string {
 	ret := ""
 	ret += sn.gentab(indent)
 	ret += "[func_desc_arglist]:\n"
-	for i, _ := range sn.arglist {
+	for i := range sn.arglist {
 		ret += sn.gentab(indent + 1)
 		ret += sn.arglist[i]
 		ret += "\n"
@@ -213,7 +213,7 @@ func (sn *block_node) dump(indent int) string {
 	ret := ""
 	ret += sn.gentab(indent)
 	ret += "[block]:\n"
-	for i, _ := range sn.stmtlist {
+	for i := range sn.stmtlist {
 		ret += sn.gentab(indent + 1)
 		ret += "[stmt"
 		ret += strconv.Itoa(i)
@@ -288,7 +288,7 @@ func (sn *function_call_arglist_node) dump(indent int) string {
 	ret := ""
 	ret += sn.gentab(indent)
 	ret += "[func_call_arglist]:\n"
-	for i, _ := range sn.arglist {
+	for i := range sn.arglist {
 		ret += sn.gentab(indent + 1)
 		ret += "[arg"
 		ret += strconv.Itoa(i)
@@ -334,6 +334,78 @@ func (sn *function_call_node) dump(indent int) string {
 	ret += "\n"
 	if sn.arglist != nil {
 		ret += sn.arglist.dump(indent + 1)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type for_stmt struct {
+	syntree_node_base
+	str        string
+	beginblock *block_node
+	cmp        *cmp_stmt
+	endblock   *block_node
+	block      *block_node
+}
+
+func (sn *for_stmt) gettype() int {
+	return est_for_stmt
+}
+func (sn *for_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[for]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[beginblock]:\n"
+	if sn.beginblock != nil {
+		ret += sn.beginblock.dump(indent + 2)
+	}
+	ret += sn.gentab(indent + 1)
+	ret += "[cmp]:\n"
+	if sn.cmp != nil {
+		ret += sn.cmp.dump(indent + 2)
+	}
+	ret += sn.gentab(indent + 1)
+	ret += "[endblock]:\n"
+	if sn.endblock != nil {
+		ret += sn.endblock.dump(indent + 2)
+	}
+	ret += sn.gentab(indent + 1)
+	ret += "[block]:\n"
+	if sn.block != nil {
+		ret += sn.block.dump(indent + 2)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type cmp_stmt struct {
+	syntree_node_base
+	cmp   string
+	left  syntree_node
+	right syntree_node
+}
+
+func (sn *cmp_stmt) gettype() int {
+	return est_cmp_stmt
+}
+func (sn *cmp_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[cmp]:"
+	ret += sn.cmp
+	ret += "\n"
+	if sn.left != nil {
+		ret += sn.gentab(indent + 1)
+		ret += "[left]:\n"
+		ret += sn.left.dump(indent + 2)
+	}
+	if sn.right != nil {
+		ret += sn.gentab(indent + 1)
+		ret += "[right]:\n"
+		ret += sn.right.dump(indent + 2)
 	}
 	return ret
 }

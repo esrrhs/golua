@@ -482,9 +482,9 @@ fake_call_stmt:
 	FAKE function_call
 	{
 		loggo.Debug("[yacc]: fake_call_stmt <- fake function_call");
-		//function_call_node * p = dynamic_cast<function_call_node*>($2);
-		//p->fakecall = true;
-		//$$ = p;
+		p := ($2.sn).(*function_call_node)
+		p.fakecall = true
+		$$.sn = p
 	}
 	;
 	
@@ -492,23 +492,23 @@ for_stmt:
 	FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN block END
 	{
 		loggo.Debug("[yacc]: for_stmt <- block cmp block");
-		//NEWTYPE(p, for_stmt);
-		//p->cmp = dynamic_cast<cmp_stmt*>($4);
-		//p->beginblock = dynamic_cast<block_node*>($2);
-		//p->endblock = dynamic_cast<block_node*>($6);
-		//p->block = dynamic_cast<block_node*>($8);
-		//$$ = p;
+		p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = ($4.sn).(*cmp_stmt)
+		p.beginblock = ($2.sn).(*block_node)
+		p.endblock = ($6.sn).(*block_node)
+		p.block = ($8.sn).(*block_node)
+		$$.sn = p
 	}
 	|
 	FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN END
 	{
 		loggo.Debug("[yacc]: for_stmt <- block cmp");
-		//NEWTYPE(p, for_stmt);
-		//p->cmp = dynamic_cast<cmp_stmt*>($4);
-		//p->beginblock = dynamic_cast<block_node*>($2);
-		//p->endblock = dynamic_cast<block_node*>($6);
-		//p->block = 0;
-		//$$ = p;
+		p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = ($4.sn).(*cmp_stmt)
+		p.beginblock = ($2.sn).(*block_node)
+		p.endblock = ($6.sn).(*block_node)
+		p.block = nil
+		$$.sn = p
 	}
 	;
 

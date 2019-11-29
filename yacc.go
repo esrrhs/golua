@@ -1269,33 +1269,33 @@ yydefault:
 		//line ../yacc.y:483
 		{
 			loggo.Debug("[yacc]: fake_call_stmt <- fake function_call")
-			//function_call_node * p = dynamic_cast<function_call_node*>($2);
-			//p->fakecall = true;
-			//$$ = p;
+			p := (yyDollar[2].sn).(*function_call_node)
+			p.fakecall = true
+			yyVAL.sn = p
 		}
 	case 56:
 		yyDollar = yyS[yypt-9 : yypt+1]
 		//line ../yacc.y:493
 		{
 			loggo.Debug("[yacc]: for_stmt <- block cmp block")
-			//NEWTYPE(p, for_stmt);
-			//p->cmp = dynamic_cast<cmp_stmt*>($4);
-			//p->beginblock = dynamic_cast<block_node*>($2);
-			//p->endblock = dynamic_cast<block_node*>($6);
-			//p->block = dynamic_cast<block_node*>($8);
-			//$$ = p;
+			p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = (yyDollar[4].sn).(*cmp_stmt)
+			p.beginblock = (yyDollar[2].sn).(*block_node)
+			p.endblock = (yyDollar[6].sn).(*block_node)
+			p.block = (yyDollar[8].sn).(*block_node)
+			yyVAL.sn = p
 		}
 	case 57:
 		yyDollar = yyS[yypt-8 : yypt+1]
 		//line ../yacc.y:504
 		{
 			loggo.Debug("[yacc]: for_stmt <- block cmp")
-			//NEWTYPE(p, for_stmt);
-			//p->cmp = dynamic_cast<cmp_stmt*>($4);
-			//p->beginblock = dynamic_cast<block_node*>($2);
-			//p->endblock = dynamic_cast<block_node*>($6);
-			//p->block = 0;
-			//$$ = p;
+			p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = (yyDollar[4].sn).(*cmp_stmt)
+			p.beginblock = (yyDollar[2].sn).(*block_node)
+			p.endblock = (yyDollar[6].sn).(*block_node)
+			p.block = nil
+			yyVAL.sn = p
 		}
 	case 58:
 		yyDollar = yyS[yypt-11 : yypt+1]
