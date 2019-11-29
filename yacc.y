@@ -220,37 +220,33 @@ function_declaration:
 	FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET END
 	{
 		loggo.Debug("[yacc]: function_declaration <- empty %v", $2.s);
-		//NEWTYPE(p, func_desc_node);
-		//p->funcname = $2;
-		//p->arglist = 0;
-		//p->block = 0;
-		//p->endline = yylloc.first_line;
-		//l := yylex.(lexerwarpper).mf
-		//l->add_func_desc(p);
+		p := &func_desc_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.funcname = $2.s
+                p.arglist = $4.sn.(*func_desc_arglist_node)
+		l := yylex.(lexerwarpper).mf
+		l.add_func_desc(p)
 	}
 	;
 
 function_declaration_arguments: 
 	/* empty */
 	{
-		//$$ = 0;
 	}
 	| 
 	function_declaration_arguments ARG_SPLITTER arg 
 	{
 		loggo.Debug("[yacc]: function_declaration_arguments <- arg function_declaration_arguments");
-		//assert($1->gettype() == est_arglist);
-		//func_desc_arglist_node * p = dynamic_cast<func_desc_arglist_node*>($1);
-		//p->add_arg($3);
-		//$$ = p;
+		p := ($1.sn).(*func_desc_arglist_node)
+		p.add_arg($3.s)
+		$$.sn = p
 	}
 	| 
 	arg
 	{
 		loggo.Debug("[yacc]: function_declaration_arguments <- arg");
-		//NEWTYPE(p, func_desc_arglist_node);
-		//p->add_arg($1);
-		//$$ = p;
+		p := &func_desc_arglist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_arg($1.s)
+		$$.sn = p
 	}
 	;
 
