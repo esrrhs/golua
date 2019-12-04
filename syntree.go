@@ -692,6 +692,9 @@ func (sn *var_list_node) dump(indent int) string {
 	}
 	return ret
 }
+func (sn *var_list_node) add_arg(arg syntree_node) {
+	sn.varlist = append(sn.varlist, arg)
+}
 
 //////////////////////////////////////////////////////////////////
 
@@ -715,6 +718,39 @@ func (sn *multi_assign_stmt) dump(indent int) string {
 	ret += sn.gentab(indent + 1)
 	ret += "[value]:\n"
 	ret += sn.value.dump(indent + 2)
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+const (
+	EVT_TRUE = iota
+	EVT_FALSE
+	EVT_NUM
+	EVT_STR
+	EVT_FLOAT
+	EVT_UUID
+	EVT_MAP
+	EVT_ARRAY
+	EVT_NULL
+)
+
+type explicit_value_node struct {
+	syntree_node_base
+	str string
+	ty  int
+	v   syntree_node
+}
+
+func (sn *explicit_value_node) gettype() int {
+	return est_explicit_value
+}
+func (sn *explicit_value_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[explicit_value]:"
+	ret += sn.str
+	ret += "\n"
 	return ret
 }
 

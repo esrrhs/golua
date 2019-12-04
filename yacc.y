@@ -945,18 +945,17 @@ var_list:
 	var_list ARG_SPLITTER var
 	{
 		loggo.Debug("[yacc]: var_list <- var_list var");
-		//assert($1->gettype() == est_var_list);
-		//var_list_node * p = dynamic_cast<var_list_node*>($1);
-		//p->add_arg($3);
-		//$$ = p;
+		p := ($1.sn).(*var_list_node)
+		p.add_arg($3.sn)
+		$$.sn = p
 	}
 	|
 	var
 	{
 		loggo.Debug("[yacc]: var_list <- var");
-		//NEWTYPE(p, var_list_node);
-		//p->add_arg($1);
-		//$$ = p;
+		p := &var_list_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_arg($1.sn)
+		$$.sn = p
 	}
 	;
 	
@@ -964,19 +963,19 @@ assign_value:
 	explicit_value
 	{
 		loggo.Debug("[yacc]: assign_value <- explicit_value");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	variable
 	{
 		loggo.Debug("[yacc]: assign_value <- variable");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	expr
 	{
 		loggo.Debug("[yacc]: assign_value <- expr");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	;
 	
@@ -984,65 +983,65 @@ math_assign_stmt :
 	variable PLUS_ASSIGN assign_value
 	{
 		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
-		//NEWTYPE(p, math_assign_stmt);
-		//p->var = $1;
-		//p->oper = "+=";
-		//p->value = $3;
-		//$$ = p;
+		p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.vr = $1.sn
+		p.oper = "+="
+		p.value = $3.sn
+		$$.sn = p
 	}
 	|
 	variable MINUS_ASSIGN assign_value
 	{
 		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
-		//NEWTYPE(p, math_assign_stmt);
-		//p->var = $1;
-		//p->oper = "-=";
-		//p->value = $3;
-		//$$ = p;
+		p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.vr = $1.sn
+		p.oper = "-="
+		p.value = $3.sn
+		$$.sn = p
 	}
 	|
 	variable DIVIDE_ASSIGN assign_value
 	{
 		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
-		//NEWTYPE(p, math_assign_stmt);
-		//p->var = $1;
-		//p->oper = "/=";
-		//p->value = $3;
-		//$$ = p;
+		p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.vr = $1.sn
+		p.oper = "/="
+		p.value = $3.sn
+		$$.sn = p
 	}
 	|
 	variable MULTIPLY_ASSIGN assign_value
 	{
 		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
-		//NEWTYPE(p, math_assign_stmt);
-		//p->var = $1;
-		//p->oper = "*=";
-		//p->value = $3;
-		//$$ = p;
+		p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.vr = $1.sn
+		p.oper = "*="
+		p.value = $3.sn
+		$$.sn = p
 	}
 	|
 	variable DIVIDE_MOD_ASSIGN assign_value
 	{
 		loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value");
-		//NEWTYPE(p, math_assign_stmt);
-		//p->var = $1;
-		//p->oper = "%=";
-		//p->value = $3;
-		//$$ = p;
+		p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.vr = $1.sn
+		p.oper = "%="
+		p.value = $3.sn
+		$$.sn = p
 	}
 	|
 	variable INC
 	{
 		loggo.Debug("[yacc]: math_assign_stmt <- variable INC");
-		//NEWTYPE(pp, explicit_value_node);
-		//pp->str = "1";
-		//pp->type = explicit_value_node::EVT_NUM;
-		//
-		//NEWTYPE(p, math_assign_stmt);
-		//p->var = $1;
-		//p->oper = "+=";
-		//p->value = pp;
-		//$$ = p;
+		pp := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		pp.str = "1"
+		pp.ty = EVT_NUM
+
+		p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.vr = $1.sn
+		p.oper = "+="
+		p.value = pp
+		$$.sn = p
 	}
 	;
 	
