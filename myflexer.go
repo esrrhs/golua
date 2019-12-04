@@ -6,10 +6,12 @@ type myflexer struct {
 	f           fakeStruct
 	fileName    string
 	packageName string
+	includelist []string
 }
 
 func (mf *myflexer) add_include(include_file string) {
 	loggo.Debug("add include %s", include_file)
+	mf.includelist = append(mf.includelist, include_file)
 }
 
 func (mf *myflexer) add_struct_desc(name string, p *struct_desc_memlist_node) {
@@ -22,4 +24,7 @@ func (mf *myflexer) add_const_desc(name string, p syntree_node) {
 
 func (mf *myflexer) add_func_desc(p *func_desc_node) {
 	loggo.Debug("add func %s %d", p.funcname, p.lineno())
+	if loggo.IsDebug() {
+		loggo.Debug("dump func %s \n%s", p.funcname, p.dump(0))
+	}
 }

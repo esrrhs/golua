@@ -29,6 +29,12 @@ func Parse(file string) (err error) {
 
 	loggo.Debug("start parse " + file)
 
+	// check local save include
+	// TODO
+
+	// add include local save
+	// TODO
+
 	f, err := os.OpenFile(file, os.O_RDONLY, os.ModeType)
 	if err != nil {
 		panic(err)
@@ -48,6 +54,26 @@ func Parse(file string) (err error) {
 	if ret != 0 {
 		panic(errors.New("yyParse fail " + strconv.Itoa(ret)))
 	}
+
+	loggo.Debug("yyParse ok" + file)
+
+	// parse include file
+	for _, f := range mf.includelist {
+		err := Parse(f)
+		if err != nil {
+			return err
+		}
+	}
+
+	loggo.Debug("include Parse ok" + file)
+
+	mc := compiler{}
+	err = mc.compile(&mf)
+	if err != nil {
+		return err
+	}
+
+	loggo.Debug("compile ok" + file)
 
 	loggo.Debug("start parse ok" + file)
 	return nil
