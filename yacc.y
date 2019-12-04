@@ -1049,15 +1049,15 @@ var:
 	VAR_BEGIN IDENTIFIER
 	{
 		loggo.Debug("[yacc]: var <- VAR_BEGIN IDENTIFIER %v", $2.s);
-		//NEWTYPE(p, var_node);
-		//p->str = $2;
-		//$$ = p;
+		p := &var_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $2.s
+		$$.sn = p
 	}
 	|
 	variable
 	{
 		loggo.Debug("[yacc]: var <- variable");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	;
 
@@ -1065,34 +1065,34 @@ variable:
 	IDENTIFIER
 	{
 		loggo.Debug("[yacc]: variable <- IDENTIFIER %v", $1.s);
-		//NEWTYPE(p, variable_node);
-		//p->str = $1;
-		//$$ = p;
+		p := &variable_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		$$.sn = p
 	}
 	|
 	IDENTIFIER OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET
 	{
 		loggo.Debug("[yacc]: container_get_node <- IDENTIFIER[expr_value] %v", $1.s);
-		//NEWTYPE(p, container_get_node);
-		//p->container = $1;
-		//p->key = $3;
-		//$$ = p;
+		p := &container_get_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.container = $1.s
+		p.key = $3.sn
+		$$.sn = p
 	}
 	|
 	IDENTIFIER_POINTER
 	{
 		loggo.Debug("[yacc]: variable <- IDENTIFIER_POINTER %v", $1.s);
-		//NEWTYPE(p, struct_pointer_node);
-		//p->str = $1;
-		//$$ = p;
+		p := &struct_pointer_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		$$.sn = p
 	}
 	|
 	IDENTIFIER_DOT
 	{
 		loggo.Debug("[yacc]: variable <- IDENTIFIER_DOT %v", $1.s);
-		//NEWTYPE(p, variable_node);
-		//p->str = $1;
-		//$$ = p;
+		p := &variable_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		$$.sn = p
 	}
 	;
 
@@ -1100,19 +1100,19 @@ expr:
 	OPEN_BRACKET expr CLOSE_BRACKET
 	{
 		loggo.Debug("[yacc]: expr <- (expr)");
-		//$$ = $2;
+		$$.sn = $2.sn
 	}
 	|
 	function_call
 	{
 		loggo.Debug("[yacc]: expr <- function_call");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	math_expr
 	{
 		loggo.Debug("[yacc]: expr <- math_expr");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	;
 
@@ -1120,67 +1120,67 @@ math_expr:
 	OPEN_BRACKET math_expr CLOSE_BRACKET
 	{
 		loggo.Debug("[yacc]: math_expr <- (math_expr)");
-		//$$ = $2;
+		$$.sn = $2.sn
 	}
 	|
 	expr_value PLUS expr_value
 	{
 		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
-		//NEWTYPE(p, math_expr_node);
-		//p->oper = "+";
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.oper = "+"
+		p.left = $1.sn
+		p.right = $3.sn
+		$$.sn = p
 	}
 	|
 	expr_value MINUS expr_value
 	{
 		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
-		//NEWTYPE(p, math_expr_node);
-		//p->oper = "-";
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.oper = "-"
+		p.left = $1.sn
+		p.right = $3.sn
+		$$.sn = p
 	}
 	|
 	expr_value MULTIPLY expr_value
 	{
 		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
-		//NEWTYPE(p, math_expr_node);
-		//p->oper = "*";
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.oper = "*"
+		p.left = $1.sn
+		p.right = $3.sn
+		$$.sn = p
 	}
 	|
 	expr_value DIVIDE expr_value
 	{
 		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
-		//NEWTYPE(p, math_expr_node);
-		//p->oper = "/";
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.oper = "/"
+		p.left = $1.sn
+		p.right = $3.sn
+		$$.sn = p
 	}
 	|
 	expr_value DIVIDE_MOD expr_value
 	{
 		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
-		//NEWTYPE(p, math_expr_node);
-		//p->oper = "%";
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.oper = "%"
+		p.left = $1.sn
+		p.right = $3.sn
+		$$.sn = p
 	}
 	|
 	expr_value STRING_CAT expr_value
 	{
 		loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", $2.s);
-		//NEWTYPE(p, math_expr_node);
-		//p->oper = "..";
-		//p->left = $1;
-		//p->right = $3;
-		//$$ = p;
+		p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.oper = ".."
+		p.left = $1.sn
+		p.right = $3.sn
+		$$.sn = p
 	}
 	;	
 
@@ -1188,25 +1188,25 @@ expr_value:
 	math_expr
 	{
 		loggo.Debug("[yacc]: expr_value <- math_expr");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	explicit_value
 	{
 		loggo.Debug("[yacc]: expr_value <- explicit_value");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	function_call
 	{
 		loggo.Debug("[yacc]: expr_value <- function_call");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	|
 	variable
 	{
 		loggo.Debug("[yacc]: expr_value <- variable");
-		//$$ = $1;
+		$$.sn = $1.sn
 	}
 	;
 	
@@ -1214,84 +1214,84 @@ explicit_value:
 	FTRUE 
 	{
 		loggo.Debug("[yacc]: explicit_value <- FTRUE");
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = $1;
-		//p->type = explicit_value_node::EVT_TRUE;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		p.ty = EVT_TRUE
+		$$.sn = p
 	}
 	|
 	FFALSE 
 	{
 		loggo.Debug("[yacc]: explicit_value <- FFALSE");
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = $1;
-		//p->type = explicit_value_node::EVT_FALSE;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		p.ty = EVT_FALSE
+		$$.sn = p
 	}
 	|
 	NUMBER 
 	{
 		loggo.Debug("[yacc]: explicit_value <- NUMBER %v", $1.s);
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = $1;
-		//p->type = explicit_value_node::EVT_NUM;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		p.ty = EVT_NUM
+		$$.sn = p
 	}
 	|
 	FKUUID
 	{
 		loggo.Debug("[yacc]: explicit_value <- FKUUID %v", $1.s);
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = $1;
-		//p->type = explicit_value_node::EVT_UUID;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		p.ty = EVT_UUID
+		$$.sn = p
 	}
 	|
 	STRING_DEFINITION 
 	{
 		loggo.Debug("[yacc]: explicit_value <- STRING_DEFINITION %v", $1.s);
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = $1;
-		//p->type = explicit_value_node::EVT_STR;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		p.ty = EVT_STR
+		$$.sn = p
 	}
 	|
 	FKFLOAT
 	{
 		loggo.Debug("[yacc]: explicit_value <- FKFLOAT %v", $1.s);
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = $1;
-		//p->type = explicit_value_node::EVT_FLOAT;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		p.ty = EVT_FLOAT
+		$$.sn = p
 	}
 	|
 	FNULL
 	{
 		loggo.Debug("[yacc]: explicit_value <- FNULL %v", $1.s);
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = $1;
-		//p->type = explicit_value_node::EVT_NULL;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = $1.s
+		p.ty = EVT_NULL
+		$$.sn = p
 	}
 	|
 	OPEN_BIG_BRACKET const_map_list_value CLOSE_BIG_BRACKET
 	{
 		loggo.Debug("[yacc]: explicit_value <- const_map_list_value");
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = "";
-		//p->type = explicit_value_node::EVT_MAP;
-		//p->v = $2;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = ""
+		p.ty = EVT_MAP
+		p.v = $2.sn
+		$$.sn = p
 	}
 	|
 	OPEN_SQUARE_BRACKET const_array_list_value CLOSE_SQUARE_BRACKET
 	{
 		loggo.Debug("[yacc]: explicit_value <- const_array_list_value");
-		//NEWTYPE(p, explicit_value_node);
-		//p->str = "";
-		//p->type = explicit_value_node::EVT_ARRAY;
-		//p->v = $2;
-		//$$ = p;
+		p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.str = ""
+		p.ty = EVT_ARRAY
+		p.v = $2.sn
+		$$.sn = p
 	}
 	;
       
@@ -1299,25 +1299,24 @@ const_map_list_value:
 	/* empty */
 	{
 		loggo.Debug("[yacc]: const_map_list_value <- null");
-		//NEWTYPE(p, const_map_list_value_node);
-		//$$ = p;
+		p := &const_map_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		$$.sn = p
 	}
 	|
 	const_map_value
 	{
 		loggo.Debug("[yacc]: const_map_list_value <- const_map_value");
-		//NEWTYPE(p, const_map_list_value_node);
-		//p->add_ele($1);
-		//$$ = p;
+		p := &const_map_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_ele($1.sn)
+		$$.sn = p
 	}
 	|
 	const_map_list_value const_map_value
 	{
 		loggo.Debug("[yacc]: const_map_list_value <- const_map_list_value const_map_value");
-		//assert($1->gettype() == est_constmaplist);
-		//const_map_list_value_node * p = dynamic_cast<const_map_list_value_node*>($1);
-		//p->add_ele($2);
-		//$$ = p;
+		p := ($1.sn).(*const_map_list_value_node)
+		p.add_ele($2.sn)
+		$$.sn = p
 	}
 	;
 	
@@ -1325,10 +1324,10 @@ const_map_value:
 	explicit_value COLON explicit_value
 	{
 		loggo.Debug("[yacc]: const_map_value <- explicit_value");
-		//NEWTYPE(p, const_map_value_node);
-		//p->k = $1;
-		//p->v = $3;
-		//$$ = p;
+		p := &const_map_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.k = $1.sn
+		p.v = $3.sn
+		$$.sn = p
 	}
 	;
 
@@ -1336,25 +1335,24 @@ const_array_list_value:
 	/* empty */
 	{
 		loggo.Debug("[yacc]: const_array_list_value <- null");
-		//NEWTYPE(p, const_array_list_value_node);
-		//$$ = p;
+		p := &const_array_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		$$.sn = p
 	}
 	|
 	explicit_value
 	{
 		loggo.Debug("[yacc]: const_array_list_value <- explicit_value");
-		//NEWTYPE(p, const_array_list_value_node);
-		//p->add_ele($1);
-		//$$ = p;
+		p := &const_array_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_ele($1.sn)
+		$$.sn = p
 	}
 	|
 	const_array_list_value explicit_value
 	{
 		loggo.Debug("[yacc]: const_array_list_value <- const_array_list_value explicit_value");
-		//assert($1->gettype() == est_constarraylist);
-		//const_array_list_value_node * p = dynamic_cast<const_array_list_value_node*>($1);
-		//p->add_ele($2);
-		//$$ = p;
+		p := ($1.sn).(*const_array_list_value_node)
+		p.add_ele($2.sn)
+		$$.sn = p
 	}
 	;
 	
@@ -1362,8 +1360,8 @@ break:
 	BREAK 
 	{
 		loggo.Debug("[yacc]: break <- BREAK");
-		//NEWTYPE(p, break_stmt);
-		//$$ = p;
+		p := &break_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		$$.sn = p
 	}
 	;
 	
@@ -1371,8 +1369,8 @@ continue:
 	CONTINUE 
 	{
 		loggo.Debug("[yacc]: CONTINUE");
-		//NEWTYPE(p, continue_stmt);
-		//$$ = p;
+		p := &continue_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		$$.sn = p
 	}
 	;
 
@@ -1381,7 +1379,7 @@ sleep:
 	{
 		loggo.Debug("[yacc]: SLEEP");
 		//NEWTYPE(p, sleep_stmt);
-		//p->time = $2;
+		//p.time = $2;
 		//$$ = p;
 	}
 	
@@ -1390,7 +1388,7 @@ yield:
 	{
 		loggo.Debug("[yacc]: YIELD");
 		//NEWTYPE(p, yield_stmt);
-		//p->time = $2;
+		//p.time = $2;
 		//$$ = p;
 	}
 	;
@@ -1400,9 +1398,9 @@ switch_stmt:
 	{
 		loggo.Debug("[yacc]: switch_stmt");
 		//NEWTYPE(p, switch_stmt);
-		//p->cmp = $2;
-		//p->caselist = $3;
-		//p->def = $5;
+		//p.cmp = $2;
+		//p.caselist = $3;
+		//p.def = $5;
 		//$$ = p;
 	}
 	|
@@ -1410,9 +1408,9 @@ switch_stmt:
 	{
 		loggo.Debug("[yacc]: switch_stmt");
 		//NEWTYPE(p, switch_stmt);
-		//p->cmp = $2;
-		//p->caselist = $3;
-		//p->def = 0;
+		//p.cmp = $2;
+		//p.caselist = $3;
+		//p.def = 0;
 		//$$ = p;
 	}
 	;
@@ -1422,16 +1420,16 @@ switch_case_list:
 	{
 		loggo.Debug("[yacc]: switch_case_list <- switch_case_define");
 		//NEWTYPE(p, switch_caselist_node);
-		//p->add_case($1);
+		//p.add_case($1);
 		//$$ = p;
 	}
 	|
 	switch_case_list switch_case_define
 	{
 		loggo.Debug("[yacc]: switch_case_list <- switch_case_list switch_case_define");
-		//assert($2->gettype() == est_switch_case_node);
+		//assert($2.gettype() == est_switch_case_node);
 		//switch_caselist_node * p = dynamic_cast<switch_caselist_node*>($1);
-		//p->add_case($2);
+		//p.add_case($2);
 		//$$ = p;
 	}
 	;
@@ -1441,8 +1439,8 @@ switch_case_define:
 	{
 		loggo.Debug("[yacc]: switch_case_define");
 		//NEWTYPE(p, switch_case_node);
-		//p->cmp = $2;
-		//p->block = $4;
+		//p.cmp = $2;
+		//p.block = $4;
 		//$$ = p;
 	}
 	|
@@ -1450,8 +1448,8 @@ switch_case_define:
 	{
 		loggo.Debug("[yacc]: switch_case_define");
 		//NEWTYPE(p, switch_case_node);
-		//p->cmp = $2;
-		//p->block = 0;
+		//p.cmp = $2;
+		//p.block = 0;
 		//$$ = p;
 	}
 	;

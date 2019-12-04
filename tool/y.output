@@ -359,7 +359,7 @@ state 41
 	OPEN_SQUARE_BRACKET  shift 41
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 143 (src line 1335)
+	.  reduce 143 (src line 1334)
 
 	explicit_value  goto 49
 	const_array_list_value  goto 48
@@ -439,7 +439,7 @@ state 48
 state 49
 	const_array_list_value:  explicit_value.    (144)
 
-	.  reduce 144 (src line 1342)
+	.  reduce 144 (src line 1341)
 
 
 state 50
@@ -543,7 +543,7 @@ state 55
 state 56
 	const_array_list_value:  const_array_list_value explicit_value.    (145)
 
-	.  reduce 145 (src line 1350)
+	.  reduce 145 (src line 1349)
 
 
 state 57
@@ -830,13 +830,13 @@ state 79
 state 80
 	break:  BREAK.    (146)
 
-	.  reduce 146 (src line 1361)
+	.  reduce 146 (src line 1359)
 
 
 state 81
 	continue:  CONTINUE.    (147)
 
-	.  reduce 147 (src line 1370)
+	.  reduce 147 (src line 1368)
 
 
 state 82
@@ -1129,7 +1129,7 @@ state 97
 state 98
 	const_map_value:  explicit_value COLON explicit_value.    (142)
 
-	.  reduce 142 (src line 1324)
+	.  reduce 142 (src line 1323)
 
 
 state 99
@@ -1772,7 +1772,7 @@ state 138
 	DIVIDE  shift 151
 	MULTIPLY  shift 150
 	STRING_CAT  shift 153
-	.  reduce 148 (src line 1379)
+	.  reduce 148 (src line 1377)
 
 
 state 139
@@ -1831,7 +1831,7 @@ state 142
 	DIVIDE  shift 151
 	MULTIPLY  shift 150
 	STRING_CAT  shift 153
-	.  reduce 149 (src line 1388)
+	.  reduce 149 (src line 1386)
 
 
 state 143
@@ -2722,7 +2722,7 @@ state 195
 state 196
 	switch_case_list:  switch_case_define.    (152)
 
-	.  reduce 152 (src line 1420)
+	.  reduce 152 (src line 1418)
 
 
 state 197
@@ -3277,7 +3277,7 @@ state 229
 state 230
 	switch_case_list:  switch_case_list switch_case_define.    (153)
 
-	.  reduce 153 (src line 1428)
+	.  reduce 153 (src line 1426)
 
 
 state 231
@@ -3568,7 +3568,7 @@ state 246
 state 247
 	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT END.    (151)
 
-	.  reduce 151 (src line 1408)
+	.  reduce 151 (src line 1406)
 
 
 state 248
@@ -3599,7 +3599,7 @@ state 248
 	SWITCH  shift 90
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 155 (src line 1448)
+	.  reduce 155 (src line 1446)
 
 	explicit_value  goto 96
 	block  goto 258
@@ -3827,7 +3827,7 @@ state 256
 state 257
 	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT block END.    (150)
 
-	.  reduce 150 (src line 1398)
+	.  reduce 150 (src line 1396)
 
 
 state 258
@@ -3858,7 +3858,7 @@ state 258
 	SWITCH  shift 90
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 154 (src line 1439)
+	.  reduce 154 (src line 1437)
 
 	explicit_value  goto 96
 	function_call  goto 83

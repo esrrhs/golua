@@ -755,3 +755,177 @@ func (sn *explicit_value_node) dump(indent int) string {
 }
 
 //////////////////////////////////////////////////////////////////
+
+type container_get_node struct {
+	syntree_node_base
+	container string
+	key       syntree_node
+}
+
+func (sn *container_get_node) gettype() int {
+	return est_container_get
+}
+func (sn *container_get_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[container_get]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[container]:"
+	ret += sn.container
+	ret += "\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[key]:\n"
+	ret += sn.key.dump(indent + 2)
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type struct_pointer_node struct {
+	syntree_node_base
+	str string
+}
+
+func (sn *struct_pointer_node) gettype() int {
+	return est_struct_pointer
+}
+func (sn *struct_pointer_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[struct_pointer_node]:"
+	ret += sn.str
+	ret += "\n"
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type math_expr_node struct {
+	syntree_node_base
+	oper  string
+	left  syntree_node
+	right syntree_node
+}
+
+func (sn *math_expr_node) gettype() int {
+	return est_math_expr
+}
+func (sn *math_expr_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[math_expr]:"
+	ret += sn.oper
+	ret += "\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[left]:\n"
+	ret += sn.left.dump(indent + 2)
+	ret += sn.gentab(indent + 1)
+	ret += "[right]:\n"
+	ret += sn.right.dump(indent + 2)
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type const_map_list_value_node struct {
+	syntree_node_base
+	map_ele_node_list []syntree_node
+}
+
+func (sn *const_map_list_value_node) gettype() int {
+	return est_constmaplist
+}
+func (sn *const_map_list_value_node) dump(indent int) string {
+	ret := ""
+	for i := range sn.map_ele_node_list {
+		ret += sn.gentab(indent + 1)
+		ret += strconv.Itoa(i)
+		ret += "]:\n"
+		ret += sn.map_ele_node_list[i].dump(indent + 2)
+	}
+	return ret
+}
+func (sn *const_map_list_value_node) add_ele(ele syntree_node) {
+	sn.map_ele_node_list = append(sn.map_ele_node_list, ele)
+}
+
+//////////////////////////////////////////////////////////////////
+
+type const_map_value_node struct {
+	syntree_node_base
+	k syntree_node
+	v syntree_node
+}
+
+func (sn *const_map_value_node) gettype() int {
+	return est_constmapvalue
+}
+func (sn *const_map_value_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "("
+	ret += sn.k.dump(indent + 1)
+	ret += ":\n"
+	ret += sn.v.dump(indent + 1)
+	ret += sn.gentab(indent)
+	ret += ")\n"
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type const_array_list_value_node struct {
+	syntree_node_base
+	array_ele_node_list []syntree_node
+}
+
+func (sn *const_array_list_value_node) gettype() int {
+	return est_constarraylist
+}
+func (sn *const_array_list_value_node) dump(indent int) string {
+	ret := ""
+	for i := range sn.array_ele_node_list {
+		ret += sn.gentab(indent + 1)
+		ret += strconv.Itoa(i)
+		ret += "]:\n"
+		ret += sn.array_ele_node_list[i].dump(indent + 2)
+	}
+	return ret
+}
+func (sn *const_array_list_value_node) add_ele(ele syntree_node) {
+	sn.array_ele_node_list = append(sn.array_ele_node_list, ele)
+}
+
+//////////////////////////////////////////////////////////////////
+
+type break_stmt struct {
+	syntree_node_base
+}
+
+func (sn *break_stmt) gettype() int {
+	return est_break
+}
+func (sn *break_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[break]:\n"
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type continue_stmt struct {
+	syntree_node_base
+}
+
+func (sn *continue_stmt) gettype() int {
+	return est_break
+}
+func (sn *continue_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[continue]:\n"
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
