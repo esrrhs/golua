@@ -929,3 +929,120 @@ func (sn *continue_stmt) dump(indent int) string {
 }
 
 //////////////////////////////////////////////////////////////////
+
+type sleep_stmt struct {
+	syntree_node_base
+	time syntree_node
+}
+
+func (sn *sleep_stmt) gettype() int {
+	return est_sleep
+}
+func (sn *sleep_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[sleep]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[time]:\n"
+	ret += sn.time.dump(indent + 2)
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type yield_stmt struct {
+	syntree_node_base
+	time syntree_node
+}
+
+func (sn *yield_stmt) gettype() int {
+	return est_yield
+}
+func (sn *yield_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[yield]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[time]:\n"
+	ret += sn.time.dump(indent + 2)
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type switch_stmt struct {
+	syntree_node_base
+	cmp      syntree_node
+	caselist syntree_node
+	def      syntree_node
+}
+
+func (sn *switch_stmt) gettype() int {
+	return est_switch_stmt
+}
+func (sn *switch_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[switch]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[cmp]:\n"
+	ret += sn.cmp.dump(indent + 2)
+	ret += sn.gentab(indent + 1)
+	ret += "[case list]:\n"
+	ret += sn.caselist.dump(indent + 2)
+	ret += sn.gentab(indent + 1)
+	if sn.def != nil {
+		ret += "[default]:\n"
+		ret += sn.def.dump(indent + 2)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type switch_caselist_node struct {
+	syntree_node_base
+	list []syntree_node
+}
+
+func (sn *switch_caselist_node) gettype() int {
+	return est_switch_caselist
+}
+func (sn *switch_caselist_node) dump(indent int) string {
+	ret := ""
+	for i := range sn.list {
+		ret += sn.list[i].dump(indent + 2)
+	}
+	return ret
+}
+func (sn *switch_caselist_node) add_case(ele syntree_node) {
+	sn.list = append(sn.list, ele)
+}
+
+//////////////////////////////////////////////////////////////////
+
+type switch_case_node struct {
+	syntree_node_base
+	cmp   syntree_node
+	block syntree_node
+}
+
+func (sn *switch_case_node) gettype() int {
+	return est_switch_case_node
+}
+func (sn *switch_case_node) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[case]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[cmp]:\n"
+	ret += sn.cmp.dump(indent + 2)
+	ret += sn.gentab(indent + 1)
+	if sn.block != nil {
+		ret += "[block]:\n"
+		ret += sn.block.dump(indent + 2)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////

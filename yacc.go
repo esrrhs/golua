@@ -157,7 +157,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line ../yacc.y:1457
+//line ../yacc.y:1456
 
 func init() {
 	yyErrorVerbose = true // set the global that enables showing full errors
@@ -2200,79 +2200,78 @@ yydefault:
 		//line ../yacc.y:1379
 		{
 			loggo.Debug("[yacc]: SLEEP")
-			//NEWTYPE(p, sleep_stmt);
-			//p.time = $2;
-			//$$ = p;
+			p := &sleep_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.time = yyDollar[2].sn
+			yyVAL.sn = p
 		}
 	case 149:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:1388
 		{
 			loggo.Debug("[yacc]: YIELD")
-			//NEWTYPE(p, yield_stmt);
-			//p.time = $2;
-			//$$ = p;
+			p := &yield_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.time = yyDollar[2].sn
+			yyVAL.sn = p
 		}
 	case 150:
 		yyDollar = yyS[yypt-6 : yypt+1]
 		//line ../yacc.y:1398
 		{
 			loggo.Debug("[yacc]: switch_stmt")
-			//NEWTYPE(p, switch_stmt);
-			//p.cmp = $2;
-			//p.caselist = $3;
-			//p.def = $5;
-			//$$ = p;
+			p := &switch_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = yyDollar[2].sn
+			p.caselist = yyDollar[3].sn
+			p.def = yyDollar[5].sn
+			yyVAL.sn = p
 		}
 	case 151:
 		yyDollar = yyS[yypt-5 : yypt+1]
 		//line ../yacc.y:1408
 		{
 			loggo.Debug("[yacc]: switch_stmt")
-			//NEWTYPE(p, switch_stmt);
-			//p.cmp = $2;
-			//p.caselist = $3;
-			//p.def = 0;
-			//$$ = p;
+			p := &switch_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = yyDollar[2].sn
+			p.caselist = yyDollar[3].sn
+			p.def = nil
+			yyVAL.sn = p
 		}
 	case 152:
 		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:1420
 		{
 			loggo.Debug("[yacc]: switch_case_list <- switch_case_define")
-			//NEWTYPE(p, switch_caselist_node);
-			//p.add_case($1);
-			//$$ = p;
+			p := &switch_caselist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.add_case(yyDollar[1].sn)
+			yyVAL.sn = p
 		}
 	case 153:
 		yyDollar = yyS[yypt-2 : yypt+1]
 		//line ../yacc.y:1428
 		{
 			loggo.Debug("[yacc]: switch_case_list <- switch_case_list switch_case_define")
-			//assert($2.gettype() == est_switch_case_node);
-			//switch_caselist_node * p = dynamic_cast<switch_caselist_node*>($1);
-			//p.add_case($2);
-			//$$ = p;
+			p := (yyDollar[1].sn).(*switch_caselist_node)
+			p.add_case(yyDollar[2].sn)
+			yyVAL.sn = p
 		}
 	case 154:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:1439
+		//line ../yacc.y:1438
 		{
 			loggo.Debug("[yacc]: switch_case_define")
-			//NEWTYPE(p, switch_case_node);
-			//p.cmp = $2;
-			//p.block = $4;
-			//$$ = p;
+			p := &switch_case_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = yyDollar[2].sn
+			p.block = yyDollar[4].sn
+			yyVAL.sn = p
 		}
 	case 155:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1448
+		//line ../yacc.y:1447
 		{
 			loggo.Debug("[yacc]: switch_case_define")
-			//NEWTYPE(p, switch_case_node);
-			//p.cmp = $2;
-			//p.block = 0;
-			//$$ = p;
+			p := &switch_case_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+			p.cmp = yyDollar[2].sn
+			p.block = nil
+			yyVAL.sn = p
 		}
 	}
 	goto yystack /* stack new state and value */

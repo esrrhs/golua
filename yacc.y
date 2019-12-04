@@ -1378,18 +1378,18 @@ sleep:
 	SLEEP expr_value 
 	{
 		loggo.Debug("[yacc]: SLEEP");
-		//NEWTYPE(p, sleep_stmt);
-		//p.time = $2;
-		//$$ = p;
+		p := &sleep_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.time = $2.sn
+		$$.sn = p
 	}
 	
 yield:
 	YIELD expr_value
 	{
 		loggo.Debug("[yacc]: YIELD");
-		//NEWTYPE(p, yield_stmt);
-		//p.time = $2;
-		//$$ = p;
+		p := &yield_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.time = $2.sn
+		$$.sn = p
 	}
 	;
 	
@@ -1397,21 +1397,21 @@ switch_stmt:
 	SWITCH cmp_value switch_case_list DEFAULT block END
 	{
 		loggo.Debug("[yacc]: switch_stmt");
-		//NEWTYPE(p, switch_stmt);
-		//p.cmp = $2;
-		//p.caselist = $3;
-		//p.def = $5;
-		//$$ = p;
+		p := &switch_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.sn
+		p.caselist = $3.sn
+		p.def = $5.sn
+		$$.sn = p
 	}
 	|
 	SWITCH cmp_value switch_case_list DEFAULT END
 	{
 		loggo.Debug("[yacc]: switch_stmt");
-		//NEWTYPE(p, switch_stmt);
-		//p.cmp = $2;
-		//p.caselist = $3;
-		//p.def = 0;
-		//$$ = p;
+		p := &switch_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.sn
+		p.caselist = $3.sn
+		p.def = nil
+		$$.sn = p
 	}
 	;
 	
@@ -1419,18 +1419,17 @@ switch_case_list:
 	switch_case_define
 	{
 		loggo.Debug("[yacc]: switch_case_list <- switch_case_define");
-		//NEWTYPE(p, switch_caselist_node);
-		//p.add_case($1);
-		//$$ = p;
+		p := &switch_caselist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.add_case($1.sn)
+		$$.sn = p
 	}
 	|
 	switch_case_list switch_case_define
 	{
 		loggo.Debug("[yacc]: switch_case_list <- switch_case_list switch_case_define");
-		//assert($2.gettype() == est_switch_case_node);
-		//switch_caselist_node * p = dynamic_cast<switch_caselist_node*>($1);
-		//p.add_case($2);
-		//$$ = p;
+		p := ($1.sn).(*switch_caselist_node)
+		p.add_case($2.sn)
+		$$.sn = p
 	}
 	;
 
@@ -1438,19 +1437,19 @@ switch_case_define:
 	CASE cmp_value THEN block
 	{
 		loggo.Debug("[yacc]: switch_case_define");
-		//NEWTYPE(p, switch_case_node);
-		//p.cmp = $2;
-		//p.block = $4;
-		//$$ = p;
+		p := &switch_case_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.sn
+		p.block = $4.sn
+		$$.sn = p
 	}
 	|
 	CASE cmp_value THEN
 	{
 		loggo.Debug("[yacc]: switch_case_define");
-		//NEWTYPE(p, switch_case_node);
-		//p.cmp = $2;
-		//p.block = 0;
-		//$$ = p;
+		p := &switch_case_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.cmp = $2.sn
+		p.block = nil
+		$$.sn = p
 	}
 	;
 	
