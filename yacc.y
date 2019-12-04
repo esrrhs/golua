@@ -212,7 +212,9 @@ function_declaration:
 		loggo.Debug("[yacc]: function_declaration <- block %v", $2.s);
 		p := &func_desc_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.funcname = $2.s
-		p.arglist = $4.sn.(*func_desc_arglist_node)
+		if $4.sn != nil {
+			p.arglist = $4.sn.(*func_desc_arglist_node)
+		}
 		p.block = $6.sn.(*block_node)
 		l := yylex.(lexerwarpper).mf
 		l.add_func_desc(p)
@@ -223,7 +225,9 @@ function_declaration:
 		loggo.Debug("[yacc]: function_declaration <- empty %v", $2.s);
 		p := &func_desc_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.funcname = $2.s
-                p.arglist = $4.sn.(*func_desc_arglist_node)
+		if $4.sn != nil {
+                	p.arglist = $4.sn.(*func_desc_arglist_node)
+                }
 		p.block = nil
 		l := yylex.(lexerwarpper).mf
 		l.add_func_desc(p)
@@ -270,7 +274,9 @@ function_call:
 		p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.fuc = $1.s
 		p.prefunc = nil
-		p.arglist = ($3.sn).(*function_call_arglist_node)
+		if $3.sn != nil {
+			p.arglist = ($3.sn).(*function_call_arglist_node)
+		}
 		p.fakecall = false
 		p.classmem_call = false
 		$$.sn = p
@@ -282,7 +288,9 @@ function_call:
 		p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.fuc = $1.s
 		p.prefunc = nil
-		p.arglist = ($3.sn).(*function_call_arglist_node)
+		if $3.sn != nil {
+			p.arglist = ($3.sn).(*function_call_arglist_node)
+		}
 		p.fakecall = false
 		p.classmem_call = false
 		$$.sn = p
@@ -294,7 +302,9 @@ function_call:
 		p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.fuc = ""
 		p.prefunc = $1.sn;
-		p.arglist = ($3.sn).(*function_call_arglist_node)
+		if $3.sn != nil {
+			p.arglist = ($3.sn).(*function_call_arglist_node)
+		}
 		p.fakecall = false
 		p.classmem_call = false
 		$$.sn = p
@@ -610,8 +620,12 @@ if_stmt:
 		p := &if_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.cmp = ($2.sn).(*cmp_stmt)
 		p.block = ($4.sn).(*block_node)
-		p.elseifs = ($5.sn).(*elseif_stmt_list)
-		p.elses = ($6.sn).(*else_stmt)
+		if $5.sn != nil {
+			p.elseifs = ($5.sn).(*elseif_stmt_list)
+		}
+		if $6.sn != nil {
+			p.elses = ($6.sn).(*else_stmt)
+		}
 		$$.sn = p
 	}
 	|
@@ -621,8 +635,12 @@ if_stmt:
 		p := &if_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 		p.cmp = ($2.sn).(*cmp_stmt)
 		p.block = nil
-		p.elseifs = ($4.sn).(*elseif_stmt_list)
-		p.elses = ($5.sn).(*else_stmt)
+		if $4.sn != nil {
+			p.elseifs = ($4.sn).(*elseif_stmt_list)
+		}
+		if $5.sn != nil {
+			p.elses = ($5.sn).(*else_stmt)
+		}
 		$$.sn = p;
 	}
 	;

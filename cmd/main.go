@@ -11,5 +11,8 @@ func main() {
 		Prefix: "fakego",
 		MaxDay: 1,
 	})
-	fakego.Parse("./test.fk")
+	err := fakego.Parse("./test.fk")
+	if err != nil {
+		loggo.Error("parse %s", err)
+	}
 }

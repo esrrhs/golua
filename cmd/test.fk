@@ -10,6 +10,9 @@ struct teststruct
 	sample_c
 end
 
+struct teststruct
+end
+
 const ele_none = 0
 const obj_begin = 1
 const obj_end = 2
@@ -19,6 +22,36 @@ const string_tag = 5
 const ele_seq = 6
 const member_seq = 7
 const ele_num = 8
+
+const hellomap = {1 : "a" 2 : "b" 3 : [1 2 3]}
+
+const test = {}
+const test = []
+
+func test()
+
+	var ok, var f = file.open(name, "rb")
+	if not ok then
+		return false, 0
+	end
+
+	var content = file.read_all(f)
+
+	ok, var ret, var errormsg = parse_string(content)
+
+	return ok, ret, errormsg
+
+end
+
+func test()
+
+end
+
+func test()
+    if is a then
+    else
+    end
+end
 
 func parse(name)
 
@@ -42,7 +75,7 @@ func parse_string(content)
 	if not ok then
 		return false, ret, errormsg
 	end
-	
+
 	return true, ret, errormsg
 	
 end
@@ -84,7 +117,7 @@ func _parse(content)
 			if not ok then
 				return ok, ret, errormsg
 			end
-		
+
 		default
 			return false, ret, "type default "..ele_type
 			
