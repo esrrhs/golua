@@ -6,9 +6,21 @@ import (
 	"github.com/esrrhs/go-engine/src/loggo"
 	"os"
 	"strconv"
+	"strings"
 )
 
+type pasrseContent struct {
+	includemap  map[string]int
+	includelist []string
+}
+
 func Parse(file string) (err error) {
+	ctx := &pasrseContent{}
+	ctx.includemap = make(map[string]int)
+	return parse(ctx, file)
+}
+
+func parse(ctx *pasrseContent, file string) (err error) {
 	var ll *lexerwarpper
 	defer func() {
 		if r := recover(); r != nil {
@@ -29,11 +41,17 @@ func Parse(file string) (err error) {
 
 	loggo.Debug("start parse " + file)
 
-	// check local save include
-	// TODO
+	for _, s := range ctx.includelist {
+		if s == file {
+			return errors.New("include loop " + strings.Join(ctx.includelist, ",") + file)
+		}
+	}
+	ctx.includelist = append(ctx.includelist, file)
 
-	// add include local save
-	// TODO
+	if ctx.includemap[file] > 0 {
+		return nil
+	}
+	ctx.includemap[file] = 1
 
 	f, err := os.OpenFile(file, os.O_RDONLY, os.ModeType)
 	if err != nil {
@@ -52,7 +70,7 @@ func Parse(file string) (err error) {
 
 	ret := yyParse(l)
 	if ret != 0 {
-		panic(errors.New("yyParse fail " + strconv.Itoa(ret)))
+		return errors.New("yyParse fail " + strconv.Itoa(ret))
 	}
 
 	loggo.Debug("yyParse ok" + file)
@@ -75,6 +93,9 @@ func Parse(file string) (err error) {
 
 	loggo.Debug("compile ok" + file)
 
+	ctx.includelist = ctx.includelist[0 : len(ctx.includelist)-1]
+
 	loggo.Debug("start parse ok" + file)
+
 	return nil
 }

@@ -53,6 +53,14 @@ func test()
     end
 end
 
+func test()
+    switch a
+    case 1 then
+    case 2 then
+    default
+    end
+end
+
 func parse(name)
 
 	var ok, var f = file.open(name, "rb")

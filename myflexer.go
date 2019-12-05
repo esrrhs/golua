@@ -3,7 +3,6 @@ package fakego
 import "github.com/esrrhs/go-engine/src/loggo"
 
 type myflexer struct {
-	f           fakeStruct
 	fileName    string
 	packageName string
 	includelist []string
