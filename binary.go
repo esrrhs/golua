@@ -3,11 +3,12 @@ package fakego
 import (
 	"github.com/esrrhs/go-engine/src/common"
 	"github.com/esrrhs/go-engine/src/rbuffergo"
+	"math"
 )
 
 type command uint64
 
-var EMPTY_CMD = command(-1)
+var EMPTY_CMD = command(math.MaxInt64)
 
 const (
 	COMMAND_OPCODE = iota
