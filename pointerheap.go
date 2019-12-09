@@ -1,8 +1,10 @@
 package fakego
 
-import "unsafe"
-
 type pointerele struct {
-	ptr unsafe.Pointer
+	ptr interface{}
 	ty  string
+}
+
+func allocpointer(ptr interface{}, ty string) *pointerele {
+	return nil
 }
