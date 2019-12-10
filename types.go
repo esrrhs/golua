@@ -7,7 +7,30 @@ func vartostring(v *variant) string {
 }
 
 func fkmaptoa(vm *variant_map) string {
-	return ""
+	if vm.recurflag != 0 {
+		return "MAP IN RECUR"
+	}
+	atomic.AddInt32(&vm.recurflag, 1)
+	defer atomic.AddInt32(&vm.recurflag, -1)
+
+	ret := ""
+	ret += "{"
+	i := 0
+	for key, value := range vm.vm {
+		if i == 0 {
+			ret += "("
+		} else {
+			ret += ",("
+		}
+		ret += vartostring(&key)
+		ret += ","
+		ret += vartostring(&value)
+		ret += ")"
+		i++
+	}
+	ret += "}"
+
+	return ret
 }
 
 func fkarraytoa(va *variant_array) string {
@@ -20,11 +43,7 @@ func fkarraytoa(va *variant_array) string {
 	ret := ""
 	ret += "["
 	for _, n := range va.va {
-		if n != nil {
-			ret += vartostring(n)
-		} else {
-			ret += " "
-		}
+		ret += vartostring(&n)
 		ret += ","
 	}
 	ret += "]"

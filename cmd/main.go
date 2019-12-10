@@ -15,4 +15,5 @@ func main() {
 	if err != nil {
 		loggo.Error("parse %s", err)
 	}
+	fakego.NewLexer()
 }

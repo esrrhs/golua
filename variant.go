@@ -3,6 +3,7 @@ package fakego
 import (
 	"fmt"
 	"github.com/esrrhs/go-engine/src/common"
+	"reflect"
 	"strconv"
 )
 
@@ -38,8 +39,8 @@ func (v *variant) String() string {
 		d := v.data.(uint64)
 		return strconv.FormatUint(d, 10)
 	case POINTER:
-		d := v.data.(*pointerele)
-		return "(" + d.ty + ")" + fmt.Sprintf("%x", d.ptr)
+		d := v.data
+		return "(" + reflect.TypeOf(d).String() + ")" + fmt.Sprintf("%x", d)
 	case ARRAY:
 		d := v.data.(*variant_array)
 		return fkarraytoa(d)
@@ -48,4 +49,32 @@ func (v *variant) String() string {
 		return fkmaptoa(d)
 	}
 	return "ERROR"
+}
+func _V_SET_NIL(v *variant) {
+	v.ty = NIL
+	v.data = nil
+}
+func _V_SET_POINTER(v *variant, p interface{}) {
+	v.ty = POINTER
+	v.data = p
+}
+func _V_SET_REAL(v *variant, r float64) {
+	v.ty = REAL
+	v.data = r
+}
+func _V_SET_STRING(v *variant, s string) {
+	v.ty = STRING
+	v.data = s
+}
+func _V_SET_UUID(v *variant, id uint64) {
+	v.ty = UUID
+	v.data = id
+}
+func _V_SET_ARRAY(v *variant, a *variant_array) {
+	v.ty = ARRAY
+	v.data = a
+}
+func _V_SET_MAP(v *variant, m *variant_map) {
+	v.ty = MAP
+	v.data = m
 }

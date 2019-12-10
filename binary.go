@@ -111,7 +111,7 @@ func _ADDR_POS(code int) int {
 	return int(common.LOINT16(int32(code)))
 }
 
-func OpCodeStr(opcode int) string {
+func opcodeStr(opcode int) string {
 	switch opcode {
 
 	case OPCODE_ASSIGN:
