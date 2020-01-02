@@ -3,24 +3,26 @@ package fakego
 import (
 	"bufio"
 	"errors"
-	"github.com/esrrhs/go-engine/src/loggo"
 	"os"
 	"strconv"
 	"strings"
 )
 
-type pasrseContent struct {
+type parser struct {
+}
+
+type parseContent struct {
 	includemap  map[string]int
 	includelist []string
 }
 
 func Parse(file string) (err error) {
-	ctx := &pasrseContent{}
+	ctx := &parseContent{}
 	ctx.includemap = make(map[string]int)
-	return parse(ctx, file)
+	return gfs.pa.parse(ctx, file)
 }
 
-func parse(ctx *pasrseContent, file string) (err error) {
+func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	var ll *lexerwarpper
 	defer func() {
 		if r := recover(); r != nil {
@@ -39,7 +41,7 @@ func parse(ctx *pasrseContent, file string) (err error) {
 		}
 	}()
 
-	loggo.Debug("start parse " + file)
+	log_debug("start parse " + file)
 
 	for _, s := range ctx.includelist {
 		if s == file {
@@ -73,17 +75,17 @@ func parse(ctx *pasrseContent, file string) (err error) {
 		return errors.New("yyParse fail " + strconv.Itoa(ret))
 	}
 
-	loggo.Debug("yyParse ok" + file)
+	log_debug("yyParse ok" + file)
 
 	// parse include file
 	for _, f := range mf.includelist {
-		err := Parse(f)
+		err := pa.parse(ctx, f)
 		if err != nil {
 			return err
 		}
 	}
 
-	loggo.Debug("include Parse ok" + file)
+	log_debug("include Parse ok" + file)
 
 	mc := compiler{}
 	err = mc.compile(&mf)
@@ -91,11 +93,20 @@ func parse(ctx *pasrseContent, file string) (err error) {
 		return err
 	}
 
-	loggo.Debug("compile ok" + file)
+	log_debug("compile ok" + file)
 
 	ctx.includelist = ctx.includelist[0 : len(ctx.includelist)-1]
 
-	loggo.Debug("start parse ok" + file)
+	log_debug("start parse ok" + file)
 
 	return nil
+}
+
+func (pa *parser) reg_const_define(constname string, v *variant, lineno int) {
+	// TODO
+}
+
+func (pa *parser) get_const_define(constname string) (*variant, int) {
+	// TODO
+	return nil, 0
 }

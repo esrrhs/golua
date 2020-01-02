@@ -1,71 +1,69 @@
 /[ \t\n]/     { /* Skip spaces and tabs. */ }
 /\-\-[^\n]*/  { /* Comments. */ }
-/(var)/ { loggo.Debug("VAR_BEGIN"); return VAR_BEGIN }
-/(return)/ { loggo.Debug("RETURN"); return RETURN }
-/(break)/ { loggo.Debug("BREAK"); return BREAK }
-/(func)/ { loggo.Debug("FUNC"); return FUNC }
-/(fake)/ { loggo.Debug("FAKE"); return FAKE }
-/(while)/ { loggo.Debug("WHILE"); return WHILE }
-/(for)/ { loggo.Debug("FOR"); return FOR }
-/(true)/ { loggo.Debug("FTRUE"); return FTRUE }
-/(false)/ { loggo.Debug("FFALSE"); return FFALSE }
-/(if)/ { loggo.Debug("IF"); return IF }
-/(then)/ { loggo.Debug("THEN"); return THEN }
-/(else)/ { loggo.Debug("ELSE"); return ELSE }
-/(elseif)/ { loggo.Debug("ELSEIF"); return ELSEIF }
-/(end)/ { loggo.Debug("END"); return END }
-/(const)/ { loggo.Debug("FCONST"); return FCONST }
-/(package)/ { loggo.Debug("PACKAGE"); return PACKAGE }
-/(null)/ { loggo.Debug("NULL"); return FNULL }
-/(include)/ { loggo.Debug("INCLUDE"); return INCLUDE }
-/(struct)/ { loggo.Debug("STRUCT"); return STRUCT }
-/(and)/ { loggo.Debug("AND"); return AND }
-/(or)/ { loggo.Debug("OR"); return OR }
-/(is)/ { loggo.Debug("IS"); return IS }
-/(not)/ { loggo.Debug("NOT"); return NOT }
-/(continue)/ { loggo.Debug("CONTINUE"); return CONTINUE }
-/(yield)/ { loggo.Debug("YIELD"); return YIELD }
-/(sleep)/ { loggo.Debug("SLEEP"); return SLEEP }
-/(switch)/ { loggo.Debug("SWITCH"); return SWITCH }
-/(case)/ { loggo.Debug("CASE"); return CASE }
-/(default)/ { loggo.Debug("DEFAULT"); return DEFAULT }
-/\"(\\"|[^\"])*\"/ { loggo.Debug("STRING_DEFINITION"); lval.s = yylex.Text(); return STRING_DEFINITION;}
-/[a-zA-Z_][a-zA-Z0-9_]*/ { loggo.Debug("IDENTIFIER"); lval.s = yylex.Text(); return IDENTIFIER;}
-/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+/ { loggo.Debug("IDENTIFIER_DOT"); lval.s = yylex.Text(); return IDENTIFIER_DOT;}
-/[a-zA-Z_][a-zA-Z0-9_]*(\-\>[a-zA-Z_][a-zA-Z0-9_]*)+/ { loggo.Debug("IDENTIFIER_POINTER"); lval.s = yylex.Text(); return IDENTIFIER_POINTER;}
-/[0-9]+u/ { loggo.Debug("FKUUID"); lval.s = yylex.Text(); return FKUUID;}
-/-?[0-9]+/ { loggo.Debug("NUMBER"); lval.s = yylex.Text(); return NUMBER;}
-/-?[0-9]+\.[0-9]+([Ee]-?[0-9]+)?/ { loggo.Debug("FKFLOAT"); lval.s = yylex.Text(); return FKFLOAT;}
-/(\%)/ { loggo.Debug("DIVIDE_MOD"); return DIVIDE_MOD }
-/(\,)/ { loggo.Debug("ARG_SPLITTER"); return ARG_SPLITTER }
-/(\-\>)/ { loggo.Debug("RIGHT_POINTER"); return RIGHT_POINTER }
-/(\+\+)/ { loggo.Debug("INC"); return INC }
-/(\+)/ { loggo.Debug("PLUS"); return PLUS }
-/(\-)/ { loggo.Debug("MINUS"); return MINUS }
-/(\/)/ { loggo.Debug("DIVIDE"); return DIVIDE }
-/(\*)/ { loggo.Debug("MULTIPLY"); return MULTIPLY }
-/(\:\=)/ { loggo.Debug("NEW_ASSIGN"); return NEW_ASSIGN }
-/(\+\=)/ { loggo.Debug("PLUS_ASSIGN"); return PLUS_ASSIGN }
-/(\-\=)/ { loggo.Debug("MINUS_ASSIGN"); return MINUS_ASSIGN }
-/(\/\=)/ { loggo.Debug("DIVIDE_ASSIGN"); return DIVIDE_ASSIGN }
-/(\*\=)/ { loggo.Debug("MULTIPLY_ASSIGN"); return MULTIPLY_ASSIGN }
-/(\%\=)/ { loggo.Debug("DIVIDE_MOD_ASSIGN"); return DIVIDE_MOD_ASSIGN }
-/(\=)/ { loggo.Debug("ASSIGN"); return ASSIGN }
-/(\>)/ { loggo.Debug("MORE"); return MORE }
-/(\<)/ { loggo.Debug("LESS"); return LESS }
-/(\>\=)/ { loggo.Debug("MORE_OR_EQUAL"); return MORE_OR_EQUAL }
-/(\<\=)/ { loggo.Debug("LESS_OR_EQUAL"); return LESS_OR_EQUAL }
-/(\=\=)/ { loggo.Debug("EQUAL"); return EQUAL }
-/(\!\=)/ { loggo.Debug("NOT_EQUAL"); return NOT_EQUAL }
-/(\()/ { loggo.Debug("OPEN_BRACKET"); return OPEN_BRACKET }
-/(\))/ { loggo.Debug("CLOSE_BRACKET"); return CLOSE_BRACKET }
-/(\:)/ { loggo.Debug("COLON"); return COLON }
-/(\[)/ { loggo.Debug("OPEN_SQUARE_BRACKET"); return OPEN_SQUARE_BRACKET }
-/(\])/ { loggo.Debug("CLOSE_SQUARE_BRACKET"); return CLOSE_SQUARE_BRACKET }
-/(\{)/ { loggo.Debug("OPEN_BIG_BRACKET"); return OPEN_BIG_BRACKET }
-/(\})/ { loggo.Debug("CLOSE_BIG_BRACKET"); return CLOSE_BIG_BRACKET }
-/(\.\.)/ { loggo.Debug("STRING_CAT"); return STRING_CAT }
+/(var)/ { log_debug("VAR_BEGIN"); return VAR_BEGIN }
+/(return)/ { log_debug("RETURN"); return RETURN }
+/(break)/ { log_debug("BREAK"); return BREAK }
+/(func)/ { log_debug("FUNC"); return FUNC }
+/(fake)/ { log_debug("FAKE"); return FAKE }
+/(while)/ { log_debug("WHILE"); return WHILE }
+/(for)/ { log_debug("FOR"); return FOR }
+/(true)/ { log_debug("FTRUE"); return FTRUE }
+/(false)/ { log_debug("FFALSE"); return FFALSE }
+/(if)/ { log_debug("IF"); return IF }
+/(then)/ { log_debug("THEN"); return THEN }
+/(else)/ { log_debug("ELSE"); return ELSE }
+/(elseif)/ { log_debug("ELSEIF"); return ELSEIF }
+/(end)/ { log_debug("END"); return END }
+/(const)/ { log_debug("FCONST"); return FCONST }
+/(package)/ { log_debug("PACKAGE"); return PACKAGE }
+/(null)/ { log_debug("NULL"); return FNULL }
+/(include)/ { log_debug("INCLUDE"); return INCLUDE }
+/(struct)/ { log_debug("STRUCT"); return STRUCT }
+/(and)/ { log_debug("AND"); return AND }
+/(or)/ { log_debug("OR"); return OR }
+/(is)/ { log_debug("IS"); return IS }
+/(not)/ { log_debug("NOT"); return NOT }
+/(continue)/ { log_debug("CONTINUE"); return CONTINUE }
+/(yield)/ { log_debug("YIELD"); return YIELD }
+/(sleep)/ { log_debug("SLEEP"); return SLEEP }
+/(switch)/ { log_debug("SWITCH"); return SWITCH }
+/(case)/ { log_debug("CASE"); return CASE }
+/(default)/ { log_debug("DEFAULT"); return DEFAULT }
+/\"(\\"|[^\"])*\"/ { log_debug("STRING_DEFINITION"); lval.s = yylex.Text(); return STRING_DEFINITION;}
+/[a-zA-Z_][a-zA-Z0-9_]*/ { log_debug("IDENTIFIER"); lval.s = yylex.Text(); return IDENTIFIER;}
+/[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+/ { log_debug("IDENTIFIER_DOT"); lval.s = yylex.Text(); return IDENTIFIER_DOT;}
+/[a-zA-Z_][a-zA-Z0-9_]*(\-\>[a-zA-Z_][a-zA-Z0-9_]*)+/ { log_debug("IDENTIFIER_POINTER"); lval.s = yylex.Text(); return IDENTIFIER_POINTER;}
+/[0-9]+u/ { log_debug("FKUUID"); lval.s = yylex.Text(); return FKUUID;}
+/-?[0-9]+/ { log_debug("NUMBER"); lval.s = yylex.Text(); return NUMBER;}
+/-?[0-9]+\.[0-9]+([Ee]-?[0-9]+)?/ { log_debug("FKFLOAT"); lval.s = yylex.Text(); return FKFLOAT;}
+/(\%)/ { log_debug("DIVIDE_MOD"); return DIVIDE_MOD }
+/(\,)/ { log_debug("ARG_SPLITTER"); return ARG_SPLITTER }
+/(\-\>)/ { log_debug("RIGHT_POINTER"); return RIGHT_POINTER }
+/(\+\+)/ { log_debug("INC"); return INC }
+/(\+)/ { log_debug("PLUS"); return PLUS }
+/(\-)/ { log_debug("MINUS"); return MINUS }
+/(\/)/ { log_debug("DIVIDE"); return DIVIDE }
+/(\*)/ { log_debug("MULTIPLY"); return MULTIPLY }
+/(\:\=)/ { log_debug("NEW_ASSIGN"); return NEW_ASSIGN }
+/(\+\=)/ { log_debug("PLUS_ASSIGN"); return PLUS_ASSIGN }
+/(\-\=)/ { log_debug("MINUS_ASSIGN"); return MINUS_ASSIGN }
+/(\/\=)/ { log_debug("DIVIDE_ASSIGN"); return DIVIDE_ASSIGN }
+/(\*\=)/ { log_debug("MULTIPLY_ASSIGN"); return MULTIPLY_ASSIGN }
+/(\%\=)/ { log_debug("DIVIDE_MOD_ASSIGN"); return DIVIDE_MOD_ASSIGN }
+/(\=)/ { log_debug("ASSIGN"); return ASSIGN }
+/(\>)/ { log_debug("MORE"); return MORE }
+/(\<)/ { log_debug("LESS"); return LESS }
+/(\>\=)/ { log_debug("MORE_OR_EQUAL"); return MORE_OR_EQUAL }
+/(\<\=)/ { log_debug("LESS_OR_EQUAL"); return LESS_OR_EQUAL }
+/(\=\=)/ { log_debug("EQUAL"); return EQUAL }
+/(\!\=)/ { log_debug("NOT_EQUAL"); return NOT_EQUAL }
+/(\()/ { log_debug("OPEN_BRACKET"); return OPEN_BRACKET }
+/(\))/ { log_debug("CLOSE_BRACKET"); return CLOSE_BRACKET }
+/(\:)/ { log_debug("COLON"); return COLON }
+/(\[)/ { log_debug("OPEN_SQUARE_BRACKET"); return OPEN_SQUARE_BRACKET }
+/(\])/ { log_debug("CLOSE_SQUARE_BRACKET"); return CLOSE_SQUARE_BRACKET }
+/(\{)/ { log_debug("OPEN_BIG_BRACKET"); return OPEN_BIG_BRACKET }
+/(\})/ { log_debug("CLOSE_BIG_BRACKET"); return CLOSE_BIG_BRACKET }
+/(\.\.)/ { log_debug("STRING_CAT"); return STRING_CAT }
 //
 package fakego
-
-import "github.com/esrrhs/go-engine/src/loggo"

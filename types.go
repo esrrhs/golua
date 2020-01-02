@@ -1,6 +1,31 @@
 package fakego
 
-import "sync/atomic"
+import (
+	"github.com/esrrhs/go-engine/src/loggo"
+	"sync/atomic"
+)
+
+var gOpenLog bool
+
+func OpenLog(b bool) {
+	gOpenLog = b
+}
+
+func isOpenLog() bool {
+	return gOpenLog
+}
+
+func log_debug(format string, a ...interface{}) {
+	if isOpenLog() {
+		loggo.Debug(format, a...)
+	}
+}
+
+func log_error(format string, a ...interface{}) {
+	if isOpenLog() {
+		loggo.Error(format, a...)
+	}
+}
 
 func vartostring(v *variant) string {
 	return v.String()
@@ -24,7 +49,7 @@ func fkmaptoa(vm *variant_map) string {
 		}
 		ret += vartostring(&key)
 		ret += ","
-		ret += vartostring(&value)
+		ret += vartostring(value)
 		ret += ")"
 		i++
 	}
@@ -43,10 +68,18 @@ func fkarraytoa(va *variant_array) string {
 	ret := ""
 	ret += "["
 	for _, n := range va.va {
-		ret += vartostring(&n)
+		ret += vartostring(n)
 		ret += ","
 	}
 	ret += "]"
 
 	return ret
+}
+
+func fkgen_package_name(p string, n string) string {
+	if len(p) <= 0 {
+		return n
+	} else {
+		return p + "." + n
+	}
 }

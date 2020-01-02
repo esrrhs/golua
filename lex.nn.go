@@ -1,6 +1,5 @@
 package fakego
 
-import "github.com/esrrhs/go-engine/src/loggo"
 import (
 	"bufio"
 	"io"
@@ -3992,334 +3991,334 @@ OUTER0:
 			}
 		case 2:
 			{
-				loggo.Debug("VAR_BEGIN")
+				log_debug("VAR_BEGIN")
 				return VAR_BEGIN
 			}
 		case 3:
 			{
-				loggo.Debug("RETURN")
+				log_debug("RETURN")
 				return RETURN
 			}
 		case 4:
 			{
-				loggo.Debug("BREAK")
+				log_debug("BREAK")
 				return BREAK
 			}
 		case 5:
 			{
-				loggo.Debug("FUNC")
+				log_debug("FUNC")
 				return FUNC
 			}
 		case 6:
 			{
-				loggo.Debug("FAKE")
+				log_debug("FAKE")
 				return FAKE
 			}
 		case 7:
 			{
-				loggo.Debug("WHILE")
+				log_debug("WHILE")
 				return WHILE
 			}
 		case 8:
 			{
-				loggo.Debug("FOR")
+				log_debug("FOR")
 				return FOR
 			}
 		case 9:
 			{
-				loggo.Debug("FTRUE")
+				log_debug("FTRUE")
 				return FTRUE
 			}
 		case 10:
 			{
-				loggo.Debug("FFALSE")
+				log_debug("FFALSE")
 				return FFALSE
 			}
 		case 11:
 			{
-				loggo.Debug("IF")
+				log_debug("IF")
 				return IF
 			}
 		case 12:
 			{
-				loggo.Debug("THEN")
+				log_debug("THEN")
 				return THEN
 			}
 		case 13:
 			{
-				loggo.Debug("ELSE")
+				log_debug("ELSE")
 				return ELSE
 			}
 		case 14:
 			{
-				loggo.Debug("ELSEIF")
+				log_debug("ELSEIF")
 				return ELSEIF
 			}
 		case 15:
 			{
-				loggo.Debug("END")
+				log_debug("END")
 				return END
 			}
 		case 16:
 			{
-				loggo.Debug("FCONST")
+				log_debug("FCONST")
 				return FCONST
 			}
 		case 17:
 			{
-				loggo.Debug("PACKAGE")
+				log_debug("PACKAGE")
 				return PACKAGE
 			}
 		case 18:
 			{
-				loggo.Debug("NULL")
+				log_debug("NULL")
 				return FNULL
 			}
 		case 19:
 			{
-				loggo.Debug("INCLUDE")
+				log_debug("INCLUDE")
 				return INCLUDE
 			}
 		case 20:
 			{
-				loggo.Debug("STRUCT")
+				log_debug("STRUCT")
 				return STRUCT
 			}
 		case 21:
 			{
-				loggo.Debug("AND")
+				log_debug("AND")
 				return AND
 			}
 		case 22:
 			{
-				loggo.Debug("OR")
+				log_debug("OR")
 				return OR
 			}
 		case 23:
 			{
-				loggo.Debug("IS")
+				log_debug("IS")
 				return IS
 			}
 		case 24:
 			{
-				loggo.Debug("NOT")
+				log_debug("NOT")
 				return NOT
 			}
 		case 25:
 			{
-				loggo.Debug("CONTINUE")
+				log_debug("CONTINUE")
 				return CONTINUE
 			}
 		case 26:
 			{
-				loggo.Debug("YIELD")
+				log_debug("YIELD")
 				return YIELD
 			}
 		case 27:
 			{
-				loggo.Debug("SLEEP")
+				log_debug("SLEEP")
 				return SLEEP
 			}
 		case 28:
 			{
-				loggo.Debug("SWITCH")
+				log_debug("SWITCH")
 				return SWITCH
 			}
 		case 29:
 			{
-				loggo.Debug("CASE")
+				log_debug("CASE")
 				return CASE
 			}
 		case 30:
 			{
-				loggo.Debug("DEFAULT")
+				log_debug("DEFAULT")
 				return DEFAULT
 			}
 		case 31:
 			{
-				loggo.Debug("STRING_DEFINITION")
+				log_debug("STRING_DEFINITION")
 				lval.s = yylex.Text()
 				return STRING_DEFINITION
 			}
 		case 32:
 			{
-				loggo.Debug("IDENTIFIER")
+				log_debug("IDENTIFIER")
 				lval.s = yylex.Text()
 				return IDENTIFIER
 			}
 		case 33:
 			{
-				loggo.Debug("IDENTIFIER_DOT")
+				log_debug("IDENTIFIER_DOT")
 				lval.s = yylex.Text()
 				return IDENTIFIER_DOT
 			}
 		case 34:
 			{
-				loggo.Debug("IDENTIFIER_POINTER")
+				log_debug("IDENTIFIER_POINTER")
 				lval.s = yylex.Text()
 				return IDENTIFIER_POINTER
 			}
 		case 35:
 			{
-				loggo.Debug("FKUUID")
+				log_debug("FKUUID")
 				lval.s = yylex.Text()
 				return FKUUID
 			}
 		case 36:
 			{
-				loggo.Debug("NUMBER")
+				log_debug("NUMBER")
 				lval.s = yylex.Text()
 				return NUMBER
 			}
 		case 37:
 			{
-				loggo.Debug("FKFLOAT")
+				log_debug("FKFLOAT")
 				lval.s = yylex.Text()
 				return FKFLOAT
 			}
 		case 38:
 			{
-				loggo.Debug("DIVIDE_MOD")
+				log_debug("DIVIDE_MOD")
 				return DIVIDE_MOD
 			}
 		case 39:
 			{
-				loggo.Debug("ARG_SPLITTER")
+				log_debug("ARG_SPLITTER")
 				return ARG_SPLITTER
 			}
 		case 40:
 			{
-				loggo.Debug("RIGHT_POINTER")
+				log_debug("RIGHT_POINTER")
 				return RIGHT_POINTER
 			}
 		case 41:
 			{
-				loggo.Debug("INC")
+				log_debug("INC")
 				return INC
 			}
 		case 42:
 			{
-				loggo.Debug("PLUS")
+				log_debug("PLUS")
 				return PLUS
 			}
 		case 43:
 			{
-				loggo.Debug("MINUS")
+				log_debug("MINUS")
 				return MINUS
 			}
 		case 44:
 			{
-				loggo.Debug("DIVIDE")
+				log_debug("DIVIDE")
 				return DIVIDE
 			}
 		case 45:
 			{
-				loggo.Debug("MULTIPLY")
+				log_debug("MULTIPLY")
 				return MULTIPLY
 			}
 		case 46:
 			{
-				loggo.Debug("NEW_ASSIGN")
+				log_debug("NEW_ASSIGN")
 				return NEW_ASSIGN
 			}
 		case 47:
 			{
-				loggo.Debug("PLUS_ASSIGN")
+				log_debug("PLUS_ASSIGN")
 				return PLUS_ASSIGN
 			}
 		case 48:
 			{
-				loggo.Debug("MINUS_ASSIGN")
+				log_debug("MINUS_ASSIGN")
 				return MINUS_ASSIGN
 			}
 		case 49:
 			{
-				loggo.Debug("DIVIDE_ASSIGN")
+				log_debug("DIVIDE_ASSIGN")
 				return DIVIDE_ASSIGN
 			}
 		case 50:
 			{
-				loggo.Debug("MULTIPLY_ASSIGN")
+				log_debug("MULTIPLY_ASSIGN")
 				return MULTIPLY_ASSIGN
 			}
 		case 51:
 			{
-				loggo.Debug("DIVIDE_MOD_ASSIGN")
+				log_debug("DIVIDE_MOD_ASSIGN")
 				return DIVIDE_MOD_ASSIGN
 			}
 		case 52:
 			{
-				loggo.Debug("ASSIGN")
+				log_debug("ASSIGN")
 				return ASSIGN
 			}
 		case 53:
 			{
-				loggo.Debug("MORE")
+				log_debug("MORE")
 				return MORE
 			}
 		case 54:
 			{
-				loggo.Debug("LESS")
+				log_debug("LESS")
 				return LESS
 			}
 		case 55:
 			{
-				loggo.Debug("MORE_OR_EQUAL")
+				log_debug("MORE_OR_EQUAL")
 				return MORE_OR_EQUAL
 			}
 		case 56:
 			{
-				loggo.Debug("LESS_OR_EQUAL")
+				log_debug("LESS_OR_EQUAL")
 				return LESS_OR_EQUAL
 			}
 		case 57:
 			{
-				loggo.Debug("EQUAL")
+				log_debug("EQUAL")
 				return EQUAL
 			}
 		case 58:
 			{
-				loggo.Debug("NOT_EQUAL")
+				log_debug("NOT_EQUAL")
 				return NOT_EQUAL
 			}
 		case 59:
 			{
-				loggo.Debug("OPEN_BRACKET")
+				log_debug("OPEN_BRACKET")
 				return OPEN_BRACKET
 			}
 		case 60:
 			{
-				loggo.Debug("CLOSE_BRACKET")
+				log_debug("CLOSE_BRACKET")
 				return CLOSE_BRACKET
 			}
 		case 61:
 			{
-				loggo.Debug("COLON")
+				log_debug("COLON")
 				return COLON
 			}
 		case 62:
 			{
-				loggo.Debug("OPEN_SQUARE_BRACKET")
+				log_debug("OPEN_SQUARE_BRACKET")
 				return OPEN_SQUARE_BRACKET
 			}
 		case 63:
 			{
-				loggo.Debug("CLOSE_SQUARE_BRACKET")
+				log_debug("CLOSE_SQUARE_BRACKET")
 				return CLOSE_SQUARE_BRACKET
 			}
 		case 64:
 			{
-				loggo.Debug("OPEN_BIG_BRACKET")
+				log_debug("OPEN_BIG_BRACKET")
 				return OPEN_BIG_BRACKET
 			}
 		case 65:
 			{
-				loggo.Debug("CLOSE_BIG_BRACKET")
+				log_debug("CLOSE_BIG_BRACKET")
 				return CLOSE_BIG_BRACKET
 			}
 		case 66:
 			{
-				loggo.Debug("STRING_CAT")
+				log_debug("STRING_CAT")
 				return STRING_CAT
 			}
 		default:

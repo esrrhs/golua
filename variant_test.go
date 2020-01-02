@@ -15,69 +15,95 @@ func Test0001(t *testing.T) {
 	va := gfs.con.newarray()
 	vm := gfs.con.newgmap()
 
-	tt := variant{}
+	{
+		tt := variant{}
+		v := variant{}
+		_V_SET_NIL(&v)
+		fmt.Println(v.String())
+		m1[v] = "1"
+		va.va = append(va.va, &v)
 
-	v := variant{}
-	_V_SET_NIL(&v)
-	fmt.Println(v.String())
-	m1[v] = "1"
-	va.va = append(va.va, v)
+		_V_SET_STRING(&tt, m1[v])
+		vm.vm[v] = &tt
+	}
 
-	_V_SET_STRING(&tt, m1[v])
-	vm.vm[v] = tt
+	{
+		tt := variant{}
+		v := variant{}
+		_V_SET_REAL(&v, 0.2)
+		fmt.Println(v.String())
+		m1[v] = "2"
+		va.va = append(va.va, &v)
 
-	_V_SET_REAL(&v, 0.2)
-	fmt.Println(v.String())
-	m1[v] = "2"
-	va.va = append(va.va, v)
+		_V_SET_STRING(&tt, m1[v])
+		vm.vm[v] = &tt
+	}
 
-	_V_SET_STRING(&tt, m1[v])
-	vm.vm[v] = tt
+	{
+		tt := variant{}
+		v := variant{}
+		_V_SET_STRING(&v, "abc")
+		fmt.Println(v.String())
+		m1[v] = "3"
+		va.va = append(va.va, &v)
 
-	_V_SET_STRING(&v, "abc")
-	fmt.Println(v.String())
-	m1[v] = "3"
-	va.va = append(va.va, v)
+		_V_SET_STRING(&tt, m1[v])
+		vm.vm[v] = &tt
 
-	_V_SET_STRING(&tt, m1[v])
-	vm.vm[v] = tt
+	}
 
 	pe := AA{}
 	pe.a = 1
+	{
+		tt := variant{}
+		v := variant{}
 
-	_V_SET_POINTER(&v, &pe)
-	fmt.Println(v.String())
-	m1[v] = "4"
-	va.va = append(va.va, v)
+		_V_SET_POINTER(&v, &pe)
+		fmt.Println(v.String())
+		m1[v] = "4"
+		va.va = append(va.va, &v)
 
-	_V_SET_STRING(&tt, m1[v])
-	vm.vm[v] = tt
+		_V_SET_STRING(&tt, m1[v])
+		vm.vm[v] = &tt
+	}
 
-	_V_SET_UUID(&v, 214124214)
-	fmt.Println(v.String())
-	m1[v] = "5"
-	va.va = append(va.va, v)
+	{
+		tt := variant{}
+		v := variant{}
+		_V_SET_UUID(&v, 214124214)
+		fmt.Println(v.String())
+		m1[v] = "5"
+		va.va = append(va.va, &v)
 
-	_V_SET_STRING(&tt, m1[v])
-	vm.vm[v] = tt
+		_V_SET_STRING(&tt, m1[v])
+		vm.vm[v] = &tt
+	}
 
-	_V_SET_ARRAY(&v, va)
-	fmt.Println(v.String())
-	m1[v] = "6"
-	va.va = append(va.va, v)
-	_V_SET_ARRAY(&v, va)
-	fmt.Println(v.String())
+	{
+		tt := variant{}
+		v := variant{}
+		_V_SET_ARRAY(&v, va)
+		fmt.Println(v.String())
+		m1[v] = "6"
+		va.va = append(va.va, &v)
+		_V_SET_ARRAY(&v, va)
+		fmt.Println(v.String())
 
-	_V_SET_STRING(&tt, m1[v])
-	vm.vm[v] = tt
+		_V_SET_STRING(&tt, m1[v])
+		vm.vm[v] = &tt
+	}
 
-	_V_SET_MAP(&v, vm)
-	fmt.Println(v.String())
-	m1[v] = "7"
-	_V_SET_STRING(&tt, m1[v])
-	vm.vm[v] = tt
-	_V_SET_MAP(&v, vm)
-	fmt.Println(v.String())
+	{
+		tt := variant{}
+		v := variant{}
+		_V_SET_MAP(&v, vm)
+		fmt.Println(v.String())
+		m1[v] = "7"
+		_V_SET_STRING(&tt, m1[v])
+		vm.vm[v] = &tt
+		_V_SET_MAP(&v, vm)
+		fmt.Println(v.String())
+	}
 
 	////////////////////////////////////
 

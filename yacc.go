@@ -4,9 +4,7 @@ package fakego
 import __yyfmt__ "fmt"
 
 //line ../yacc.y:3
-import "github.com/esrrhs/go-engine/src/loggo"
-
-//line ../yacc.y:8
+//line ../yacc.y:6
 type yySymType struct {
 	yys int
 	s   string
@@ -157,7 +155,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line ../yacc.y:1474
+//line ../yacc.y:1472
 
 func init() {
 	yyErrorVerbose = true // set the global that enables showing full errors
@@ -888,48 +886,48 @@ yydefault:
 
 	case 2:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:97
+		//line ../yacc.y:95
 		{
 		}
 	case 3:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:101
+		//line ../yacc.y:99
 		{
-			loggo.Debug("[yacc]: package %v", yyDollar[2].s)
+			log_debug("[yacc]: package %v", yyDollar[2].s)
 			l := yylex.(lexerwarpper).mf
-			l.packageName = (yyDollar[2].s)
+			l.set_package(yyDollar[2].s)
 		}
 	case 4:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:108
+		//line ../yacc.y:106
 		{
-			loggo.Debug("[yacc]: package %v", yyDollar[2].s)
+			log_debug("[yacc]: package %v", yyDollar[2].s)
 			l := yylex.(lexerwarpper).mf
-			l.packageName = (yyDollar[2].s)
+			l.set_package(yyDollar[2].s)
 		}
 	case 5:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:116
+		//line ../yacc.y:114
 		{
 		}
 	case 8:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:126
+		//line ../yacc.y:124
 		{
-			loggo.Debug("[yacc]: include %v", yyDollar[2].s)
+			log_debug("[yacc]: include %v", yyDollar[2].s)
 			l := yylex.(lexerwarpper).mf
 			l.add_include(yyDollar[2].s)
 		}
 	case 9:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:135
+		//line ../yacc.y:133
 		{
 		}
 	case 12:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:145
+		//line ../yacc.y:143
 		{
-			loggo.Debug("[yacc]: struct_define %v", yyDollar[2].s)
+			log_debug("[yacc]: struct_define %v", yyDollar[2].s)
 			l := yylex.(lexerwarpper).mf
 			if (yyDollar[3].sn) != nil {
 				p := (yyDollar[3].sn).(*struct_desc_memlist_node)
@@ -938,51 +936,51 @@ yydefault:
 		}
 	case 13:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:157
+		//line ../yacc.y:155
 		{
 			yyVAL.sn = nil
 		}
 	case 14:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:162
+		//line ../yacc.y:160
 		{
-			loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER struct_mem_declaration")
+			log_debug("[yacc]: struct_mem_declaration <- IDENTIFIER struct_mem_declaration")
 			p := (yyDollar[1].sn).(*struct_desc_memlist_node)
 			p.add_arg(yyDollar[2].s)
 			yyVAL.sn = p
 		}
 	case 15:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:170
+		//line ../yacc.y:168
 		{
-			loggo.Debug("[yacc]: struct_mem_declaration <- IDENTIFIER")
+			log_debug("[yacc]: struct_mem_declaration <- IDENTIFIER")
 			p := &struct_desc_memlist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_arg(yyDollar[1].s)
 			yyVAL.sn = p
 		}
 	case 16:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:180
+		//line ../yacc.y:178
 		{
 		}
 	case 19:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:190
+		//line ../yacc.y:188
 		{
-			loggo.Debug("[yacc]: const_define %v", yyDollar[2].s)
+			log_debug("[yacc]: const_define %v", yyDollar[2].s)
 			l := yylex.(lexerwarpper).mf
 			l.add_const_desc(yyDollar[2].s, yyDollar[4].sn)
 		}
 	case 20:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:199
+		//line ../yacc.y:197
 		{
 		}
 	case 23:
 		yyDollar = yyS[yypt-7 : yypt+1]
-		//line ../yacc.y:211
+		//line ../yacc.y:209
 		{
-			loggo.Debug("[yacc]: function_declaration <- block %v", yyDollar[2].s)
+			log_debug("[yacc]: function_declaration <- block %v", yyDollar[2].s)
 			p := &func_desc_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.funcname = yyDollar[2].s
 			if yyDollar[4].sn != nil {
@@ -994,9 +992,9 @@ yydefault:
 		}
 	case 24:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:224
+		//line ../yacc.y:222
 		{
-			loggo.Debug("[yacc]: function_declaration <- empty %v", yyDollar[2].s)
+			log_debug("[yacc]: function_declaration <- empty %v", yyDollar[2].s)
 			p := &func_desc_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.funcname = yyDollar[2].s
 			if yyDollar[4].sn != nil {
@@ -1008,42 +1006,42 @@ yydefault:
 		}
 	case 25:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:239
+		//line ../yacc.y:237
 		{
 			yyVAL.sn = nil
 		}
 	case 26:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:244
+		//line ../yacc.y:242
 		{
-			loggo.Debug("[yacc]: function_declaration_arguments <- arg function_declaration_arguments")
+			log_debug("[yacc]: function_declaration_arguments <- arg function_declaration_arguments")
 			p := (yyDollar[1].sn).(*func_desc_arglist_node)
 			p.add_arg(yyDollar[3].s)
 			yyVAL.sn = p
 		}
 	case 27:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:252
+		//line ../yacc.y:250
 		{
-			loggo.Debug("[yacc]: function_declaration_arguments <- arg")
+			log_debug("[yacc]: function_declaration_arguments <- arg")
 			p := &func_desc_arglist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_arg(yyDollar[1].s)
 			yyVAL.sn = p
 		}
 	case 28:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:262
+		//line ../yacc.y:260
 		{
-			loggo.Debug("[yacc]: arg <- IDENTIFIER %v", yyDollar[1].s)
+			log_debug("[yacc]: arg <- IDENTIFIER %v", yyDollar[1].s)
 			p := &identifier_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			yyVAL.sn = p
 		}
 	case 29:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:272
+		//line ../yacc.y:270
 		{
-			loggo.Debug("[yacc]: function_call <- function_call_arguments %v", yyDollar[1].s)
+			log_debug("[yacc]: function_call <- function_call_arguments %v", yyDollar[1].s)
 			p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.fuc = yyDollar[1].s
 			p.prefunc = nil
@@ -1056,9 +1054,9 @@ yydefault:
 		}
 	case 30:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:286
+		//line ../yacc.y:284
 		{
-			loggo.Debug("[yacc]: function_call <- function_call_arguments %v", yyDollar[1].s)
+			log_debug("[yacc]: function_call <- function_call_arguments %v", yyDollar[1].s)
 			p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.fuc = yyDollar[1].s
 			p.prefunc = nil
@@ -1071,9 +1069,9 @@ yydefault:
 		}
 	case 31:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:300
+		//line ../yacc.y:298
 		{
-			loggo.Debug("[yacc]: function_call <- function_call_arguments")
+			log_debug("[yacc]: function_call <- function_call_arguments")
 			p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.fuc = ""
 			p.prefunc = yyDollar[1].sn
@@ -1086,9 +1084,9 @@ yydefault:
 		}
 	case 32:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:314
+		//line ../yacc.y:312
 		{
-			loggo.Debug("[yacc]: function_call <- mem function_call_arguments %v", yyDollar[3].s)
+			log_debug("[yacc]: function_call <- mem function_call_arguments %v", yyDollar[3].s)
 			p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.fuc = yyDollar[3].s
 			p.prefunc = nil
@@ -1104,9 +1102,9 @@ yydefault:
 		}
 	case 33:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:331
+		//line ../yacc.y:329
 		{
-			loggo.Debug("[yacc]: function_call <- mem function_call_arguments %v", yyDollar[3].s)
+			log_debug("[yacc]: function_call <- mem function_call_arguments %v", yyDollar[3].s)
 			p := &function_call_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.fuc = yyDollar[3].s
 			p.prefunc = nil
@@ -1122,172 +1120,172 @@ yydefault:
 		}
 	case 34:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:350
+		//line ../yacc.y:348
 		{
 			yyVAL.sn = nil
 		}
 	case 35:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:355
+		//line ../yacc.y:353
 		{
-			loggo.Debug("[yacc]: function_call_arguments <- arg_expr function_call_arguments")
+			log_debug("[yacc]: function_call_arguments <- arg_expr function_call_arguments")
 			p := (yyDollar[1].sn).(*function_call_arglist_node)
 			p.add_arg(yyDollar[3].sn)
 			yyVAL.sn = p
 		}
 	case 36:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:363
+		//line ../yacc.y:361
 		{
-			loggo.Debug("[yacc]: function_call_arguments <- arg_expr")
+			log_debug("[yacc]: function_call_arguments <- arg_expr")
 			p := &function_call_arglist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_arg(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
 	case 37:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:373
+		//line ../yacc.y:371
 		{
-			loggo.Debug("[yacc]: arg_expr <- expr_value")
+			log_debug("[yacc]: arg_expr <- expr_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 38:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:383
+		//line ../yacc.y:381
 		{
-			loggo.Debug("[yacc]: block <- block stmt")
+			log_debug("[yacc]: block <- block stmt")
 			p := (yyDollar[1].sn).(*block_node)
 			p.add_stmt(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
 	case 39:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:391
+		//line ../yacc.y:389
 		{
-			loggo.Debug("[yacc]: block <- stmt")
+			log_debug("[yacc]: block <- stmt")
 			p := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_stmt(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
 	case 40:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:401
+		//line ../yacc.y:399
 		{
-			loggo.Debug("[yacc]: stmt <- while_stmt")
+			log_debug("[yacc]: stmt <- while_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 41:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:407
+		//line ../yacc.y:405
 		{
-			loggo.Debug("[yacc]: stmt <- if_stmt")
+			log_debug("[yacc]: stmt <- if_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 42:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:413
+		//line ../yacc.y:411
 		{
-			loggo.Debug("[yacc]: stmt <- return_stmt")
+			log_debug("[yacc]: stmt <- return_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 43:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:419
+		//line ../yacc.y:417
 		{
-			loggo.Debug("[yacc]: stmt <- assign_stmt")
+			log_debug("[yacc]: stmt <- assign_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 44:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:425
+		//line ../yacc.y:423
 		{
-			loggo.Debug("[yacc]: stmt <- multi_assign_stmt")
+			log_debug("[yacc]: stmt <- multi_assign_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 45:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:431
+		//line ../yacc.y:429
 		{
-			loggo.Debug("[yacc]: stmt <- break")
+			log_debug("[yacc]: stmt <- break")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 46:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:437
+		//line ../yacc.y:435
 		{
-			loggo.Debug("[yacc]: stmt <- continue")
+			log_debug("[yacc]: stmt <- continue")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 47:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:443
+		//line ../yacc.y:441
 		{
-			loggo.Debug("[yacc]: stmt <- expr")
+			log_debug("[yacc]: stmt <- expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 48:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:449
+		//line ../yacc.y:447
 		{
-			loggo.Debug("[yacc]: stmt <- math_assign_stmt")
+			log_debug("[yacc]: stmt <- math_assign_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 49:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:455
+		//line ../yacc.y:453
 		{
-			loggo.Debug("[yacc]: stmt <- for_stmt")
+			log_debug("[yacc]: stmt <- for_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 50:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:461
+		//line ../yacc.y:459
 		{
-			loggo.Debug("[yacc]: stmt <- for_loop_stmt")
+			log_debug("[yacc]: stmt <- for_loop_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 51:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:467
+		//line ../yacc.y:465
 		{
-			loggo.Debug("[yacc]: stmt <- fake_call_stmt")
+			log_debug("[yacc]: stmt <- fake_call_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 52:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:473
+		//line ../yacc.y:471
 		{
-			loggo.Debug("[yacc]: stmt <- sleep_stmt")
+			log_debug("[yacc]: stmt <- sleep_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 53:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:479
+		//line ../yacc.y:477
 		{
-			loggo.Debug("[yacc]: stmt <- yield_stmt")
+			log_debug("[yacc]: stmt <- yield_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 54:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:485
+		//line ../yacc.y:483
 		{
-			loggo.Debug("[yacc]: stmt <- switch_stmt")
+			log_debug("[yacc]: stmt <- switch_stmt")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 55:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:493
+		//line ../yacc.y:491
 		{
-			loggo.Debug("[yacc]: fake_call_stmt <- fake function_call")
+			log_debug("[yacc]: fake_call_stmt <- fake function_call")
 			p := (yyDollar[2].sn).(*function_call_node)
 			p.fakecall = true
 			yyVAL.sn = p
 		}
 	case 56:
 		yyDollar = yyS[yypt-9 : yypt+1]
-		//line ../yacc.y:503
+		//line ../yacc.y:501
 		{
-			loggo.Debug("[yacc]: for_stmt <- block cmp block")
+			log_debug("[yacc]: for_stmt <- block cmp block")
 			p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = (yyDollar[4].sn).(*cmp_stmt)
 			p.beginblock = (yyDollar[2].sn).(*block_node)
@@ -1297,9 +1295,9 @@ yydefault:
 		}
 	case 57:
 		yyDollar = yyS[yypt-8 : yypt+1]
-		//line ../yacc.y:514
+		//line ../yacc.y:512
 		{
-			loggo.Debug("[yacc]: for_stmt <- block cmp")
+			log_debug("[yacc]: for_stmt <- block cmp")
 			p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = (yyDollar[4].sn).(*cmp_stmt)
 			p.beginblock = (yyDollar[2].sn).(*block_node)
@@ -1309,9 +1307,9 @@ yydefault:
 		}
 	case 58:
 		yyDollar = yyS[yypt-11 : yypt+1]
-		//line ../yacc.y:527
+		//line ../yacc.y:525
 		{
-			loggo.Debug("[yacc]: for_loop_stmt <- block")
+			log_debug("[yacc]: for_loop_stmt <- block")
 			p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 
 			pi := yyDollar[2].sn
@@ -1348,9 +1346,9 @@ yydefault:
 		}
 	case 59:
 		yyDollar = yyS[yypt-10 : yypt+1]
-		//line ../yacc.y:565
+		//line ../yacc.y:563
 		{
-			loggo.Debug("[yacc]: for_loop_stmt <- empty")
+			log_debug("[yacc]: for_loop_stmt <- empty")
 			p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 
 			pcmp := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1380,9 +1378,9 @@ yydefault:
 		}
 	case 60:
 		yyDollar = yyS[yypt-5 : yypt+1]
-		//line ../yacc.y:598
+		//line ../yacc.y:596
 		{
-			loggo.Debug("[yacc]: while_stmt <- cmp block")
+			log_debug("[yacc]: while_stmt <- cmp block")
 			p := &while_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
 			p.block = (yyDollar[4].sn).(*block_node)
@@ -1390,9 +1388,9 @@ yydefault:
 		}
 	case 61:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:607
+		//line ../yacc.y:605
 		{
-			loggo.Debug("[yacc]: while_stmt <- cmp")
+			log_debug("[yacc]: while_stmt <- cmp")
 			p := &while_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
 			p.block = nil
@@ -1400,9 +1398,9 @@ yydefault:
 		}
 	case 62:
 		yyDollar = yyS[yypt-7 : yypt+1]
-		//line ../yacc.y:618
+		//line ../yacc.y:616
 		{
-			loggo.Debug("[yacc]: if_stmt <- cmp block")
+			log_debug("[yacc]: if_stmt <- cmp block")
 			p := &if_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
 			p.block = (yyDollar[4].sn).(*block_node)
@@ -1416,9 +1414,9 @@ yydefault:
 		}
 	case 63:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:633
+		//line ../yacc.y:631
 		{
-			loggo.Debug("[yacc]: if_stmt <- cmp")
+			log_debug("[yacc]: if_stmt <- cmp")
 			p := &if_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
 			p.block = nil
@@ -1432,33 +1430,33 @@ yydefault:
 		}
 	case 64:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:650
+		//line ../yacc.y:648
 		{
 			yyVAL.sn = nil
 		}
 	case 65:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:655
+		//line ../yacc.y:653
 		{
-			loggo.Debug("[yacc]: elseif_stmt_list <- elseif_stmt_list elseif_stmt")
+			log_debug("[yacc]: elseif_stmt_list <- elseif_stmt_list elseif_stmt")
 			p := (yyDollar[1].sn).(*elseif_stmt_list)
 			p.add_stmt(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
 	case 66:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:663
+		//line ../yacc.y:661
 		{
-			loggo.Debug("[yacc]: elseif_stmt_list <- elseif_stmt")
+			log_debug("[yacc]: elseif_stmt_list <- elseif_stmt")
 			p := &elseif_stmt_list{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_stmt(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
 	case 67:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:673
+		//line ../yacc.y:671
 		{
-			loggo.Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
+			log_debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
 			p := &elseif_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
 			p.block = (yyDollar[4].sn).(*block_node)
@@ -1466,9 +1464,9 @@ yydefault:
 		}
 	case 68:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:682
+		//line ../yacc.y:680
 		{
-			loggo.Debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
+			log_debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
 			p := &elseif_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = (yyDollar[2].sn).(*cmp_stmt)
 			p.block = nil
@@ -1476,40 +1474,40 @@ yydefault:
 		}
 	case 69:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:693
+		//line ../yacc.y:691
 		{
 			yyVAL.sn = nil
 		}
 	case 70:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:698
+		//line ../yacc.y:696
 		{
-			loggo.Debug("[yacc]: else_stmt <- block")
+			log_debug("[yacc]: else_stmt <- block")
 			p := &else_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.block = (yyDollar[2].sn).(*block_node)
 			yyVAL.sn = p
 		}
 	case 71:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:706
+		//line ../yacc.y:704
 		{
-			loggo.Debug("[yacc]: else_stmt <- empty")
+			log_debug("[yacc]: else_stmt <- empty")
 			p := &else_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.block = nil
 			yyVAL.sn = p
 		}
 	case 72:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:716
+		//line ../yacc.y:714
 		{
-			loggo.Debug("[yacc]: cmp <- ( cmp )")
+			log_debug("[yacc]: cmp <- ( cmp )")
 			yyVAL.sn = yyDollar[2].sn
 		}
 	case 73:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:722
+		//line ../yacc.y:720
 		{
-			loggo.Debug("[yacc]: cmp <- cmp AND cmp")
+			log_debug("[yacc]: cmp <- cmp AND cmp")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = "&&"
 			p.left = yyDollar[1].sn
@@ -1518,9 +1516,9 @@ yydefault:
 		}
 	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:732
+		//line ../yacc.y:730
 		{
-			loggo.Debug("[yacc]: cmp <- cmp OR cmp")
+			log_debug("[yacc]: cmp <- cmp OR cmp")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = "||"
 			p.left = yyDollar[1].sn
@@ -1529,9 +1527,9 @@ yydefault:
 		}
 	case 75:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:742
+		//line ../yacc.y:740
 		{
-			loggo.Debug("[yacc]: cmp <- cmp_value LESS cmp_value")
+			log_debug("[yacc]: cmp <- cmp_value LESS cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].s
 			p.left = yyDollar[1].sn
@@ -1540,9 +1538,9 @@ yydefault:
 		}
 	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:752
+		//line ../yacc.y:750
 		{
-			loggo.Debug("[yacc]: cmp <- cmp_value MORE cmp_value")
+			log_debug("[yacc]: cmp <- cmp_value MORE cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].s
 			p.left = yyDollar[1].sn
@@ -1551,9 +1549,9 @@ yydefault:
 		}
 	case 77:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:762
+		//line ../yacc.y:760
 		{
-			loggo.Debug("[yacc]: cmp <- cmp_value EQUAL cmp_value")
+			log_debug("[yacc]: cmp <- cmp_value EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].s
 			p.left = yyDollar[1].sn
@@ -1562,9 +1560,9 @@ yydefault:
 		}
 	case 78:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:772
+		//line ../yacc.y:770
 		{
-			loggo.Debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value")
+			log_debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].s
 			p.left = yyDollar[1].sn
@@ -1573,9 +1571,9 @@ yydefault:
 		}
 	case 79:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:782
+		//line ../yacc.y:780
 		{
-			loggo.Debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value")
+			log_debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].s
 			p.left = yyDollar[1].sn
@@ -1584,9 +1582,9 @@ yydefault:
 		}
 	case 80:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:792
+		//line ../yacc.y:790
 		{
-			loggo.Debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value")
+			log_debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].s
 			p.left = yyDollar[1].sn
@@ -1595,9 +1593,9 @@ yydefault:
 		}
 	case 81:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:802
+		//line ../yacc.y:800
 		{
-			loggo.Debug("[yacc]: cmp <- true")
+			log_debug("[yacc]: cmp <- true")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = "true"
 			p.left = nil
@@ -1606,9 +1604,9 @@ yydefault:
 		}
 	case 82:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:812
+		//line ../yacc.y:810
 		{
-			loggo.Debug("[yacc]: cmp <- false")
+			log_debug("[yacc]: cmp <- false")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = "false"
 			p.left = nil
@@ -1617,9 +1615,9 @@ yydefault:
 		}
 	case 83:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:822
+		//line ../yacc.y:820
 		{
-			loggo.Debug("[yacc]: cmp <- cmp_value IS cmp_value")
+			log_debug("[yacc]: cmp <- cmp_value IS cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = "is"
 			p.left = yyDollar[2].sn
@@ -1628,9 +1626,9 @@ yydefault:
 		}
 	case 84:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:832
+		//line ../yacc.y:830
 		{
-			loggo.Debug("[yacc]: cmp <- cmp_value NOT cmp_value")
+			log_debug("[yacc]: cmp <- cmp_value NOT cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = "not"
 			p.left = yyDollar[2].sn
@@ -1639,87 +1637,87 @@ yydefault:
 		}
 	case 85:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:844
+		//line ../yacc.y:842
 		{
-			loggo.Debug("[yacc]: cmp_value <- explicit_value")
+			log_debug("[yacc]: cmp_value <- explicit_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 86:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:850
+		//line ../yacc.y:848
 		{
-			loggo.Debug("[yacc]: cmp_value <- variable")
+			log_debug("[yacc]: cmp_value <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 87:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:856
+		//line ../yacc.y:854
 		{
-			loggo.Debug("[yacc]: cmp_value <- expr")
+			log_debug("[yacc]: cmp_value <- expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 88:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:864
+		//line ../yacc.y:862
 		{
-			loggo.Debug("[yacc]: return_stmt <- RETURN return_value_list")
+			log_debug("[yacc]: return_stmt <- RETURN return_value_list")
 			p := &return_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.returnlist = (yyDollar[2].sn).(*return_value_list_node)
 			yyVAL.sn = p
 		}
 	case 89:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:872
+		//line ../yacc.y:870
 		{
-			loggo.Debug("[yacc]: return_stmt <- RETURN")
+			log_debug("[yacc]: return_stmt <- RETURN")
 			p := &return_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.returnlist = nil
 			yyVAL.sn = p
 		}
 	case 90:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:882
+		//line ../yacc.y:880
 		{
-			loggo.Debug("[yacc]: return_value_list <- return_value_list return_value")
+			log_debug("[yacc]: return_value_list <- return_value_list return_value")
 			p := (yyDollar[1].sn).(*return_value_list_node)
 			p.add_arg(yyDollar[3].sn)
 			yyVAL.sn = p
 		}
 	case 91:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:890
+		//line ../yacc.y:888
 		{
-			loggo.Debug("[yacc]: return_value_list <- return_value")
+			log_debug("[yacc]: return_value_list <- return_value")
 			p := &return_value_list_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_arg(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
 	case 92:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:900
+		//line ../yacc.y:898
 		{
-			loggo.Debug("[yacc]: return_value <- explicit_value")
+			log_debug("[yacc]: return_value <- explicit_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 93:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:906
+		//line ../yacc.y:904
 		{
-			loggo.Debug("[yacc]: return_value <- variable")
+			log_debug("[yacc]: return_value <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 94:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:912
+		//line ../yacc.y:910
 		{
-			loggo.Debug("[yacc]: return_value <- expr")
+			log_debug("[yacc]: return_value <- expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 95:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:920
+		//line ../yacc.y:918
 		{
-			loggo.Debug("[yacc]: assign_stmt <- var assign_value")
+			log_debug("[yacc]: assign_stmt <- var assign_value")
 			p := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.vr = yyDollar[1].sn
 			p.value = yyDollar[3].sn
@@ -1728,9 +1726,9 @@ yydefault:
 		}
 	case 96:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:930
+		//line ../yacc.y:928
 		{
-			loggo.Debug("[yacc]: new assign_stmt <- var assign_value")
+			log_debug("[yacc]: new assign_stmt <- var assign_value")
 			p := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.vr = yyDollar[1].sn
 			p.value = yyDollar[3].sn
@@ -1739,9 +1737,9 @@ yydefault:
 		}
 	case 97:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:942
+		//line ../yacc.y:940
 		{
-			loggo.Debug("[yacc]: multi_assign_stmt <- var_list function_call")
+			log_debug("[yacc]: multi_assign_stmt <- var_list function_call")
 			p := &multi_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.varlist = (yyDollar[1].sn).(*var_list_node)
 			p.value = yyDollar[3].sn
@@ -1750,9 +1748,9 @@ yydefault:
 		}
 	case 98:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:952
+		//line ../yacc.y:950
 		{
-			loggo.Debug("[yacc]: new multi_assign_stmt <- var_list function_call")
+			log_debug("[yacc]: new multi_assign_stmt <- var_list function_call")
 			p := &multi_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.varlist = (yyDollar[1].sn).(*var_list_node)
 			p.value = yyDollar[3].sn
@@ -1761,48 +1759,48 @@ yydefault:
 		}
 	case 99:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:964
+		//line ../yacc.y:962
 		{
-			loggo.Debug("[yacc]: var_list <- var_list var")
+			log_debug("[yacc]: var_list <- var_list var")
 			p := (yyDollar[1].sn).(*var_list_node)
 			p.add_arg(yyDollar[3].sn)
 			yyVAL.sn = p
 		}
 	case 100:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:972
+		//line ../yacc.y:970
 		{
-			loggo.Debug("[yacc]: var_list <- var")
+			log_debug("[yacc]: var_list <- var")
 			p := &var_list_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_arg(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
 	case 101:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:982
+		//line ../yacc.y:980
 		{
-			loggo.Debug("[yacc]: assign_value <- explicit_value")
+			log_debug("[yacc]: assign_value <- explicit_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 102:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:988
+		//line ../yacc.y:986
 		{
-			loggo.Debug("[yacc]: assign_value <- variable")
+			log_debug("[yacc]: assign_value <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 103:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:994
+		//line ../yacc.y:992
 		{
-			loggo.Debug("[yacc]: assign_value <- expr")
+			log_debug("[yacc]: assign_value <- expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 104:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1002
+		//line ../yacc.y:1000
 		{
-			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.vr = yyDollar[1].sn
 			p.oper = "+="
@@ -1811,9 +1809,9 @@ yydefault:
 		}
 	case 105:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1012
+		//line ../yacc.y:1010
 		{
-			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.vr = yyDollar[1].sn
 			p.oper = "-="
@@ -1822,9 +1820,9 @@ yydefault:
 		}
 	case 106:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1022
+		//line ../yacc.y:1020
 		{
-			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.vr = yyDollar[1].sn
 			p.oper = "/="
@@ -1833,9 +1831,9 @@ yydefault:
 		}
 	case 107:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1032
+		//line ../yacc.y:1030
 		{
-			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.vr = yyDollar[1].sn
 			p.oper = "*="
@@ -1844,9 +1842,9 @@ yydefault:
 		}
 	case 108:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1042
+		//line ../yacc.y:1040
 		{
-			loggo.Debug("[yacc]: math_assign_stmt <- variable assign_value")
+			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.vr = yyDollar[1].sn
 			p.oper = "%="
@@ -1855,9 +1853,9 @@ yydefault:
 		}
 	case 109:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1052
+		//line ../yacc.y:1050
 		{
-			loggo.Debug("[yacc]: math_assign_stmt <- variable INC")
+			log_debug("[yacc]: math_assign_stmt <- variable INC")
 			pp := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			pp.str = "1"
 			pp.ty = EVT_NUM
@@ -1870,34 +1868,34 @@ yydefault:
 		}
 	case 110:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1068
+		//line ../yacc.y:1066
 		{
-			loggo.Debug("[yacc]: var <- VAR_BEGIN IDENTIFIER %v", yyDollar[2].s)
+			log_debug("[yacc]: var <- VAR_BEGIN IDENTIFIER %v", yyDollar[2].s)
 			p := &var_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[2].s
 			yyVAL.sn = p
 		}
 	case 111:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1076
+		//line ../yacc.y:1074
 		{
-			loggo.Debug("[yacc]: var <- variable")
+			log_debug("[yacc]: var <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 112:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1084
+		//line ../yacc.y:1082
 		{
-			loggo.Debug("[yacc]: variable <- IDENTIFIER %v", yyDollar[1].s)
+			log_debug("[yacc]: variable <- IDENTIFIER %v", yyDollar[1].s)
 			p := &variable_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			yyVAL.sn = p
 		}
 	case 113:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:1092
+		//line ../yacc.y:1090
 		{
-			loggo.Debug("[yacc]: container_get_node <- IDENTIFIER[expr_value] %v", yyDollar[1].s)
+			log_debug("[yacc]: container_get_node <- IDENTIFIER[expr_value] %v", yyDollar[1].s)
 			p := &container_get_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.container = yyDollar[1].s
 			p.key = yyDollar[3].sn
@@ -1905,55 +1903,55 @@ yydefault:
 		}
 	case 114:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1101
+		//line ../yacc.y:1099
 		{
-			loggo.Debug("[yacc]: variable <- IDENTIFIER_POINTER %v", yyDollar[1].s)
+			log_debug("[yacc]: variable <- IDENTIFIER_POINTER %v", yyDollar[1].s)
 			p := &struct_pointer_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			yyVAL.sn = p
 		}
 	case 115:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1109
+		//line ../yacc.y:1107
 		{
-			loggo.Debug("[yacc]: variable <- IDENTIFIER_DOT %v", yyDollar[1].s)
+			log_debug("[yacc]: variable <- IDENTIFIER_DOT %v", yyDollar[1].s)
 			p := &variable_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			yyVAL.sn = p
 		}
 	case 116:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1119
+		//line ../yacc.y:1117
 		{
-			loggo.Debug("[yacc]: expr <- (expr)")
+			log_debug("[yacc]: expr <- (expr)")
 			yyVAL.sn = yyDollar[2].sn
 		}
 	case 117:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1125
+		//line ../yacc.y:1123
 		{
-			loggo.Debug("[yacc]: expr <- function_call")
+			log_debug("[yacc]: expr <- function_call")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 118:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1131
+		//line ../yacc.y:1129
 		{
-			loggo.Debug("[yacc]: expr <- math_expr")
+			log_debug("[yacc]: expr <- math_expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 119:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1139
+		//line ../yacc.y:1137
 		{
-			loggo.Debug("[yacc]: math_expr <- (math_expr)")
+			log_debug("[yacc]: math_expr <- (math_expr)")
 			yyVAL.sn = yyDollar[2].sn
 		}
 	case 120:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1145
+		//line ../yacc.y:1143
 		{
-			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.oper = "+"
 			p.left = yyDollar[1].sn
@@ -1962,9 +1960,9 @@ yydefault:
 		}
 	case 121:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1155
+		//line ../yacc.y:1153
 		{
-			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.oper = "-"
 			p.left = yyDollar[1].sn
@@ -1973,9 +1971,9 @@ yydefault:
 		}
 	case 122:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1165
+		//line ../yacc.y:1163
 		{
-			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.oper = "*"
 			p.left = yyDollar[1].sn
@@ -1984,9 +1982,9 @@ yydefault:
 		}
 	case 123:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1175
+		//line ../yacc.y:1173
 		{
-			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.oper = "/"
 			p.left = yyDollar[1].sn
@@ -1995,9 +1993,9 @@ yydefault:
 		}
 	case 124:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1185
+		//line ../yacc.y:1183
 		{
-			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.oper = "%"
 			p.left = yyDollar[1].sn
@@ -2006,9 +2004,9 @@ yydefault:
 		}
 	case 125:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1195
+		//line ../yacc.y:1193
 		{
-			loggo.Debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
+			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.oper = ".."
 			p.left = yyDollar[1].sn
@@ -2017,37 +2015,37 @@ yydefault:
 		}
 	case 126:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1207
+		//line ../yacc.y:1205
 		{
-			loggo.Debug("[yacc]: expr_value <- math_expr")
+			log_debug("[yacc]: expr_value <- math_expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 127:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1213
+		//line ../yacc.y:1211
 		{
-			loggo.Debug("[yacc]: expr_value <- explicit_value")
+			log_debug("[yacc]: expr_value <- explicit_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 128:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1219
+		//line ../yacc.y:1217
 		{
-			loggo.Debug("[yacc]: expr_value <- function_call")
+			log_debug("[yacc]: expr_value <- function_call")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 129:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1225
+		//line ../yacc.y:1223
 		{
-			loggo.Debug("[yacc]: expr_value <- variable")
+			log_debug("[yacc]: expr_value <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
 	case 130:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1233
+		//line ../yacc.y:1231
 		{
-			loggo.Debug("[yacc]: explicit_value <- FTRUE")
+			log_debug("[yacc]: explicit_value <- FTRUE")
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			p.ty = EVT_TRUE
@@ -2055,9 +2053,9 @@ yydefault:
 		}
 	case 131:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1242
+		//line ../yacc.y:1240
 		{
-			loggo.Debug("[yacc]: explicit_value <- FFALSE")
+			log_debug("[yacc]: explicit_value <- FFALSE")
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			p.ty = EVT_FALSE
@@ -2065,9 +2063,9 @@ yydefault:
 		}
 	case 132:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1251
+		//line ../yacc.y:1249
 		{
-			loggo.Debug("[yacc]: explicit_value <- NUMBER %v", yyDollar[1].s)
+			log_debug("[yacc]: explicit_value <- NUMBER %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			p.ty = EVT_NUM
@@ -2075,9 +2073,9 @@ yydefault:
 		}
 	case 133:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1260
+		//line ../yacc.y:1258
 		{
-			loggo.Debug("[yacc]: explicit_value <- FKUUID %v", yyDollar[1].s)
+			log_debug("[yacc]: explicit_value <- FKUUID %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			p.ty = EVT_UUID
@@ -2085,9 +2083,9 @@ yydefault:
 		}
 	case 134:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1269
+		//line ../yacc.y:1267
 		{
-			loggo.Debug("[yacc]: explicit_value <- STRING_DEFINITION %v", yyDollar[1].s)
+			log_debug("[yacc]: explicit_value <- STRING_DEFINITION %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			p.ty = EVT_STR
@@ -2095,9 +2093,9 @@ yydefault:
 		}
 	case 135:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1278
+		//line ../yacc.y:1276
 		{
-			loggo.Debug("[yacc]: explicit_value <- FKFLOAT %v", yyDollar[1].s)
+			log_debug("[yacc]: explicit_value <- FKFLOAT %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			p.ty = EVT_FLOAT
@@ -2105,9 +2103,9 @@ yydefault:
 		}
 	case 136:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1287
+		//line ../yacc.y:1285
 		{
-			loggo.Debug("[yacc]: explicit_value <- FNULL %v", yyDollar[1].s)
+			log_debug("[yacc]: explicit_value <- FNULL %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			p.ty = EVT_NULL
@@ -2115,9 +2113,9 @@ yydefault:
 		}
 	case 137:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1296
+		//line ../yacc.y:1294
 		{
-			loggo.Debug("[yacc]: explicit_value <- const_map_list_value")
+			log_debug("[yacc]: explicit_value <- const_map_list_value")
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = ""
 			p.ty = EVT_MAP
@@ -2126,9 +2124,9 @@ yydefault:
 		}
 	case 138:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1306
+		//line ../yacc.y:1304
 		{
-			loggo.Debug("[yacc]: explicit_value <- const_array_list_value")
+			log_debug("[yacc]: explicit_value <- const_array_list_value")
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = ""
 			p.ty = EVT_ARRAY
@@ -2137,35 +2135,35 @@ yydefault:
 		}
 	case 139:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:1318
+		//line ../yacc.y:1316
 		{
-			loggo.Debug("[yacc]: const_map_list_value <- null")
+			log_debug("[yacc]: const_map_list_value <- null")
 			p := &const_map_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			yyVAL.sn = p
 		}
 	case 140:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1325
+		//line ../yacc.y:1323
 		{
-			loggo.Debug("[yacc]: const_map_list_value <- const_map_value")
+			log_debug("[yacc]: const_map_list_value <- const_map_value")
 			p := &const_map_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_ele(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
 	case 141:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1333
+		//line ../yacc.y:1331
 		{
-			loggo.Debug("[yacc]: const_map_list_value <- const_map_list_value const_map_value")
+			log_debug("[yacc]: const_map_list_value <- const_map_list_value const_map_value")
 			p := (yyDollar[1].sn).(*const_map_list_value_node)
 			p.add_ele(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
 	case 142:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1343
+		//line ../yacc.y:1341
 		{
-			loggo.Debug("[yacc]: const_map_value <- explicit_value")
+			log_debug("[yacc]: const_map_value <- explicit_value")
 			p := &const_map_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.k = yyDollar[1].sn
 			p.v = yyDollar[3].sn
@@ -2173,69 +2171,69 @@ yydefault:
 		}
 	case 143:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:1354
+		//line ../yacc.y:1352
 		{
-			loggo.Debug("[yacc]: const_array_list_value <- null")
+			log_debug("[yacc]: const_array_list_value <- null")
 			p := &const_array_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			yyVAL.sn = p
 		}
 	case 144:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1361
+		//line ../yacc.y:1359
 		{
-			loggo.Debug("[yacc]: const_array_list_value <- explicit_value")
+			log_debug("[yacc]: const_array_list_value <- explicit_value")
 			p := &const_array_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_ele(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
 	case 145:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1369
+		//line ../yacc.y:1367
 		{
-			loggo.Debug("[yacc]: const_array_list_value <- const_array_list_value explicit_value")
+			log_debug("[yacc]: const_array_list_value <- const_array_list_value explicit_value")
 			p := (yyDollar[1].sn).(*const_array_list_value_node)
 			p.add_ele(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
 	case 146:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1379
+		//line ../yacc.y:1377
 		{
-			loggo.Debug("[yacc]: break <- BREAK")
+			log_debug("[yacc]: break <- BREAK")
 			p := &break_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			yyVAL.sn = p
 		}
 	case 147:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1388
+		//line ../yacc.y:1386
 		{
-			loggo.Debug("[yacc]: CONTINUE")
+			log_debug("[yacc]: CONTINUE")
 			p := &continue_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			yyVAL.sn = p
 		}
 	case 148:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1397
+		//line ../yacc.y:1395
 		{
-			loggo.Debug("[yacc]: SLEEP")
+			log_debug("[yacc]: SLEEP")
 			p := &sleep_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.time = yyDollar[2].sn
 			yyVAL.sn = p
 		}
 	case 149:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1406
+		//line ../yacc.y:1404
 		{
-			loggo.Debug("[yacc]: YIELD")
+			log_debug("[yacc]: YIELD")
 			p := &yield_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.time = yyDollar[2].sn
 			yyVAL.sn = p
 		}
 	case 150:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:1416
+		//line ../yacc.y:1414
 		{
-			loggo.Debug("[yacc]: switch_stmt")
+			log_debug("[yacc]: switch_stmt")
 			p := &switch_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].sn
 			p.caselist = yyDollar[3].sn
@@ -2244,9 +2242,9 @@ yydefault:
 		}
 	case 151:
 		yyDollar = yyS[yypt-5 : yypt+1]
-		//line ../yacc.y:1426
+		//line ../yacc.y:1424
 		{
-			loggo.Debug("[yacc]: switch_stmt")
+			log_debug("[yacc]: switch_stmt")
 			p := &switch_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].sn
 			p.caselist = yyDollar[3].sn
@@ -2255,27 +2253,27 @@ yydefault:
 		}
 	case 152:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1438
+		//line ../yacc.y:1436
 		{
-			loggo.Debug("[yacc]: switch_case_list <- switch_case_define")
+			log_debug("[yacc]: switch_case_list <- switch_case_define")
 			p := &switch_caselist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_case(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
 	case 153:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1446
+		//line ../yacc.y:1444
 		{
-			loggo.Debug("[yacc]: switch_case_list <- switch_case_list switch_case_define")
+			log_debug("[yacc]: switch_case_list <- switch_case_list switch_case_define")
 			p := (yyDollar[1].sn).(*switch_caselist_node)
 			p.add_case(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
 	case 154:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:1456
+		//line ../yacc.y:1454
 		{
-			loggo.Debug("[yacc]: switch_case_define")
+			log_debug("[yacc]: switch_case_define")
 			p := &switch_case_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].sn
 			p.block = yyDollar[4].sn
@@ -2283,9 +2281,9 @@ yydefault:
 		}
 	case 155:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1465
+		//line ../yacc.y:1463
 		{
-			loggo.Debug("[yacc]: switch_case_define")
+			log_debug("[yacc]: switch_case_define")
 			p := &switch_case_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.cmp = yyDollar[2].sn
 			p.block = nil

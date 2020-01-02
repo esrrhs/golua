@@ -4,6 +4,7 @@
 2018.5.21:添加myflexer，下一步生成语法树
 2019.11.28:添加synctree，跑通逻辑，下一步完成整个语法树
 2019.12.4:完成整个语法树，下一步完善parse，再添加compiler逻辑
+2020.1.2:添加compiler逻辑，加上log开关，variant先都使用pointer
 
 
 
