@@ -1,8 +1,6 @@
 package fakego
 
 import (
-	"github.com/esrrhs/go-engine/src/common"
-	"github.com/esrrhs/go-engine/src/rbuffergo"
 	"math"
 )
 
@@ -85,10 +83,10 @@ const (
 )
 
 func _MAKE_COMMAND(ty int, code int) command {
-	return command(common.MAKEINT64(int32(ty), int32(code)))
+	return command(_MAKEINT64(int32(ty), int32(code)))
 }
 func _MAKE_ADDR(addrtype int, pos int) command {
-	return _MAKE_COMMAND(COMMAND_ADDR, int(common.MAKEINT32(int16(addrtype), int16(pos))))
+	return _MAKE_COMMAND(COMMAND_ADDR, int(_MAKEINT32(int16(addrtype), int16(pos))))
 }
 func _MAKE_OPCODE(op int) command {
 	return _MAKE_COMMAND(COMMAND_OPCODE, op)
@@ -98,17 +96,17 @@ func _MAKE_POS(pos int) command {
 }
 
 func _COMMAND_TYPE(cmd command) int {
-	return int(common.HIINT32(int64(cmd)))
+	return int(_HIINT32(int64(cmd)))
 }
 func _COMMAND_CODE(cmd command) int {
-	return int(common.LOINT32(int64(cmd)))
+	return int(_LOINT32(int64(cmd)))
 }
 
 func _ADDR_TYPE(code int) int {
-	return int(common.HIINT16(int32(code)))
+	return int(_HIINT16(int32(code)))
 }
 func _ADDR_POS(code int) int {
-	return int(common.LOINT16(int32(code)))
+	return int(_LOINT16(int32(code)))
 }
 
 func opcodeStr(opcode int) string {
@@ -233,12 +231,4 @@ type func_binary struct {
 
 func (fb *func_binary) dump(pos int) string {
 	return ""
-}
-
-func (fb *func_binary) save(buffer *rbuffergo.RBuffergo) error {
-	return nil
-}
-
-func (fb *func_binary) load(buffer *rbuffergo.RBuffergo) error {
-	return nil
 }

@@ -1,7 +1,9 @@
 package fakego
 
 import (
-	"github.com/esrrhs/go-engine/src/loggo"
+	"log"
+	"math"
+	"os"
 	"strconv"
 	"sync/atomic"
 )
@@ -12,13 +14,27 @@ func isOpenLog() bool {
 
 func log_debug(format string, a ...interface{}) {
 	if isOpenLog() {
-		loggo.Debug(format, a...)
+		f, err := os.OpenFile("fakego.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		log.SetOutput(f)
+		log.SetPrefix("[DEBUG]:")
+		log.Printf(format, a...)
 	}
 }
 
 func log_error(format string, a ...interface{}) {
 	if isOpenLog() {
-		loggo.Error(format, a...)
+		f, err := os.OpenFile("fakego.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+		log.SetOutput(f)
+		log.SetPrefix("[ERROR]:")
+		log.Printf(format, a...)
 	}
 }
 
@@ -114,4 +130,28 @@ func fkgen_package_name(p string, n string) string {
 	} else {
 		return p + "." + n
 	}
+}
+
+func _MAKEINT64(high int32, low int32) int64 {
+	return (int64)(((int64)(low)) | ((int64)((int32)(high)))<<32)
+}
+func _HIINT32(I int64) int32 {
+	return (int32)(((int64)(I) >> 32) & 0xFFFFFFFF)
+}
+func _LOINT32(l int64) int32 {
+	return (int32)(l)
+}
+
+func _MAKEINT32(high int16, low int16) int32 {
+	return (int32)(((int32)(low)) | ((int32)((int16)(high)))<<16)
+}
+func _HIINT16(I int32) int16 {
+	return (int16)(((int32)(I) >> 16) & 0xFFFF)
+}
+func _LOINT16(l int32) int16 {
+	return (int16)(l)
+}
+
+func isInt(r float64) bool {
+	return (r - math.Floor(r)) == 0
 }

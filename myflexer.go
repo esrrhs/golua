@@ -1,7 +1,6 @@
 package fakego
 
 import (
-	"github.com/esrrhs/go-engine/src/loggo"
 	"sync"
 )
 
@@ -42,7 +41,7 @@ func (mf *myflexer) get_const_map() sync.Map {
 
 func (mf *myflexer) add_func_desc(p *func_desc_node) {
 	log_debug("add func %s %d", p.funcname, p.lineno())
-	if loggo.IsDebug() {
+	if isOpenLog() {
 		log_debug("dump func %s \n%s", p.funcname, p.dump(0))
 	}
 }

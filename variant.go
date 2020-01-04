@@ -3,7 +3,6 @@ package fakego
 import (
 	"errors"
 	"fmt"
-	"github.com/esrrhs/go-engine/src/common"
 	"reflect"
 	"strconv"
 )
@@ -29,7 +28,7 @@ func (v *variant) String() string {
 		return "nil"
 	case REAL:
 		d := v.data.(float64)
-		if common.IsInt(d) {
+		if isInt(d) {
 			return strconv.FormatInt(int64(d), 10)
 		} else {
 			return strconv.FormatFloat(d, 'E', -1, 64)
