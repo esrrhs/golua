@@ -754,6 +754,10 @@ func (sn *explicit_value_node) dump(indent int) string {
 	return ret
 }
 
+func (sn *explicit_value_node) getvaluetype() int {
+	return sn.ty
+}
+
 //////////////////////////////////////////////////////////////////
 
 type container_get_node struct {

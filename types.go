@@ -2,17 +2,12 @@ package fakego
 
 import (
 	"github.com/esrrhs/go-engine/src/loggo"
+	"strconv"
 	"sync/atomic"
 )
 
-var gOpenLog bool
-
-func OpenLog(b bool) {
-	gOpenLog = b
-}
-
 func isOpenLog() bool {
-	return gOpenLog
+	return gfs.cfg.OpenLog
 }
 
 func log_debug(format string, a ...interface{}) {
@@ -29,6 +24,27 @@ func log_error(format string, a ...interface{}) {
 
 func vartostring(v *variant) string {
 	return v.String()
+}
+
+func vartypetostring(ty int) string {
+	switch ty {
+	case NIL:
+		return "NIL"
+	case REAL:
+		return "REAL"
+	case STRING:
+		return "STRING"
+	case POINTER:
+		return "POINTER"
+	case UUID:
+		return "UUID"
+	case ARRAY:
+		return "ARRAY"
+	case MAP:
+		return "MAP"
+	default:
+		panic("vartypetostring fail " + strconv.Itoa(ty))
+	}
 }
 
 func fkmaptoa(vm *variant_map) string {
@@ -73,6 +89,22 @@ func fkarraytoa(va *variant_array) string {
 	}
 	ret += "]"
 
+	return ret
+}
+
+func fkatol(str string) int {
+	ret, err := strconv.Atoi(str)
+	if err != nil {
+		panic(err)
+	}
+	return ret
+}
+
+func fkatof(str string) float64 {
+	ret, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		panic(err)
+	}
 	return ret
 }
 

@@ -1,6 +1,7 @@
 package fakego
 
 import (
+	"errors"
 	"fmt"
 	"github.com/esrrhs/go-engine/src/common"
 	"reflect"
@@ -50,31 +51,71 @@ func (v *variant) String() string {
 	}
 	return "ERROR"
 }
-func _V_SET_NIL(v *variant) {
+func (v *variant) V_SET_NIL() {
 	v.ty = NIL
 	v.data = nil
 }
-func _V_SET_POINTER(v *variant, p interface{}) {
+func (v *variant) V_SET_POINTER(p interface{}) {
 	v.ty = POINTER
 	v.data = p
 }
-func _V_SET_REAL(v *variant, r float64) {
+func (v *variant) V_SET_REAL(r float64) {
 	v.ty = REAL
 	v.data = r
 }
-func _V_SET_STRING(v *variant, s string) {
+func (v *variant) V_SET_STRING(s string) {
 	v.ty = STRING
 	v.data = s
 }
-func _V_SET_UUID(v *variant, id uint64) {
+func (v *variant) V_SET_UUID(id uint64) {
 	v.ty = UUID
 	v.data = id
 }
-func _V_SET_ARRAY(v *variant, a *variant_array) {
+func (v *variant) V_SET_ARRAY(a *variant_array) {
 	v.ty = ARRAY
 	v.data = a
 }
-func _V_SET_MAP(v *variant, m *variant_map) {
+func (v *variant) V_SET_MAP(m *variant_map) {
 	v.ty = MAP
 	v.data = m
+}
+
+func (v *variant) V_GET_POINTER() interface{} {
+	if v.ty == POINTER {
+		return v.data
+	} else if v.ty == NIL {
+		return nil
+	} else {
+		panic(errors.New(fmt.Sprintf("variant get pointer fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
+	}
+}
+
+func (v *variant) V_GET_REAL() float64 {
+	if v.ty == REAL {
+		return v.data.(float64)
+	} else if v.ty == NIL {
+		return 0
+	} else {
+		panic(errors.New(fmt.Sprintf("variant get real fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
+	}
+}
+
+func (v *variant) V_GET_STRING() string {
+	if v.ty == STRING {
+		return v.data.(string)
+	} else if v.ty == NIL {
+		return ""
+	} else {
+		panic(errors.New(fmt.Sprintf("variant get string fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
+	}
+}
+
+func (v *variant) V_GET_UUID() uint64 {
+	if v.ty == UUID {
+		return v.data.(uint64)
+	} else if v.ty == NIL {
+		return 0
+	} else {
+		panic(errors.New(fmt.Sprintf("variant get uuid fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
+	}
 }

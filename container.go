@@ -1,10 +1,15 @@
 package fakego
 
-import "sync"
+import (
+	"errors"
+	"fmt"
+	"sync"
+)
 
 type variant_container_base struct {
 	recurflag int32
 	isconst   bool
+	lock      sync.Mutex
 }
 
 type variant_array struct {
@@ -51,4 +56,63 @@ func (c *container) newconstmap() *variant_map {
 	vm.vm = make(map[variant]*variant)
 	vm.isconst = true
 	return vm
+}
+
+func (vm *variant_map) con_map_get(k *variant) *variant {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+	var ret *variant
+	ret = vm.vm[*k]
+	if ret != nil {
+		return ret
+	}
+	ret = &variant{}
+	vm.vm[*k] = ret
+	return ret
+}
+
+func (vm *variant_map) con_map_set(k *variant, v *variant) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+	vm.vm[*k] = v
+}
+
+func (va *variant_array) con_array_get(k *variant) *variant {
+	va.lock.Lock()
+	defer va.lock.Unlock()
+
+	index := int(k.V_GET_REAL())
+	if index < 0 {
+		panic(errors.New(fmt.Sprintf("interpreter get array fail, index %d", index)))
+	}
+
+	if index >= len(va.va) {
+		oldsize := len(va.va)
+		newsize := index + 1 + oldsize*gfs.cfg.ArrayGrowSpeed/100
+		va.va = append(va.va, make([]*variant, newsize-oldsize)...)
+	}
+
+	if va.va[index] == nil {
+		va.va[index] = &variant{}
+	}
+
+	return va.va[index]
+}
+
+func (va *variant_array) con_array_set(k *variant, v *variant) {
+	va.lock.Lock()
+	defer va.lock.Unlock()
+
+	index := int(k.V_GET_REAL())
+	if index < 0 {
+		panic(errors.New(fmt.Sprintf("interpreter set array fail, index %d", index)))
+	}
+
+	if index >= len(va.va) {
+		oldsize := len(va.va)
+		newsize := index + 1 + oldsize*gfs.cfg.ArrayGrowSpeed/100
+		va.va = append(va.va, make([]*variant, newsize-oldsize)...)
+	}
+
+	va.va[index] = v
 }

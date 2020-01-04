@@ -18,36 +18,36 @@ func Test0001(t *testing.T) {
 	{
 		tt := variant{}
 		v := variant{}
-		_V_SET_NIL(&v)
+		v.V_SET_NIL()
 		fmt.Println(v.String())
 		m1[v] = "1"
 		va.va = append(va.va, &v)
 
-		_V_SET_STRING(&tt, m1[v])
+		tt.V_SET_STRING(m1[v])
 		vm.vm[v] = &tt
 	}
 
 	{
 		tt := variant{}
 		v := variant{}
-		_V_SET_REAL(&v, 0.2)
+		v.V_SET_REAL(0.2)
 		fmt.Println(v.String())
 		m1[v] = "2"
 		va.va = append(va.va, &v)
 
-		_V_SET_STRING(&tt, m1[v])
+		tt.V_SET_STRING(m1[v])
 		vm.vm[v] = &tt
 	}
 
 	{
 		tt := variant{}
 		v := variant{}
-		_V_SET_STRING(&v, "abc")
+		v.V_SET_STRING("abc")
 		fmt.Println(v.String())
 		m1[v] = "3"
 		va.va = append(va.va, &v)
 
-		_V_SET_STRING(&tt, m1[v])
+		tt.V_SET_STRING(m1[v])
 		vm.vm[v] = &tt
 
 	}
@@ -58,81 +58,81 @@ func Test0001(t *testing.T) {
 		tt := variant{}
 		v := variant{}
 
-		_V_SET_POINTER(&v, &pe)
+		v.V_SET_POINTER(&pe)
 		fmt.Println(v.String())
 		m1[v] = "4"
 		va.va = append(va.va, &v)
 
-		_V_SET_STRING(&tt, m1[v])
+		tt.V_SET_STRING(m1[v])
 		vm.vm[v] = &tt
 	}
 
 	{
 		tt := variant{}
 		v := variant{}
-		_V_SET_UUID(&v, 214124214)
+		v.V_SET_UUID(214124214)
 		fmt.Println(v.String())
 		m1[v] = "5"
 		va.va = append(va.va, &v)
 
-		_V_SET_STRING(&tt, m1[v])
+		tt.V_SET_STRING(m1[v])
 		vm.vm[v] = &tt
 	}
 
 	{
 		tt := variant{}
 		v := variant{}
-		_V_SET_ARRAY(&v, va)
+		v.V_SET_ARRAY(va)
 		fmt.Println(v.String())
 		m1[v] = "6"
 		va.va = append(va.va, &v)
-		_V_SET_ARRAY(&v, va)
+		v.V_SET_ARRAY(va)
 		fmt.Println(v.String())
 
-		_V_SET_STRING(&tt, m1[v])
+		tt.V_SET_STRING(m1[v])
 		vm.vm[v] = &tt
 	}
 
 	{
 		tt := variant{}
 		v := variant{}
-		_V_SET_MAP(&v, vm)
+		v.V_SET_MAP(vm)
 		fmt.Println(v.String())
 		m1[v] = "7"
-		_V_SET_STRING(&tt, m1[v])
+		tt.V_SET_STRING(m1[v])
 		vm.vm[v] = &tt
-		_V_SET_MAP(&v, vm)
+		v.V_SET_MAP(vm)
 		fmt.Println(v.String())
 	}
 
 	////////////////////////////////////
 
 	k := variant{}
-	_V_SET_NIL(&k)
+	k.V_SET_NIL()
 	fmt.Println(m1[k])
 	if m1[k] != "1" {
 		t.Error("fail")
 	}
 
-	_V_SET_REAL(&k, 0.1)
+	k.V_SET_REAL(0.1)
 	fmt.Println(m1[k])
 	if m1[k] != "" {
 		t.Error("fail")
 	}
 
-	_V_SET_REAL(&k, 0.2)
+	k.V_SET_REAL(0.2)
 	fmt.Println(m1[k])
 	if m1[k] != "2" {
 		t.Error("fail")
 	}
 
-	_V_SET_STRING(&k, "a")
+	k.V_SET_STRING("a")
 	fmt.Println(m1[k])
 	if m1[k] != "" {
 		t.Error("fail")
 	}
 
-	_V_SET_STRING(&k, "abc")
+	k.V_SET_STRING("abc")
 	fmt.Println(m1[k])
 	if m1[k] != "3" {
 		t.Error("fail")
@@ -141,37 +141,37 @@ func Test0001(t *testing.T) {
 	pe1 := AA{}
 	pe1.a = 1
 
-	_V_SET_POINTER(&k, &pe1)
+	k.V_SET_POINTER(&pe1)
 	fmt.Println(m1[k])
 	if m1[k] != "" {
 		t.Error("fail")
 	}
 
-	_V_SET_POINTER(&k, &pe)
+	k.V_SET_POINTER(&pe)
 	fmt.Println(m1[k])
 	if m1[k] != "4" {
 		t.Error("fail")
 	}
 
-	_V_SET_UUID(&k, 21412421)
+	k.V_SET_UUID(21412421)
 	fmt.Println(m1[k])
 	if m1[k] != "" {
 		t.Error("fail")
 	}
 
-	_V_SET_UUID(&k, 214124214)
+	k.V_SET_UUID(214124214)
 	fmt.Println(m1[k])
 	if m1[k] != "5" {
 		t.Error("fail")
 	}
 
-	_V_SET_ARRAY(&k, va)
+	k.V_SET_ARRAY(va)
 	fmt.Println(m1[k])
 	if m1[k] != "6" {
 		t.Error("fail")
 	}
 
-	_V_SET_MAP(&k, vm)
+	k.V_SET_MAP(vm)
 	fmt.Println(m1[k])
 	if m1[k] != "7" {
 		t.Error("fail")

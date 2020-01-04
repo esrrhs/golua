@@ -11,7 +11,7 @@ func main() {
 		Prefix: "fakego",
 		MaxDay: 1,
 	})
-	fakego.OpenLog(true)
+	fakego.SetConfig(fakego.FakeConfig{OpenLog: true})
 	err := fakego.Parse("./test.fk")
 	if err != nil {
 		loggo.Error("parse %s", err)

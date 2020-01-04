@@ -36,7 +36,7 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 			case error:
 				err = x
 			default:
-				err = errors.New("Unknown panic")
+				err = errors.New("unknown panic error")
 			}
 		}
 	}()
@@ -45,7 +45,7 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 
 	for _, s := range ctx.includelist {
 		if s == file {
-			return errors.New("include loop " + strings.Join(ctx.includelist, ",") + file)
+			panic(errors.New("include loop " + strings.Join(ctx.includelist, ",") + file))
 		}
 	}
 	ctx.includelist = append(ctx.includelist, file)
@@ -72,7 +72,7 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 
 	ret := yyParse(l)
 	if ret != 0 {
-		return errors.New("yyParse fail " + strconv.Itoa(ret))
+		panic(errors.New("yyParse fail " + strconv.Itoa(ret)))
 	}
 
 	log_debug("yyParse ok" + file)
@@ -81,17 +81,14 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	for _, f := range mf.includelist {
 		err := pa.parse(ctx, f)
 		if err != nil {
-			return err
+			panic(err)
 		}
 	}
 
 	log_debug("include Parse ok" + file)
 
 	mc := compiler{}
-	err = mc.compile(&mf)
-	if err != nil {
-		return err
-	}
+	mc.compile(&mf)
 
 	log_debug("compile ok" + file)
 
