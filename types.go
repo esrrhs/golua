@@ -1,6 +1,7 @@
 package fakego
 
 import (
+	"io"
 	"log"
 	"math"
 	"os"
@@ -19,7 +20,8 @@ func log_debug(format string, a ...interface{}) {
 			panic(err)
 		}
 		defer f.Close()
-		log.SetOutput(f)
+		mw := io.MultiWriter(os.Stdout, f)
+		log.SetOutput(mw)
 		log.SetPrefix("[DEBUG]:")
 		log.Printf(format, a...)
 	}
@@ -32,7 +34,8 @@ func log_error(format string, a ...interface{}) {
 			panic(err)
 		}
 		defer f.Close()
-		log.SetOutput(f)
+		mw := io.MultiWriter(os.Stdout, f)
+		log.SetOutput(mw)
 		log.SetPrefix("[ERROR]:")
 		log.Printf(format, a...)
 	}
