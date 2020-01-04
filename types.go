@@ -21,6 +21,7 @@ func log_debug(format string, a ...interface{}) {
 		}
 		defer f.Close()
 		mw := io.MultiWriter(os.Stdout, f)
+		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 		log.SetOutput(mw)
 		log.SetPrefix("[DEBUG]:")
 		log.Printf(format, a...)
@@ -35,6 +36,7 @@ func log_error(format string, a ...interface{}) {
 		}
 		defer f.Close()
 		mw := io.MultiWriter(os.Stdout, f)
+		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 		log.SetOutput(mw)
 		log.SetPrefix("[ERROR]:")
 		log.Printf(format, a...)
