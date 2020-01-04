@@ -1,4 +1,9 @@
 # fakego
+
+[<img src="https://img.shields.io/github/license/esrrhs/fakego">](https://github.com/esrrhs/fakego)
+[<img src="https://img.shields.io/github/languages/top/esrrhs/fakego">](https://github.com/esrrhs/fakego)
+[<img src="https://img.shields.io/github/workflow/status/esrrhs/fakego/Go">](https://github.com/esrrhs/fakego/actions)
+
 Lightweight embedded scripting language
 
 ## Brief introduction
