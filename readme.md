@@ -2,8 +2,6 @@
 
 [<img src="https://img.shields.io/github/license/esrrhs/fakego">](https://github.com/esrrhs/fakego)
 [<img src="https://img.shields.io/github/languages/top/esrrhs/fakego">](https://github.com/esrrhs/fakego)
-[<img src="https://img.shields.io/github/v/release/esrrhs/fakego">](https://github.com/esrrhs/fakego/releases)
-[<img src="https://img.shields.io/github/downloads/esrrhs/fakego/total">](https://github.com/esrrhs/fakego/releases)
 [<img src="https://img.shields.io/github/workflow/status/esrrhs/fakego/Go">](https://github.com/esrrhs/fakego/actions)
 
 轻量级嵌入式脚本语言
