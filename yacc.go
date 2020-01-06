@@ -155,7 +155,7 @@ const yyEofCode = 1
 const yyErrCode = 2
 const yyInitialStackSize = 16
 
-//line ../yacc.y:1472
+//line ../yacc.y:1445
 
 func init() {
 	yyErrorVerbose = true // set the global that enables showing full errors
@@ -167,267 +167,296 @@ var yyExca = [...]int{
 	1, -1,
 	-2, 0,
 	-1, 83,
+	19, 130,
+	21, 130,
+	22, 130,
+	23, 130,
+	24, 130,
+	66, 130,
+	-2, 119,
+	-1, 84,
 	19, 128,
 	21, 128,
 	22, 128,
 	23, 128,
 	24, 128,
 	66, 128,
-	-2, 117,
-	-1, 84,
-	19, 126,
-	21, 126,
-	22, 126,
-	23, 126,
-	24, 126,
-	66, 126,
-	-2, 118,
+	-2, 120,
 	-1, 85,
-	20, 111,
-	25, 111,
-	63, 111,
-	-2, 129,
-	-1, 104,
-	12, 81,
-	20, 81,
-	33, 81,
-	34, 81,
-	35, 81,
-	-2, 130,
-	-1, 105,
-	12, 82,
-	20, 82,
-	33, 82,
-	34, 82,
-	35, 82,
+	20, 113,
+	25, 113,
+	63, 113,
 	-2, 131,
+	-1, 104,
+	12, 83,
+	20, 83,
+	33, 83,
+	34, 83,
+	35, 83,
+	-2, 132,
+	-1, 105,
+	12, 84,
+	20, 84,
+	33, 84,
+	34, 84,
+	35, 84,
+	-2, 133,
 	-1, 108,
-	19, 127,
-	21, 127,
-	22, 127,
-	23, 127,
-	24, 127,
-	66, 127,
-	-2, 85,
+	19, 129,
+	21, 129,
+	22, 129,
+	23, 129,
+	24, 129,
+	66, 129,
+	-2, 87,
 	-1, 109,
-	19, 129,
-	21, 129,
-	22, 129,
-	23, 129,
-	24, 129,
-	66, 129,
-	-2, 86,
+	19, 131,
+	21, 131,
+	22, 131,
+	23, 131,
+	24, 131,
+	66, 131,
+	-2, 88,
 	-1, 114,
-	19, 127,
-	21, 127,
-	22, 127,
-	23, 127,
-	24, 127,
-	66, 127,
-	-2, 92,
+	19, 129,
+	21, 129,
+	22, 129,
+	23, 129,
+	24, 129,
+	66, 129,
+	-2, 94,
 	-1, 115,
-	19, 129,
-	21, 129,
-	22, 129,
-	23, 129,
-	24, 129,
-	66, 129,
-	-2, 93,
+	19, 131,
+	21, 131,
+	22, 131,
+	23, 131,
+	24, 131,
+	66, 131,
+	-2, 95,
 	-1, 123,
-	26, 118,
-	27, 118,
-	28, 118,
-	29, 118,
-	30, 118,
-	31, 118,
-	-2, 126,
+	26, 120,
+	27, 120,
+	28, 120,
+	29, 120,
+	30, 120,
+	31, 120,
+	-2, 128,
 	-1, 170,
-	19, 127,
-	21, 127,
-	22, 127,
-	23, 127,
-	24, 127,
-	66, 127,
-	-2, 101,
-	-1, 171,
 	19, 129,
 	21, 129,
 	22, 129,
 	23, 129,
 	24, 129,
 	66, 129,
-	-2, 102,
+	-2, 103,
+	-1, 171,
+	19, 131,
+	21, 131,
+	22, 131,
+	23, 131,
+	24, 131,
+	66, 131,
+	-2, 104,
+	-1, 229,
+	19, 129,
+	21, 129,
+	22, 129,
+	23, 129,
+	24, 129,
+	65, 58,
+	66, 129,
+	-2, 103,
+	-1, 230,
+	19, 131,
+	21, 131,
+	22, 131,
+	23, 131,
+	24, 131,
+	65, 59,
+	66, 131,
+	-2, 104,
 }
 
 const yyPrivate = 57344
 
-const yyLast = 1228
+const yyLast = 1339
 
 var yyAct = [...]int{
 
-	85, 219, 113, 196, 237, 78, 169, 183, 220, 153,
-	152, 239, 148, 149, 151, 150, 245, 267, 197, 229,
-	193, 101, 182, 197, 152, 17, 148, 149, 151, 150,
-	12, 91, 77, 80, 6, 75, 33, 34, 76, 233,
-	3, 270, 37, 92, 35, 43, 7, 6, 152, 146,
-	12, 59, 151, 150, 127, 83, 121, 153, 118, 82,
-	46, 119, 221, 38, 152, 54, 148, 149, 151, 150,
-	86, 153, 87, 36, 41, 103, 109, 109, 115, 93,
-	95, 22, 8, 124, 81, 89, 88, 90, 137, 124,
-	124, 109, 135, 181, 40, 153, 39, 97, 111, 120,
-	145, 226, 117, 109, 125, 225, 53, 109, 109, 100,
-	262, 153, 155, 156, 126, 146, 180, 147, 171, 171,
-	137, 137, 177, 17, 157, 173, 124, 176, 31, 171,
-	171, 171, 171, 171, 28, 187, 188, 189, 190, 191,
-	118, 84, 124, 136, 140, 140, 124, 124, 124, 124,
-	124, 124, 124, 124, 124, 92, 109, 109, 244, 186,
-	109, 109, 109, 109, 109, 109, 143, 252, 198, 115,
-	200, 222, 155, 156, 224, 174, 175, 209, 210, 57,
-	168, 140, 165, 166, 185, 144, 100, 254, 44, 155,
-	156, 93, 95, 109, 171, 167, 27, 140, 109, 230,
-	228, 140, 140, 140, 140, 140, 140, 140, 140, 140,
-	211, 155, 156, 21, 227, 25, 224, 155, 156, 23,
-	236, 224, 109, 96, 123, 124, 124, 124, 238, 253,
-	139, 139, 241, 26, 234, 212, 213, 214, 215, 216,
-	217, 249, 224, 240, 123, 238, 109, 94, 242, 243,
-	18, 13, 32, 154, 259, 232, 91, 250, 224, 100,
-	29, 248, 30, 124, 47, 49, 134, 139, 178, 47,
-	100, 223, 56, 231, 22, 155, 156, 195, 98, 48,
-	140, 140, 140, 194, 51, 45, 79, 139, 139, 139,
-	139, 139, 139, 139, 139, 139, 16, 50, 100, 108,
-	108, 114, 112, 100, 179, 95, 11, 100, 5, 74,
-	100, 20, 100, 10, 108, 100, 15, 73, 140, 72,
-	100, 256, 71, 70, 69, 68, 108, 66, 65, 64,
-	108, 108, 63, 62, 207, 67, 138, 142, 61, 60,
-	42, 170, 170, 24, 19, 14, 9, 218, 4, 2,
-	1, 0, 170, 170, 170, 170, 170, 128, 129, 130,
-	131, 132, 127, 0, 133, 0, 139, 139, 139, 0,
-	0, 0, 0, 184, 0, 0, 0, 0, 0, 108,
-	108, 0, 0, 108, 108, 108, 108, 108, 108, 0,
-	0, 0, 114, 184, 199, 184, 201, 202, 203, 204,
-	205, 206, 33, 34, 139, 0, 0, 0, 37, 246,
-	35, 110, 110, 116, 0, 0, 108, 170, 122, 251,
-	0, 108, 0, 0, 255, 0, 110, 0, 258, 38,
-	0, 0, 260, 0, 0, 0, 0, 0, 158, 36,
-	41, 263, 110, 110, 0, 108, 0, 268, 0, 0,
-	0, 0, 0, 172, 172, 0, 0, 0, 0, 0,
-	40, 52, 39, 0, 172, 172, 172, 172, 172, 108,
-	0, 0, 184, 184, 184, 0, 0, 0, 104, 105,
-	0, 0, 0, 0, 37, 92, 35, 0, 0, 0,
-	0, 110, 110, 0, 0, 110, 110, 110, 110, 110,
-	110, 102, 0, 0, 116, 38, 0, 91, 77, 80,
-	265, 75, 33, 34, 76, 36, 41, 269, 37, 92,
-	35, 93, 95, 0, 106, 107, 0, 0, 110, 172,
-	0, 0, 0, 110, 0, 82, 40, 0, 39, 38,
-	160, 159, 162, 163, 161, 164, 86, 0, 87, 36,
-	41, 0, 0, 0, 0, 93, 95, 110, 0, 0,
-	81, 89, 88, 90, 0, 0, 0, 0, 0, 0,
-	40, 0, 39, 91, 77, 80, 0, 75, 33, 34,
-	76, 110, 0, 266, 37, 92, 35, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 33, 34, 0, 0,
-	0, 82, 37, 0, 35, 38, 0, 0, 0, 0,
-	0, 0, 86, 0, 87, 36, 41, 0, 0, 0,
-	0, 93, 95, 38, 0, 0, 81, 89, 88, 90,
-	0, 0, 0, 36, 41, 55, 40, 0, 39, 91,
-	77, 80, 0, 75, 33, 34, 76, 0, 0, 264,
-	37, 92, 35, 0, 40, 0, 39, 91, 77, 80,
-	0, 75, 33, 34, 76, 261, 0, 82, 37, 92,
-	35, 38, 0, 0, 0, 0, 0, 0, 86, 0,
-	87, 36, 41, 0, 0, 82, 0, 93, 95, 38,
-	0, 0, 81, 89, 88, 90, 86, 0, 87, 36,
-	41, 0, 40, 0, 39, 93, 95, 0, 0, 0,
-	81, 89, 88, 90, 0, 0, 0, 0, 0, 0,
-	40, 0, 39, 91, 77, 80, 0, 75, 33, 34,
-	76, 0, 0, 257, 37, 92, 35, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 33, 34, 0, 0,
-	0, 82, 37, 0, 35, 38, 0, 0, 0, 0,
-	0, 0, 86, 0, 87, 36, 41, 0, 0, 0,
-	0, 93, 95, 38, 0, 0, 81, 89, 88, 90,
-	0, 0, 0, 36, 41, 0, 40, 0, 39, 91,
-	77, 80, 0, 75, 33, 34, 76, 0, 0, 247,
-	37, 92, 35, 0, 40, 0, 39, 91, 77, 80,
-	0, 75, 33, 34, 76, 0, 0, 82, 37, 92,
-	35, 38, 0, 0, 0, 0, 0, 0, 86, 0,
-	87, 36, 41, 0, 0, 82, 0, 93, 95, 38,
-	0, 0, 81, 89, 88, 90, 86, 0, 87, 36,
-	41, 0, 40, 0, 39, 93, 95, 0, 0, 0,
-	81, 89, 88, 90, 0, 0, 0, 221, 0, 0,
-	40, 0, 39, 91, 77, 80, 0, 75, 33, 34,
-	76, 0, 0, 235, 37, 92, 35, 0, 0, 0,
+	85, 220, 228, 239, 183, 219, 196, 153, 169, 241,
+	113, 104, 105, 78, 247, 193, 197, 37, 92, 35,
+	43, 101, 6, 152, 33, 34, 182, 151, 150, 92,
+	37, 92, 35, 3, 102, 117, 197, 231, 38, 22,
+	152, 59, 148, 149, 151, 150, 146, 141, 36, 41,
+	7, 38, 181, 118, 93, 95, 127, 106, 107, 121,
+	221, 36, 41, 91, 119, 93, 95, 93, 95, 40,
+	153, 39, 97, 118, 17, 178, 109, 109, 115, 12,
+	54, 17, 40, 124, 39, 180, 8, 153, 137, 124,
+	124, 109, 6, 254, 145, 12, 57, 46, 111, 100,
+	135, 226, 120, 109, 125, 155, 156, 109, 109, 146,
+	224, 179, 95, 28, 126, 155, 156, 225, 171, 171,
+	137, 137, 177, 256, 157, 147, 124, 173, 31, 171,
+	171, 171, 171, 171, 266, 176, 168, 187, 188, 189,
+	190, 191, 124, 53, 246, 186, 124, 124, 124, 124,
+	124, 124, 124, 124, 124, 96, 109, 109, 155, 156,
+	109, 109, 109, 109, 109, 109, 211, 155, 156, 115,
+	185, 21, 198, 224, 200, 224, 100, 209, 210, 222,
+	144, 33, 34, 134, 32, 44, 255, 37, 236, 35,
+	167, 26, 27, 109, 230, 25, 47, 49, 109, 263,
+	23, 47, 232, 224, 56, 29, 18, 30, 38, 13,
+	98, 271, 155, 156, 227, 154, 234, 224, 36, 41,
+	55, 240, 109, 252, 238, 124, 124, 124, 250, 243,
+	223, 108, 108, 114, 51, 11, 22, 155, 156, 40,
+	240, 39, 251, 242, 16, 15, 108, 50, 260, 100,
+	258, 207, 244, 245, 195, 48, 5, 45, 108, 20,
+	100, 10, 108, 108, 218, 79, 112, 260, 74, 269,
+	73, 72, 71, 170, 170, 70, 69, 68, 67, 66,
+	65, 64, 63, 62, 170, 170, 170, 170, 170, 61,
+	100, 60, 42, 24, 19, 100, 14, 9, 4, 100,
+	2, 1, 0, 83, 100, 0, 100, 0, 0, 100,
+	0, 108, 108, 0, 100, 108, 108, 108, 108, 108,
+	108, 0, 0, 0, 114, 0, 0, 0, 248, 152,
+	0, 148, 149, 151, 150, 0, 94, 0, 253, 0,
+	0, 0, 0, 257, 0, 0, 0, 262, 108, 229,
+	0, 264, 0, 108, 110, 110, 116, 103, 235, 0,
+	0, 122, 267, 0, 0, 0, 0, 0, 272, 110,
+	160, 159, 162, 163, 161, 164, 153, 108, 0, 0,
+	0, 158, 0, 0, 0, 110, 110, 0, 0, 0,
+	84, 136, 140, 140, 0, 0, 172, 172, 0, 0,
+	0, 0, 0, 259, 0, 0, 0, 172, 172, 172,
+	172, 172, 128, 129, 130, 131, 132, 127, 0, 133,
+	0, 0, 259, 174, 175, 138, 142, 0, 0, 140,
+	0, 0, 0, 0, 110, 110, 0, 0, 110, 110,
+	110, 110, 110, 110, 0, 140, 0, 116, 143, 140,
+	140, 140, 140, 140, 140, 140, 140, 140, 0, 0,
+	0, 0, 184, 0, 165, 166, 0, 0, 0, 0,
+	0, 110, 172, 123, 0, 0, 110, 0, 0, 139,
+	139, 0, 184, 199, 184, 201, 202, 203, 204, 205,
+	206, 0, 0, 123, 0, 0, 0, 0, 0, 0,
+	110, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 139, 212, 213, 214,
+	215, 216, 217, 0, 0, 0, 0, 0, 140, 140,
+	140, 0, 194, 0, 0, 0, 139, 139, 139, 139,
+	139, 139, 139, 139, 139, 0, 91, 77, 80, 0,
+	75, 33, 34, 76, 0, 233, 274, 37, 92, 35,
+	0, 184, 184, 184, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 82, 0, 33, 34, 38, 0,
+	0, 0, 37, 0, 35, 86, 0, 87, 36, 41,
+	0, 0, 0, 0, 93, 95, 0, 0, 0, 81,
+	89, 88, 90, 38, 0, 0, 0, 0, 0, 40,
+	0, 39, 0, 36, 41, 139, 139, 139, 91, 77,
+	80, 0, 75, 33, 34, 76, 0, 0, 273, 37,
+	92, 35, 0, 0, 40, 52, 39, 0, 0, 0,
+	0, 33, 34, 0, 0, 0, 82, 37, 0, 35,
+	38, 0, 0, 0, 0, 0, 0, 86, 0, 87,
+	36, 41, 0, 0, 0, 0, 93, 95, 38, 0,
+	0, 81, 89, 88, 90, 0, 0, 0, 36, 41,
+	0, 40, 0, 39, 91, 77, 80, 0, 75, 33,
+	34, 76, 0, 0, 270, 37, 92, 35, 0, 40,
+	0, 39, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 82, 0, 0, 0, 38, 0, 0, 0,
+	0, 0, 0, 86, 0, 87, 36, 41, 0, 0,
+	0, 0, 93, 95, 0, 0, 0, 81, 89, 88,
+	90, 0, 0, 0, 0, 0, 0, 40, 0, 39,
+	91, 77, 80, 0, 75, 33, 34, 76, 0, 0,
+	268, 37, 92, 35, 0, 0, 0, 0, 91, 77,
+	80, 0, 75, 33, 34, 76, 265, 0, 82, 37,
+	92, 35, 38, 0, 0, 0, 0, 0, 0, 86,
+	0, 87, 36, 41, 0, 0, 82, 0, 93, 95,
+	38, 0, 0, 81, 89, 88, 90, 86, 0, 87,
+	36, 41, 0, 40, 0, 39, 93, 95, 0, 0,
+	0, 81, 89, 88, 90, 0, 0, 0, 0, 0,
+	0, 40, 0, 39, 91, 77, 80, 0, 75, 33,
+	34, 76, 0, 0, 261, 37, 92, 35, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 82, 0, 0, 0, 38, 0, 0, 0, 0,
-	0, 0, 86, 0, 87, 36, 41, 0, 0, 0,
-	0, 93, 95, 0, 0, 0, 81, 89, 88, 90,
-	0, 0, 0, 0, 0, 0, 40, 0, 39, 91,
-	77, 80, 0, 75, 33, 34, 76, 0, 0, 208,
-	37, 92, 35, 0, 0, 0, 0, 91, 77, 80,
-	0, 75, 33, 34, 76, 0, 0, 82, 37, 92,
-	35, 38, 0, 192, 0, 0, 0, 0, 86, 0,
-	87, 36, 41, 0, 0, 82, 0, 93, 95, 38,
-	0, 0, 81, 89, 88, 90, 86, 0, 87, 36,
-	41, 0, 40, 0, 39, 93, 95, 0, 0, 0,
-	81, 89, 88, 90, 0, 0, 0, 0, 0, 0,
-	40, 0, 39, 91, 77, 80, 0, 75, 33, 34,
-	76, 0, 0, 99, 37, 92, 35, 0, 0, 0,
+	0, 0, 82, 0, 0, 0, 38, 0, 0, 0,
+	0, 0, 0, 86, 0, 87, 36, 41, 0, 0,
+	0, 0, 93, 95, 0, 0, 0, 81, 89, 88,
+	90, 0, 0, 0, 0, 0, 0, 40, 0, 39,
+	91, 77, 80, 0, 75, 33, 34, 76, 0, 0,
+	249, 37, 92, 35, 0, 0, 0, 0, 91, 77,
+	80, 0, 75, 33, 34, 76, 0, 0, 82, 37,
+	92, 35, 38, 0, 0, 0, 0, 0, 0, 86,
+	0, 87, 36, 41, 0, 0, 82, 0, 93, 95,
+	38, 0, 0, 81, 89, 88, 90, 86, 0, 87,
+	36, 41, 0, 40, 0, 39, 93, 95, 0, 0,
+	0, 81, 89, 88, 90, 0, 0, 0, 221, 0,
+	0, 40, 0, 39, 91, 77, 80, 0, 75, 33,
+	34, 76, 0, 0, 237, 37, 92, 35, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 82, 0, 0, 0, 38, 0, 0, 0, 0,
-	0, 0, 86, 0, 87, 36, 41, 0, 0, 0,
-	0, 93, 95, 0, 0, 0, 81, 89, 88, 90,
-	0, 0, 0, 0, 0, 0, 40, 0, 39, 91,
-	77, 80, 0, 75, 33, 34, 76, 0, 0, 58,
-	37, 92, 35, 0, 0, 0, 0, 91, 77, 80,
-	0, 75, 33, 34, 76, 0, 0, 82, 37, 92,
-	35, 38, 0, 0, 0, 0, 0, 0, 86, 0,
-	87, 36, 41, 0, 0, 82, 0, 93, 95, 38,
-	0, 0, 81, 89, 88, 90, 86, 0, 87, 36,
-	41, 0, 40, 0, 39, 93, 95, 0, 33, 34,
-	81, 89, 88, 90, 37, 92, 35, 33, 34, 0,
-	40, 0, 39, 37, 92, 35, 0, 0, 0, 0,
-	0, 141, 0, 0, 0, 38, 0, 0, 0, 0,
-	82, 0, 0, 0, 38, 36, 41, 0, 0, 0,
-	0, 93, 95, 0, 36, 41, 0, 0, 0, 0,
-	93, 95, 0, 0, 0, 0, 40, 0, 39, 0,
-	0, 0, 0, 0, 0, 40, 0, 39,
+	0, 0, 82, 0, 0, 0, 38, 0, 0, 0,
+	0, 0, 0, 86, 0, 87, 36, 41, 0, 0,
+	0, 0, 93, 95, 0, 0, 0, 81, 89, 88,
+	90, 0, 0, 0, 0, 0, 0, 40, 0, 39,
+	91, 77, 80, 0, 75, 33, 34, 76, 0, 0,
+	208, 37, 92, 35, 0, 0, 0, 0, 91, 77,
+	80, 0, 75, 33, 34, 76, 0, 0, 82, 37,
+	92, 35, 38, 0, 192, 0, 0, 0, 0, 86,
+	0, 87, 36, 41, 0, 0, 82, 0, 93, 95,
+	38, 0, 0, 81, 89, 88, 90, 86, 0, 87,
+	36, 41, 0, 40, 0, 39, 93, 95, 0, 0,
+	0, 81, 89, 88, 90, 0, 0, 0, 0, 0,
+	0, 40, 0, 39, 91, 77, 80, 0, 75, 33,
+	34, 76, 0, 0, 99, 37, 92, 35, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 82, 0, 0, 0, 38, 0, 0, 0,
+	0, 0, 0, 86, 0, 87, 36, 41, 0, 0,
+	0, 0, 93, 95, 0, 0, 0, 81, 89, 88,
+	90, 0, 0, 0, 0, 0, 0, 40, 0, 39,
+	91, 77, 80, 0, 75, 33, 34, 76, 0, 0,
+	58, 37, 92, 35, 0, 0, 0, 0, 91, 77,
+	80, 0, 75, 33, 34, 76, 0, 0, 82, 37,
+	92, 35, 38, 0, 0, 0, 0, 0, 0, 86,
+	0, 87, 36, 41, 0, 0, 82, 0, 93, 95,
+	38, 0, 0, 81, 89, 88, 90, 86, 0, 87,
+	36, 41, 0, 40, 0, 39, 93, 95, 0, 33,
+	34, 81, 89, 88, 90, 37, 92, 35, 33, 34,
+	0, 40, 0, 39, 37, 178, 35, 0, 0, 0,
+	0, 0, 82, 0, 0, 0, 38, 0, 0, 0,
+	0, 0, 0, 0, 0, 38, 36, 41, 0, 0,
+	0, 0, 93, 95, 0, 36, 41, 0, 0, 0,
+	0, 179, 95, 0, 0, 0, 0, 40, 0, 39,
+	0, 0, 0, 0, 0, 0, 40, 0, 39,
 }
 var yyPact = [...]int{
 
-	-10, -1000, -17, 30, -4, -1000, 236, -1000, -1000, -24,
-	-1000, -1000, 234, -1000, 74, -1000, -1000, 203, 199, 267,
-	-1000, -1000, 180, 109, 246, -1000, -1000, 96, 737, -1000,
-	-1000, 172, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
-	737, 737, 264, -1000, -1000, 393, -1000, 23, 587, -1000,
-	1085, 172, -1000, -1000, 737, -1000, -1000, 1019, -1000, -1000,
+	-17, -1000, -29, 34, 41, -1000, 194, -1000, -1000, 25,
+	-1000, -1000, 190, -1000, 32, -1000, -1000, 184, 179, 229,
+	-1000, -1000, 176, 88, 191, -1000, -1000, 96, 632, -1000,
+	-1000, 169, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
+	632, 632, 214, -1000, -1000, 567, -1000, 38, 172, -1000,
+	1196, 169, -1000, -1000, 632, -1000, -1000, 1130, -1000, -1000,
 	-1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000, -1000,
-	-1000, -1000, -1000, -1000, -1000, 469, 469, 1158, 77, 36,
-	-1000, -1000, 1158, 72, -1000, 320, 1103, 139, 1149, 1149,
-	1158, 169, 68, 85, 45, -1000, -1000, -1000, -1000, -1000,
-	-1000, 241, 469, 514, -1000, -1000, 1158, 1158, -1000, 12,
-	-1000, 183, 160, -1000, -1000, 12, -1000, 1158, 1158, 139,
-	139, 252, 83, 60, 12, 1149, 168, 143, 1158, 1158,
-	1158, 1158, 1158, -1000, 953, -5, 72, 12, 45, -1000,
-	72, 1149, 45, -38, -1000, 1149, 1149, 1149, 1149, 1149,
-	1149, 1149, 1149, 1149, 935, 469, 469, 177, 83, 1158,
-	1158, 1158, 1158, 1158, 1158, -1000, -1000, 803, 1158, -1000,
-	-1000, 12, -1000, -1000, 72, 72, -1000, -1000, 2, -1000,
-	-1000, -1000, 238, -1000, 45, 73, 69, -1000, -1000, -1000,
-	-1000, -1000, 469, 1158, 60, -43, -1000, 1158, 222, -9,
-	201, 29, 29, -57, -57, -57, -1000, 869, -1000, 78,
-	78, -1000, -1000, -1000, -1000, -1000, -1000, -1000, 803, -2,
-	-1000, 469, -1000, -1000, 1149, 1149, 1149, 138, -49, 785,
-	-1000, 249, -1000, -1000, -1000, -1000, -2, 243, -1000, 1103,
-	155, -1000, 196, 154, 1103, 1158, 719, -1000, 1103, 240,
-	-1000, 1103, 1103, -1000, -1000, 653, 90, -1000, 1103, -1000,
-	1103, 635, 1149, 569, -1000, 5, -1000, 503, 27, -1000,
-	-1000,
+	-1000, -1000, -1000, -1000, -1000, 2, 2, 1260, 10, 39,
+	-1000, -1000, 1260, 72, -1000, 375, 1214, 13, 15, 15,
+	1260, 164, 62, 93, 21, -1000, -1000, -1000, -1000, -1000,
+	-1000, 203, 2, 344, -1000, -1000, 1260, 1260, -1000, 14,
+	-1000, 178, 116, -1000, -1000, 14, -1000, 1260, 1260, 13,
+	13, 59, 52, 19, 14, 15, 154, 129, 1260, 1260,
+	1260, 1260, 1260, -1000, 1064, -10, 72, 14, 21, -1000,
+	72, 15, 21, -45, -1000, 15, 15, 15, 15, 15,
+	15, 15, 15, 15, 1046, 2, 2, 133, 52, 1260,
+	1260, 1260, 1260, 1260, 1260, -1000, -1000, 914, 1260, -1000,
+	-1000, 14, -1000, -1000, 72, 72, -1000, -1000, -1, -1000,
+	-1000, -1000, 197, -1000, 21, 85, 69, -1000, -1000, -1000,
+	-1000, -1000, 2, 1260, 19, -25, -1000, 1260, 183, 310,
+	155, 4, 4, -59, -59, -59, -1000, 980, -1000, 71,
+	71, -1000, -1000, -1000, -1000, -1000, -1000, -1000, 914, -4,
+	-1000, 2, -1000, -1000, 15, 15, 15, 124, -51, -1000,
+	14, 896, -1000, 216, -1000, -1000, -1000, -1000, -4, 209,
+	-1000, 1214, 81, -1000, 153, 90, 1214, 1269, 830, -1000,
+	1214, 185, -1000, 1214, 1214, -1000, -1000, 764, 114, -1000,
+	-1000, -1000, 1214, -1000, 1214, 746, 1269, 680, -1000, 199,
+	-1000, 614, 542, -1000, -1000,
 }
 var yyPgo = [...]int{
 
-	0, 350, 349, 348, 346, 345, 344, 308, 306, 343,
-	296, 223, 213, 340, 179, 45, 55, 22, 0, 7,
-	247, 51, 339, 338, 333, 332, 329, 328, 327, 335,
-	325, 324, 323, 322, 319, 317, 309, 21, 5, 6,
-	75, 1, 4, 8, 302, 2, 286, 141, 285, 279,
-	60, 277, 3,
+	0, 301, 300, 298, 297, 296, 294, 256, 235, 293,
+	244, 155, 171, 292, 96, 20, 303, 26, 0, 4,
+	336, 41, 291, 289, 283, 282, 281, 280, 279, 278,
+	277, 276, 275, 272, 271, 270, 268, 21, 2, 13,
+	5, 3, 1, 357, 266, 10, 8, 265, 390, 257,
+	255, 97, 254, 6,
 }
 var yyR1 = [...]int{
 
@@ -436,17 +465,17 @@ var yyR1 = [...]int{
 	6, 6, 6, 12, 12, 13, 13, 13, 15, 16,
 	16, 16, 16, 16, 17, 17, 17, 19, 14, 14,
 	21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
-	21, 21, 21, 21, 21, 33, 31, 31, 32, 32,
-	22, 22, 23, 23, 41, 41, 41, 43, 43, 42,
-	42, 42, 37, 37, 37, 37, 37, 37, 37, 37,
-	37, 37, 37, 37, 37, 40, 40, 40, 24, 24,
-	44, 44, 45, 45, 45, 25, 25, 26, 26, 46,
-	46, 39, 39, 39, 30, 30, 30, 30, 30, 30,
-	38, 38, 18, 18, 18, 18, 29, 29, 29, 47,
-	47, 47, 47, 47, 47, 47, 20, 20, 20, 20,
-	11, 11, 11, 11, 11, 11, 11, 11, 11, 48,
-	48, 48, 50, 49, 49, 49, 27, 28, 34, 35,
-	36, 36, 51, 51, 52, 52,
+	21, 21, 21, 21, 21, 33, 31, 31, 38, 38,
+	32, 32, 22, 22, 23, 23, 40, 40, 40, 42,
+	42, 41, 41, 41, 37, 37, 37, 37, 37, 37,
+	37, 37, 37, 37, 37, 37, 37, 43, 43, 43,
+	24, 24, 44, 44, 45, 45, 45, 25, 25, 26,
+	26, 47, 47, 46, 46, 46, 30, 30, 30, 30,
+	30, 30, 39, 39, 18, 18, 18, 18, 29, 29,
+	29, 48, 48, 48, 48, 48, 48, 48, 20, 20,
+	20, 20, 11, 11, 11, 11, 11, 11, 11, 11,
+	11, 49, 49, 49, 51, 50, 50, 50, 27, 28,
+	34, 35, 36, 36, 52, 52, 53, 53,
 }
 var yyR2 = [...]int{
 
@@ -455,17 +484,17 @@ var yyR2 = [...]int{
 	0, 1, 2, 7, 6, 0, 3, 1, 1, 4,
 	4, 4, 6, 6, 0, 3, 1, 1, 2, 1,
 	1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 2, 9, 8, 11, 10,
-	5, 4, 7, 6, 0, 2, 1, 4, 3, 0,
-	2, 1, 3, 3, 3, 3, 3, 3, 3, 3,
-	3, 1, 1, 2, 2, 1, 1, 1, 2, 1,
-	3, 1, 1, 1, 1, 3, 3, 3, 3, 3,
-	1, 1, 1, 1, 3, 3, 3, 3, 3, 2,
-	2, 1, 1, 4, 1, 1, 3, 1, 1, 3,
-	3, 3, 3, 3, 3, 3, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 3, 3, 0,
-	1, 2, 3, 0, 1, 2, 1, 1, 2, 2,
-	6, 5, 1, 2, 4, 3,
+	1, 1, 1, 1, 1, 2, 9, 8, 1, 1,
+	11, 10, 5, 4, 7, 6, 0, 2, 1, 4,
+	3, 0, 2, 1, 3, 3, 3, 3, 3, 3,
+	3, 3, 3, 1, 1, 2, 2, 1, 1, 1,
+	2, 1, 3, 1, 1, 1, 1, 3, 3, 3,
+	3, 3, 1, 1, 1, 1, 3, 3, 3, 3,
+	3, 2, 2, 1, 1, 4, 1, 1, 3, 1,
+	1, 3, 3, 3, 3, 3, 3, 3, 1, 1,
+	1, 1, 1, 1, 1, 1, 1, 1, 1, 3,
+	3, 0, 1, 2, 3, 0, 1, 2, 1, 1,
+	2, 2, 6, 5, 1, 2, 4, 3,
 }
 var yyChk = [...]int{
 
@@ -473,61 +502,61 @@ var yyChk = [...]int{
 	-7, -8, 54, 15, -5, -8, -10, 49, 16, -6,
 	-10, -12, 7, 16, -9, 16, -12, 16, 25, 14,
 	16, 32, -11, 9, 10, 17, 46, 15, 36, 69,
-	67, 47, -13, -15, 16, -48, -50, -11, -49, -11,
-	33, 20, 68, -50, 42, 48, -11, -14, 14, -21,
+	67, 47, -13, -15, 16, -49, -51, -11, -50, -11,
+	33, 20, 68, -51, 42, 48, -11, -14, 14, -21,
 	-22, -23, -24, -25, -26, -27, -28, -29, -30, -31,
-	-32, -33, -34, -35, -36, 8, 11, 5, -38, -46,
-	6, 57, 32, -16, -47, -18, 43, 45, 59, 58,
+	-32, -33, -34, -35, -36, 8, 11, 5, -39, -47,
+	6, 57, 32, -16, -48, -18, 43, 45, 59, 58,
 	60, 4, 16, 52, -20, 53, -11, -15, -11, 14,
-	-21, -37, 32, -40, 9, 10, 55, 56, -11, -18,
+	-21, -37, 32, -43, 9, 10, 55, 56, -11, -18,
 	-29, -37, -44, -45, -11, -18, -29, 25, 63, 25,
-	63, 20, -29, -47, -18, 32, 42, 42, 37, 38,
-	39, 40, 41, 44, -14, -38, -16, -18, -20, -47,
-	-16, 32, -20, -40, 16, 32, 47, 32, 21, 22,
+	63, 20, -29, -48, -18, 32, 42, 42, 37, 38,
+	39, 40, 41, 44, -14, -39, -16, -18, -20, -48,
+	-16, 32, -20, -43, 16, 32, 47, 32, 21, 22,
 	24, 23, 19, 66, 12, 34, 35, -37, -29, 27,
-	26, 30, 28, 29, 31, -40, -40, 12, 20, -39,
-	-11, -18, -29, -39, -16, -16, -38, -18, 16, 52,
-	33, 33, -17, -19, -20, 16, 16, -39, -39, -39,
-	-39, -39, 20, 25, -47, -51, -52, 61, -17, -20,
+	26, 30, 28, 29, 31, -43, -43, 12, 20, -46,
+	-11, -18, -29, -46, -16, -16, -39, -18, 16, 52,
+	33, 33, -17, -19, -20, 16, 16, -46, -46, -46,
+	-46, -46, 20, 25, -48, -52, -53, 61, -17, -20,
 	-17, -20, -20, -20, -20, -20, -20, -14, 14, -37,
-	-37, 33, -40, -40, -40, -40, -40, -40, -14, -41,
-	-43, 64, -45, 33, 20, 32, 32, -37, -39, 62,
-	-52, -40, 33, 48, 33, 14, -41, -42, -43, 13,
-	-37, -19, -17, -17, 20, 65, -14, 14, 12, -42,
-	14, -14, 12, 33, 33, -14, -40, 14, -14, 14,
-	-14, 12, 20, -14, 14, -20, 14, 12, -14, 14,
-	14,
+	-37, 33, -43, -43, -43, -43, -43, -43, -14, -40,
+	-42, 64, -45, 33, 20, 32, 32, -37, -38, -11,
+	-18, 62, -53, -43, 33, 48, 33, 14, -40, -41,
+	-42, 13, -37, -19, -17, -17, 20, 65, -14, 14,
+	12, -41, 14, -14, 12, 33, 33, -14, -38, -11,
+	-18, 14, -14, 14, -14, 12, 20, -14, 14, -38,
+	14, 12, -14, 14, 14,
 }
 var yyDef = [...]int{
 
 	2, -2, 5, 0, 9, 6, 0, 3, 4, 16,
 	7, 10, 0, 8, 20, 11, 17, 0, 13, 1,
 	18, 21, 0, 0, 0, 15, 22, 0, 0, 12,
-	14, 25, 19, 130, 131, 132, 133, 134, 135, 136,
-	139, 143, 0, 27, 28, 0, 140, 0, 0, 144,
-	0, 0, 137, 141, 0, 138, 145, 0, 24, 39,
+	14, 25, 19, 132, 133, 134, 135, 136, 137, 138,
+	141, 145, 0, 27, 28, 0, 142, 0, 0, 146,
+	0, 0, 139, 143, 0, 140, 147, 0, 24, 39,
 	40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
-	50, 51, 52, 53, 54, 0, 0, 89, 100, 0,
-	146, 147, 0, -2, -2, -2, 0, 0, 0, 0,
-	0, 0, 112, 115, 0, 114, 127, 26, 142, 23,
+	50, 51, 52, 53, 54, 0, 0, 91, 102, 0,
+	148, 149, 0, -2, -2, -2, 0, 0, 0, 0,
+	0, 0, 114, 117, 0, 116, 129, 26, 144, 23,
 	38, 0, 0, 0, -2, -2, 0, 0, -2, -2,
-	87, 0, 88, 91, -2, -2, 94, 0, 0, 0,
-	0, 0, 0, -2, 129, 34, 0, 0, 0, 0,
-	0, 0, 0, 109, 0, 100, 55, 0, 148, 126,
-	128, 0, 149, 0, 110, 34, 0, 34, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 87, 0,
-	0, 0, 0, 0, 0, 83, 84, 64, 0, 95,
-	-2, -2, 103, 96, 97, 98, 99, 111, 112, 115,
-	116, 119, 0, 36, 37, 0, 0, 104, 105, 106,
-	107, 108, 0, 0, 126, 0, 152, 0, 0, 0,
-	0, 120, 121, 122, 123, 124, 125, 0, 61, 73,
-	74, 72, 75, 76, 77, 78, 79, 80, 64, 69,
-	66, 0, 90, 31, 0, 34, 34, 0, 95, 0,
-	153, 0, 29, 113, 30, 60, 69, 0, 65, 71,
-	0, 35, 0, 0, 0, 0, 0, 151, 155, 0,
-	63, 70, 68, 32, 33, 0, 0, 150, 154, 62,
-	67, 0, 0, 0, 57, 0, 56, 0, 0, 59,
-	58,
+	89, 0, 90, 93, -2, -2, 96, 0, 0, 0,
+	0, 0, 0, -2, 131, 34, 0, 0, 0, 0,
+	0, 0, 0, 111, 0, 102, 55, 0, 150, 128,
+	130, 0, 151, 0, 112, 34, 0, 34, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 89, 0,
+	0, 0, 0, 0, 0, 85, 86, 66, 0, 97,
+	-2, -2, 105, 98, 99, 100, 101, 113, 114, 117,
+	118, 121, 0, 36, 37, 0, 0, 106, 107, 108,
+	109, 110, 0, 0, 128, 0, 154, 0, 0, 0,
+	0, 122, 123, 124, 125, 126, 127, 0, 63, 75,
+	76, 74, 77, 78, 79, 80, 81, 82, 66, 71,
+	68, 0, 92, 31, 0, 34, 34, 0, 0, -2,
+	-2, 0, 155, 0, 29, 115, 30, 62, 71, 0,
+	67, 73, 0, 35, 0, 0, 0, 0, 0, 153,
+	157, 0, 65, 72, 70, 32, 33, 0, 0, 58,
+	59, 152, 156, 64, 69, 0, 0, 0, 57, 0,
+	56, 0, 0, 61, 60,
 }
 var yyTok1 = [...]int{
 
@@ -1306,79 +1335,52 @@ yydefault:
 			yyVAL.sn = p
 		}
 	case 58:
-		yyDollar = yyS[yypt-11 : yypt+1]
+		yyDollar = yyS[yypt-1 : yypt+1]
 		//line ../yacc.y:525
 		{
-			log_debug("[yacc]: for_loop_stmt <- block")
-			p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-
-			pi := yyDollar[2].sn
-			if pi.gettype() == est_var {
-				pvar := &variable_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-				pvar.str = (pi).(*var_node).str
-				pi = pvar
-			}
-
-			pcmp := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pcmp.cmp = "<"
-			pcmp.left = pi
-			pcmp.right = yyDollar[6].sn
-			p.cmp = pcmp
-
-			pbeginblockassign := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pbeginblockassign.vr = yyDollar[2].sn
-			pbeginblockassign.value = yyDollar[4].sn
-			pbeginblockassign.isnew = false
-			pbeginblock := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pbeginblock.add_stmt(pbeginblockassign)
-			p.beginblock = pbeginblock
-
-			pendblockassign := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pendblockassign.vr = pi
-			pendblockassign.oper = "+="
-			pendblockassign.value = yyDollar[8].sn
-			pendblock := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pendblock.add_stmt(pendblockassign)
-			p.endblock = pendblock
-
-			p.block = (yyDollar[10].sn).(*block_node)
-			yyVAL.sn = p
+			log_debug("[yacc]: for_loop_value <- explicit_value")
+			yyVAL.sn = yyDollar[1].sn
 		}
 	case 59:
-		yyDollar = yyS[yypt-10 : yypt+1]
-		//line ../yacc.y:563
+		yyDollar = yyS[yypt-1 : yypt+1]
+		//line ../yacc.y:531
 		{
-			log_debug("[yacc]: for_loop_stmt <- empty")
-			p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-
-			pcmp := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pcmp.cmp = "<"
-			pcmp.left = yyDollar[2].sn
-			pcmp.right = yyDollar[6].sn
-			p.cmp = pcmp
-
-			pbeginblockassign := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pbeginblockassign.vr = yyDollar[2].sn
-			pbeginblockassign.value = yyDollar[4].sn
-			pbeginblockassign.isnew = false
-			pbeginblock := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pbeginblock.add_stmt(pbeginblockassign)
-			p.beginblock = pbeginblock
-
-			pendblockassign := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pendblockassign.vr = yyDollar[2].sn
-			pendblockassign.oper = "+="
-			pendblockassign.value = yyDollar[8].sn
-			pendblock := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pendblock.add_stmt(pendblockassign)
-			p.endblock = pendblock
-
-			p.block = nil
-			yyVAL.sn = p
+			log_debug("[yacc]: for_loop_value <- variable")
+			yyVAL.sn = yyDollar[1].sn
 		}
 	case 60:
+		yyDollar = yyS[yypt-11 : yypt+1]
+		//line ../yacc.y:539
+		{
+			log_debug("[yacc]: for_loop_stmt <- block")
+			p := &for_loop_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+
+			p.iter = yyDollar[2].sn
+			p.begin = yyDollar[4].sn
+			p.end = yyDollar[6].sn
+			p.step = yyDollar[8].sn
+			p.block = yyDollar[10].sn.(*block_node)
+
+			yyVAL.sn = p
+		}
+	case 61:
+		yyDollar = yyS[yypt-10 : yypt+1]
+		//line ../yacc.y:553
+		{
+			log_debug("[yacc]: for_loop_stmt <- block")
+			p := &for_loop_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+
+			p.iter = yyDollar[2].sn
+			p.begin = yyDollar[4].sn
+			p.end = yyDollar[6].sn
+			p.step = yyDollar[8].sn
+			p.block = nil
+
+			yyVAL.sn = p
+		}
+	case 62:
 		yyDollar = yyS[yypt-5 : yypt+1]
-		//line ../yacc.y:596
+		//line ../yacc.y:569
 		{
 			log_debug("[yacc]: while_stmt <- cmp block")
 			p := &while_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1386,9 +1388,9 @@ yydefault:
 			p.block = (yyDollar[4].sn).(*block_node)
 			yyVAL.sn = p
 		}
-	case 61:
+	case 63:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:605
+		//line ../yacc.y:578
 		{
 			log_debug("[yacc]: while_stmt <- cmp")
 			p := &while_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1396,9 +1398,9 @@ yydefault:
 			p.block = nil
 			yyVAL.sn = p
 		}
-	case 62:
+	case 64:
 		yyDollar = yyS[yypt-7 : yypt+1]
-		//line ../yacc.y:616
+		//line ../yacc.y:589
 		{
 			log_debug("[yacc]: if_stmt <- cmp block")
 			p := &if_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1412,9 +1414,9 @@ yydefault:
 			}
 			yyVAL.sn = p
 		}
-	case 63:
+	case 65:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:631
+		//line ../yacc.y:604
 		{
 			log_debug("[yacc]: if_stmt <- cmp")
 			p := &if_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1428,33 +1430,33 @@ yydefault:
 			}
 			yyVAL.sn = p
 		}
-	case 64:
+	case 66:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:648
+		//line ../yacc.y:621
 		{
 			yyVAL.sn = nil
 		}
-	case 65:
+	case 67:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:653
+		//line ../yacc.y:626
 		{
 			log_debug("[yacc]: elseif_stmt_list <- elseif_stmt_list elseif_stmt")
 			p := (yyDollar[1].sn).(*elseif_stmt_list)
 			p.add_stmt(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
-	case 66:
+	case 68:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:661
+		//line ../yacc.y:634
 		{
 			log_debug("[yacc]: elseif_stmt_list <- elseif_stmt")
 			p := &elseif_stmt_list{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_stmt(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
-	case 67:
+	case 69:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:671
+		//line ../yacc.y:644
 		{
 			log_debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
 			p := &elseif_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1462,9 +1464,9 @@ yydefault:
 			p.block = (yyDollar[4].sn).(*block_node)
 			yyVAL.sn = p
 		}
-	case 68:
+	case 70:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:680
+		//line ../yacc.y:653
 		{
 			log_debug("[yacc]: elseif_stmt <- ELSEIF cmp THEN block")
 			p := &elseif_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1472,40 +1474,40 @@ yydefault:
 			p.block = nil
 			yyVAL.sn = p
 		}
-	case 69:
+	case 71:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:691
+		//line ../yacc.y:664
 		{
 			yyVAL.sn = nil
 		}
-	case 70:
+	case 72:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:696
+		//line ../yacc.y:669
 		{
 			log_debug("[yacc]: else_stmt <- block")
 			p := &else_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.block = (yyDollar[2].sn).(*block_node)
 			yyVAL.sn = p
 		}
-	case 71:
+	case 73:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:704
+		//line ../yacc.y:677
 		{
 			log_debug("[yacc]: else_stmt <- empty")
 			p := &else_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.block = nil
 			yyVAL.sn = p
 		}
-	case 72:
+	case 74:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:714
+		//line ../yacc.y:687
 		{
 			log_debug("[yacc]: cmp <- ( cmp )")
 			yyVAL.sn = yyDollar[2].sn
 		}
-	case 73:
+	case 75:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:720
+		//line ../yacc.y:693
 		{
 			log_debug("[yacc]: cmp <- cmp AND cmp")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1514,9 +1516,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 74:
+	case 76:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:730
+		//line ../yacc.y:703
 		{
 			log_debug("[yacc]: cmp <- cmp OR cmp")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1525,9 +1527,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 75:
+	case 77:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:740
+		//line ../yacc.y:713
 		{
 			log_debug("[yacc]: cmp <- cmp_value LESS cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1536,9 +1538,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 76:
+	case 78:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:750
+		//line ../yacc.y:723
 		{
 			log_debug("[yacc]: cmp <- cmp_value MORE cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1547,9 +1549,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 77:
+	case 79:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:760
+		//line ../yacc.y:733
 		{
 			log_debug("[yacc]: cmp <- cmp_value EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1558,9 +1560,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 78:
+	case 80:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:770
+		//line ../yacc.y:743
 		{
 			log_debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1569,9 +1571,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 79:
+	case 81:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:780
+		//line ../yacc.y:753
 		{
 			log_debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1580,9 +1582,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 80:
+	case 82:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:790
+		//line ../yacc.y:763
 		{
 			log_debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1591,9 +1593,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 81:
+	case 83:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:800
+		//line ../yacc.y:773
 		{
 			log_debug("[yacc]: cmp <- true")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1602,9 +1604,9 @@ yydefault:
 			p.right = nil
 			yyVAL.sn = p
 		}
-	case 82:
+	case 84:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:810
+		//line ../yacc.y:783
 		{
 			log_debug("[yacc]: cmp <- false")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1613,9 +1615,9 @@ yydefault:
 			p.right = nil
 			yyVAL.sn = p
 		}
-	case 83:
+	case 85:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:820
+		//line ../yacc.y:793
 		{
 			log_debug("[yacc]: cmp <- cmp_value IS cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1624,9 +1626,9 @@ yydefault:
 			p.right = nil
 			yyVAL.sn = p
 		}
-	case 84:
+	case 86:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:830
+		//line ../yacc.y:803
 		{
 			log_debug("[yacc]: cmp <- cmp_value NOT cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1635,87 +1637,87 @@ yydefault:
 			p.right = nil
 			yyVAL.sn = p
 		}
-	case 85:
+	case 87:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:842
+		//line ../yacc.y:815
 		{
 			log_debug("[yacc]: cmp_value <- explicit_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 86:
+	case 88:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:848
+		//line ../yacc.y:821
 		{
 			log_debug("[yacc]: cmp_value <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 87:
+	case 89:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:854
+		//line ../yacc.y:827
 		{
 			log_debug("[yacc]: cmp_value <- expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 88:
+	case 90:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:862
+		//line ../yacc.y:835
 		{
 			log_debug("[yacc]: return_stmt <- RETURN return_value_list")
 			p := &return_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.returnlist = (yyDollar[2].sn).(*return_value_list_node)
 			yyVAL.sn = p
 		}
-	case 89:
+	case 91:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:870
+		//line ../yacc.y:843
 		{
 			log_debug("[yacc]: return_stmt <- RETURN")
 			p := &return_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.returnlist = nil
 			yyVAL.sn = p
 		}
-	case 90:
+	case 92:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:880
+		//line ../yacc.y:853
 		{
 			log_debug("[yacc]: return_value_list <- return_value_list return_value")
 			p := (yyDollar[1].sn).(*return_value_list_node)
 			p.add_arg(yyDollar[3].sn)
 			yyVAL.sn = p
 		}
-	case 91:
+	case 93:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:888
+		//line ../yacc.y:861
 		{
 			log_debug("[yacc]: return_value_list <- return_value")
 			p := &return_value_list_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_arg(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
-	case 92:
+	case 94:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:898
+		//line ../yacc.y:871
 		{
 			log_debug("[yacc]: return_value <- explicit_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 93:
+	case 95:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:904
+		//line ../yacc.y:877
 		{
 			log_debug("[yacc]: return_value <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 94:
+	case 96:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:910
+		//line ../yacc.y:883
 		{
 			log_debug("[yacc]: return_value <- expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 95:
+	case 97:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:918
+		//line ../yacc.y:891
 		{
 			log_debug("[yacc]: assign_stmt <- var assign_value")
 			p := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1724,9 +1726,9 @@ yydefault:
 			p.isnew = false
 			yyVAL.sn = p
 		}
-	case 96:
+	case 98:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:928
+		//line ../yacc.y:901
 		{
 			log_debug("[yacc]: new assign_stmt <- var assign_value")
 			p := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1735,9 +1737,9 @@ yydefault:
 			p.isnew = true
 			yyVAL.sn = p
 		}
-	case 97:
+	case 99:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:940
+		//line ../yacc.y:913
 		{
 			log_debug("[yacc]: multi_assign_stmt <- var_list function_call")
 			p := &multi_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1746,9 +1748,9 @@ yydefault:
 			p.isnew = false
 			yyVAL.sn = p
 		}
-	case 98:
+	case 100:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:950
+		//line ../yacc.y:923
 		{
 			log_debug("[yacc]: new multi_assign_stmt <- var_list function_call")
 			p := &multi_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1757,48 +1759,48 @@ yydefault:
 			p.isnew = true
 			yyVAL.sn = p
 		}
-	case 99:
+	case 101:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:962
+		//line ../yacc.y:935
 		{
 			log_debug("[yacc]: var_list <- var_list var")
 			p := (yyDollar[1].sn).(*var_list_node)
 			p.add_arg(yyDollar[3].sn)
 			yyVAL.sn = p
 		}
-	case 100:
+	case 102:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:970
+		//line ../yacc.y:943
 		{
 			log_debug("[yacc]: var_list <- var")
 			p := &var_list_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_arg(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
-	case 101:
+	case 103:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:980
+		//line ../yacc.y:953
 		{
 			log_debug("[yacc]: assign_value <- explicit_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 102:
+	case 104:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:986
+		//line ../yacc.y:959
 		{
 			log_debug("[yacc]: assign_value <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 103:
+	case 105:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:992
+		//line ../yacc.y:965
 		{
 			log_debug("[yacc]: assign_value <- expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 104:
+	case 106:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1000
+		//line ../yacc.y:973
 		{
 			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1807,9 +1809,9 @@ yydefault:
 			p.value = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 105:
+	case 107:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1010
+		//line ../yacc.y:983
 		{
 			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1818,9 +1820,9 @@ yydefault:
 			p.value = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 106:
+	case 108:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1020
+		//line ../yacc.y:993
 		{
 			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1829,9 +1831,9 @@ yydefault:
 			p.value = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 107:
+	case 109:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1030
+		//line ../yacc.y:1003
 		{
 			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1840,9 +1842,9 @@ yydefault:
 			p.value = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 108:
+	case 110:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1040
+		//line ../yacc.y:1013
 		{
 			log_debug("[yacc]: math_assign_stmt <- variable assign_value")
 			p := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1851,9 +1853,9 @@ yydefault:
 			p.value = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 109:
+	case 111:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1050
+		//line ../yacc.y:1023
 		{
 			log_debug("[yacc]: math_assign_stmt <- variable INC")
 			pp := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1866,34 +1868,34 @@ yydefault:
 			p.value = pp
 			yyVAL.sn = p
 		}
-	case 110:
+	case 112:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1066
+		//line ../yacc.y:1039
 		{
 			log_debug("[yacc]: var <- VAR_BEGIN IDENTIFIER %v", yyDollar[2].s)
 			p := &var_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[2].s
 			yyVAL.sn = p
 		}
-	case 111:
+	case 113:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1074
+		//line ../yacc.y:1047
 		{
 			log_debug("[yacc]: var <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 112:
+	case 114:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1082
+		//line ../yacc.y:1055
 		{
 			log_debug("[yacc]: variable <- IDENTIFIER %v", yyDollar[1].s)
 			p := &variable_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			yyVAL.sn = p
 		}
-	case 113:
+	case 115:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:1090
+		//line ../yacc.y:1063
 		{
 			log_debug("[yacc]: container_get_node <- IDENTIFIER[expr_value] %v", yyDollar[1].s)
 			p := &container_get_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1901,55 +1903,55 @@ yydefault:
 			p.key = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 114:
+	case 116:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1099
+		//line ../yacc.y:1072
 		{
 			log_debug("[yacc]: variable <- IDENTIFIER_POINTER %v", yyDollar[1].s)
 			p := &struct_pointer_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			yyVAL.sn = p
 		}
-	case 115:
+	case 117:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1107
+		//line ../yacc.y:1080
 		{
 			log_debug("[yacc]: variable <- IDENTIFIER_DOT %v", yyDollar[1].s)
 			p := &variable_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.str = yyDollar[1].s
 			yyVAL.sn = p
 		}
-	case 116:
+	case 118:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1117
+		//line ../yacc.y:1090
 		{
 			log_debug("[yacc]: expr <- (expr)")
 			yyVAL.sn = yyDollar[2].sn
 		}
-	case 117:
+	case 119:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1123
+		//line ../yacc.y:1096
 		{
 			log_debug("[yacc]: expr <- function_call")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 118:
+	case 120:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1129
+		//line ../yacc.y:1102
 		{
 			log_debug("[yacc]: expr <- math_expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 119:
+	case 121:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1137
+		//line ../yacc.y:1110
 		{
 			log_debug("[yacc]: math_expr <- (math_expr)")
 			yyVAL.sn = yyDollar[2].sn
 		}
-	case 120:
+	case 122:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1143
+		//line ../yacc.y:1116
 		{
 			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1958,9 +1960,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 121:
+	case 123:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1153
+		//line ../yacc.y:1126
 		{
 			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1969,9 +1971,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 122:
+	case 124:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1163
+		//line ../yacc.y:1136
 		{
 			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1980,9 +1982,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 123:
+	case 125:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1173
+		//line ../yacc.y:1146
 		{
 			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -1991,9 +1993,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 124:
+	case 126:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1183
+		//line ../yacc.y:1156
 		{
 			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2002,9 +2004,9 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 125:
+	case 127:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1193
+		//line ../yacc.y:1166
 		{
 			log_debug("[yacc]: math_expr <- expr_value %v expr_value", yyDollar[2].s)
 			p := &math_expr_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2013,37 +2015,37 @@ yydefault:
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 126:
+	case 128:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1205
+		//line ../yacc.y:1178
 		{
 			log_debug("[yacc]: expr_value <- math_expr")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 127:
+	case 129:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1211
+		//line ../yacc.y:1184
 		{
 			log_debug("[yacc]: expr_value <- explicit_value")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 128:
+	case 130:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1217
+		//line ../yacc.y:1190
 		{
 			log_debug("[yacc]: expr_value <- function_call")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 129:
+	case 131:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1223
+		//line ../yacc.y:1196
 		{
 			log_debug("[yacc]: expr_value <- variable")
 			yyVAL.sn = yyDollar[1].sn
 		}
-	case 130:
+	case 132:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1231
+		//line ../yacc.y:1204
 		{
 			log_debug("[yacc]: explicit_value <- FTRUE")
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2051,9 +2053,9 @@ yydefault:
 			p.ty = EVT_TRUE
 			yyVAL.sn = p
 		}
-	case 131:
+	case 133:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1240
+		//line ../yacc.y:1213
 		{
 			log_debug("[yacc]: explicit_value <- FFALSE")
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2061,9 +2063,9 @@ yydefault:
 			p.ty = EVT_FALSE
 			yyVAL.sn = p
 		}
-	case 132:
+	case 134:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1249
+		//line ../yacc.y:1222
 		{
 			log_debug("[yacc]: explicit_value <- NUMBER %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2071,9 +2073,9 @@ yydefault:
 			p.ty = EVT_NUM
 			yyVAL.sn = p
 		}
-	case 133:
+	case 135:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1258
+		//line ../yacc.y:1231
 		{
 			log_debug("[yacc]: explicit_value <- FKUUID %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2081,9 +2083,9 @@ yydefault:
 			p.ty = EVT_UUID
 			yyVAL.sn = p
 		}
-	case 134:
+	case 136:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1267
+		//line ../yacc.y:1240
 		{
 			log_debug("[yacc]: explicit_value <- STRING_DEFINITION %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2091,9 +2093,9 @@ yydefault:
 			p.ty = EVT_STR
 			yyVAL.sn = p
 		}
-	case 135:
+	case 137:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1276
+		//line ../yacc.y:1249
 		{
 			log_debug("[yacc]: explicit_value <- FKFLOAT %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2101,9 +2103,9 @@ yydefault:
 			p.ty = EVT_FLOAT
 			yyVAL.sn = p
 		}
-	case 136:
+	case 138:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1285
+		//line ../yacc.y:1258
 		{
 			log_debug("[yacc]: explicit_value <- FNULL %v", yyDollar[1].s)
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2111,9 +2113,9 @@ yydefault:
 			p.ty = EVT_NULL
 			yyVAL.sn = p
 		}
-	case 137:
+	case 139:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1294
+		//line ../yacc.y:1267
 		{
 			log_debug("[yacc]: explicit_value <- const_map_list_value")
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2122,9 +2124,9 @@ yydefault:
 			p.v = yyDollar[2].sn
 			yyVAL.sn = p
 		}
-	case 138:
+	case 140:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1304
+		//line ../yacc.y:1277
 		{
 			log_debug("[yacc]: explicit_value <- const_array_list_value")
 			p := &explicit_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2133,35 +2135,35 @@ yydefault:
 			p.v = yyDollar[2].sn
 			yyVAL.sn = p
 		}
-	case 139:
+	case 141:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:1316
+		//line ../yacc.y:1289
 		{
 			log_debug("[yacc]: const_map_list_value <- null")
 			p := &const_map_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			yyVAL.sn = p
 		}
-	case 140:
+	case 142:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1323
+		//line ../yacc.y:1296
 		{
 			log_debug("[yacc]: const_map_list_value <- const_map_value")
 			p := &const_map_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_ele(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
-	case 141:
+	case 143:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1331
+		//line ../yacc.y:1304
 		{
 			log_debug("[yacc]: const_map_list_value <- const_map_list_value const_map_value")
 			p := (yyDollar[1].sn).(*const_map_list_value_node)
 			p.add_ele(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
-	case 142:
+	case 144:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1341
+		//line ../yacc.y:1314
 		{
 			log_debug("[yacc]: const_map_value <- explicit_value")
 			p := &const_map_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2169,69 +2171,69 @@ yydefault:
 			p.v = yyDollar[3].sn
 			yyVAL.sn = p
 		}
-	case 143:
+	case 145:
 		yyDollar = yyS[yypt-0 : yypt+1]
-		//line ../yacc.y:1352
+		//line ../yacc.y:1325
 		{
 			log_debug("[yacc]: const_array_list_value <- null")
 			p := &const_array_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			yyVAL.sn = p
 		}
-	case 144:
+	case 146:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1359
+		//line ../yacc.y:1332
 		{
 			log_debug("[yacc]: const_array_list_value <- explicit_value")
 			p := &const_array_list_value_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_ele(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
-	case 145:
+	case 147:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1367
+		//line ../yacc.y:1340
 		{
 			log_debug("[yacc]: const_array_list_value <- const_array_list_value explicit_value")
 			p := (yyDollar[1].sn).(*const_array_list_value_node)
 			p.add_ele(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
-	case 146:
+	case 148:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1377
+		//line ../yacc.y:1350
 		{
 			log_debug("[yacc]: break <- BREAK")
 			p := &break_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			yyVAL.sn = p
 		}
-	case 147:
+	case 149:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1386
+		//line ../yacc.y:1359
 		{
 			log_debug("[yacc]: CONTINUE")
 			p := &continue_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			yyVAL.sn = p
 		}
-	case 148:
+	case 150:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1395
+		//line ../yacc.y:1368
 		{
 			log_debug("[yacc]: SLEEP")
 			p := &sleep_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.time = yyDollar[2].sn
 			yyVAL.sn = p
 		}
-	case 149:
+	case 151:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1404
+		//line ../yacc.y:1377
 		{
 			log_debug("[yacc]: YIELD")
 			p := &yield_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.time = yyDollar[2].sn
 			yyVAL.sn = p
 		}
-	case 150:
+	case 152:
 		yyDollar = yyS[yypt-6 : yypt+1]
-		//line ../yacc.y:1414
+		//line ../yacc.y:1387
 		{
 			log_debug("[yacc]: switch_stmt")
 			p := &switch_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2240,9 +2242,9 @@ yydefault:
 			p.def = yyDollar[5].sn
 			yyVAL.sn = p
 		}
-	case 151:
+	case 153:
 		yyDollar = yyS[yypt-5 : yypt+1]
-		//line ../yacc.y:1424
+		//line ../yacc.y:1397
 		{
 			log_debug("[yacc]: switch_stmt")
 			p := &switch_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2251,27 +2253,27 @@ yydefault:
 			p.def = nil
 			yyVAL.sn = p
 		}
-	case 152:
+	case 154:
 		yyDollar = yyS[yypt-1 : yypt+1]
-		//line ../yacc.y:1436
+		//line ../yacc.y:1409
 		{
 			log_debug("[yacc]: switch_case_list <- switch_case_define")
 			p := &switch_caselist_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 			p.add_case(yyDollar[1].sn)
 			yyVAL.sn = p
 		}
-	case 153:
+	case 155:
 		yyDollar = yyS[yypt-2 : yypt+1]
-		//line ../yacc.y:1444
+		//line ../yacc.y:1417
 		{
 			log_debug("[yacc]: switch_case_list <- switch_case_list switch_case_define")
 			p := (yyDollar[1].sn).(*switch_caselist_node)
 			p.add_case(yyDollar[2].sn)
 			yyVAL.sn = p
 		}
-	case 154:
+	case 156:
 		yyDollar = yyS[yypt-4 : yypt+1]
-		//line ../yacc.y:1454
+		//line ../yacc.y:1427
 		{
 			log_debug("[yacc]: switch_case_define")
 			p := &switch_case_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
@@ -2279,9 +2281,9 @@ yydefault:
 			p.block = yyDollar[4].sn
 			yyVAL.sn = p
 		}
-	case 155:
+	case 157:
 		yyDollar = yyS[yypt-3 : yypt+1]
-		//line ../yacc.y:1463
+		//line ../yacc.y:1436
 		{
 			log_debug("[yacc]: switch_case_define")
 			p := &switch_case_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}

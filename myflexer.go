@@ -9,6 +9,7 @@ type myflexer struct {
 	packageName string
 	includelist []string
 	constmap    sync.Map
+	funclist    []*func_desc_node
 }
 
 func (mf *myflexer) set_package(package_name string) {
@@ -44,4 +45,13 @@ func (mf *myflexer) add_func_desc(p *func_desc_node) {
 	if isOpenLog() {
 		log_debug("dump func %s \n%s", p.funcname, p.dump(0))
 	}
+	mf.funclist = append(mf.funclist, p)
+}
+
+func (mf *myflexer) get_func_list() []*func_desc_node {
+	return mf.funclist
+}
+
+func (mf *myflexer) getfilename() string {
+	return mf.fileName
 }

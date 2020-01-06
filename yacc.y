@@ -520,77 +520,50 @@ for_stmt:
 	}
 	;
 
+for_loop_value:
+	explicit_value
+	{
+		log_debug("[yacc]: for_loop_value <- explicit_value");
+		$$.sn = $1.sn
+	}
+	|
+	variable
+	{
+		log_debug("[yacc]: for_loop_value <- variable");
+		$$.sn = $1.sn
+	}
+    ;
+
 for_loop_stmt:
-	FOR var ASSIGN assign_value RIGHT_POINTER cmp_value ARG_SPLITTER expr_value THEN block END
+	FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN block END
 	{
 		log_debug("[yacc]: for_loop_stmt <- block");
-		p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p := &for_loop_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 
-		pi := $2.sn
-		if pi.gettype() == est_var {
-			pvar := &variable_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			pvar.str = (pi).(*var_node).str
-			pi = pvar
-		}
+		p.iter = $2.sn
+		p.begin = $4.sn
+		p.end = $6.sn
+		p.step = $8.sn
+		p.block = $10.sn.(*block_node)
 
-		pcmp := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pcmp.cmp = "<"
-		pcmp.left = pi
-		pcmp.right = $6.sn
-		p.cmp = pcmp
-
-		pbeginblockassign := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pbeginblockassign.vr = $2.sn
-		pbeginblockassign.value = $4.sn
-		pbeginblockassign.isnew = false
-		pbeginblock := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pbeginblock.add_stmt(pbeginblockassign)
-		p.beginblock = pbeginblock
-
-		pendblockassign := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pendblockassign.vr = pi
-		pendblockassign.oper = "+="
-		pendblockassign.value = $8.sn
-		pendblock := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pendblock.add_stmt(pendblockassign)
-		p.endblock = pendblock
-
-		p.block = ($10.sn).(*block_node)
 		$$.sn = p
 	}
 	|
-	FOR var ASSIGN assign_value RIGHT_POINTER cmp_value ARG_SPLITTER expr_value THEN END
+	FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN END
 	{
-		log_debug("[yacc]: for_loop_stmt <- empty");
-		p := &for_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		log_debug("[yacc]: for_loop_stmt <- block");
+		p := &for_loop_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
 
-		pcmp := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pcmp.cmp = "<"
-		pcmp.left = $2.sn
-		pcmp.right = $6.sn
-		p.cmp = pcmp
-
-		pbeginblockassign := &assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pbeginblockassign.vr = $2.sn
-		pbeginblockassign.value = $4.sn
-		pbeginblockassign.isnew = false
-		pbeginblock := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pbeginblock.add_stmt(pbeginblockassign)
-		p.beginblock = pbeginblock
-
-		pendblockassign := &math_assign_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pendblockassign.vr = $2.sn
-		pendblockassign.oper = "+="
-		pendblockassign.value = $8.sn
-		pendblock := &block_node{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		pendblock.add_stmt(pendblockassign)
-		p.endblock = pendblock
-
+		p.iter = $2.sn
+		p.begin = $4.sn
+		p.end = $6.sn
+		p.step = $8.sn
 		p.block = nil
+
 		$$.sn = p
 	}
 	;
-	
+
 while_stmt:
 	WHILE cmp THEN block END 
 	{

@@ -6,9 +6,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 type parser struct {
+	constinfo sync.Map
 }
 
 type parseContent struct {
@@ -45,7 +47,7 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 
 	for _, s := range ctx.includelist {
 		if s == file {
-			panic(errors.New("include loop " + strings.Join(ctx.includelist, ",") + file))
+			seterror(file, 0, "", "include loop "+strings.Join(ctx.includelist, ",")+file)
 		}
 	}
 	ctx.includelist = append(ctx.includelist, file)
@@ -57,12 +59,13 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 
 	f, err := os.OpenFile(file, os.O_RDONLY, os.ModeType)
 	if err != nil {
-		panic(err)
+		seterror(file, 0, "", err.Error())
 	}
 	fr := bufio.NewReader(f)
 	lex := NewLexer(fr)
 
 	mf := myflexer{}
+	mf.fileName = file
 
 	l := lexerwarpper{
 		lex,
@@ -72,7 +75,7 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 
 	ret := yyParse(l)
 	if ret != 0 {
-		panic(errors.New("yyParse fail " + strconv.Itoa(ret)))
+		seterror(file, 0, "", "yyParse fail "+strconv.Itoa(ret))
 	}
 
 	log_debug("yyParse ok" + file)
@@ -81,7 +84,7 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	for _, f := range mf.includelist {
 		err := pa.parse(ctx, f)
 		if err != nil {
-			panic(err)
+			seterror(file, 0, "", err.Error())
 		}
 	}
 
@@ -99,11 +102,20 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	return nil
 }
 
+type const_parser_info struct {
+	v      *variant
+	lineno int
+}
+
 func (pa *parser) reg_const_define(constname string, v *variant, lineno int) {
-	// TODO
+	pa.constinfo.Store(constname, &const_parser_info{v: v, lineno: lineno})
 }
 
 func (pa *parser) get_const_define(constname string) (*variant, int) {
-	// TODO
+	v, ok := pa.constinfo.Load(constname)
+	if ok {
+		ci := v.(*const_parser_info)
+		return ci.v, ci.lineno
+	}
 	return nil, 0
 }

@@ -2,6 +2,7 @@ package fakego
 
 import (
 	"math"
+	"unsafe"
 )
 
 type command uint64
@@ -230,5 +231,16 @@ type func_binary struct {
 }
 
 func (fb *func_binary) dump(pos int) string {
-	return ""
+	return "TODO"
+}
+
+func (fb *func_binary) binary_size() int {
+	return int(unsafe.Sizeof(fb.buff))
+}
+
+type binary struct {
+}
+
+func (b *binary) dump() string {
+	return "TODO"
 }

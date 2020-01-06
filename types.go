@@ -1,6 +1,7 @@
 package fakego
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"math"
@@ -24,21 +25,6 @@ func log_debug(format string, a ...interface{}) {
 		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
 		log.SetOutput(mw)
 		log.SetPrefix("[DEBUG]:")
-		log.Printf(format, a...)
-	}
-}
-
-func log_error(format string, a ...interface{}) {
-	if isOpenLog() {
-		f, err := os.OpenFile("fakego.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-		if err != nil {
-			panic(err)
-		}
-		defer f.Close()
-		mw := io.MultiWriter(os.Stdout, f)
-		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
-		log.SetOutput(mw)
-		log.SetPrefix("[ERROR]:")
 		log.Printf(format, a...)
 	}
 }
@@ -159,4 +145,21 @@ func _LOINT16(l int32) int16 {
 
 func isInt(r float64) bool {
 	return (r - math.Floor(r)) == 0
+}
+
+func seterror(file string, lineno int, funcname string, format string, a ...interface{}) {
+	var fe FakeErr
+	fe.error = fmt.Sprintf(format, a)
+	fe.lineno = lineno
+	fe.file = file
+	fe.funcname = funcname
+	panic(fe)
+}
+
+func get_syntree_typename(sn syntree_node) string {
+	ret := syntree_TYPE_name[sn.gettype()]
+	if ret != "" {
+		return ret
+	}
+	return "unknown"
 }

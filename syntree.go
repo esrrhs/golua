@@ -141,6 +141,7 @@ type syntree_node_base struct {
 func (sn *syntree_node_base) lineno() int {
 	return sn.lno
 }
+
 func (sn *syntree_node_base) gentab(n int) string {
 	ret := ""
 	ret += "LINE:"
@@ -370,6 +371,52 @@ func (sn *for_stmt) dump(indent int) string {
 	ret += "[endblock]:\n"
 	if sn.endblock != nil {
 		ret += sn.endblock.dump(indent + 2)
+	}
+	ret += sn.gentab(indent + 1)
+	ret += "[block]:\n"
+	if sn.block != nil {
+		ret += sn.block.dump(indent + 2)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type for_loop_stmt struct {
+	syntree_node_base
+	iter  syntree_node
+	begin syntree_node
+	end   syntree_node
+	step  syntree_node
+	block *block_node
+}
+
+func (sn *for_loop_stmt) gettype() int {
+	return est_for_loop_stmt
+}
+func (sn *for_loop_stmt) dump(indent int) string {
+	ret := ""
+	ret += sn.gentab(indent)
+	ret += "[for]:\n"
+	ret += sn.gentab(indent + 1)
+	ret += "[iter]:\n"
+	if sn.iter != nil {
+		ret += sn.iter.dump(indent + 2)
+	}
+	ret += sn.gentab(indent + 1)
+	ret += "[begin]:\n"
+	if sn.begin != nil {
+		ret += sn.begin.dump(indent + 2)
+	}
+	ret += sn.gentab(indent + 1)
+	ret += "[end]:\n"
+	if sn.end != nil {
+		ret += sn.end.dump(indent + 2)
+	}
+	ret += sn.gentab(indent + 1)
+	ret += "[step]:\n"
+	if sn.step != nil {
+		ret += sn.step.dump(indent + 2)
 	}
 	ret += sn.gentab(indent + 1)
 	ret += "[block]:\n"
