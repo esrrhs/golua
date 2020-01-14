@@ -58,3 +58,23 @@ func (cg *codegen) add_stack_identifier(name string, lineno int) int {
 	cg.debug_block_identifiers_list = append(cg.debug_block_identifiers_list, tmp)
 	return ret
 }
+
+func (cg *codegen) byte_code_size() int {
+	return len(cg.byte_code_list)
+}
+
+func (cg *codegen) pop_stack_identifiers() {
+	list := cg.block_identifiers_stack[len(cg.block_identifiers_stack)-1]
+	stacksize := len(list)
+	cg.block_identifiers_stack = cg.block_identifiers_stack[0 : len(cg.block_identifiers_stack)-1]
+	cg.stackpos -= stacksize
+}
+
+func (cg *codegen) push(code command, lineno int) {
+	cg.byte_code_list = append(cg.byte_code_list, code)
+	cg.byte_lineno_list = append(cg.byte_lineno_list, lineno)
+}
+
+func (cg *codegen) set(pos int, code command) {
+	cg.byte_code_list[pos] = code
+}

@@ -5,9 +5,22 @@ import (
 	"strconv"
 )
 
+type beak_pos_list []int
+type loop_break_pos_stack []beak_pos_list
+type continue_pos_stack []int
+type continue_end_pos_list []int
+type continue_end_pos_stack []continue_end_pos_list
+
 type compiler struct {
-	mf               *myflexer
-	cur_compile_func string
+	mf                      *myflexer
+	cur_compile_func        string
+	loop_break_pos_stack    loop_break_pos_stack
+	loop_continue_pos_stack continue_pos_stack
+	continue_end_pos_stack  continue_end_pos_stack
+	cmp_jne                 bool
+	cur_addr                command
+	new_var                 bool
+	cmp_deps                int
 }
 
 func (c *compiler) compile(mf *myflexer) {
@@ -238,8 +251,57 @@ func (c *compiler) compile_seterror(node syntree_node, format string, a ...inter
 	seterror(c.mf.getfilename(), node.lineno(), c.cur_compile_func, "compile func(%s), %s", c.cur_compile_func, str)
 }
 
-func (c *compiler) compile_while_stmt(cg *codegen, stmt *while_stmt) {
+func (c *compiler) compile_while_stmt(cg *codegen, ws *while_stmt) {
 
+	log_debug("[compiler] compile_while_stmt %p", ws)
+
+	startpos := 0
+	jnepos := 0
+	c.loop_break_pos_stack = append(c.loop_break_pos_stack, beak_pos_list{})
+	startpos = cg.byte_code_size()
+	c.loop_continue_pos_stack = append(c.loop_continue_pos_stack, startpos)
+
+	// 条件
+	cg.push_stack_identifiers()
+	c.compile_node(cg, ws.cmp)
+	cg.pop_stack_identifiers()
+
+	// cmp与jne结合
+	if c.cmp_jne {
+		cg.push(EMPTY_CMD, ws.cmp.lineno()) // 先塞个位置
+		jnepos = cg.byte_code_size() - 1
+	} else {
+		cg.push(_MAKE_OPCODE(OPCODE_JNE), ws.lineno())
+		cg.push(c.cur_addr, ws.lineno())
+		cg.push(EMPTY_CMD, ws.lineno()) // 先塞个位置
+		jnepos = cg.byte_code_size() - 1
+	}
+	c.cmp_deps = 0
+	c.cmp_jne = false
+
+	// block块
+	if ws.block != nil {
+		cg.push_stack_identifiers()
+		c.compile_node(cg, ws.block)
+		cg.pop_stack_identifiers()
+	}
+
+	// 跳回判断地方
+	cg.push(_MAKE_OPCODE(OPCODE_JMP), ws.lineno())
+	cg.push(_MAKE_POS(startpos), ws.lineno())
+
+	// 跳转出block块
+	cg.set(jnepos, _MAKE_POS(cg.byte_code_size()))
+
+	// 替换掉break
+	bplist := c.loop_break_pos_stack[len(c.loop_break_pos_stack)-1]
+	for i, _ := range bplist {
+		cg.set(bplist[i], _MAKE_POS(cg.byte_code_size()))
+	}
+	c.loop_break_pos_stack = c.loop_break_pos_stack[0 : len(c.loop_break_pos_stack)-1]
+	c.loop_continue_pos_stack = c.loop_continue_pos_stack[0 : len(c.loop_continue_pos_stack)-1]
+
+	log_debug("[compiler] compile_while_stmt %p OK", ws)
 }
 
 func (c *compiler) compile_for_stmt(cg *codegen, stmt *for_stmt) {
