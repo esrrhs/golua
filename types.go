@@ -163,3 +163,11 @@ func get_syntree_typename(sn syntree_node) string {
 	}
 	return "unknown"
 }
+
+func command_ternarytesting(b bool, left command, right command) command {
+	if b {
+		return left
+	} else {
+		return right
+	}
+}

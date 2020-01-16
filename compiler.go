@@ -19,8 +19,10 @@ type compiler struct {
 	continue_end_pos_stack  continue_end_pos_stack
 	cmp_jne                 bool
 	cur_addr                command
+	cur_addrs               []command
 	new_var                 bool
 	cmp_deps                int
+	func_ret_num            int
 }
 
 func (c *compiler) compile(mf *myflexer) {
@@ -304,20 +306,314 @@ func (c *compiler) compile_while_stmt(cg *codegen, ws *while_stmt) {
 	log_debug("[compiler] compile_while_stmt %p OK", ws)
 }
 
-func (c *compiler) compile_for_stmt(cg *codegen, stmt *for_stmt) {
+func (c *compiler) compile_for_stmt(cg *codegen, fs *for_stmt) {
 
+	log_debug("[compiler] compile_for_stmt %p", fs)
+
+	startpos := 0
+	jnepos := 0
+	continuepos := 0
+
+	c.loop_break_pos_stack = append(c.loop_break_pos_stack, beak_pos_list{})
+	c.continue_end_pos_stack = append(c.continue_end_pos_stack, continue_end_pos_list{})
+
+	// 开始语句，这个作用域是全for都有效的
+	cg.push_stack_identifiers()
+	if fs.beginblock != nil {
+		c.compile_node(cg, fs.beginblock)
+	}
+
+	startpos = cg.byte_code_size()
+
+	// 需要continue end
+	c.loop_continue_pos_stack = append(c.loop_continue_pos_stack, -1)
+
+	// 条件
+	cg.push_stack_identifiers()
+	c.compile_node(cg, fs.cmp)
+	cg.pop_stack_identifiers()
+
+	// cmp与jne结合
+	if c.cmp_jne {
+		cg.push(EMPTY_CMD, fs.cmp.lineno()) // 先塞个位置
+		jnepos = cg.byte_code_size() - 1
+	} else {
+		cg.push(_MAKE_OPCODE(OPCODE_JNE), fs.lineno())
+		cg.push(c.cur_addr, fs.lineno())
+		cg.push(EMPTY_CMD, fs.lineno()) // 先塞个位置
+		jnepos = cg.byte_code_size() - 1
+	}
+	c.cmp_deps = 0
+	c.cmp_jne = false
+
+	// block块
+	if fs.block != nil {
+		cg.push_stack_identifiers()
+		c.compile_node(cg, fs.block)
+		cg.pop_stack_identifiers()
+	}
+
+	continuepos = cg.byte_code_size()
+
+	// 结束
+	if fs.endblock != nil {
+		cg.push_stack_identifiers()
+		c.compile_node(cg, fs.endblock)
+		cg.pop_stack_identifiers()
+	}
+
+	// 跳回判断地方
+	cg.push(_MAKE_OPCODE(OPCODE_JMP), fs.lineno())
+	cg.push(_MAKE_POS(startpos), fs.lineno())
+
+	// 跳转出block块
+	cg.set(jnepos, _MAKE_POS(cg.byte_code_size()))
+
+	// 替换掉break
+	bplist := c.loop_break_pos_stack[len(c.loop_break_pos_stack)-1]
+	for i, _ := range bplist {
+		cg.set(bplist[i], _MAKE_POS(cg.byte_code_size()))
+	}
+	c.loop_break_pos_stack = c.loop_break_pos_stack[0 : len(c.loop_break_pos_stack)-1]
+
+	// 替换掉continue
+	cplist := c.continue_end_pos_stack[len(c.continue_end_pos_stack)-1]
+	for i, _ := range cplist {
+		cg.set(cplist[i], _MAKE_POS(continuepos))
+	}
+	c.continue_end_pos_stack = c.continue_end_pos_stack[0 : len(c.continue_end_pos_stack)-1]
+
+	c.loop_continue_pos_stack = c.loop_continue_pos_stack[0 : len(c.loop_continue_pos_stack)-1]
+
+	// 离开作用域
+	cg.pop_stack_identifiers()
+
+	log_debug("[compiler] compile_for_stmt %p OK", fs)
 }
 
-func (c *compiler) compile_for_loop_stmt(cg *codegen, stmt *for_loop_stmt) {
+func (c *compiler) compile_for_loop_stmt(cg *codegen, fs *for_loop_stmt) {
 
+	log_debug("[compiler] compile_for_loop_stmt %p", fs)
+
+	startpos := 0
+	jnepos := 0
+	continuepos := 0
+
+	c.loop_break_pos_stack = append(c.loop_break_pos_stack, beak_pos_list{})
+	c.continue_end_pos_stack = append(c.continue_end_pos_stack, continue_end_pos_list{})
+
+	// 开始语句，这个作用域是全for都有效的
+	cg.push_stack_identifiers()
+
+	var iter command
+	c.compile_node(cg, fs.iter)
+	iter = c.cur_addr
+	log_debug("[compiler] compile_for_loop_stmt iter = %d", c.cur_addr)
+
+	var begin command
+	c.compile_node(cg, fs.begin)
+	begin = c.cur_addr
+	log_debug("[compiler] compile_for_loop_stmt begin = %d", c.cur_addr)
+
+	var end command
+	c.compile_node(cg, fs.end)
+	end = c.cur_addr
+	log_debug("[compiler] compile_for_loop_stmt end = %d", c.cur_addr)
+
+	var step command
+	c.compile_node(cg, fs.step)
+	step = c.cur_addr
+	log_debug("[compiler] compile_for_loop_stmt step = %d", c.cur_addr)
+
+	cg.push(_MAKE_OPCODE(OPCODE_ASSIGN), fs.lineno())
+	cg.push(iter, fs.lineno())
+	cg.push(begin, fs.lineno())
+
+	cg.push(_MAKE_OPCODE(OPCODE_LESS_JNE), fs.lineno())
+	cg.push(iter, fs.lineno())
+	cg.push(end, fs.lineno())
+	tmpdespos := cg.alloc_stack_identifier()
+	tmpdest := _MAKE_ADDR(ADDR_STACK, tmpdespos)
+	cg.push(tmpdest, fs.lineno())
+	cg.push(EMPTY_CMD, fs.lineno()) // 先塞个位置
+	jnepos = cg.byte_code_size() - 1
+
+	startpos = cg.byte_code_size()
+
+	// 需要continue end
+	c.loop_continue_pos_stack = append(c.loop_continue_pos_stack, -1)
+
+	// block块
+	if fs.block != nil {
+		cg.push_stack_identifiers()
+		c.compile_node(cg, fs.block)
+		cg.pop_stack_identifiers()
+	}
+
+	continuepos = cg.byte_code_size()
+
+	cg.push(_MAKE_OPCODE(OPCODE_FOR), fs.lineno())
+	cg.push(iter, fs.lineno())
+	cg.push(end, fs.lineno())
+	cg.push(step, fs.lineno())
+	tmpdespos = cg.alloc_stack_identifier()
+	tmpdest = _MAKE_ADDR(ADDR_STACK, tmpdespos)
+	cg.push(tmpdest, fs.lineno())
+	cg.push(_MAKE_POS(startpos), fs.lineno())
+
+	// 跳转出block块
+	cg.set(jnepos, _MAKE_POS(cg.byte_code_size()))
+
+	// 替换掉break
+	bplist := c.loop_break_pos_stack[len(c.loop_break_pos_stack)-1]
+	for i, _ := range bplist {
+		cg.set(bplist[i], _MAKE_POS(cg.byte_code_size()))
+	}
+	c.loop_break_pos_stack = c.loop_break_pos_stack[0 : len(c.loop_break_pos_stack)-1]
+
+	// 替换掉continue
+	cplist := c.continue_end_pos_stack[len(c.continue_end_pos_stack)-1]
+	for i, _ := range cplist {
+		cg.set(cplist[i], _MAKE_POS(continuepos))
+	}
+	c.continue_end_pos_stack = c.continue_end_pos_stack[0 : len(c.continue_end_pos_stack)-1]
+
+	c.loop_continue_pos_stack = c.loop_continue_pos_stack[0 : len(c.loop_continue_pos_stack)-1]
+
+	// 离开作用域
+	cg.pop_stack_identifiers()
+
+	log_debug("[compiler] compile_for_loop_stmt %p OK", fs)
 }
 
-func (c *compiler) compile_multi_assign_stmt(cg *codegen, stmt *multi_assign_stmt) {
+func (c *compiler) compile_multi_assign_stmt(cg *codegen, as *multi_assign_stmt) {
 
+	log_debug("[compiler] compile_multi_assign_stmt %p", as)
+
+	// 目前多重赋值只支持a,b,c = myfunc1()，需要告诉func1多返回几个值
+	c.func_ret_num = len(as.varlist.varlist)
+
+	// 编译value
+	c.compile_node(cg, as.value)
+
+	// 挨个编译var
+	var varlist []command
+	for i, _ := range as.varlist.varlist {
+		c.new_var = as.isnew
+		c.compile_node(cg, as.varlist.varlist[i])
+		c.new_var = false
+		varlist = append(varlist, c.cur_addr)
+	}
+
+	// 挨个赋值
+	for i, _ := range as.varlist.varlist {
+		var varc command
+		var value command
+
+		varc = varlist[i]
+		value = c.cur_addrs[i]
+
+		cg.push(_MAKE_OPCODE(OPCODE_ASSIGN), as.lineno())
+		cg.push(varc, as.lineno())
+		cg.push(value, as.lineno())
+	}
+
+	log_debug("[compiler] compile_multi_assign_stmt %p OK", as)
 }
 
-func (c *compiler) compile_cmp_stmt(cg *codegen, stmt *cmp_stmt) {
+func (c *compiler) compile_cmp_stmt(cg *codegen, cs *cmp_stmt) {
 
+	log_debug("[compiler] compile_cmp_stmt %p", cs)
+
+	deps := c.cmp_deps
+	c.cmp_deps++
+
+	var oper command
+	var left command
+	var right command
+	var dest command
+
+	if cs.cmp != "not" {
+		// oper
+		if cs.cmp == "&&" {
+			oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_AND_JNE), _MAKE_OPCODE(OPCODE_AND))
+		} else if cs.cmp == "||" {
+			oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_OR_JNE), _MAKE_OPCODE(OPCODE_OR))
+		} else if cs.cmp == "<" {
+			oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_LESS_JNE), _MAKE_OPCODE(OPCODE_LESS))
+		} else if cs.cmp == ">" {
+			oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_MORE_JNE), _MAKE_OPCODE(OPCODE_MORE))
+		} else if cs.cmp == "==" {
+			oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_EQUAL_JNE), _MAKE_OPCODE(OPCODE_EQUAL))
+		} else if cs.cmp == ">=" {
+			oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_MOREEQUAL_JNE), _MAKE_OPCODE(OPCODE_MOREEQUAL))
+		} else if cs.cmp == "<=" {
+			oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_LESSEQUAL_JNE), _MAKE_OPCODE(OPCODE_LESSEQUAL))
+		} else if cs.cmp == "!=" {
+			oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_NOTEQUAL_JNE), _MAKE_OPCODE(OPCODE_NOTEQUAL))
+		} else if cs.cmp == "true" {
+			var v variant
+			v.V_SET_REAL(1)
+			pos := cg.getconst(&v)
+			c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
+
+			c.cmp_deps--
+			c.cmp_jne = false
+		} else if cs.cmp == "false" {
+			var v variant
+			v.V_SET_REAL(0)
+			pos := cg.getconst(&v)
+			c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
+
+			c.cmp_deps--
+			c.cmp_jne = false
+		} else if cs.cmp == "is" {
+			// left
+			c.compile_node(cg, cs.left)
+
+			c.cmp_deps--
+			c.cmp_jne = false
+		} else {
+			c.compile_seterror(cs, "cmp error %s", cs.cmp)
+		}
+
+		// left
+		c.compile_node(cg, cs.left)
+		left = c.cur_addr
+
+		// right
+		c.compile_node(cg, cs.right)
+		right = c.cur_addr
+
+		// result
+		despos := cg.alloc_stack_identifier()
+		dest = _MAKE_ADDR(ADDR_STACK, despos)
+		c.cur_addr = dest
+
+		cg.push(oper, cs.lineno())
+		cg.push(left, cs.lineno())
+		cg.push(right, cs.lineno())
+		cg.push(dest, cs.lineno())
+	} else { /* "not" */
+		oper = command_ternarytesting(deps != 0, _MAKE_OPCODE(OPCODE_NOT_JNE), _MAKE_OPCODE(OPCODE_NOT))
+
+		// left
+		c.compile_node(cg, cs.left)
+		left = c.cur_addr
+		despos := cg.alloc_stack_identifier()
+		dest = _MAKE_ADDR(ADDR_STACK, despos)
+		c.cur_addr = dest
+		cg.push(oper, cs.lineno())
+		cg.push(left, cs.lineno())
+		cg.push(dest, cs.lineno())
+	}
+
+	c.cmp_deps--
+	if deps != 0 {
+		c.cmp_jne = true
+	}
+
+	log_debug("[compiler] compile_cmp_stmt %p OK", cs)
 }
 
 func (c *compiler) compile_if_stmt(cg *codegen, stmt *if_stmt) {

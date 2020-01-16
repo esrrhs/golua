@@ -9,7 +9,7 @@ type block_identifiers_list []block_identifiers
 type block_identifiers_stack []block_identifiers_list
 type byte_code_list []command
 type byte_lineno_list []int
-type const_list []variant
+type const_list []*variant
 type containeraddr_list []container_addr
 type debug_block_identifiers_list []stack_variant_info
 
@@ -77,4 +77,29 @@ func (cg *codegen) push(code command, lineno int) {
 
 func (cg *codegen) set(pos int, code command) {
 	cg.byte_code_list[pos] = code
+}
+
+func (cg *codegen) alloc_stack_identifier() int {
+	ret := cg.stackpos
+	cg.block_identifiers_stack[len(cg.block_identifiers_stack)-1] =
+		append(cg.block_identifiers_stack[len(cg.block_identifiers_stack)-1], block_identifiers{"", cg.stackpos})
+	cg.stackpos++
+	if cg.stackpos > cg.maxstackpos {
+		cg.maxstackpos = cg.stackpos
+	}
+	return ret
+}
+
+func (cg *codegen) getconst(v *variant) int {
+
+	for i, _ := range cg.const_list {
+		vv := cg.const_list[i]
+		if vv.V_EQUAL_V(v) {
+			return i
+		}
+	}
+
+	pos := len(cg.const_list)
+	cg.const_list = append(cg.const_list, v)
+	return pos
 }

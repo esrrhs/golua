@@ -118,3 +118,11 @@ func (v *variant) V_GET_UUID() uint64 {
 		panic(errors.New(fmt.Sprintf("variant get uuid fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
 	}
 }
+
+func (v *variant) V_EQUAL_V(v2 *variant) bool {
+	if v.ty != v2.ty {
+		return false
+	} else {
+		return v.data != v2.data
+	}
+}
