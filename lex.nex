@@ -29,7 +29,7 @@
 /(switch)/ { log_debug("SWITCH"); return SWITCH }
 /(case)/ { log_debug("CASE"); return CASE }
 /(default)/ { log_debug("DEFAULT"); return DEFAULT }
-/\"(\\"|[^\"])*\"/ { log_debug("STRING_DEFINITION"); lval.s = yylex.Text(); return STRING_DEFINITION;}
+/\"(\\"|[^\"])*\"/ { log_debug("STRING_DEFINITION"); lval.s = yylex.Text(); lval.s = lval.s[1:len(lval.s)-1]; return STRING_DEFINITION;}
 /[a-zA-Z_][a-zA-Z0-9_]*/ { log_debug("IDENTIFIER"); lval.s = yylex.Text(); return IDENTIFIER;}
 /[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+/ { log_debug("IDENTIFIER_DOT"); lval.s = yylex.Text(); return IDENTIFIER_DOT;}
 /[a-zA-Z_][a-zA-Z0-9_]*(\-\>[a-zA-Z_][a-zA-Z0-9_]*)+/ { log_debug("IDENTIFIER_POINTER"); lval.s = yylex.Text(); return IDENTIFIER_POINTER;}

@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"strconv"
+	"strings"
 	"sync/atomic"
 )
 
@@ -91,7 +92,11 @@ func fkarraytoa(va *variant_array) string {
 	ret := ""
 	ret += "["
 	for _, n := range va.va {
-		ret += vartostring(n)
+		if n != nil {
+			ret += vartostring(n)
+		} else {
+			ret += " "
+		}
 		ret += ","
 	}
 	ret += "]"
@@ -148,12 +153,12 @@ func isInt(r float64) bool {
 }
 
 func seterror(file string, lineno int, funcname string, format string, a ...interface{}) {
-	var fe FakeErr
-	fe.error = fmt.Sprintf(format, a)
+	fe := newFakeErr()
+	fe.error = fmt.Sprintf(format, a...)
 	fe.lineno = lineno
 	fe.file = file
 	fe.funcname = funcname
-	panic(fe)
+	panic(*fe)
 }
 
 func get_syntree_typename(sn syntree_node) string {
@@ -170,4 +175,39 @@ func command_ternarytesting(b bool, left command, right command) command {
 	} else {
 		return right
 	}
+}
+
+const (
+	MAP_FUNC_NAME = "map"
+)
+
+func fkxtoa(d command, wid int) string {
+	ret := ""
+
+	var tmpbuf [32]byte
+	idx := 31
+
+	// special case '0'
+	if d == 0 {
+		ret = "0"
+	} else {
+		// add numbers
+		chars := "0123456789ABCDEF"
+		for d != 0 && idx != 0 {
+			idx = idx - 1
+			tmpbuf[idx] = chars[(d % 16)]
+			d /= 16
+		}
+
+		ret = string(tmpbuf[idx:])
+	}
+
+	if len(ret) < wid {
+		tmp := strings.Repeat("0", wid-len(ret))
+		ret = tmp + ret
+	}
+
+	tmp := "0x"
+	ret = tmp + ret
+	return ret
 }

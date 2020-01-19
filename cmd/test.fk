@@ -1,7 +1,6 @@
 package json
 
 include "file.fk"
-include "string.fk"
 
 -- struct define
 struct teststruct
@@ -28,7 +27,7 @@ const hellomap = {1 : "a" 2 : "b" 3 : [1 2 3]}
 const test = {}
 const test = []
 
-func test1()
+func test1(name)
 
 	var ok, var f = file.open(name, "rb")
 	if not ok then
@@ -44,18 +43,18 @@ func test1()
 end
 
 func test2()
-    for a = 1->5, 1 then
+    for var a = 1->5, 1 then
 
     end
 end
 
-func test3(a, a)
+func test3(a, b)
     if is a then
     else
     end
 end
 
-func test4()
+func test4(a)
     switch a
     case 1 then
     case 2 then

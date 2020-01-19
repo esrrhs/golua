@@ -1,0 +1,16 @@
+
+func test1(name)
+
+	var ok, var f = file.open(name, "rb")
+	if not ok then
+		return false, 0
+	end
+
+	var content = file.read_all(f)
+
+	ok, var ret, var errormsg = parse_string(content)
+
+	return ok, ret, errormsg
+
+end
+

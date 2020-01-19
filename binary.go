@@ -2,6 +2,7 @@ package fakego
 
 import (
 	"math"
+	"strconv"
 	"unsafe"
 )
 
@@ -223,15 +224,146 @@ type func_binary struct {
 	// 二进制行号缓冲区
 	lineno_buff []int
 	// 常量
-	const_list []variant
+	const_list []*variant
 	// container地址
 	container_addr_list []container_addr
 	// 调试信息，栈变量
 	debug_stack_variant_info []stack_variant_info
 }
 
+func dump_addr(code int) string {
+	ret := ""
+	addrtype := _HIINT16(int32(code))
+	pos := _LOINT16(int32(code))
+	switch addrtype {
+	case ADDR_STACK:
+		ret += "STACK"
+		break
+	case ADDR_CONST:
+		ret += "CONST"
+		break
+	case ADDR_CONTAINER:
+		ret += "CONTAINER"
+		break
+	default:
+		ret += "unknow "
+		ret += strconv.Itoa(int(addrtype))
+	}
+	ret += "\t"
+	ret += strconv.Itoa(int(pos))
+	return ret
+}
+
 func (fb *func_binary) dump(pos int) string {
-	return "TODO"
+	ret := ""
+
+	// 名字
+	ret += "\n["
+	ret += fb.name
+	ret += "]\n"
+
+	// 最大栈
+	ret += "\tmaxstack:\t"
+	ret += strconv.Itoa(fb.maxstack)
+	ret += "\n\n"
+
+	// 常量表
+	ret += "\t////// const define "
+	ret += strconv.Itoa(len(fb.const_list))
+	ret += " //////\n"
+	for i := 0; i < len(fb.const_list); i++ {
+		ret += "\t["
+		ret += strconv.Itoa(i)
+		ret += "]\t"
+		ret += vartypetostring(fb.const_list[i].ty)
+		ret += "\t"
+		ret += vartostring(fb.const_list[i])
+		ret += "\n"
+	}
+
+	// 容器地址表
+	ret += "\n\t////// container addr "
+	ret += strconv.Itoa(len(fb.container_addr_list))
+	ret += " //////\n"
+	for i := 0; i < len(fb.container_addr_list); i++ {
+		ret += "\t["
+		ret += strconv.Itoa(i)
+		ret += "]\t"
+		concmd := fb.container_addr_list[i].con
+		concode := _COMMAND_CODE(concmd)
+		ret += "[ CONTAINER ]\t"
+		ret += dump_addr(concode)
+		keycmd := fb.container_addr_list[i].key
+		keycode := _COMMAND_CODE(keycmd)
+		ret += "\t[ KEY ]\t"
+		ret += dump_addr(keycode)
+		ret += "\n"
+	}
+
+	// 变量地址
+	ret += "\n\t////// stack variant addr "
+	ret += strconv.Itoa(len(fb.debug_stack_variant_info))
+	ret += " //////\n"
+	for i := 0; i < len(fb.debug_stack_variant_info); i++ {
+		info := fb.debug_stack_variant_info[i]
+		ret += "\t["
+		ret += strconv.Itoa(info.pos)
+		ret += "]\t"
+		ret += info.name
+		ret += "\t\tLINE\t"
+		ret += strconv.Itoa(info.line)
+		ret += "\n"
+	}
+
+	ret += "\n\t////// byte code "
+	ret += strconv.Itoa(len(fb.buff))
+	ret += " //////\n"
+	// 字节码
+	for i := 0; i < len(fb.buff); i++ {
+		cmd := fb.buff[i]
+		ty := _COMMAND_TYPE(cmd)
+		code := _COMMAND_CODE(cmd)
+		if i == pos {
+			ret += "->"
+		}
+		ret += "\t["
+		ret += strconv.Itoa(i)
+		ret += "]"
+		ret += "[LINE "
+		ret += strconv.Itoa(fb.lineno_buff[i])
+		ret += "]\t"
+		ret += fkxtoa(cmd, 16)
+		ret += "\t"
+		switch ty {
+		case COMMAND_OPCODE:
+			{
+				ret += "["
+				ret += opcodeStr(code)
+				ret += "]\t"
+			}
+			break
+		case COMMAND_ADDR:
+			{
+				ret += "[ ADDR ]\t"
+				ret += dump_addr(code)
+			}
+			break
+		case COMMAND_POS:
+			{
+				ret += "[ POS  ]\t"
+				ret += strconv.Itoa(code)
+			}
+			break
+		default:
+			{
+				ret += "[unknow]\t"
+			}
+			break
+		}
+		ret += "\n"
+	}
+	ret += "\n"
+	return ret
 }
 
 func (fb *func_binary) binary_size() int {
@@ -242,5 +374,17 @@ type binary struct {
 }
 
 func (b *binary) dump() string {
-	return "TODO"
+	str := ""
+	gfs.fm.shh.Range(func(key, value interface{}) bool {
+		f := value.(*funcunion)
+		if f.havefb {
+			str += f.fb.dump(-1)
+		}
+		return true
+	})
+	return str
+}
+
+func (b *binary) add_func(name *variant, bin *func_binary) {
+	gfs.fm.add_func(name, bin)
 }

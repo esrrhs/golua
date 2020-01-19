@@ -4138,6 +4138,7 @@ OUTER0:
 			{
 				log_debug("STRING_DEFINITION")
 				lval.s = yylex.Text()
+				lval.s = lval.s[1 : len(lval.s)-1]
 				return STRING_DEFINITION
 			}
 		case 32:

@@ -2,5 +2,5 @@ package fakego
 
 type lexerwarpper struct {
 	yyLexer
-	mf myflexer
+	mf *myflexer
 }

@@ -8,8 +8,9 @@ type myflexer struct {
 	fileName    string
 	packageName string
 	includelist []string
-	constmap    sync.Map
+	constmap    sync.Map // string->*explicit_value_node
 	funclist    []*func_desc_node
+	struct_list sync.Map // string->[]string
 }
 
 func (mf *myflexer) set_package(package_name string) {
@@ -27,6 +28,7 @@ func (mf *myflexer) add_include(include_file string) {
 
 func (mf *myflexer) add_struct_desc(name string, p *struct_desc_memlist_node) {
 	log_debug("add struct %s %d", name, p.lineno())
+	mf.struct_list.Store(name, p.memlist)
 }
 
 func (mf *myflexer) add_const_desc(name string, p syntree_node) {
@@ -54,4 +56,19 @@ func (mf *myflexer) get_func_list() []*func_desc_node {
 
 func (mf *myflexer) getfilename() string {
 	return mf.fileName
+}
+
+func (mf *myflexer) is_have_struct(name string) bool {
+	_, ok := mf.struct_list.Load(name)
+	return ok
+}
+
+func (mf *myflexer) is_have_func(funcname string) bool {
+	for i, _ := range mf.funclist {
+		p := mf.funclist[i]
+		if p.funcname == funcname {
+			return true
+		}
+	}
+	return false
 }

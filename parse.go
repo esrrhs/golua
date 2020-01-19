@@ -10,7 +10,7 @@ import (
 )
 
 type parser struct {
-	constinfo sync.Map
+	constinfo sync.Map // string->*const_parser_info
 }
 
 type parseContent struct {
@@ -36,7 +36,9 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 			case string:
 				err = errors.New(file + ":" + strconv.Itoa(line) + ":" + x)
 			case error:
-				err = x
+				panic(x)
+			case FakeErr:
+				err = &x
 			default:
 				err = errors.New("unknown panic error")
 			}
@@ -57,6 +59,8 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	}
 	ctx.includemap[file] = 1
 
+	file = strings.TrimSuffix(file, "\n")
+	file = strings.TrimSuffix(file, "\r")
 	f, err := os.OpenFile(file, os.O_RDONLY, os.ModeType)
 	if err != nil {
 		seterror(file, 0, "", err.Error())
@@ -69,7 +73,7 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 
 	l := lexerwarpper{
 		lex,
-		mf,
+		&mf,
 	}
 	ll = &l
 
@@ -79,12 +83,13 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	}
 
 	log_debug("yyParse ok" + file)
+	f.Close()
 
 	// parse include file
 	for _, f := range mf.includelist {
 		err := pa.parse(ctx, f)
 		if err != nil {
-			seterror(file, 0, "", err.Error())
+			return err
 		}
 	}
 

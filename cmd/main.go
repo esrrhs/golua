@@ -7,8 +7,8 @@ import (
 
 func main() {
 	fakego.SetConfig(fakego.FakeConfig{OpenLog: true})
-	err := fakego.Parse("./test.fk")
+	err := fakego.Parse("test.fk")
 	if err != nil {
-		fmt.Printf("parse %s\n", err)
+		fmt.Printf("parse %v\n", err)
 	}
 }

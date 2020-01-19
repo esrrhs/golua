@@ -3,6 +3,7 @@ package fakego
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type beak_pos_list []int
@@ -100,8 +101,18 @@ func (c *compiler) compile_func(funcnode *func_desc_node) {
 		c.compile_block(&cg, funcnode.block)
 	}
 
+	// break必须为空
+	if len(c.loop_break_pos_stack) > 0 {
+		c.compile_seterror(funcnode, "compile extra break error")
+	}
+
 	// 编译成功
 	funcname := fkgen_package_name(mf.get_package(), funcnode.funcname)
+	cg.output(mf.getfilename(), mf.get_package(), funcname, &bin)
+
+	var fv variant
+	fv.V_SET_STRING(funcname)
+	gfs.bin.add_func(&fv, &bin)
 
 	log_debug("[compiler] compile_func func %s size = %d OK", funcname, bin.binary_size())
 
@@ -559,6 +570,8 @@ func (c *compiler) compile_cmp_stmt(cg *codegen, cs *cmp_stmt) {
 
 			c.cmp_deps--
 			c.cmp_jne = false
+
+			return
 		} else if cs.cmp == "false" {
 			var v variant
 			v.V_SET_REAL(0)
@@ -567,12 +580,16 @@ func (c *compiler) compile_cmp_stmt(cg *codegen, cs *cmp_stmt) {
 
 			c.cmp_deps--
 			c.cmp_jne = false
+
+			return
 		} else if cs.cmp == "is" {
 			// left
 			c.compile_node(cg, cs.left)
 
 			c.cmp_deps--
 			c.cmp_jne = false
+
+			return
 		} else {
 			c.compile_seterror(cs, "cmp error %s", cs.cmp)
 		}
@@ -616,70 +633,662 @@ func (c *compiler) compile_cmp_stmt(cg *codegen, cs *cmp_stmt) {
 	log_debug("[compiler] compile_cmp_stmt %p OK", cs)
 }
 
-func (c *compiler) compile_if_stmt(cg *codegen, stmt *if_stmt) {
+func (c *compiler) compile_if_stmt(cg *codegen, is *if_stmt) {
 
+	log_debug("[compiler] compile_if_stmt %p", is)
+
+	jnepos := 0
+	var jmpifpos []int
+
+	// 条件
+	cg.push_stack_identifiers()
+	c.compile_node(cg, is.cmp)
+	cg.pop_stack_identifiers()
+
+	// cmp与jne结合
+	if c.cmp_jne {
+		cg.push(EMPTY_CMD, is.cmp.lineno()) // 先塞个位置
+		jnepos = cg.byte_code_size() - 1
+	} else {
+		cg.push(_MAKE_OPCODE(OPCODE_JNE), is.lineno())
+		cg.push(c.cur_addr, is.lineno())
+		cg.push(EMPTY_CMD, is.lineno()) // 先塞个位置
+		jnepos = cg.byte_code_size() - 1
+	}
+	c.cmp_deps = 0
+	c.cmp_jne = false
+
+	// if块
+	if is.block != nil {
+		cg.push_stack_identifiers()
+		c.compile_node(cg, is.block)
+		cg.pop_stack_identifiers()
+	}
+
+	// 跳出if块
+	if is.elseifs != nil || (is.elses != nil && is.elses.block != nil) {
+		cg.push(_MAKE_OPCODE(OPCODE_JMP), is.lineno())
+		cg.push(EMPTY_CMD, is.lineno()) // 先塞个位置
+		jmpifpos = append(jmpifpos, cg.byte_code_size()-1)
+	}
+
+	// 开始处理elseif的
+	if is.elseifs != nil {
+		list := is.elseifs.stmtlist
+		for i, _ := range list {
+			eis := list[i].(*elseif_stmt)
+
+			// 跳转到else if
+			cg.set(jnepos, _MAKE_POS(cg.byte_code_size()))
+
+			// 条件
+			cg.push_stack_identifiers()
+			c.compile_node(cg, eis.cmp)
+			cg.pop_stack_identifiers()
+
+			// cmp与jne结合
+			if c.cmp_jne {
+				cg.push(EMPTY_CMD, eis.cmp.lineno()) // 先塞个位置
+				jnepos = cg.byte_code_size() - 1
+			} else {
+				cg.push(_MAKE_OPCODE(OPCODE_JNE), eis.lineno())
+				cg.push(c.cur_addr, eis.lineno())
+				cg.push(EMPTY_CMD, eis.lineno()) // 先塞个位置
+				jnepos = cg.byte_code_size() - 1
+			}
+			c.cmp_deps = 0
+			c.cmp_jne = false
+
+			// else if块
+			if eis.block != nil {
+				cg.push_stack_identifiers()
+				c.compile_node(cg, eis.block)
+				cg.pop_stack_identifiers()
+			}
+
+			// 跳出if块
+			cg.push(_MAKE_OPCODE(OPCODE_JMP), eis.lineno())
+			cg.push(EMPTY_CMD, eis.lineno()) // 先塞个位置
+			jmpifpos = append(jmpifpos, cg.byte_code_size()-1)
+		}
+	}
+
+	// 跳转到else
+	cg.set(jnepos, _MAKE_POS(cg.byte_code_size()))
+
+	// else块
+	if is.elses != nil && is.elses.block != nil {
+		cg.push_stack_identifiers()
+		c.compile_node(cg, is.elses.block)
+		cg.pop_stack_identifiers()
+	}
+
+	// 跳转到结束
+	for i, _ := range jmpifpos {
+		cg.set(jmpifpos[i], _MAKE_POS(cg.byte_code_size()))
+	}
+
+	log_debug("[compiler] compile_if_stmt %p OK", is)
 }
 
-func (c *compiler) compile_explicit_value(cg *codegen, node *explicit_value_node) {
+func (c *compiler) compile_explicit_value(cg *codegen, ev *explicit_value_node) {
 
+	log_debug("[compiler] compile_explicit_value %p %s", ev, ev.str)
+
+	v := c.compile_explicit_value_node_to_variant(ev)
+
+	pos := cg.getconst(v)
+	c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
+
+	log_debug("[compiler] compile_explicit_value %p OK", ev)
 }
 
-func (c *compiler) compile_return_stmt(cg *codegen, stmt *return_stmt) {
+func (c *compiler) compile_return_stmt(cg *codegen, rs *return_stmt) {
 
+	log_debug("[compiler] compile_return_stmt %p", rs)
+
+	if rs.returnlist != nil {
+		c.compile_node(cg, rs.returnlist)
+
+		cg.push(_MAKE_OPCODE(OPCODE_RETURN), rs.lineno())
+		cg.push(_MAKE_POS(len(rs.returnlist.returnlist)), rs.lineno())
+		for i, _ := range rs.returnlist.returnlist {
+			cg.push(c.cur_addrs[i], rs.lineno())
+		}
+	} else {
+		cg.push(_MAKE_OPCODE(OPCODE_RETURN), rs.lineno())
+		cg.push(_MAKE_POS(0), rs.lineno())
+	}
+
+	log_debug("[compiler] compile_return_stmt %p OK", rs)
 }
 
-func (c *compiler) compile_return_value_list(cg *codegen, node *return_value_list_node) {
+func (c *compiler) compile_return_value_list(cg *codegen, rn *return_value_list_node) {
 
+	log_debug("[compiler] compile_return_value_list %p", rn)
+
+	tmp := make([]command, len(rn.returnlist))
+	for i, _ := range rn.returnlist {
+		c.compile_node(cg, rn.returnlist[i])
+		tmp[i] = c.cur_addr
+	}
+	c.cur_addrs = tmp
+	c.cur_addr = c.cur_addrs[0]
+
+	log_debug("[compiler] compile_return_value_list %p OK", rn)
 }
 
-func (c *compiler) compile_assign_stmt(cg *codegen, stmt *assign_stmt) {
+func (c *compiler) compile_assign_stmt(cg *codegen, as *assign_stmt) {
 
+	log_debug("[compiler] compile_assign_stmt %p", as)
+
+	var vr command
+	var value command
+
+	c.compile_node(cg, as.value)
+	value = c.cur_addr
+	log_debug("[compiler] compile_assign_stmt value = %d", c.cur_addr)
+
+	c.new_var = as.isnew
+	c.compile_node(cg, as.vr)
+	c.new_var = false
+	vr = c.cur_addr
+	log_debug("[compiler] compile_assign_stmt var = %d", c.cur_addr)
+
+	cg.push(_MAKE_OPCODE(OPCODE_ASSIGN), as.lineno())
+	cg.push(vr, as.lineno())
+	cg.push(value, as.lineno())
+	log_debug("[compiler] compile_assign_stmt %p OK", as)
 }
 
-func (c *compiler) compile_math_assign_stmt(cg *codegen, stmt *math_assign_stmt) {
+func (c *compiler) compile_math_assign_stmt(cg *codegen, ms *math_assign_stmt) {
 
+	log_debug("[compiler] compile_math_assign_stmt %p", ms)
+
+	var oper command
+	var vr command
+	var value command
+
+	if ms.oper == "+=" {
+		oper = _MAKE_OPCODE(OPCODE_PLUS_ASSIGN)
+	} else if ms.oper == "-=" {
+		oper = _MAKE_OPCODE(OPCODE_MINUS_ASSIGN)
+	} else if ms.oper == "*=" {
+		oper = _MAKE_OPCODE(OPCODE_MULTIPLY_ASSIGN)
+	} else if ms.oper == "/=" {
+		oper = _MAKE_OPCODE(OPCODE_DIVIDE_ASSIGN)
+	} else if ms.oper == "%=" {
+		oper = _MAKE_OPCODE(OPCODE_DIVIDE_MOD_ASSIGN)
+	} else {
+		c.compile_seterror(ms, "compile math assign oper type %s error", ms.oper)
+	}
+
+	// value
+	c.compile_node(cg, ms.value)
+	value = c.cur_addr
+	log_debug("[compiler] compile_math_assign_stmt value = %d", c.cur_addr)
+
+	// var
+	c.compile_node(cg, ms.vr)
+	vr = c.cur_addr
+	log_debug("[compiler] compile_math_assign_stmt var = %d", c.cur_addr)
+
+	cg.push(oper, ms.lineno())
+	cg.push(vr, ms.lineno())
+	cg.push(value, ms.lineno())
+
+	log_debug("[compiler] compile_math_assign_stmt %p OK", ms)
 }
 
-func (c *compiler) compile_variable_node(cg *codegen, node *variable_node) {
+func (c *compiler) compile_variable_node(cg *codegen, vn *variable_node) {
 
+	log_debug("[compiler] compile_variable_node %p", vn)
+
+	// 看看是否是全局常量定义
+	constname := fkgen_package_name(c.mf.get_package(), vn.str)
+	gcv, _ := gfs.pa.get_const_define(constname)
+	if gcv != nil {
+		pos := cg.getconst(gcv)
+		c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
+		log_debug("[compiler] compile_variable_node %p OK", vn)
+		return
+	}
+
+	gcv, _ = gfs.pa.get_const_define(vn.str)
+	if gcv != nil {
+		pos := cg.getconst(gcv)
+		c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
+		log_debug("[compiler] compile_variable_node %p OK", vn)
+		return
+	}
+
+	// 从当前堆栈往上找
+	pos := cg.getvariable(vn.str)
+	if pos == -1 {
+		// 是不是需要new出来
+		if c.new_var {
+			var tmp var_node
+			tmp.str = vn.str
+			c.compile_var_node(cg, &tmp)
+			return
+		} else {
+			c.compile_seterror(vn, "variable %s not found", vn.str)
+		}
+	}
+	c.cur_addr = _MAKE_ADDR(ADDR_STACK, pos)
+
+	log_debug("[compiler] compile_variable_node %p OK", vn)
 }
 
-func (c *compiler) compile_var_node(cg *codegen, node *var_node) {
+func (c *compiler) compile_var_node(cg *codegen, vn *var_node) {
 
+	log_debug("[compiler] compile_var_node %p", vn)
+
+	// 确保当前block没有
+	if cg.get_cur_variable_pos(vn.str) != -1 {
+		c.compile_seterror(vn, "variable %s has define", vn.str)
+	}
+
+	// 看看是否是常量定义
+	mf := c.mf
+	evm := mf.get_const_map()
+	_, ok := evm.Load(vn.str)
+	if ok {
+		c.compile_seterror(vn, "variable %s has defined const", vn.str)
+	}
+
+	// 看看是否是全局常量定义
+	gcv, _ := gfs.pa.get_const_define(vn.str)
+	if gcv != nil {
+		c.compile_seterror(vn, "variable %s has defined global const", vn.str)
+	}
+
+	// 申请栈上空间
+	pos := cg.add_stack_identifier(vn.str, vn.lineno())
+	if pos == -1 {
+		c.compile_seterror(vn, "double %s identifier error", vn.str)
+	}
+	c.cur_addr = _MAKE_ADDR(ADDR_STACK, pos)
+
+	log_debug("[compiler] compile_var_node %p OK", vn)
 }
 
-func (c *compiler) compile_function_call_node(cg *codegen, node *function_call_node) {
+func (c *compiler) compile_function_call_node(cg *codegen, fn *function_call_node) {
 
+	log_debug("[compiler] compile_function_call_node %p", fn)
+
+	mf := c.mf
+
+	ret_num := c.func_ret_num
+	c.func_ret_num = 1
+
+	// 参数
+	var arglist []command
+	if fn.arglist != nil {
+		for i, _ := range fn.arglist.arglist {
+			sn := fn.arglist.arglist[i]
+			c.compile_node(cg, sn)
+			arglist = append(arglist, c.cur_addr)
+		}
+	}
+
+	// 调用位置
+	var callpos command
+	if fn.prefunc == nil {
+		funcn := fn.fuc
+		// 1 检查变量
+		pos := cg.getvariable(funcn)
+		if pos != -1 {
+			// 是用变量来调用函数
+			callpos = _MAKE_ADDR(ADDR_STACK, pos)
+		} else if mf.is_have_struct(funcn) {
+			// 2 检查struct
+			// 直接替换成map
+			var v variant
+			v.V_SET_STRING(MAP_FUNC_NAME)
+			pos = cg.getconst(&v)
+			callpos = _MAKE_ADDR(ADDR_CONST, pos)
+		} else if mf.is_have_func(funcn) {
+			// 3 检查本地函数
+			// 申请字符串变量
+			var v variant
+			// 拼上包名
+			pname := fkgen_package_name(mf.get_package(), funcn)
+			v.V_SET_STRING(pname)
+			pos = cg.getconst(&v)
+			callpos = _MAKE_ADDR(ADDR_CONST, pos)
+		} else {
+			// 4 直接字符串使用
+			// 申请字符串变量
+			var v variant
+			v.V_SET_STRING(funcn)
+			pos = cg.getconst(&v)
+			callpos = _MAKE_ADDR(ADDR_CONST, pos)
+		}
+	} else {
+		c.compile_node(cg, fn.prefunc)
+		callpos = c.cur_addr
+	}
+
+	// oper
+	oper := _MAKE_OPCODE(OPCODE_CALL)
+
+	// 调用类型
+	var calltype command
+	if fn.fakecall {
+		calltype = _MAKE_POS(CALL_FAKE)
+	} else if fn.classmem_call {
+		calltype = _MAKE_POS(CALL_CLASSMEM)
+	} else {
+		calltype = _MAKE_POS(CALL_NORMAL)
+	}
+
+	// 参数个数
+	argnum := _MAKE_POS(len(arglist))
+
+	// 返回值个数
+	retnum := _MAKE_POS(ret_num)
+
+	// 返回值
+	var ret []command
+	c.cur_addrs = make([]command, ret_num)
+	for i := 0; i < ret_num; i++ {
+		retpos := cg.alloc_stack_identifier()
+		ret = append(ret, _MAKE_ADDR(ADDR_STACK, retpos))
+		c.cur_addrs[i] = ret[i]
+	}
+	c.cur_addr = ret[0]
+
+	cg.push(oper, fn.lineno())
+	cg.push(calltype, fn.lineno())
+	cg.push(callpos, fn.lineno())
+	cg.push(retnum, fn.lineno())
+	for i := 0; i < ret_num; i++ {
+		cg.push(ret[i], fn.lineno())
+	}
+	cg.push(argnum, fn.lineno())
+	for i, _ := range arglist {
+		cg.push(arglist[i], fn.lineno())
+	}
+
+	log_debug("[compiler] compile_function_call_node %p OK", fn)
 }
 
-func (c *compiler) compile_break_stmt(cg *codegen, stmt *break_stmt) {
+func (c *compiler) compile_break_stmt(cg *codegen, bs *break_stmt) {
 
+	log_debug("[compiler] compile_break_stmt %p", bs)
+
+	cg.push(_MAKE_OPCODE(OPCODE_JMP), bs.lineno())
+	cg.push(EMPTY_CMD, bs.lineno()) // 先塞个位置
+
+	jmppos := cg.byte_code_size() - 1
+
+	c.loop_break_pos_stack[len(c.loop_break_pos_stack)-1] = append(c.loop_break_pos_stack[len(c.loop_break_pos_stack)-1], jmppos)
+
+	log_debug("[compiler] compile_break_stmt %p OK", bs)
 }
 
-func (c *compiler) compile_continue_stmt(cg *codegen, stmt *continue_stmt) {
+func (c *compiler) compile_continue_stmt(cg *codegen, cs *continue_stmt) {
 
+	log_debug("[compiler] compile_continue_stmt %p", cs)
+
+	if len(c.loop_continue_pos_stack) <= 0 {
+		c.compile_seterror(cs, "no loop to continue")
+	}
+
+	continuepos := c.loop_continue_pos_stack[len(c.loop_continue_pos_stack)-1]
+
+	cg.push(_MAKE_OPCODE(OPCODE_JMP), cs.lineno())
+	cg.push(_MAKE_POS(continuepos), cs.lineno())
+
+	if continuepos == -1 {
+		// 一会统一设置
+		pos := cg.byte_code_size() - 1
+		c.continue_end_pos_stack[len(c.continue_end_pos_stack)-1] = append(c.continue_end_pos_stack[len(c.continue_end_pos_stack)-1], pos)
+	}
+
+	log_debug("[compiler] compile_continue_stmt %p OK", cs)
 }
 
-func (c *compiler) compile_math_expr_node(cg *codegen, node *math_expr_node) {
+func (c *compiler) compile_math_expr_node(cg *codegen, mn *math_expr_node) {
 
+	log_debug("[compiler] compile_math_expr_node %p", mn)
+
+	var oper command
+	var left command
+	var right command
+	var dest command
+
+	if mn.oper == "+" {
+		oper = _MAKE_OPCODE(OPCODE_PLUS)
+	} else if mn.oper == "-" {
+		oper = _MAKE_OPCODE(OPCODE_MINUS)
+	} else if mn.oper == "*" {
+		oper = _MAKE_OPCODE(OPCODE_MULTIPLY)
+	} else if mn.oper == "/" {
+		oper = _MAKE_OPCODE(OPCODE_DIVIDE)
+	} else if mn.oper == "%" {
+		oper = _MAKE_OPCODE(OPCODE_DIVIDE_MOD)
+	} else if mn.oper == ".." {
+		oper = _MAKE_OPCODE(OPCODE_STRING_CAT)
+	} else {
+		c.compile_seterror(mn, "compile math oper type %s error", mn.oper)
+	}
+
+	// left
+	c.compile_node(cg, mn.left)
+	left = c.cur_addr
+
+	// right
+	c.compile_node(cg, mn.right)
+	right = c.cur_addr
+
+	// result
+	despos := cg.alloc_stack_identifier()
+	dest = _MAKE_ADDR(ADDR_STACK, despos)
+	c.cur_addr = dest
+
+	cg.push(oper, mn.lineno())
+	cg.push(left, mn.lineno())
+	cg.push(right, mn.lineno())
+	cg.push(dest, mn.lineno())
+
+	log_debug("[compiler] compile_math_expr_node %p OK", mn)
 }
 
-func (c *compiler) compile_container_get(cg *codegen, node *container_get_node) {
+func (c *compiler) compile_container_get(cg *codegen, cn *container_get_node) {
 
+	log_debug("[compiler] compile_container_get %p", cn)
+
+	// 编译con
+	var con command
+
+	// 看看是否是全局常量定义
+	gcv, _ := gfs.pa.get_const_define(cn.container)
+	if gcv != nil {
+		pos := cg.getconst(gcv)
+		con = _MAKE_ADDR(ADDR_CONST, pos)
+	} else {
+		pos := cg.getvariable(cn.container)
+		if pos == -1 {
+			c.compile_seterror(cn, "variable %s not found", cn.container)
+		}
+		con = _MAKE_ADDR(ADDR_STACK, pos)
+	}
+
+	// 编译key
+	var key command
+	c.compile_node(cg, cn.key)
+	key = c.cur_addr
+
+	// 返回
+	addrpos := cg.getcontaineraddr(con, key)
+	c.cur_addr = _MAKE_ADDR(ADDR_CONTAINER, addrpos)
+
+	log_debug("[compiler] compile_container_get %p OK", cn)
 }
 
-func (c *compiler) compile_struct_pointer(cg *codegen, node *struct_pointer_node) {
+func (c *compiler) compile_struct_pointer(cg *codegen, sn *struct_pointer_node) {
 
+	log_debug("[compiler] compile_struct_pointer %p", sn)
+
+	name := sn.str
+	var tmp []string
+	for {
+		pos := strings.Index(name, "->")
+		if pos == -1 {
+			tmp = append(tmp, name)
+			break
+		}
+		tmp = append(tmp, name[0:pos])
+		name = name[pos+2:]
+	}
+
+	if len(tmp) < 2 {
+		c.compile_seterror(sn, "compile struct pointer %s failed", sn.str)
+	}
+
+	connname := tmp[0]
+
+	// 编译con
+	var con command
+	// 看看是否是全局常量定义
+	gcv, _ := gfs.pa.get_const_define(connname)
+	if gcv != nil {
+		pos := cg.getconst(gcv)
+		con = _MAKE_ADDR(ADDR_CONST, pos)
+	} else {
+		pos := cg.getvariable(connname)
+		if pos == -1 {
+			c.compile_seterror(sn, "variable %s not found", connname)
+		}
+		con = _MAKE_ADDR(ADDR_STACK, pos)
+	}
+
+	for i, _ := range tmp {
+		keystr := tmp[i]
+
+		// 编译key
+		var v variant
+		v.V_SET_STRING(keystr)
+		pos := cg.getconst(&v)
+		key := _MAKE_ADDR(ADDR_CONST, pos)
+
+		// 获取容器的位置
+		addrpos := cg.getcontaineraddr(con, key)
+		c.cur_addr = _MAKE_ADDR(ADDR_CONTAINER, addrpos)
+		con = c.cur_addr
+	}
+
+	log_debug("[compiler] compile_struct_pointer %p OK", sn)
 }
 
-func (c *compiler) compile_sleep_stmt(cg *codegen, stmt *sleep_stmt) {
+func (c *compiler) compile_sleep_stmt(cg *codegen, ss *sleep_stmt) {
 
+	log_debug("[compiler] compile_sleep_stmt %p", ss)
+
+	// 编译time
+	var time command
+	c.compile_node(cg, ss.time)
+	time = c.cur_addr
+
+	cg.push(_MAKE_OPCODE(OPCODE_SLEEP), ss.lineno())
+	cg.push(time, ss.lineno())
+
+	log_debug("[compiler] compile_sleep_stmt %p OK", ss)
 }
 
-func (c *compiler) compile_yield_stmt(cg *codegen, stmt *yield_stmt) {
+func (c *compiler) compile_yield_stmt(cg *codegen, ys *yield_stmt) {
 
+	log_debug("[compiler] compile_yield_stmt %p", ys)
+
+	// 编译time
+	var time command
+	c.compile_node(cg, ys.time)
+	time = c.cur_addr
+
+	cg.push(_MAKE_OPCODE(OPCODE_YIELD), ys.lineno())
+	cg.push(time, ys.lineno())
+
+	log_debug("[compiler] compile_yield_stmt %p OK", ys)
 }
 
-func (c *compiler) compile_switch_stmt(cg *codegen, stmt *switch_stmt) {
+func (c *compiler) compile_switch_stmt(cg *codegen, ss *switch_stmt) {
 
+	log_debug("[compiler] compile_switch_stmt %p", ss)
+
+	var caseleft command
+	var caseresult command
+
+	cg.push_stack_identifiers()
+
+	// caseleft
+	c.compile_node(cg, ss.cmp)
+	caseleft = c.cur_addr
+
+	// caseresult
+	despos := cg.alloc_stack_identifier()
+	caseresult = _MAKE_ADDR(ADDR_STACK, despos)
+
+	scln := ss.caselist.(*switch_caselist_node)
+
+	var jmpswitchposlist []int
+
+	// 挨个和case的比较
+	for i, _ := range scln.list {
+		oper := _MAKE_OPCODE(OPCODE_EQUAL)
+		left := caseleft
+		right := command(0)
+		dest := caseresult
+
+		scn := scln.list[i].(*switch_case_node)
+
+		// right
+		c.compile_node(cg, scn.cmp)
+		right = c.cur_addr
+
+		// push case
+		cg.push(oper, scn.lineno())
+		cg.push(left, scn.lineno())
+		cg.push(right, scn.lineno())
+		cg.push(dest, scn.lineno())
+
+		// push jmp
+		cg.push(_MAKE_OPCODE(OPCODE_JNE), scn.lineno())
+		cg.push(dest, scn.lineno())
+		cg.push(EMPTY_CMD, scn.lineno()) // 先塞个位置
+		jnepos := cg.byte_code_size() - 1
+
+		// build block
+		if scn.block != nil {
+			cg.push_stack_identifiers()
+			c.compile_node(cg, scn.block)
+			cg.pop_stack_identifiers()
+		}
+
+		// 跳出switch块
+		cg.push(_MAKE_OPCODE(OPCODE_JMP), scn.lineno())
+		cg.push(EMPTY_CMD, scn.lineno()) // 先塞个位置
+		jmpswitchpos := cg.byte_code_size() - 1
+		jmpswitchposlist = append(jmpswitchposlist, jmpswitchpos)
+
+		// 跳转出case块
+		cg.set(jnepos, _MAKE_POS(cg.byte_code_size()))
+	}
+
+	// default
+	if ss.def != nil {
+		cg.push_stack_identifiers()
+		c.compile_node(cg, ss.def)
+		cg.pop_stack_identifiers()
+	}
+
+	cg.pop_stack_identifiers()
+
+	// 塞跳出的
+	for i, _ := range jmpswitchposlist {
+		cg.set(jmpswitchposlist[i], _MAKE_POS(cg.byte_code_size()))
+	}
+
+	log_debug("[compiler] compile_switch_stmt %p OK", ss)
 }
