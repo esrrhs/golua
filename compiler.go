@@ -997,7 +997,11 @@ func (c *compiler) compile_function_call_node(cg *codegen, fn *function_call_nod
 		ret = append(ret, _MAKE_ADDR(ADDR_STACK, retpos))
 		c.cur_addrs[i] = ret[i]
 	}
-	c.cur_addr = ret[0]
+	if ret_num > 0 {
+		c.cur_addr = ret[0]
+	} else {
+		c.cur_addr = 0
+	}
 
 	cg.push(oper, fn.lineno())
 	cg.push(calltype, fn.lineno())

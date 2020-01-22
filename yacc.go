@@ -1533,7 +1533,7 @@ yydefault:
 		{
 			log_debug("[yacc]: cmp <- cmp_value LESS cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			p.cmp = yyDollar[2].s
+			p.cmp = "<"
 			p.left = yyDollar[1].sn
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
@@ -1544,7 +1544,7 @@ yydefault:
 		{
 			log_debug("[yacc]: cmp <- cmp_value MORE cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			p.cmp = yyDollar[2].s
+			p.cmp = ">"
 			p.left = yyDollar[1].sn
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
@@ -1555,7 +1555,7 @@ yydefault:
 		{
 			log_debug("[yacc]: cmp <- cmp_value EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			p.cmp = yyDollar[2].s
+			p.cmp = "=="
 			p.left = yyDollar[1].sn
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
@@ -1566,7 +1566,7 @@ yydefault:
 		{
 			log_debug("[yacc]: cmp <- cmp_value MORE_OR_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			p.cmp = yyDollar[2].s
+			p.cmp = ">="
 			p.left = yyDollar[1].sn
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
@@ -1577,7 +1577,7 @@ yydefault:
 		{
 			log_debug("[yacc]: cmp <- cmp_value LESS_OR_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			p.cmp = yyDollar[2].s
+			p.cmp = "<="
 			p.left = yyDollar[1].sn
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p
@@ -1588,7 +1588,7 @@ yydefault:
 		{
 			log_debug("[yacc]: cmp <- cmp_value NOT_EQUAL cmp_value")
 			p := &cmp_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-			p.cmp = yyDollar[2].s
+			p.cmp = "!="
 			p.left = yyDollar[1].sn
 			p.right = yyDollar[3].sn
 			yyVAL.sn = p

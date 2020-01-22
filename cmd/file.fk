@@ -1,6 +1,9 @@
 
 func test1(name)
 
+	for var i = 0, i < size(name), i++ then
+	end
+
 	var ok, var f = file.open(name, "rb")
 	if not ok then
 		return false, 0

@@ -18,6 +18,8 @@
 2020.1.14:添加compiler while逻辑，完成框架，下一步填各个node
 2020.1.16:添加compiler for if逻辑，完成框架，下一步填各个node
 2020.1.19:添加compiler完成，修复bug
+2020.1.22:compiler修复bug，下一步加vm
+
 
 
 
