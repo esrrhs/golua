@@ -77,6 +77,17 @@ func (vm *variant_map) con_map_set(k *variant, v *variant) {
 	vm.vm[*k] = v
 }
 
+func (vm *variant_map) con_map_to() map[variant]*variant {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	ret := make(map[variant]*variant)
+	for k, v := range vm.vm {
+		ret[k] = v
+	}
+	return ret
+}
+
 func (va *variant_array) con_array_get(k *variant) *variant {
 	va.lock.Lock()
 	defer va.lock.Unlock()
@@ -115,4 +126,13 @@ func (va *variant_array) con_array_set(k *variant, v *variant) {
 	}
 
 	va.va[index] = v
+}
+
+func (va *variant_array) con_array_to() []*variant {
+	va.lock.Lock()
+	defer va.lock.Unlock()
+
+	ret := make([]*variant, len(va.va))
+	copy(ret, va.va)
+	return ret
 }

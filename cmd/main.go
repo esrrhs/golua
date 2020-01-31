@@ -10,5 +10,11 @@ func main() {
 	err := fakego.Parse("test.fk")
 	if err != nil {
 		fmt.Printf("parse %v\n", err)
+		return
+	}
+	ret, err := fakego.Run("test_run", 1, "2")
+	if err != nil {
+		fmt.Printf("parse %v\n", err)
+		return
 	}
 }

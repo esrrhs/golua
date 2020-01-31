@@ -177,3 +177,33 @@ func Test0001(t *testing.T) {
 		t.Error("fail")
 	}
 }
+
+func Test00011(t *testing.T) {
+	var v variant
+	v.from(1)
+	fmt.Println(v.String())
+	fmt.Println(v.to())
+
+	v.from("a")
+	fmt.Println(v.String())
+	fmt.Println(v.to())
+
+	v.from([]string{"a", "1"})
+	fmt.Println(v.String())
+	fmt.Println(v.to())
+
+	v.from(nil)
+	fmt.Println(v.String())
+	fmt.Println(v.to())
+
+	v.from(uint64(12412521536124))
+	fmt.Println(v.String())
+	fmt.Println(v.to())
+
+	m := make(map[interface{}]interface{})
+	m[1] = "a"
+	m["a"] = 1
+	v.from(m)
+	fmt.Println(v.String())
+	fmt.Println(v.to())
+}
