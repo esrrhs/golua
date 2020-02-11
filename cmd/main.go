@@ -14,7 +14,8 @@ func main() {
 	}
 	ret, err := fakego.Run("test_run", 1, "2")
 	if err != nil {
-		fmt.Printf("parse %v\n", err)
+		fmt.Printf("Run %v\n", err)
 		return
 	}
+	fmt.Printf("Run ok %v\n", ret)
 }

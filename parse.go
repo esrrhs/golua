@@ -18,7 +18,7 @@ type parseContent struct {
 	includelist []string
 }
 
-func Parse(file string) (err error) {
+func Parse(file string) error {
 	ctx := &parseContent{}
 	ctx.includemap = make(map[string]int)
 	return gfs.pa.parse(ctx, file)
