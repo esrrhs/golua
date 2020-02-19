@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 func isOpenLog() bool {
@@ -210,4 +211,8 @@ func fkxtoa(d command, wid int) string {
 	tmp := "0x"
 	ret = tmp + ret
 	return ret
+}
+
+func fkgetmstick() int64 {
+	return time.Now().UnixNano()
 }

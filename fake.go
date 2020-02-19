@@ -13,6 +13,7 @@ type fakeStruct struct {
 	con container
 	bin binary
 	fm  funcmap
+	pf  profile
 }
 
 type FakeErr struct {

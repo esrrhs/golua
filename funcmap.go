@@ -37,3 +37,11 @@ func (fm *funcmap) add_func_union(name *variant) *funcunion {
 	fm.shh.Store(*name, &tmp)
 	return &tmp
 }
+
+func (fm *funcmap) get_func(name *variant) *funcunion {
+	p, ok := fm.shh.Load(*name)
+	if ok {
+		return p.(*funcunion)
+	}
+	return nil
+}
