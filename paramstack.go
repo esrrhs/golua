@@ -28,6 +28,13 @@ func (ps *paramstack) pop() interface{} {
 	return v.to()
 }
 
+func (ps *paramstack) pops() (a []interface{}) {
+	for ps.size() > 0 {
+		a = append(a, ps.pop())
+	}
+	return
+}
+
 func (ps *paramstack) size() int {
 	return ps.len
 }

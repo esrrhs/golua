@@ -4,7 +4,7 @@ import (
 	"errors"
 )
 
-func Run(fun string, p ...interface{}) (ret interface{}, err error) {
+func Run(fun string, p ...interface{}) (ret []interface{}, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch x := r.(type) {
@@ -32,7 +32,7 @@ func Run(fun string, p ...interface{}) (ret interface{}, err error) {
 	inter.call(&funcv, ps, nil)
 	inter.run()
 
-	ret = ps.pop()
+	ret = ps.pops()
 	return
 }
 
@@ -155,7 +155,12 @@ func (inter *interpreter) call(fun *variant, ps *paramstack, retpos []int) {
 		}
 
 		// 重置ret
-		inter.ret[0].V_SET_NIL()
+		if len(inter.ret) <= 0 {
+			inter.ret = make([]variant, 1)
+		}
+		for i, _ := range inter.ret {
+			inter.ret[i].V_SET_NIL()
+		}
 
 		// 新函数
 		inter.fb = fb

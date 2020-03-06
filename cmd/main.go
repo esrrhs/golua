@@ -12,7 +12,7 @@ func main() {
 		fmt.Printf("parse %v\n", err)
 		return
 	}
-	ret, err := fakego.Run("test_run", 1, "2")
+	ret, err := fakego.Run("json.test_run", 1, "2")
 	if err != nil {
 		fmt.Printf("Run %v\n", err)
 		return
