@@ -84,6 +84,7 @@ type interpreter struct {
 	sp    int
 	fb    *func_binary
 	ret   []variant
+	isend bool
 }
 
 func (inter *interpreter) call(fun *variant, ps *paramstack, retpos []int) {
@@ -177,6 +178,16 @@ func (inter *interpreter) call(fun *variant, ps *paramstack, retpos []int) {
 
 func (inter *interpreter) run() {
 
+	// 栈溢出检查
+	if len(inter.stack) > gfs.cfg.StackMax {
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "stack too big %d", len(inter.stack))
+	}
+
+	if inter.isend {
+		return
+	}
+
+	// TODO
 }
 
 func (inter *interpreter) getcurfile() string {
