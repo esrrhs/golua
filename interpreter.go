@@ -187,7 +187,12 @@ func (inter *interpreter) run() {
 		return
 	}
 
-	// TODO
+	for {
+		// 当前函数走完
+		if inter.ip >= inter.fb.binary_size() {
+			// TODO
+		}
+	}
 }
 
 func (inter *interpreter) getcurfile() string {
