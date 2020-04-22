@@ -262,7 +262,50 @@ func (inter *interpreter) BP_GET_RETPOS(bp int, retnum int, i int) int {
 	return inter.stack[bp-5-retnum+i].data.(int)
 }
 
-func (inter *interpreter) GET_VARIANT(funcBinary *func_binary, bp int, i int) *variant {
-	// TODO
+func (inter *interpreter) GET_VARIANT(fb *func_binary, bp int, pos int) *variant {
+	cmd := inter.GET_CMD(fb, pos)
+	return inter.GET_VARIANT_BY_CMD(fb, bp, cmd)
+}
+func (inter *interpreter) GET_VARIANT_BY_CMD(fb *func_binary, bp int, cmd command) *variant {
+	addrtype := _ADDR_TYPE(_COMMAND_CODE(cmd))
+	addrpos := _ADDR_POS(_COMMAND_CODE(cmd))
+	switch addrtype {
+	case ADDR_STACK:
+		return inter.GET_STACK(bp, addrpos)
+	case ADDR_CONST:
+		return inter.GET_CONST(fb, addrpos)
+	case ADDR_CONTAINER:
+		return inter.GET_CONTAINER(fb, bp, addrpos)
+	default:
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "addrtype cannot be %d %d", addrtype, addrpos)
+	}
+	return nil
+}
+
+func (inter *interpreter) GET_CMD(fb *func_binary, pos int) command {
+	return fb.buff[pos]
+}
+
+func (inter *interpreter) GET_STACK(bp int, pos int) *variant {
+	return &inter.stack[bp+pos]
+}
+
+func (inter *interpreter) GET_CONST(fb *func_binary, pos int) *variant {
+	return &fb.const_list[pos]
+}
+
+func (inter *interpreter) GET_CONTAINER(fb *func_binary, bp int, conpos int) *variant {
+	ca := fb.container_addr_list[conpos]
+	conv := inter.GET_VARIANT_BY_CMD(fb, bp, ca.con)
+	keyv := inter.GET_VARIANT_BY_CMD(fb, bp, ca.key)
+
+	switch conv.ty {
+	case MAP:
+		return conv.data.(*variant_map).con_map_get(keyv)
+	case ARRAY:
+		return conv.data.(*variant_array).con_array_get(keyv)
+	default:
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter get container variant fail, container type error, type %s", vartypetostring(conv.ty))
+	}
 	return nil
 }

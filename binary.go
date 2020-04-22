@@ -224,7 +224,7 @@ type func_binary struct {
 	// 二进制行号缓冲区
 	lineno_buff []int
 	// 常量
-	const_list []*variant
+	const_list []variant
 	// container地址
 	container_addr_list []container_addr
 	// 调试信息，栈变量
@@ -277,7 +277,7 @@ func (fb *func_binary) dump(pos int) string {
 		ret += "]\t"
 		ret += vartypetostring(fb.const_list[i].ty)
 		ret += "\t"
-		ret += vartostring(fb.const_list[i])
+		ret += vartostring(&fb.const_list[i])
 		ret += "\n"
 	}
 
