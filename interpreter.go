@@ -190,7 +190,34 @@ func (inter *interpreter) run() {
 	for {
 		// 当前函数走完
 		if inter.ip >= inter.fb.binary_size() {
-			// TODO
+			// 记录profile
+			if gfs.cfg.OpenProfile {
+				calltime := inter.BP_GET_CALLTIME(inter.bp)
+				gfs.pf.add_func_sample(inter.fb.name, fkgetmstick()-calltime)
+			}
+
+			// 出栈
+			oldretnum := inter.BP_GET_RETNUM(inter.bp)
+			callbp := inter.BP_GET_BP(inter.bp)
+			inter.fb = inter.BP_GET_FB(inter.bp)
+			inter.ip = inter.BP_GET_IP(inter.bp)
+			oldbp := inter.bp
+			inter.sp = inter.bp - BP_SIZE - oldretnum
+			inter.bp = callbp
+
+			// 所有都完
+			if inter.BP_END(inter.bp) {
+				inter.isend = true
+				break
+			} else { // 塞返回值
+				for i := 0; i < oldretnum; i++ {
+					oldretpos := inter.BP_GET_RETPOS(oldbp, oldretnum, i)
+
+					ret := inter.GET_VARIANT(inter.fb, inter.bp, oldretpos)
+					*ret = inter.ret[i]
+				}
+			}
+			continue
 		}
 	}
 }
@@ -205,4 +232,37 @@ func (inter *interpreter) getcurline() int {
 
 func (inter *interpreter) getcurfunc() string {
 	return "TODO"
+}
+
+func (inter *interpreter) BP_END(bp int) bool {
+	return bp == 0
+}
+
+func (inter *interpreter) BP_GET_CALLTIME(bp int) int64 {
+	return inter.stack[bp-3].data.(int64)
+}
+
+func (inter *interpreter) BP_GET_RETNUM(bp int) int {
+	return inter.stack[bp-5].data.(int)
+}
+
+func (inter *interpreter) BP_GET_BP(bp int) int {
+	return inter.stack[bp-1].data.(int)
+}
+
+func (inter *interpreter) BP_GET_FB(bp int) *func_binary {
+	return inter.stack[bp-2].data.(*func_binary)
+}
+
+func (inter *interpreter) BP_GET_IP(bp int) int {
+	return inter.stack[bp-4].data.(int)
+}
+
+func (inter *interpreter) BP_GET_RETPOS(bp int, retnum int, i int) int {
+	return inter.stack[bp-5-retnum+i].data.(int)
+}
+
+func (inter *interpreter) GET_VARIANT(funcBinary *func_binary, bp int, i int) *variant {
+	// TODO
+	return nil
 }
