@@ -219,6 +219,81 @@ func (inter *interpreter) run() {
 			}
 			continue
 		}
+
+		code := _COMMAND_CODE(inter.GET_CMD(inter.fb, inter.ip))
+
+		//log_debug("next %d %d %s", _COMMAND_TYPE(inter.GET_CMD(inter.fb, inter.ip)), code, opcodeStr(code))
+
+		inter.ip++
+
+		if gfs.cfg.OpenProfile {
+			gfs.pf.add_code_sample(code)
+		}
+
+		// 执行对应命令，放一起switch效率更高，cpu有缓存
+		switch code {
+		case OPCODE_ASSIGN:
+			// 赋值dest，必须为栈上或容器内
+			if !(inter.CHECK_STACK_POS(inter.fb, inter.ip) || inter.CHECK_CONTAINER_POS(inter.fb, inter.ip)) {
+				seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter assign error, dest is not stack or container, type %s", inter.POS_TYPE_NAME(inter.fb, inter.ip))
+			}
+
+			varv := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			if inter.CHECK_CONST_MAP_POS(varv) || inter.CHECK_CONST_ARRAY_POS(varv) {
+				seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter assign error, dest is const container")
+			}
+			inter.ip++
+
+			// 赋值来源
+			valuev := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			inter.ip++
+
+			// 赋值
+			*varv = *valuev
+			//log_debug("assign %s to %s", vartostring(valuev), vartostring(varv))
+		case OPCODE_PLUS:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_PLUS(left, right, dest)
+		case OPCODE_MINUS:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_MINUS(left, right, dest)
+		case OPCODE_MULTIPLY:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_MULTIPLY(left, right, dest)
+		case OPCODE_DIVIDE:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_DIVIDE(left, right, dest)
+		case OPCODE_DIVIDE_MOD:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_DIVIDE_MOD(left, right, dest)
+		case OPCODE_STRING_CAT:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_STRING_CAT(left, right, dest)
+		case OPCODE_AND:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_AND(left, right, dest)
+		case OPCODE_OR:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_OR(left, right, dest)
+		case OPCODE_LESS:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_LESS(left, right, dest)
+		case OPCODE_MORE:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_MORE(left, right, dest)
+		case OPCODE_EQUAL:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_EQUAL(left, right, dest)
+		case OPCODE_MOREEQUAL:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_MOREEQUAL(left, right, dest)
+		case OPCODE_LESSEQUAL:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_LESSEQUAL(left, right, dest)
+		case OPCODE_NOTEQUAL:
+			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
+			inter.V_NOTEQUAL(left, right, dest)
+		}
 	}
 }
 
@@ -286,6 +361,22 @@ func (inter *interpreter) GET_CMD(fb *func_binary, pos int) command {
 	return fb.buff[pos]
 }
 
+func (inter *interpreter) GET_CMD_ADDR_TYPE(fb *func_binary, pos int) int {
+	return _ADDR_TYPE(_COMMAND_CODE(inter.GET_CMD(fb, pos)))
+}
+
+func (inter *interpreter) CHECK_STACK_POS(fb *func_binary, pos int) bool {
+	return _ADDR_TYPE(_COMMAND_CODE(inter.GET_CMD(fb, pos))) == ADDR_STACK
+}
+
+func (inter *interpreter) CHECK_CONTAINER_POS(fb *func_binary, pos int) bool {
+	return _ADDR_TYPE(_COMMAND_CODE(inter.GET_CMD(fb, pos))) == ADDR_CONTAINER
+}
+
+func (inter *interpreter) POS_TYPE_NAME(fb *func_binary, pos int) string {
+	return vartypetostring(inter.GET_CMD_ADDR_TYPE(fb, pos))
+}
+
 func (inter *interpreter) GET_STACK(bp int, pos int) *variant {
 	return &inter.stack[bp+pos]
 }
@@ -308,4 +399,165 @@ func (inter *interpreter) GET_CONTAINER(fb *func_binary, bp int, conpos int) *va
 		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter get container variant fail, container type error, type %s", vartypetostring(conv.ty))
 	}
 	return nil
+}
+
+func (inter *interpreter) CHECK_CONST_MAP_POS(v *variant) bool {
+	if v.ty == MAP {
+		d := v.data.(*variant_map)
+		return d.isconst
+	}
+	return false
+}
+
+func (inter *interpreter) CHECK_CONST_ARRAY_POS(v *variant) bool {
+	if v.ty == ARRAY {
+		d := v.data.(*variant_array)
+		return d.isconst
+	}
+	return false
+}
+
+func (inter *interpreter) MATH_OPER(fb *func_binary, bp int) (*variant, *variant, *variant) {
+	left := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	right := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	if !(inter.CHECK_STACK_POS(fb, inter.ip) || inter.CHECK_CONTAINER_POS(fb, inter.ip)) {
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter math oper error, dest is not stack, type %s", inter.POS_TYPE_NAME(fb, inter.ip))
+	}
+	dest := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	log_debug("math left %s right %s", vartostring(left), vartostring(right))
+	return left, right, dest
+}
+
+func (inter *interpreter) V_ASSERT_CAN_CAL(v *variant) {
+	if !(v.ty == REAL) {
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "variant can not calculate, the variant is %s %s", vartypetostring(v.ty), vartostring(v))
+	}
+}
+
+func (inter *interpreter) V_ASSERT_CAN_DIVIDE(v *variant) {
+	if !(v.data.(float64) == 0) {
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "variant can not be divide, the variant is %s %s", vartypetostring(v.ty), vartostring(v))
+	}
+}
+
+func (inter *interpreter) V_PLUS(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	dest.data = left.data.(float64) + right.data.(float64)
+}
+
+func (inter *interpreter) V_MINUS(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	dest.data = left.data.(float64) - right.data.(float64)
+}
+
+func (inter *interpreter) V_MULTIPLY(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	dest.data = left.data.(float64) * right.data.(float64)
+}
+
+func (inter *interpreter) V_DIVIDE(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	inter.V_ASSERT_CAN_DIVIDE(right)
+	dest.data = left.data.(float64) / right.data.(float64)
+}
+
+func (inter *interpreter) V_DIVIDE_MOD(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	inter.V_ASSERT_CAN_DIVIDE(right)
+	dest.data = float64(int64(left.data.(float64)) % int64(right.data.(float64)))
+}
+
+func (inter *interpreter) V_STRING_CAT(left *variant, right *variant, dest *variant) {
+	dest.V_SET_STRING(left.String() + right.String())
+}
+
+func (inter *interpreter) V_AND(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) != 0 && right.data.(float64) != 0 {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) V_OR(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) != 0 || right.data.(float64) != 0 {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) V_LESS(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) < right.data.(float64) {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) V_MORE(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) > right.data.(float64) {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) V_EQUAL(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) == right.data.(float64) {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) V_MOREEQUAL(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) >= right.data.(float64) {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) V_LESSEQUAL(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) <= right.data.(float64) {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) V_NOTEQUAL(left *variant, right *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) != right.data.(float64) {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
 }
