@@ -24,6 +24,7 @@
 2020.2.19:加interpreter的run入口，下一步加详细内容
 2020.4.22:加interpreter的return
 2020.5.8:加interpreter的MATH_OPER，先完成再优化
+2020.5.11:加interpreter的JNE
 
 
 

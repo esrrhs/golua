@@ -293,6 +293,54 @@ func (inter *interpreter) run() {
 		case OPCODE_NOTEQUAL:
 			left, right, dest := inter.MATH_OPER(inter.fb, inter.bp)
 			inter.V_NOTEQUAL(left, right, dest)
+		case OPCODE_NOT:
+			left, dest := inter.MATH_SINGLE_OPER(inter.fb, inter.bp)
+			inter.V_NOT(left, dest)
+		case OPCODE_AND_JNE:
+			left, right, destip := inter.MATH_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_AND_JNE(left, right) {
+				inter.ip = destip
+			}
+		case OPCODE_OR_JNE:
+			left, right, destip := inter.MATH_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_OR_JNE(left, right) {
+				inter.ip = destip
+			}
+		case OPCODE_LESS_JNE:
+			left, right, destip := inter.MATH_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_LESS_JNE(left, right) {
+				inter.ip = destip
+			}
+		case OPCODE_MORE_JNE:
+			left, right, destip := inter.MATH_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_MORE_JNE(left, right) {
+				inter.ip = destip
+			}
+		case OPCODE_EQUAL_JNE:
+			left, right, destip := inter.MATH_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_EQUAL_JNE(left, right) {
+				inter.ip = destip
+			}
+		case OPCODE_MOREEQUAL_JNE:
+			left, right, destip := inter.MATH_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_MOREEQUAL_JNE(left, right) {
+				inter.ip = destip
+			}
+		case OPCODE_LESSEQUAL_JNE:
+			left, right, destip := inter.MATH_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_LESSEQUAL_JNE(left, right) {
+				inter.ip = destip
+			}
+		case OPCODE_NOTEQUAL_JNE:
+			left, right, destip := inter.MATH_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_NOTEQUAL_JNE(left, right) {
+				inter.ip = destip
+			}
+		case OPCODE_NOT_JNE:
+			left, destip := inter.MATH_SINGLE_OPER_JNE(inter.fb, inter.bp)
+			if !inter.V_NOT_JNE(left) {
+				inter.ip = destip
+			}
 		}
 	}
 }
@@ -430,7 +478,7 @@ func (inter *interpreter) MATH_OPER(fb *func_binary, bp int) (*variant, *variant
 	dest := inter.GET_VARIANT(fb, bp, inter.ip)
 	inter.ip++
 
-	log_debug("math left %s right %s", vartostring(left), vartostring(right))
+	//log_debug("math left %s right %s", vartostring(left), vartostring(right))
 	return left, right, dest
 }
 
@@ -560,4 +608,109 @@ func (inter *interpreter) V_NOTEQUAL(left *variant, right *variant, dest *varian
 	} else {
 		dest.data = float64(0)
 	}
+}
+
+func (inter *interpreter) MATH_SINGLE_OPER(fb *func_binary, bp int) (*variant, *variant) {
+	left := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	if !(inter.CHECK_STACK_POS(fb, inter.ip) || inter.CHECK_CONTAINER_POS(fb, inter.ip)) {
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter math oper error, dest is not stack, type %s", inter.POS_TYPE_NAME(fb, inter.ip))
+	}
+	dest := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	//log_debug("math left %s ", vartostring(left))
+	return left, dest
+}
+
+func (inter *interpreter) V_NOT(left *variant, dest *variant) {
+	inter.V_ASSERT_CAN_CAL(left)
+	if left.data.(float64) == 0 {
+		dest.data = float64(1)
+	} else {
+		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) MATH_OPER_JNE(fb *func_binary, bp int) (*variant, *variant, int) {
+	left := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	right := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	/*dest*/
+	inter.ip++
+	destip := _COMMAND_CODE(inter.GET_CMD(fb, inter.ip))
+	inter.ip++
+
+	//log_debug("math left %s right %s ", vartostring(left), vartostring(right))
+	return left, right, destip
+}
+
+func (inter *interpreter) V_AND_JNE(left *variant, right *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	return left.data.(float64) != 0 && right.data.(float64) != 0
+}
+
+func (inter *interpreter) V_OR_JNE(left *variant, right *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	return left.data.(float64) != 0 || right.data.(float64) != 0
+}
+
+func (inter *interpreter) V_LESS_JNE(left *variant, right *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	return left.data.(float64) < right.data.(float64)
+}
+
+func (inter *interpreter) V_MORE_JNE(left *variant, right *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	return left.data.(float64) > right.data.(float64)
+}
+
+func (inter *interpreter) V_EQUAL_JNE(left *variant, right *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	return left.data.(float64) == right.data.(float64)
+}
+
+func (inter *interpreter) V_MOREEQUAL_JNE(left *variant, right *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	return left.data.(float64) >= right.data.(float64)
+}
+
+func (inter *interpreter) V_LESSEQUAL_JNE(left *variant, right *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	return left.data.(float64) <= right.data.(float64)
+}
+
+func (inter *interpreter) V_NOTEQUAL_JNE(left *variant, right *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	return left.data.(float64) != right.data.(float64)
+}
+
+func (inter *interpreter) MATH_SINGLE_OPER_JNE(fb *func_binary, bp int) (*variant, int) {
+	left := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	/*dest*/
+	inter.ip++
+	destip := _COMMAND_CODE(inter.GET_CMD(fb, inter.ip))
+	inter.ip++
+
+	//log_debug("math left %s ", vartostring(left))
+	return left, destip
+}
+
+func (inter *interpreter) V_NOT_JNE(left *variant) bool {
+	inter.V_ASSERT_CAN_CAL(left)
+	return left.data.(float64) == 0
 }
