@@ -9,7 +9,7 @@ type block_identifiers_list []block_identifiers
 type block_identifiers_stack []block_identifiers_list
 type byte_code_list []command
 type byte_lineno_list []int
-type const_list []*variant
+type const_list []variant
 type containeraddr_list []container_addr
 type debug_block_identifiers_list []stack_variant_info
 
@@ -90,7 +90,7 @@ func (cg *codegen) alloc_stack_identifier() int {
 	return ret
 }
 
-func (cg *codegen) getconst(v *variant) int {
+func (cg *codegen) getconst(v variant) int {
 
 	for i, _ := range cg.const_list {
 		vv := cg.const_list[i]

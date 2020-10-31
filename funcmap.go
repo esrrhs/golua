@@ -21,25 +21,25 @@ func (fm *funcmap) dump() string {
 	return "TODO"
 }
 
-func (fm *funcmap) add_func(name *variant, fb *func_binary) {
+func (fm *funcmap) add_func(name variant, fb *func_binary) {
 	f := fm.add_func_union(name)
 	f.fb = fb
 	f.havefb = true
 }
 
-func (fm *funcmap) add_func_union(name *variant) *funcunion {
-	p, ok := fm.shh.Load(*name)
+func (fm *funcmap) add_func_union(name variant) *funcunion {
+	p, ok := fm.shh.Load(name)
 	if ok {
 		return p.(*funcunion)
 	}
 
 	tmp := funcunion{}
-	fm.shh.Store(*name, &tmp)
+	fm.shh.Store(name, &tmp)
 	return &tmp
 }
 
-func (fm *funcmap) get_func(name *variant) *funcunion {
-	p, ok := fm.shh.Load(*name)
+func (fm *funcmap) get_func(name variant) *funcunion {
+	p, ok := fm.shh.Load(name)
 	if ok {
 		return p.(*funcunion)
 	}

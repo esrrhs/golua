@@ -3,7 +3,6 @@ package fakego
 import (
 	"math"
 	"strconv"
-	"unsafe"
 )
 
 type command uint64
@@ -277,7 +276,7 @@ func (fb *func_binary) dump(pos int) string {
 		ret += "]\t"
 		ret += vartypetostring(fb.const_list[i].ty)
 		ret += "\t"
-		ret += vartostring(&fb.const_list[i])
+		ret += vartostring(fb.const_list[i])
 		ret += "\n"
 	}
 
@@ -367,7 +366,7 @@ func (fb *func_binary) dump(pos int) string {
 }
 
 func (fb *func_binary) binary_size() int {
-	return int(unsafe.Sizeof(fb.buff))
+	return len(fb.buff)
 }
 
 type binary struct {
@@ -385,6 +384,6 @@ func (b *binary) dump() string {
 	return str
 }
 
-func (b *binary) add_func(name *variant, bin *func_binary) {
+func (b *binary) add_func(name variant, bin *func_binary) {
 	gfs.fm.add_func(name, bin)
 }
