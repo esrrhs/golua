@@ -108,19 +108,19 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 }
 
 type const_parser_info struct {
-	v      *variant
+	v      variant
 	lineno int
 }
 
-func (pa *parser) reg_const_define(constname string, v *variant, lineno int) {
+func (pa *parser) reg_const_define(constname string, v variant, lineno int) {
 	pa.constinfo.Store(constname, &const_parser_info{v: v, lineno: lineno})
 }
 
-func (pa *parser) get_const_define(constname string) (*variant, int) {
+func (pa *parser) get_const_define(constname string) (bool, variant, int) {
 	v, ok := pa.constinfo.Load(constname)
 	if ok {
 		ci := v.(*const_parser_info)
-		return ci.v, ci.lineno
+		return true, ci.v, ci.lineno
 	}
-	return nil, 0
+	return false, nil_variant, 0
 }

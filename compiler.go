@@ -112,7 +112,7 @@ func (c *compiler) compile_func(funcnode *func_desc_node) {
 
 	var fv variant
 	fv.V_SET_STRING(funcname)
-	gfs.bin.add_func(&fv, &bin)
+	gfs.bin.add_func(fv, &bin)
 
 	log_debug("[compiler] compile_func func %s size = %d OK", funcname, bin.binary_size())
 
@@ -208,7 +208,7 @@ func (c *compiler) compile_node(cg *codegen, node syntree_node) {
 	log_debug("[compiler] compile_node %p %s OK", node, get_syntree_typename(node))
 }
 
-func (c *compiler) compile_explicit_value_node_to_variant(ev *explicit_value_node) *variant {
+func (c *compiler) compile_explicit_value_node_to_variant(ev *explicit_value_node) variant {
 	var v variant
 	switch ev.getvaluetype() {
 	case EVT_NULL:
@@ -235,7 +235,7 @@ func (c *compiler) compile_explicit_value_node_to_variant(ev *explicit_value_nod
 				vn := cmv.v.(*explicit_value_node)
 				kv := c.compile_explicit_value_node_to_variant(kn)
 				vv := c.compile_explicit_value_node_to_variant(vn)
-				vm.con_map_set(kv, vv)
+				vm.con_map_set(kv, &vv)
 			}
 			v.V_SET_MAP(vm)
 		}
@@ -248,7 +248,7 @@ func (c *compiler) compile_explicit_value_node_to_variant(ev *explicit_value_nod
 				kv.V_SET_REAL(float64(i))
 				vn := j.(*explicit_value_node)
 				vv := c.compile_explicit_value_node_to_variant(vn)
-				va.con_array_set(&kv, vv)
+				va.con_array_set(kv, &vv)
 			}
 			v.V_SET_ARRAY(va)
 		}
@@ -256,7 +256,7 @@ func (c *compiler) compile_explicit_value_node_to_variant(ev *explicit_value_nod
 		c.compile_seterror(ev, "compile_explicit_value_node_to_variant type error "+strconv.Itoa(ev.getvaluetype()))
 	}
 
-	return &v
+	return v
 }
 
 func (c *compiler) compile_seterror(node syntree_node, format string, a ...interface{}) {
@@ -565,7 +565,7 @@ func (c *compiler) compile_cmp_stmt(cg *codegen, cs *cmp_stmt) {
 		} else if cs.cmp == "true" {
 			var v variant
 			v.V_SET_REAL(1)
-			pos := cg.getconst(&v)
+			pos := cg.getconst(v)
 			c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
 
 			c.cmp_deps--
@@ -575,7 +575,7 @@ func (c *compiler) compile_cmp_stmt(cg *codegen, cs *cmp_stmt) {
 		} else if cs.cmp == "false" {
 			var v variant
 			v.V_SET_REAL(0)
-			pos := cg.getconst(&v)
+			pos := cg.getconst(v)
 			c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
 
 			c.cmp_deps--
@@ -846,16 +846,16 @@ func (c *compiler) compile_variable_node(cg *codegen, vn *variable_node) {
 
 	// 看看是否是全局常量定义
 	constname := fkgen_package_name(c.mf.get_package(), vn.str)
-	gcv, _ := gfs.pa.get_const_define(constname)
-	if gcv != nil {
+	find, gcv, _ := gfs.pa.get_const_define(constname)
+	if find {
 		pos := cg.getconst(gcv)
 		c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
 		log_debug("[compiler] compile_variable_node %p OK", vn)
 		return
 	}
 
-	gcv, _ = gfs.pa.get_const_define(vn.str)
-	if gcv != nil {
+	find, gcv, _ = gfs.pa.get_const_define(vn.str)
+	if find {
 		pos := cg.getconst(gcv)
 		c.cur_addr = _MAKE_ADDR(ADDR_CONST, pos)
 		log_debug("[compiler] compile_variable_node %p OK", vn)
@@ -898,8 +898,8 @@ func (c *compiler) compile_var_node(cg *codegen, vn *var_node) {
 	}
 
 	// 看看是否是全局常量定义
-	gcv, _ := gfs.pa.get_const_define(vn.str)
-	if gcv != nil {
+	find, _, _ := gfs.pa.get_const_define(vn.str)
+	if find {
 		c.compile_seterror(vn, "variable %s has defined global const", vn.str)
 	}
 
@@ -946,7 +946,7 @@ func (c *compiler) compile_function_call_node(cg *codegen, fn *function_call_nod
 			// 直接替换成map
 			var v variant
 			v.V_SET_STRING(MAP_FUNC_NAME)
-			pos = cg.getconst(&v)
+			pos = cg.getconst(v)
 			callpos = _MAKE_ADDR(ADDR_CONST, pos)
 		} else if mf.is_have_func(funcn) {
 			// 3 检查本地函数
@@ -955,14 +955,14 @@ func (c *compiler) compile_function_call_node(cg *codegen, fn *function_call_nod
 			// 拼上包名
 			pname := fkgen_package_name(mf.get_package(), funcn)
 			v.V_SET_STRING(pname)
-			pos = cg.getconst(&v)
+			pos = cg.getconst(v)
 			callpos = _MAKE_ADDR(ADDR_CONST, pos)
 		} else {
 			// 4 直接字符串使用
 			// 申请字符串变量
 			var v variant
 			v.V_SET_STRING(funcn)
-			pos = cg.getconst(&v)
+			pos = cg.getconst(v)
 			callpos = _MAKE_ADDR(ADDR_CONST, pos)
 		}
 	} else {
@@ -1108,8 +1108,8 @@ func (c *compiler) compile_container_get(cg *codegen, cn *container_get_node) {
 	var con command
 
 	// 看看是否是全局常量定义
-	gcv, _ := gfs.pa.get_const_define(cn.container)
-	if gcv != nil {
+	find, gcv, _ := gfs.pa.get_const_define(cn.container)
+	if find {
 		pos := cg.getconst(gcv)
 		con = _MAKE_ADDR(ADDR_CONST, pos)
 	} else {
@@ -1157,8 +1157,8 @@ func (c *compiler) compile_struct_pointer(cg *codegen, sn *struct_pointer_node) 
 	// 编译con
 	var con command
 	// 看看是否是全局常量定义
-	gcv, _ := gfs.pa.get_const_define(connname)
-	if gcv != nil {
+	find, gcv, _ := gfs.pa.get_const_define(connname)
+	if find {
 		pos := cg.getconst(gcv)
 		con = _MAKE_ADDR(ADDR_CONST, pos)
 	} else {
@@ -1175,7 +1175,7 @@ func (c *compiler) compile_struct_pointer(cg *codegen, sn *struct_pointer_node) 
 		// 编译key
 		var v variant
 		v.V_SET_STRING(keystr)
-		pos := cg.getconst(&v)
+		pos := cg.getconst(v)
 		key := _MAKE_ADDR(ADDR_CONST, pos)
 
 		// 获取容器的位置

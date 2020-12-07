@@ -31,7 +31,7 @@ func log_debug(format string, a ...interface{}) {
 	}
 }
 
-func vartostring(v *variant) string {
+func vartostring(v variant) string {
 	return v.String()
 }
 
@@ -72,9 +72,9 @@ func fkmaptoa(vm *variant_map) string {
 		} else {
 			ret += ",("
 		}
-		ret += vartostring(&key)
+		ret += vartostring(key)
 		ret += ","
-		ret += vartostring(value)
+		ret += vartostring(*value)
 		ret += ")"
 		i++
 	}
@@ -94,7 +94,7 @@ func fkarraytoa(va *variant_array) string {
 	ret += "["
 	for _, n := range va.va {
 		if n != nil {
-			ret += vartostring(n)
+			ret += vartostring(*n)
 		} else {
 			ret += " "
 		}

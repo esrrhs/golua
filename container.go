@@ -58,23 +58,23 @@ func (c *container) newconstmap() *variant_map {
 	return vm
 }
 
-func (vm *variant_map) con_map_get(k *variant) *variant {
+func (vm *variant_map) con_map_get(k variant) *variant {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 	var ret *variant
-	ret = vm.vm[*k]
-	if ret != nil {
+	ret, ok := vm.vm[k]
+	if ok {
 		return ret
 	}
 	ret = &variant{}
-	vm.vm[*k] = ret
+	vm.vm[k] = ret
 	return ret
 }
 
-func (vm *variant_map) con_map_set(k *variant, v *variant) {
+func (vm *variant_map) con_map_set(k variant, v *variant) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
-	vm.vm[*k] = v
+	vm.vm[k] = v
 }
 
 func (vm *variant_map) con_map_to() map[variant]*variant {
@@ -88,7 +88,7 @@ func (vm *variant_map) con_map_to() map[variant]*variant {
 	return ret
 }
 
-func (va *variant_array) con_array_get(k *variant) *variant {
+func (va *variant_array) con_array_get(k variant) *variant {
 	va.lock.Lock()
 	defer va.lock.Unlock()
 
@@ -110,7 +110,7 @@ func (va *variant_array) con_array_get(k *variant) *variant {
 	return va.va[index]
 }
 
-func (va *variant_array) con_array_set(k *variant, v *variant) {
+func (va *variant_array) con_array_set(k variant, v *variant) {
 	va.lock.Lock()
 	defer va.lock.Unlock()
 

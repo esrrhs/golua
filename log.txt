@@ -2,7 +2,7 @@
 * 支持并发的外部接口
 * 除了外部接口，除了内部的工具函数，无全局函数
 * 不依赖任何第三方库
-* 内部variant传参使用pointer
+* 内部variant除了需要外部赋值的传递指针，其他传参使用值拷贝
 * 内部错误使用panic，使用自定义的FakeErr
 * 外部接口返回error
 
@@ -25,6 +25,8 @@
 2020.4.22:加interpreter的return
 2020.5.8:加interpreter的MATH_OPER，先完成再优化
 2020.5.11:加interpreter的JNE
+2020.10.31:把variant不必要的指针传参改成值拷贝，运行空函数ok，下一步加interpreter剩下的指令
 2020.12.7:加interpreter的MATH_ASSIGN_OPER
+
 
 

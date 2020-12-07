@@ -8,14 +8,16 @@ import (
 )
 
 const (
-	NIL     = iota
-	REAL    // 参与计算的数值
-	STRING  // 字符串
-	POINTER // 指针
-	UUID    // int64的uuid，不参与计算，为了效率
-	ARRAY   // 数组
-	MAP     // 集合
+	NIL     = 0
+	REAL    = 1 // 参与计算的数值
+	STRING  = 2 // 字符串
+	POINTER = 3 // 指针
+	UUID    = 4 // int64的uuid，不参与计算，为了效率
+	ARRAY   = 5 // 数组
+	MAP     = 6 // 集合
 )
+
+var nil_variant variant
 
 type variant struct {
 	ty   int
@@ -86,7 +88,7 @@ func (v *variant) V_GET_POINTER() interface{} {
 	} else if v.ty == NIL {
 		return nil
 	} else {
-		panic(errors.New(fmt.Sprintf("variant get pointer fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
+		panic(errors.New(fmt.Sprintf("variant get pointer fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v))))
 	}
 }
 
@@ -96,7 +98,7 @@ func (v *variant) V_GET_REAL() float64 {
 	} else if v.ty == NIL {
 		return 0
 	} else {
-		panic(errors.New(fmt.Sprintf("variant get real fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
+		panic(errors.New(fmt.Sprintf("variant get real fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v))))
 	}
 }
 
@@ -106,7 +108,7 @@ func (v *variant) V_GET_STRING() string {
 	} else if v.ty == NIL {
 		return ""
 	} else {
-		panic(errors.New(fmt.Sprintf("variant get string fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
+		panic(errors.New(fmt.Sprintf("variant get string fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v))))
 	}
 }
 
@@ -116,11 +118,11 @@ func (v *variant) V_GET_UUID() uint64 {
 	} else if v.ty == NIL {
 		return 0
 	} else {
-		panic(errors.New(fmt.Sprintf("variant get uuid fail, the variant is %s %s", vartypetostring(v.ty), vartostring(v))))
+		panic(errors.New(fmt.Sprintf("variant get uuid fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v))))
 	}
 }
 
-func (v *variant) V_EQUAL_V(v2 *variant) bool {
+func (v *variant) V_EQUAL_V(v2 variant) bool {
 	if v.ty != v2.ty {
 		return false
 	} else {
@@ -190,7 +192,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int:
@@ -201,7 +203,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int8:
@@ -212,7 +214,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []uint8:
@@ -223,7 +225,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int16:
@@ -234,7 +236,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []uint16:
@@ -245,7 +247,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int32:
@@ -256,7 +258,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []uint32:
@@ -267,7 +269,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []float32:
@@ -278,7 +280,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []float64:
@@ -289,7 +291,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int64:
@@ -300,7 +302,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []uint64:
@@ -311,7 +313,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []string:
@@ -322,7 +324,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []interface{}:
@@ -333,7 +335,7 @@ func (v *variant) from(i interface{}) {
 			kv.V_SET_REAL(float64(i))
 			var vv variant
 			vv.from(d[i])
-			va.con_array_set(&kv, &vv)
+			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case map[interface{}]interface{}:
@@ -344,7 +346,7 @@ func (v *variant) from(i interface{}) {
 			kv.from(k)
 			var vv variant
 			vv.from(v)
-			vm.con_map_set(&kv, &vv)
+			vm.con_map_set(kv, &vv)
 		}
 		v.V_SET_MAP(vm)
 	default:
