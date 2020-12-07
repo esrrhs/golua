@@ -128,6 +128,13 @@ func (v *variant) V_EQUAL_V(v2 *variant) bool {
 	}
 }
 
+func (v *variant) V_ISBOOL() bool {
+	if v.ty != REAL {
+		return false
+	}
+	return v.data.(float64) != 0
+}
+
 func (v *variant) from(i interface{}) {
 	switch i.(type) {
 	case nil:

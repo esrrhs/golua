@@ -341,6 +341,36 @@ func (inter *interpreter) run() {
 			if !inter.V_NOT_JNE(left) {
 				inter.ip = destip
 			}
+		case OPCODE_JNE:
+			cmp := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			inter.ip++
+
+			ip := _COMMAND_CODE(inter.GET_CMD(inter.fb, inter.ip))
+			inter.ip++
+
+			if !cmp.V_ISBOOL() {
+				inter.ip = ip
+			}
+		case OPCODE_JMP:
+			ip := _COMMAND_CODE(inter.GET_CMD(inter.fb, inter.ip))
+			inter.ip++
+			inter.ip = ip
+		case OPCODE_PLUS_ASSIGN:
+			right, dest := inter.MATH_ASSIGN_OPER(inter.fb, inter.bp)
+			inter.V_PLUS(dest, right, dest)
+		case OPCODE_MINUS_ASSIGN:
+			right, dest := inter.MATH_ASSIGN_OPER(inter.fb, inter.bp)
+			inter.V_MINUS(dest, right, dest)
+		case OPCODE_MULTIPLY_ASSIGN:
+			right, dest := inter.MATH_ASSIGN_OPER(inter.fb, inter.bp)
+			inter.V_MULTIPLY(dest, right, dest)
+		case OPCODE_DIVIDE_ASSIGN:
+			right, dest := inter.MATH_ASSIGN_OPER(inter.fb, inter.bp)
+			inter.V_DIVIDE(dest, right, dest)
+		case OPCODE_DIVIDE_MOD_ASSIGN:
+			right, dest := inter.MATH_ASSIGN_OPER(inter.fb, inter.bp)
+			inter.V_DIVIDE_MOD(dest, right, dest)
+
 		}
 	}
 }
@@ -465,6 +495,22 @@ func (inter *interpreter) CHECK_CONST_ARRAY_POS(v *variant) bool {
 	return false
 }
 
+func (inter *interpreter) MATH_ASSIGN_OPER(fb *func_binary, bp int) (*variant, *variant) {
+	if !(inter.CHECK_STACK_POS(fb, inter.ip) || inter.CHECK_CONTAINER_POS(fb, inter.ip)) {
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter math oper error, dest is not stack, type %s", inter.POS_TYPE_NAME(fb, inter.ip))
+	}
+	dest := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+	if !(inter.CHECK_CONST_ARRAY_POS(dest) || inter.CHECK_CONST_MAP_POS(dest)) {
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter assign error, dest is const container")
+	}
+
+	right := inter.GET_VARIANT(fb, bp, inter.ip)
+	inter.ip++
+
+	return right, dest
+}
+
 func (inter *interpreter) MATH_OPER(fb *func_binary, bp int) (*variant, *variant, *variant) {
 	left := inter.GET_VARIANT(fb, bp, inter.ip)
 	inter.ip++
@@ -477,6 +523,9 @@ func (inter *interpreter) MATH_OPER(fb *func_binary, bp int) (*variant, *variant
 	}
 	dest := inter.GET_VARIANT(fb, bp, inter.ip)
 	inter.ip++
+	if !(inter.CHECK_CONST_ARRAY_POS(dest) || inter.CHECK_CONST_MAP_POS(dest)) {
+		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter assign error, dest is const container")
+	}
 
 	//log_debug("math left %s right %s", vartostring(left), vartostring(right))
 	return left, right, dest
