@@ -375,6 +375,38 @@ func (inter *interpreter) run() {
 		case OPCODE_DIVIDE_MOD_ASSIGN:
 			right, dest := inter.MATH_ASSIGN_OPER(inter.fb, inter.bp)
 			inter.V_DIVIDE_MOD(*dest, right, dest)
+		case OPCODE_CALL:
+			calltype := _COMMAND_CODE(inter.GET_CMD(inter.fb, inter.ip))
+			inter.ip++
+
+			callpos := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			inter.ip++
+
+			retnum := _COMMAND_CODE(inter.GET_CMD(inter.fb, inter.ip))
+			inter.ip++
+
+			retpos := make([]int, retnum)
+
+			for i := 0; i < retnum; i++ {
+				retpos[i] = inter.ip
+				inter.ip++
+			}
+
+			argnum := _COMMAND_CODE(inter.GET_CMD(inter.fb, inter.ip))
+			inter.ip++
+
+			ps := &paramstack{}
+
+			for i := 0; i < argnum; i++ {
+				arg := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+				inter.ip++
+
+				ps.vlist = append(ps.vlist, *arg)
+			}
+
+			if calltype == CALL_NORMAL {
+				inter.call(*callpos, ps, retpos)
+			}
 		}
 	}
 }
