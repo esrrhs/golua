@@ -406,6 +406,32 @@ func (inter *interpreter) run() {
 
 			if calltype == CALL_NORMAL {
 				inter.call(*callpos, ps, retpos)
+			} else {
+				// TODO
+			}
+		case OPCODE_FOR:
+			iter := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			inter.ip++
+
+			end := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			inter.ip++
+
+			step := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			inter.ip++
+
+			// tmp dest
+			inter.ip++
+
+			ip := _COMMAND_CODE(inter.GET_CMD(inter.fb, inter.ip))
+			inter.ip++
+
+			inter.V_PLUS(*iter, *step, iter)
+
+			b := false
+			inter.V_FOR_LESS(*iter, *end, &b)
+
+			if b {
+				inter.ip = ip
 			}
 		}
 	}
@@ -633,6 +659,16 @@ func (inter *interpreter) V_OR(left variant, right variant, dest *variant) {
 		dest.data = float64(1)
 	} else {
 		dest.data = float64(0)
+	}
+}
+
+func (inter *interpreter) V_FOR_LESS(left variant, right variant, dest *bool) {
+	inter.V_ASSERT_CAN_CAL(left)
+	inter.V_ASSERT_CAN_CAL(right)
+	if left.data.(float64) < right.data.(float64) {
+		*dest = true
+	} else {
+		*dest = false
 	}
 }
 
