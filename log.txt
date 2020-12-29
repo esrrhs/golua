@@ -28,6 +28,7 @@
 2020.10.31:把variant不必要的指针传参改成值拷贝，运行空函数ok，下一步加interpreter剩下的指令
 2020.12.7:加interpreter的MATH_ASSIGN_OPER
 2020.12.25:加interpreter的FOR
+2020.12.29:结束加interpreter，下一步测试纯脚本
 
 
 
