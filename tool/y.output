@@ -268,59 +268,59 @@ state 32
 
 
 state 33
-	explicit_value:  FTRUE.    (132)
+	explicit_value:  FTRUE.    (130)
 
-	.  reduce 132 (src line 1202)
+	.  reduce 130 (src line 1190)
 
 
 state 34
-	explicit_value:  FFALSE.    (133)
+	explicit_value:  FFALSE.    (131)
 
-	.  reduce 133 (src line 1211)
+	.  reduce 131 (src line 1199)
 
 
 state 35
-	explicit_value:  NUMBER.    (134)
+	explicit_value:  NUMBER.    (132)
 
-	.  reduce 134 (src line 1220)
+	.  reduce 132 (src line 1208)
 
 
 state 36
-	explicit_value:  FKUUID.    (135)
+	explicit_value:  FKUUID.    (133)
 
-	.  reduce 135 (src line 1229)
+	.  reduce 133 (src line 1217)
 
 
 state 37
-	explicit_value:  STRING_DEFINITION.    (136)
+	explicit_value:  STRING_DEFINITION.    (134)
 
-	.  reduce 136 (src line 1238)
+	.  reduce 134 (src line 1226)
 
 
 state 38
-	explicit_value:  FKFLOAT.    (137)
+	explicit_value:  FKFLOAT.    (135)
 
-	.  reduce 137 (src line 1247)
+	.  reduce 135 (src line 1235)
 
 
 state 39
-	explicit_value:  FNULL.    (138)
+	explicit_value:  FNULL.    (136)
 
-	.  reduce 138 (src line 1256)
+	.  reduce 136 (src line 1244)
 
 
-40: shift/reduce conflict (shift 33(0), red'n 141(0)) on FTRUE
-40: shift/reduce conflict (shift 34(0), red'n 141(0)) on FFALSE
-40: shift/reduce conflict (shift 37(0), red'n 141(0)) on STRING_DEFINITION
-40: shift/reduce conflict (shift 35(0), red'n 141(0)) on NUMBER
-40: shift/reduce conflict (shift 38(0), red'n 141(0)) on FKFLOAT
-40: shift/reduce conflict (shift 36(0), red'n 141(0)) on FKUUID
-40: shift/reduce conflict (shift 41(0), red'n 141(0)) on OPEN_SQUARE_BRACKET
-40: shift/reduce conflict (shift 40(0), red'n 141(0)) on OPEN_BIG_BRACKET
-40: shift/reduce conflict (shift 39(0), red'n 141(0)) on FNULL
+40: shift/reduce conflict (shift 33(0), red'n 139(0)) on FTRUE
+40: shift/reduce conflict (shift 34(0), red'n 139(0)) on FFALSE
+40: shift/reduce conflict (shift 37(0), red'n 139(0)) on STRING_DEFINITION
+40: shift/reduce conflict (shift 35(0), red'n 139(0)) on NUMBER
+40: shift/reduce conflict (shift 38(0), red'n 139(0)) on FKFLOAT
+40: shift/reduce conflict (shift 36(0), red'n 139(0)) on FKUUID
+40: shift/reduce conflict (shift 41(0), red'n 139(0)) on OPEN_SQUARE_BRACKET
+40: shift/reduce conflict (shift 40(0), red'n 139(0)) on OPEN_BIG_BRACKET
+40: shift/reduce conflict (shift 39(0), red'n 139(0)) on FNULL
 state 40
 	explicit_value:  OPEN_BIG_BRACKET.const_map_list_value CLOSE_BIG_BRACKET 
-	const_map_list_value: .    (141)
+	const_map_list_value: .    (139)
 
 	FTRUE  shift 33
 	FFALSE  shift 34
@@ -331,24 +331,24 @@ state 40
 	OPEN_SQUARE_BRACKET  shift 41
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 141 (src line 1287)
+	.  reduce 139 (src line 1275)
 
 	explicit_value  goto 47
 	const_map_list_value  goto 45
 	const_map_value  goto 46
 
-41: shift/reduce conflict (shift 33(0), red'n 145(0)) on FTRUE
-41: shift/reduce conflict (shift 34(0), red'n 145(0)) on FFALSE
-41: shift/reduce conflict (shift 37(0), red'n 145(0)) on STRING_DEFINITION
-41: shift/reduce conflict (shift 35(0), red'n 145(0)) on NUMBER
-41: shift/reduce conflict (shift 38(0), red'n 145(0)) on FKFLOAT
-41: shift/reduce conflict (shift 36(0), red'n 145(0)) on FKUUID
-41: shift/reduce conflict (shift 41(0), red'n 145(0)) on OPEN_SQUARE_BRACKET
-41: shift/reduce conflict (shift 40(0), red'n 145(0)) on OPEN_BIG_BRACKET
-41: shift/reduce conflict (shift 39(0), red'n 145(0)) on FNULL
+41: shift/reduce conflict (shift 33(0), red'n 143(0)) on FTRUE
+41: shift/reduce conflict (shift 34(0), red'n 143(0)) on FFALSE
+41: shift/reduce conflict (shift 37(0), red'n 143(0)) on STRING_DEFINITION
+41: shift/reduce conflict (shift 35(0), red'n 143(0)) on NUMBER
+41: shift/reduce conflict (shift 38(0), red'n 143(0)) on FKFLOAT
+41: shift/reduce conflict (shift 36(0), red'n 143(0)) on FKUUID
+41: shift/reduce conflict (shift 41(0), red'n 143(0)) on OPEN_SQUARE_BRACKET
+41: shift/reduce conflict (shift 40(0), red'n 143(0)) on OPEN_BIG_BRACKET
+41: shift/reduce conflict (shift 39(0), red'n 143(0)) on FNULL
 state 41
 	explicit_value:  OPEN_SQUARE_BRACKET.const_array_list_value CLOSE_SQUARE_BRACKET 
-	const_array_list_value: .    (145)
+	const_array_list_value: .    (143)
 
 	FTRUE  shift 33
 	FFALSE  shift 34
@@ -359,7 +359,7 @@ state 41
 	OPEN_SQUARE_BRACKET  shift 41
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 145 (src line 1323)
+	.  reduce 143 (src line 1311)
 
 	explicit_value  goto 49
 	const_array_list_value  goto 48
@@ -406,9 +406,9 @@ state 45
 	const_map_value  goto 53
 
 state 46
-	const_map_list_value:  const_map_value.    (142)
+	const_map_list_value:  const_map_value.    (140)
 
-	.  reduce 142 (src line 1294)
+	.  reduce 140 (src line 1282)
 
 
 state 47
@@ -437,47 +437,45 @@ state 48
 	explicit_value  goto 56
 
 state 49
-	const_array_list_value:  explicit_value.    (146)
+	const_array_list_value:  explicit_value.    (144)
 
-	.  reduce 146 (src line 1330)
+	.  reduce 144 (src line 1318)
 
 
 state 50
 	function_declaration:  FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET.block END 
 	function_declaration:  FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	END  shift 58
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
+	explicit_value  goto 92
 	block  goto 57
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -491,12 +489,10 @@ state 50
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
 state 51
 	function_declaration_arguments:  function_declaration_arguments ARG_SPLITTER.arg 
@@ -504,18 +500,18 @@ state 51
 	IDENTIFIER  shift 44
 	.  error
 
-	arg  goto 97
+	arg  goto 93
 
 state 52
-	explicit_value:  OPEN_BIG_BRACKET const_map_list_value CLOSE_BIG_BRACKET.    (139)
+	explicit_value:  OPEN_BIG_BRACKET const_map_list_value CLOSE_BIG_BRACKET.    (137)
 
-	.  reduce 139 (src line 1265)
+	.  reduce 137 (src line 1253)
 
 
 state 53
-	const_map_list_value:  const_map_list_value const_map_value.    (143)
+	const_map_list_value:  const_map_list_value const_map_value.    (141)
 
-	.  reduce 143 (src line 1302)
+	.  reduce 141 (src line 1290)
 
 
 state 54
@@ -532,56 +528,54 @@ state 54
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 98
+	explicit_value  goto 94
 
 state 55
-	explicit_value:  OPEN_SQUARE_BRACKET const_array_list_value CLOSE_SQUARE_BRACKET.    (140)
+	explicit_value:  OPEN_SQUARE_BRACKET const_array_list_value CLOSE_SQUARE_BRACKET.    (138)
 
-	.  reduce 140 (src line 1275)
+	.  reduce 138 (src line 1263)
 
 
 state 56
-	const_array_list_value:  const_array_list_value explicit_value.    (147)
+	const_array_list_value:  const_array_list_value explicit_value.    (145)
 
-	.  reduce 147 (src line 1338)
+	.  reduce 145 (src line 1326)
 
 
 state 57
 	function_declaration:  FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET block.END 
 	block:  block.stmt 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 99
+	IF  shift 74
+	END  shift 95
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
 	while_stmt  goto 60
 	if_stmt  goto 61
 	return_stmt  goto 62
@@ -594,12 +588,10 @@ state 57
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
 state 58
 	function_declaration:  FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET END.    (24)
@@ -686,217 +678,205 @@ state 71
 
 
 state 72
-	stmt:  sleep.    (52)
+	stmt:  switch_stmt.    (52)
 
 	.  reduce 52 (src line 469)
 
 
 state 73
-	stmt:  yield.    (53)
-
-	.  reduce 53 (src line 475)
-
-
-state 74
-	stmt:  switch_stmt.    (54)
-
-	.  reduce 54 (src line 481)
-
-
-state 75
 	while_stmt:  WHILE.cmp THEN block END 
 	while_stmt:  WHILE.cmp THEN END 
 
-	FTRUE  shift 104
-	FFALSE  shift 105
+	FTRUE  shift 100
+	FFALSE  shift 101
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 102
+	OPEN_BRACKET  shift 98
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	IS  shift 106
-	NOT  shift 107
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	IS  shift 102
+	NOT  shift 103
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp  goto 101
-	cmp_value  goto 103
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp  goto 97
+	cmp_value  goto 99
+	math_expr  goto 82
 
-state 76
+state 74
 	if_stmt:  IF.cmp THEN block elseif_stmt_list else_stmt END 
 	if_stmt:  IF.cmp THEN elseif_stmt_list else_stmt END 
 
-	FTRUE  shift 104
-	FFALSE  shift 105
+	FTRUE  shift 100
+	FFALSE  shift 101
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 102
+	OPEN_BRACKET  shift 98
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	IS  shift 106
-	NOT  shift 107
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	IS  shift 102
+	NOT  shift 103
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp  goto 111
-	cmp_value  goto 103
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp  goto 107
+	cmp_value  goto 99
+	math_expr  goto 82
 
-77: shift/reduce conflict (shift 33(0), red'n 91(0)) on FTRUE
-77: shift/reduce conflict (shift 34(0), red'n 91(0)) on FFALSE
-77: shift/reduce conflict (shift 37(0), red'n 91(0)) on STRING_DEFINITION
-77: shift/reduce conflict (shift 92(0), red'n 91(0)) on IDENTIFIER
-77: shift/reduce conflict (shift 35(0), red'n 91(0)) on NUMBER
-77: shift/reduce conflict (shift 82(0), red'n 91(0)) on OPEN_BRACKET
-77: shift/reduce conflict (shift 38(0), red'n 91(0)) on FKFLOAT
-77: shift/reduce conflict (shift 36(0), red'n 91(0)) on FKUUID
-77: shift/reduce conflict (shift 41(0), red'n 91(0)) on OPEN_SQUARE_BRACKET
-77: shift/reduce conflict (shift 93(0), red'n 91(0)) on IDENTIFIER_DOT
-77: shift/reduce conflict (shift 95(0), red'n 91(0)) on IDENTIFIER_POINTER
-77: shift/reduce conflict (shift 40(0), red'n 91(0)) on OPEN_BIG_BRACKET
-77: shift/reduce conflict (shift 39(0), red'n 91(0)) on FNULL
-state 77
+75: shift/reduce conflict (shift 33(0), red'n 89(0)) on FTRUE
+75: shift/reduce conflict (shift 34(0), red'n 89(0)) on FFALSE
+75: shift/reduce conflict (shift 37(0), red'n 89(0)) on STRING_DEFINITION
+75: shift/reduce conflict (shift 88(0), red'n 89(0)) on IDENTIFIER
+75: shift/reduce conflict (shift 35(0), red'n 89(0)) on NUMBER
+75: shift/reduce conflict (shift 80(0), red'n 89(0)) on OPEN_BRACKET
+75: shift/reduce conflict (shift 38(0), red'n 89(0)) on FKFLOAT
+75: shift/reduce conflict (shift 36(0), red'n 89(0)) on FKUUID
+75: shift/reduce conflict (shift 41(0), red'n 89(0)) on OPEN_SQUARE_BRACKET
+75: shift/reduce conflict (shift 89(0), red'n 89(0)) on IDENTIFIER_DOT
+75: shift/reduce conflict (shift 91(0), red'n 89(0)) on IDENTIFIER_POINTER
+75: shift/reduce conflict (shift 40(0), red'n 89(0)) on OPEN_BIG_BRACKET
+75: shift/reduce conflict (shift 39(0), red'n 89(0)) on FNULL
+state 75
 	return_stmt:  RETURN.return_value_list 
-	return_stmt:  RETURN.    (91)
+	return_stmt:  RETURN.    (89)
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 91 (src line 841)
+	.  reduce 89 (src line 829)
 
-	explicit_value  goto 114
-	function_call  goto 83
-	variable  goto 115
-	expr_value  goto 94
-	expr  goto 116
-	return_value_list  goto 112
-	return_value  goto 113
-	math_expr  goto 84
+	explicit_value  goto 110
+	function_call  goto 81
+	variable  goto 111
+	expr_value  goto 90
+	expr  goto 112
+	return_value_list  goto 108
+	return_value  goto 109
+	math_expr  goto 82
 
-78: shift/reduce conflict (shift 117(0), red'n 102(0)) on ASSIGN
-78: shift/reduce conflict (shift 118(0), red'n 102(0)) on NEW_ASSIGN
-state 78
+76: shift/reduce conflict (shift 113(0), red'n 100(0)) on ASSIGN
+76: shift/reduce conflict (shift 114(0), red'n 100(0)) on NEW_ASSIGN
+state 76
 	assign_stmt:  var.ASSIGN assign_value 
 	assign_stmt:  var.NEW_ASSIGN assign_value 
-	var_list:  var.    (102)
+	var_list:  var.    (100)
 
-	ASSIGN  shift 117
-	NEW_ASSIGN  shift 118
-	.  reduce 102 (src line 941)
+	ASSIGN  shift 113
+	NEW_ASSIGN  shift 114
+	.  reduce 100 (src line 929)
 
 
-state 79
+state 77
 	multi_assign_stmt:  var_list.ASSIGN function_call 
 	multi_assign_stmt:  var_list.NEW_ASSIGN function_call 
 	var_list:  var_list.ARG_SPLITTER var 
 
-	ARG_SPLITTER  shift 121
-	ASSIGN  shift 119
-	NEW_ASSIGN  shift 120
+	ARG_SPLITTER  shift 117
+	ASSIGN  shift 115
+	NEW_ASSIGN  shift 116
 	.  error
 
 
+state 78
+	break:  BREAK.    (146)
+
+	.  reduce 146 (src line 1336)
+
+
+state 79
+	continue:  CONTINUE.    (147)
+
+	.  reduce 147 (src line 1345)
+
+
 state 80
-	break:  BREAK.    (148)
-
-	.  reduce 148 (src line 1348)
-
-
-state 81
-	continue:  CONTINUE.    (149)
-
-	.  reduce 149 (src line 1357)
-
-
-state 82
 	expr:  OPEN_BRACKET.expr CLOSE_BRACKET 
 	math_expr:  OPEN_BRACKET.math_expr CLOSE_BRACKET 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 124
-	expr_value  goto 94
-	expr  goto 122
-	math_expr  goto 123
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 120
+	expr_value  goto 90
+	expr  goto 118
+	math_expr  goto 119
 
-83: shift/reduce conflict (shift 125(0), red'n 119(0)) on OPEN_BRACKET
-state 83
+81: shift/reduce conflict (shift 121(0), red'n 117(0)) on OPEN_BRACKET
+state 81
 	function_call:  function_call.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	function_call:  function_call.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	expr:  function_call.    (119)
-	expr_value:  function_call.    (130)
-
-	DIVIDE_MOD  reduce 130 (src line 1188)
-	PLUS  reduce 130 (src line 1188)
-	MINUS  reduce 130 (src line 1188)
-	DIVIDE  reduce 130 (src line 1188)
-	MULTIPLY  reduce 130 (src line 1188)
-	OPEN_BRACKET  shift 125
-	COLON  shift 126
-	STRING_CAT  reduce 130 (src line 1188)
-	.  reduce 119 (src line 1094)
-
-
-state 84
-	expr:  math_expr.    (120)
-	expr_value:  math_expr.    (128)
+	expr:  function_call.    (117)
+	expr_value:  function_call.    (128)
 
 	DIVIDE_MOD  reduce 128 (src line 1176)
 	PLUS  reduce 128 (src line 1176)
 	MINUS  reduce 128 (src line 1176)
 	DIVIDE  reduce 128 (src line 1176)
 	MULTIPLY  reduce 128 (src line 1176)
+	OPEN_BRACKET  shift 121
+	COLON  shift 122
 	STRING_CAT  reduce 128 (src line 1176)
-	.  reduce 120 (src line 1100)
+	.  reduce 117 (src line 1082)
 
 
-state 85
+state 82
+	expr:  math_expr.    (118)
+	expr_value:  math_expr.    (126)
+
+	DIVIDE_MOD  reduce 126 (src line 1164)
+	PLUS  reduce 126 (src line 1164)
+	MINUS  reduce 126 (src line 1164)
+	DIVIDE  reduce 126 (src line 1164)
+	MULTIPLY  reduce 126 (src line 1164)
+	STRING_CAT  reduce 126 (src line 1164)
+	.  reduce 118 (src line 1088)
+
+
+state 83
 	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	math_assign_stmt:  variable.PLUS_ASSIGN assign_value 
 	math_assign_stmt:  variable.MINUS_ASSIGN assign_value 
@@ -904,59 +884,57 @@ state 85
 	math_assign_stmt:  variable.MULTIPLY_ASSIGN assign_value 
 	math_assign_stmt:  variable.DIVIDE_MOD_ASSIGN assign_value 
 	math_assign_stmt:  variable.INC 
-	var:  variable.    (113)
-	expr_value:  variable.    (131)
+	var:  variable.    (111)
+	expr_value:  variable.    (129)
 
-	ARG_SPLITTER  reduce 113 (src line 1045)
-	ASSIGN  reduce 113 (src line 1045)
-	PLUS_ASSIGN  shift 128
-	MINUS_ASSIGN  shift 129
-	DIVIDE_ASSIGN  shift 130
-	MULTIPLY_ASSIGN  shift 131
-	DIVIDE_MOD_ASSIGN  shift 132
-	COLON  shift 127
-	INC  shift 133
-	NEW_ASSIGN  reduce 113 (src line 1045)
-	.  reduce 131 (src line 1194)
+	ARG_SPLITTER  reduce 111 (src line 1033)
+	ASSIGN  reduce 111 (src line 1033)
+	PLUS_ASSIGN  shift 124
+	MINUS_ASSIGN  shift 125
+	DIVIDE_ASSIGN  shift 126
+	MULTIPLY_ASSIGN  shift 127
+	DIVIDE_MOD_ASSIGN  shift 128
+	COLON  shift 123
+	INC  shift 129
+	NEW_ASSIGN  reduce 111 (src line 1033)
+	.  reduce 129 (src line 1182)
 
 
-state 86
+state 84
 	for_stmt:  FOR.block ARG_SPLITTER cmp ARG_SPLITTER block THEN block END 
 	for_stmt:  FOR.block ARG_SPLITTER cmp ARG_SPLITTER block THEN END 
 	for_loop_stmt:  FOR.var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN block END 
 	for_loop_stmt:  FOR.var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	block  goto 134
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 130
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -970,128 +948,78 @@ state 86
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 135
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 131
+	var_list  goto 77
+	math_expr  goto 82
 
-state 87
+state 85
 	fake_call_stmt:  FAKE.function_call 
 
-	IDENTIFIER  shift 92
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER  shift 88
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	.  error
 
-	function_call  goto 136
-	variable  goto 137
+	function_call  goto 132
+	variable  goto 133
 
-state 88
-	sleep:  SLEEP.expr_value 
-
-	FTRUE  shift 33
-	FFALSE  shift 34
-	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
-	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
-	FKFLOAT  shift 38
-	FKUUID  shift 36
-	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	OPEN_BIG_BRACKET  shift 40
-	FNULL  shift 39
-	.  error
-
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 138
-	math_expr  goto 139
-
-state 89
-	yield:  YIELD.expr_value 
-
-	FTRUE  shift 33
-	FFALSE  shift 34
-	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
-	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
-	FKFLOAT  shift 38
-	FKUUID  shift 36
-	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	OPEN_BIG_BRACKET  shift 40
-	FNULL  shift 39
-	.  error
-
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 142
-	math_expr  goto 139
-
-state 90
+state 86
 	switch_stmt:  SWITCH.cmp_value switch_case_list DEFAULT block END 
 	switch_stmt:  SWITCH.cmp_value switch_case_list DEFAULT END 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 143
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 134
+	math_expr  goto 82
 
-state 91
+state 87
 	var:  VAR_BEGIN.IDENTIFIER 
 
-	IDENTIFIER  shift 144
+	IDENTIFIER  shift 135
 	.  error
 
 
-92: shift/reduce conflict (shift 145(0), red'n 114(0)) on OPEN_BRACKET
-92: shift/reduce conflict (shift 146(0), red'n 114(0)) on OPEN_SQUARE_BRACKET
-state 92
+88: shift/reduce conflict (shift 136(0), red'n 112(0)) on OPEN_BRACKET
+88: shift/reduce conflict (shift 137(0), red'n 112(0)) on OPEN_SQUARE_BRACKET
+state 88
 	function_call:  IDENTIFIER.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	variable:  IDENTIFIER.    (114)
+	variable:  IDENTIFIER.    (112)
 	variable:  IDENTIFIER.OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET 
 
-	OPEN_BRACKET  shift 145
-	OPEN_SQUARE_BRACKET  shift 146
-	.  reduce 114 (src line 1053)
+	OPEN_BRACKET  shift 136
+	OPEN_SQUARE_BRACKET  shift 137
+	.  reduce 112 (src line 1041)
 
 
-93: shift/reduce conflict (shift 147(0), red'n 117(0)) on OPEN_BRACKET
-state 93
+89: shift/reduce conflict (shift 138(0), red'n 115(0)) on OPEN_BRACKET
+state 89
 	function_call:  IDENTIFIER_DOT.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	variable:  IDENTIFIER_DOT.    (117)
+	variable:  IDENTIFIER_DOT.    (115)
 
-	OPEN_BRACKET  shift 147
-	.  reduce 117 (src line 1078)
+	OPEN_BRACKET  shift 138
+	.  reduce 115 (src line 1066)
 
 
-state 94
+state 90
 	math_expr:  expr_value.PLUS expr_value 
 	math_expr:  expr_value.MINUS expr_value 
 	math_expr:  expr_value.MULTIPLY expr_value 
@@ -1099,95 +1027,95 @@ state 94
 	math_expr:  expr_value.DIVIDE_MOD expr_value 
 	math_expr:  expr_value.STRING_CAT expr_value 
 
-	DIVIDE_MOD  shift 152
-	PLUS  shift 148
-	MINUS  shift 149
-	DIVIDE  shift 151
-	MULTIPLY  shift 150
-	STRING_CAT  shift 153
+	DIVIDE_MOD  shift 143
+	PLUS  shift 139
+	MINUS  shift 140
+	DIVIDE  shift 142
+	MULTIPLY  shift 141
+	STRING_CAT  shift 144
 	.  error
 
 
-state 95
-	variable:  IDENTIFIER_POINTER.    (116)
+state 91
+	variable:  IDENTIFIER_POINTER.    (114)
 
-	.  reduce 116 (src line 1070)
-
-
-state 96
-	expr_value:  explicit_value.    (129)
-
-	.  reduce 129 (src line 1182)
+	.  reduce 114 (src line 1058)
 
 
-state 97
+state 92
+	expr_value:  explicit_value.    (127)
+
+	.  reduce 127 (src line 1170)
+
+
+state 93
 	function_declaration_arguments:  function_declaration_arguments ARG_SPLITTER arg.    (26)
 
 	.  reduce 26 (src line 240)
 
 
-state 98
-	const_map_value:  explicit_value COLON explicit_value.    (144)
+state 94
+	const_map_value:  explicit_value COLON explicit_value.    (142)
 
-	.  reduce 144 (src line 1312)
+	.  reduce 142 (src line 1300)
 
 
-state 99
+state 95
 	function_declaration:  FUNC IDENTIFIER OPEN_BRACKET function_declaration_arguments CLOSE_BRACKET block END.    (23)
 
 	.  reduce 23 (src line 207)
 
 
-state 100
+state 96
 	block:  block stmt.    (38)
 
 	.  reduce 38 (src line 379)
 
 
-state 101
+state 97
 	while_stmt:  WHILE cmp.THEN block END 
 	while_stmt:  WHILE cmp.THEN END 
 	cmp:  cmp.AND cmp 
 	cmp:  cmp.OR cmp 
 
-	THEN  shift 154
-	AND  shift 155
-	OR  shift 156
+	THEN  shift 145
+	AND  shift 146
+	OR  shift 147
 	.  error
 
 
-state 102
+state 98
 	cmp:  OPEN_BRACKET.cmp CLOSE_BRACKET 
 	expr:  OPEN_BRACKET.expr CLOSE_BRACKET 
 	math_expr:  OPEN_BRACKET.math_expr CLOSE_BRACKET 
 
-	FTRUE  shift 104
-	FFALSE  shift 105
+	FTRUE  shift 100
+	FFALSE  shift 101
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 102
+	OPEN_BRACKET  shift 98
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	IS  shift 106
-	NOT  shift 107
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	IS  shift 102
+	NOT  shift 103
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 158
-	cmp  goto 157
-	cmp_value  goto 103
-	math_expr  goto 123
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 149
+	cmp  goto 148
+	cmp_value  goto 99
+	math_expr  goto 119
 
-state 103
+state 99
 	cmp:  cmp_value.LESS cmp_value 
 	cmp:  cmp_value.MORE cmp_value 
 	cmp:  cmp_value.EQUAL cmp_value 
@@ -1195,517 +1123,515 @@ state 103
 	cmp:  cmp_value.LESS_OR_EQUAL cmp_value 
 	cmp:  cmp_value.NOT_EQUAL cmp_value 
 
-	MORE  shift 160
-	LESS  shift 159
-	MORE_OR_EQUAL  shift 162
-	LESS_OR_EQUAL  shift 163
-	EQUAL  shift 161
-	NOT_EQUAL  shift 164
+	MORE  shift 151
+	LESS  shift 150
+	MORE_OR_EQUAL  shift 153
+	LESS_OR_EQUAL  shift 154
+	EQUAL  shift 152
+	NOT_EQUAL  shift 155
 	.  error
 
 
-state 104
-	cmp:  FTRUE.    (83)
-	explicit_value:  FTRUE.    (132)
+state 100
+	cmp:  FTRUE.    (81)
+	explicit_value:  FTRUE.    (130)
 
-	THEN  reduce 83 (src line 771)
-	ARG_SPLITTER  reduce 83 (src line 771)
-	CLOSE_BRACKET  reduce 83 (src line 771)
-	AND  reduce 83 (src line 771)
-	OR  reduce 83 (src line 771)
-	.  reduce 132 (src line 1202)
-
-
-state 105
-	cmp:  FFALSE.    (84)
-	explicit_value:  FFALSE.    (133)
-
-	THEN  reduce 84 (src line 781)
-	ARG_SPLITTER  reduce 84 (src line 781)
-	CLOSE_BRACKET  reduce 84 (src line 781)
-	AND  reduce 84 (src line 781)
-	OR  reduce 84 (src line 781)
-	.  reduce 133 (src line 1211)
+	THEN  reduce 81 (src line 759)
+	ARG_SPLITTER  reduce 81 (src line 759)
+	CLOSE_BRACKET  reduce 81 (src line 759)
+	AND  reduce 81 (src line 759)
+	OR  reduce 81 (src line 759)
+	.  reduce 130 (src line 1190)
 
 
-state 106
+state 101
+	cmp:  FFALSE.    (82)
+	explicit_value:  FFALSE.    (131)
+
+	THEN  reduce 82 (src line 769)
+	ARG_SPLITTER  reduce 82 (src line 769)
+	CLOSE_BRACKET  reduce 82 (src line 769)
+	AND  reduce 82 (src line 769)
+	OR  reduce 82 (src line 769)
+	.  reduce 131 (src line 1199)
+
+
+state 102
 	cmp:  IS.cmp_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 165
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 156
+	math_expr  goto 82
 
-state 107
+state 103
 	cmp:  NOT.cmp_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 166
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 157
+	math_expr  goto 82
 
-state 108
-	cmp_value:  explicit_value.    (87)
-	expr_value:  explicit_value.    (129)
+state 104
+	cmp_value:  explicit_value.    (85)
+	expr_value:  explicit_value.    (127)
+
+	DIVIDE_MOD  reduce 127 (src line 1170)
+	PLUS  reduce 127 (src line 1170)
+	MINUS  reduce 127 (src line 1170)
+	DIVIDE  reduce 127 (src line 1170)
+	MULTIPLY  reduce 127 (src line 1170)
+	STRING_CAT  reduce 127 (src line 1170)
+	.  reduce 85 (src line 801)
+
+
+state 105
+	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	cmp_value:  variable.    (86)
+	expr_value:  variable.    (129)
 
 	DIVIDE_MOD  reduce 129 (src line 1182)
 	PLUS  reduce 129 (src line 1182)
 	MINUS  reduce 129 (src line 1182)
 	DIVIDE  reduce 129 (src line 1182)
 	MULTIPLY  reduce 129 (src line 1182)
+	COLON  shift 123
 	STRING_CAT  reduce 129 (src line 1182)
+	.  reduce 86 (src line 807)
+
+
+state 106
+	cmp_value:  expr.    (87)
+
 	.  reduce 87 (src line 813)
 
 
-state 109
-	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	cmp_value:  variable.    (88)
-	expr_value:  variable.    (131)
-
-	DIVIDE_MOD  reduce 131 (src line 1194)
-	PLUS  reduce 131 (src line 1194)
-	MINUS  reduce 131 (src line 1194)
-	DIVIDE  reduce 131 (src line 1194)
-	MULTIPLY  reduce 131 (src line 1194)
-	COLON  shift 127
-	STRING_CAT  reduce 131 (src line 1194)
-	.  reduce 88 (src line 819)
-
-
-state 110
-	cmp_value:  expr.    (89)
-
-	.  reduce 89 (src line 825)
-
-
-state 111
+state 107
 	if_stmt:  IF cmp.THEN block elseif_stmt_list else_stmt END 
 	if_stmt:  IF cmp.THEN elseif_stmt_list else_stmt END 
 	cmp:  cmp.AND cmp 
 	cmp:  cmp.OR cmp 
 
-	THEN  shift 167
-	AND  shift 155
-	OR  shift 156
+	THEN  shift 158
+	AND  shift 146
+	OR  shift 147
 	.  error
 
 
-112: shift/reduce conflict (shift 168(0), red'n 90(0)) on ARG_SPLITTER
-state 112
-	return_stmt:  RETURN return_value_list.    (90)
+108: shift/reduce conflict (shift 159(0), red'n 88(0)) on ARG_SPLITTER
+state 108
+	return_stmt:  RETURN return_value_list.    (88)
 	return_value_list:  return_value_list.ARG_SPLITTER return_value 
 
-	ARG_SPLITTER  shift 168
-	.  reduce 90 (src line 833)
+	ARG_SPLITTER  shift 159
+	.  reduce 88 (src line 821)
 
 
-state 113
-	return_value_list:  return_value.    (93)
+state 109
+	return_value_list:  return_value.    (91)
 
-	.  reduce 93 (src line 859)
+	.  reduce 91 (src line 847)
 
 
-state 114
-	return_value:  explicit_value.    (94)
-	expr_value:  explicit_value.    (129)
+state 110
+	return_value:  explicit_value.    (92)
+	expr_value:  explicit_value.    (127)
+
+	DIVIDE_MOD  reduce 127 (src line 1170)
+	PLUS  reduce 127 (src line 1170)
+	MINUS  reduce 127 (src line 1170)
+	DIVIDE  reduce 127 (src line 1170)
+	MULTIPLY  reduce 127 (src line 1170)
+	STRING_CAT  reduce 127 (src line 1170)
+	.  reduce 92 (src line 857)
+
+
+state 111
+	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	return_value:  variable.    (93)
+	expr_value:  variable.    (129)
 
 	DIVIDE_MOD  reduce 129 (src line 1182)
 	PLUS  reduce 129 (src line 1182)
 	MINUS  reduce 129 (src line 1182)
 	DIVIDE  reduce 129 (src line 1182)
 	MULTIPLY  reduce 129 (src line 1182)
+	COLON  shift 123
 	STRING_CAT  reduce 129 (src line 1182)
+	.  reduce 93 (src line 863)
+
+
+state 112
+	return_value:  expr.    (94)
+
 	.  reduce 94 (src line 869)
 
 
-state 115
-	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	return_value:  variable.    (95)
-	expr_value:  variable.    (131)
-
-	DIVIDE_MOD  reduce 131 (src line 1194)
-	PLUS  reduce 131 (src line 1194)
-	MINUS  reduce 131 (src line 1194)
-	DIVIDE  reduce 131 (src line 1194)
-	MULTIPLY  reduce 131 (src line 1194)
-	COLON  shift 127
-	STRING_CAT  reduce 131 (src line 1194)
-	.  reduce 95 (src line 875)
-
-
-state 116
-	return_value:  expr.    (96)
-
-	.  reduce 96 (src line 881)
-
-
-state 117
+state 113
 	assign_stmt:  var ASSIGN.assign_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 170
-	function_call  goto 83
-	variable  goto 171
-	expr_value  goto 94
-	expr  goto 172
-	assign_value  goto 169
-	math_expr  goto 84
+	explicit_value  goto 161
+	function_call  goto 81
+	variable  goto 162
+	expr_value  goto 90
+	expr  goto 163
+	assign_value  goto 160
+	math_expr  goto 82
 
-state 118
+state 114
 	assign_stmt:  var NEW_ASSIGN.assign_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 170
-	function_call  goto 83
-	variable  goto 171
-	expr_value  goto 94
-	expr  goto 172
-	assign_value  goto 173
-	math_expr  goto 84
+	explicit_value  goto 161
+	function_call  goto 81
+	variable  goto 162
+	expr_value  goto 90
+	expr  goto 163
+	assign_value  goto 164
+	math_expr  goto 82
 
-state 119
+state 115
 	multi_assign_stmt:  var_list ASSIGN.function_call 
 
-	IDENTIFIER  shift 92
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER  shift 88
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	.  error
 
-	function_call  goto 174
-	variable  goto 137
+	function_call  goto 165
+	variable  goto 133
 
-state 120
+state 116
 	multi_assign_stmt:  var_list NEW_ASSIGN.function_call 
 
-	IDENTIFIER  shift 92
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER  shift 88
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	.  error
 
-	function_call  goto 175
-	variable  goto 137
+	function_call  goto 166
+	variable  goto 133
 
-state 121
+state 117
 	var_list:  var_list ARG_SPLITTER.var 
 
-	VAR_BEGIN  shift 91
-	IDENTIFIER  shift 178
-	IDENTIFIER_DOT  shift 179
-	IDENTIFIER_POINTER  shift 95
+	VAR_BEGIN  shift 87
+	IDENTIFIER  shift 169
+	IDENTIFIER_DOT  shift 170
+	IDENTIFIER_POINTER  shift 91
 	.  error
 
-	variable  goto 177
-	var  goto 176
+	variable  goto 168
+	var  goto 167
 
-state 122
+state 118
 	expr:  OPEN_BRACKET expr.CLOSE_BRACKET 
 
-	CLOSE_BRACKET  shift 180
+	CLOSE_BRACKET  shift 171
 	.  error
 
 
-123: shift/reduce conflict (shift 181(0), red'n 120(0)) on CLOSE_BRACKET
-state 123
-	expr:  math_expr.    (120)
+119: shift/reduce conflict (shift 172(0), red'n 118(0)) on CLOSE_BRACKET
+state 119
+	expr:  math_expr.    (118)
 	math_expr:  OPEN_BRACKET math_expr.CLOSE_BRACKET 
-	expr_value:  math_expr.    (128)
+	expr_value:  math_expr.    (126)
 
-	MORE  reduce 120 (src line 1100)
-	LESS  reduce 120 (src line 1100)
-	MORE_OR_EQUAL  reduce 120 (src line 1100)
-	LESS_OR_EQUAL  reduce 120 (src line 1100)
-	EQUAL  reduce 120 (src line 1100)
-	NOT_EQUAL  reduce 120 (src line 1100)
-	CLOSE_BRACKET  shift 181
-	.  reduce 128 (src line 1176)
+	MORE  reduce 118 (src line 1088)
+	LESS  reduce 118 (src line 1088)
+	MORE_OR_EQUAL  reduce 118 (src line 1088)
+	LESS_OR_EQUAL  reduce 118 (src line 1088)
+	EQUAL  reduce 118 (src line 1088)
+	NOT_EQUAL  reduce 118 (src line 1088)
+	CLOSE_BRACKET  shift 172
+	.  reduce 126 (src line 1164)
 
 
-state 124
+state 120
 	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	expr_value:  variable.    (131)
+	expr_value:  variable.    (129)
 
-	COLON  shift 127
-	.  reduce 131 (src line 1194)
+	COLON  shift 123
+	.  reduce 129 (src line 1182)
 
 
-state 125
+state 121
 	function_call:  function_call OPEN_BRACKET.function_call_arguments CLOSE_BRACKET 
 	function_call_arguments: .    (34)
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  reduce 34 (src line 346)
 
-	explicit_value  goto 96
-	function_call  goto 140
-	function_call_arguments  goto 182
-	variable  goto 124
-	arg_expr  goto 183
-	expr_value  goto 184
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	function_call_arguments  goto 173
+	variable  goto 120
+	arg_expr  goto 174
+	expr_value  goto 175
+	math_expr  goto 176
 
-state 126
+state 122
 	function_call:  function_call COLON.IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 
-	IDENTIFIER  shift 185
+	IDENTIFIER  shift 179
 	.  error
 
 
-state 127
+state 123
 	function_call:  variable COLON.IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 
-	IDENTIFIER  shift 186
+	IDENTIFIER  shift 180
 	.  error
 
 
-state 128
+state 124
 	math_assign_stmt:  variable PLUS_ASSIGN.assign_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 170
-	function_call  goto 83
-	variable  goto 171
-	expr_value  goto 94
-	expr  goto 172
-	assign_value  goto 187
-	math_expr  goto 84
+	explicit_value  goto 161
+	function_call  goto 81
+	variable  goto 162
+	expr_value  goto 90
+	expr  goto 163
+	assign_value  goto 181
+	math_expr  goto 82
 
-state 129
+state 125
 	math_assign_stmt:  variable MINUS_ASSIGN.assign_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 170
-	function_call  goto 83
-	variable  goto 171
-	expr_value  goto 94
-	expr  goto 172
-	assign_value  goto 188
-	math_expr  goto 84
+	explicit_value  goto 161
+	function_call  goto 81
+	variable  goto 162
+	expr_value  goto 90
+	expr  goto 163
+	assign_value  goto 182
+	math_expr  goto 82
 
-state 130
+state 126
 	math_assign_stmt:  variable DIVIDE_ASSIGN.assign_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 170
-	function_call  goto 83
-	variable  goto 171
-	expr_value  goto 94
-	expr  goto 172
-	assign_value  goto 189
-	math_expr  goto 84
+	explicit_value  goto 161
+	function_call  goto 81
+	variable  goto 162
+	expr_value  goto 90
+	expr  goto 163
+	assign_value  goto 183
+	math_expr  goto 82
 
-state 131
+state 127
 	math_assign_stmt:  variable MULTIPLY_ASSIGN.assign_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 170
-	function_call  goto 83
-	variable  goto 171
-	expr_value  goto 94
-	expr  goto 172
-	assign_value  goto 190
-	math_expr  goto 84
+	explicit_value  goto 161
+	function_call  goto 81
+	variable  goto 162
+	expr_value  goto 90
+	expr  goto 163
+	assign_value  goto 184
+	math_expr  goto 82
 
-state 132
+state 128
 	math_assign_stmt:  variable DIVIDE_MOD_ASSIGN.assign_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 170
-	function_call  goto 83
-	variable  goto 171
-	expr_value  goto 94
-	expr  goto 172
-	assign_value  goto 191
-	math_expr  goto 84
+	explicit_value  goto 161
+	function_call  goto 81
+	variable  goto 162
+	expr_value  goto 90
+	expr  goto 163
+	assign_value  goto 185
+	math_expr  goto 82
 
-state 133
-	math_assign_stmt:  variable INC.    (111)
+state 129
+	math_assign_stmt:  variable INC.    (109)
 
-	.  reduce 111 (src line 1021)
+	.  reduce 109 (src line 1009)
 
 
-state 134
+state 130
 	block:  block.stmt 
 	for_stmt:  FOR block.ARG_SPLITTER cmp ARG_SPLITTER block THEN block END 
 	for_stmt:  FOR block.ARG_SPLITTER cmp ARG_SPLITTER block THEN END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	ARG_SPLITTER  shift 192
-	OPEN_BRACKET  shift 82
+	ARG_SPLITTER  shift 186
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
 	while_stmt  goto 60
 	if_stmt  goto 61
 	return_stmt  goto 62
@@ -1718,396 +1644,315 @@ state 134
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-135: shift/reduce conflict (shift 193(0), red'n 102(0)) on ASSIGN
-135: shift/reduce conflict (shift 118(0), red'n 102(0)) on NEW_ASSIGN
-state 135
+131: shift/reduce conflict (shift 187(0), red'n 100(0)) on ASSIGN
+131: shift/reduce conflict (shift 114(0), red'n 100(0)) on NEW_ASSIGN
+state 131
 	for_loop_stmt:  FOR var.ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN block END 
 	for_loop_stmt:  FOR var.ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN END 
 	assign_stmt:  var.ASSIGN assign_value 
 	assign_stmt:  var.NEW_ASSIGN assign_value 
-	var_list:  var.    (102)
+	var_list:  var.    (100)
 
-	ASSIGN  shift 193
-	NEW_ASSIGN  shift 118
-	.  reduce 102 (src line 941)
+	ASSIGN  shift 187
+	NEW_ASSIGN  shift 114
+	.  reduce 100 (src line 929)
 
 
-136: shift/reduce conflict (shift 125(0), red'n 55(0)) on OPEN_BRACKET
-state 136
+132: shift/reduce conflict (shift 121(0), red'n 53(0)) on OPEN_BRACKET
+state 132
 	function_call:  function_call.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 	function_call:  function_call.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	fake_call_stmt:  FAKE function_call.    (55)
+	fake_call_stmt:  FAKE function_call.    (53)
 
-	OPEN_BRACKET  shift 125
-	COLON  shift 126
-	.  reduce 55 (src line 489)
+	OPEN_BRACKET  shift 121
+	COLON  shift 122
+	.  reduce 53 (src line 477)
 
 
-state 137
+state 133
 	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
 
-	COLON  shift 127
+	COLON  shift 123
 	.  error
 
 
-state 138
-	math_expr:  expr_value.PLUS expr_value 
-	math_expr:  expr_value.MINUS expr_value 
-	math_expr:  expr_value.MULTIPLY expr_value 
-	math_expr:  expr_value.DIVIDE expr_value 
-	math_expr:  expr_value.DIVIDE_MOD expr_value 
-	math_expr:  expr_value.STRING_CAT expr_value 
-	sleep:  SLEEP expr_value.    (150)
-
-	DIVIDE_MOD  shift 152
-	PLUS  shift 148
-	MINUS  shift 149
-	DIVIDE  shift 151
-	MULTIPLY  shift 150
-	STRING_CAT  shift 153
-	.  reduce 150 (src line 1366)
-
-
-state 139
-	expr_value:  math_expr.    (128)
-
-	.  reduce 128 (src line 1176)
-
-
-140: shift/reduce conflict (shift 125(0), red'n 130(0)) on OPEN_BRACKET
-state 140
-	function_call:  function_call.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	function_call:  function_call.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	expr_value:  function_call.    (130)
-
-	OPEN_BRACKET  shift 125
-	COLON  shift 126
-	.  reduce 130 (src line 1188)
-
-
-state 141
-	math_expr:  OPEN_BRACKET.math_expr CLOSE_BRACKET 
-
-	FTRUE  shift 33
-	FFALSE  shift 34
-	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
-	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
-	FKFLOAT  shift 38
-	FKUUID  shift 36
-	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	OPEN_BIG_BRACKET  shift 40
-	FNULL  shift 39
-	.  error
-
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 94
-	math_expr  goto 194
-
-state 142
-	math_expr:  expr_value.PLUS expr_value 
-	math_expr:  expr_value.MINUS expr_value 
-	math_expr:  expr_value.MULTIPLY expr_value 
-	math_expr:  expr_value.DIVIDE expr_value 
-	math_expr:  expr_value.DIVIDE_MOD expr_value 
-	math_expr:  expr_value.STRING_CAT expr_value 
-	yield:  YIELD expr_value.    (151)
-
-	DIVIDE_MOD  shift 152
-	PLUS  shift 148
-	MINUS  shift 149
-	DIVIDE  shift 151
-	MULTIPLY  shift 150
-	STRING_CAT  shift 153
-	.  reduce 151 (src line 1375)
-
-
-state 143
+state 134
 	switch_stmt:  SWITCH cmp_value.switch_case_list DEFAULT block END 
 	switch_stmt:  SWITCH cmp_value.switch_case_list DEFAULT END 
 
-	CASE  shift 197
+	CASE  shift 190
 	.  error
 
-	switch_case_list  goto 195
-	switch_case_define  goto 196
+	switch_case_list  goto 188
+	switch_case_define  goto 189
 
-state 144
-	var:  VAR_BEGIN IDENTIFIER.    (112)
+state 135
+	var:  VAR_BEGIN IDENTIFIER.    (110)
 
-	.  reduce 112 (src line 1037)
+	.  reduce 110 (src line 1025)
 
 
-state 145
+state 136
 	function_call:  IDENTIFIER OPEN_BRACKET.function_call_arguments CLOSE_BRACKET 
 	function_call_arguments: .    (34)
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  reduce 34 (src line 346)
 
-	explicit_value  goto 96
-	function_call  goto 140
-	function_call_arguments  goto 198
-	variable  goto 124
-	arg_expr  goto 183
-	expr_value  goto 184
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	function_call_arguments  goto 191
+	variable  goto 120
+	arg_expr  goto 174
+	expr_value  goto 175
+	math_expr  goto 176
 
-state 146
+state 137
 	variable:  IDENTIFIER OPEN_SQUARE_BRACKET.expr_value CLOSE_SQUARE_BRACKET 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 199
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	expr_value  goto 192
+	math_expr  goto 176
 
-state 147
+state 138
 	function_call:  IDENTIFIER_DOT OPEN_BRACKET.function_call_arguments CLOSE_BRACKET 
 	function_call_arguments: .    (34)
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  reduce 34 (src line 346)
 
-	explicit_value  goto 96
-	function_call  goto 140
-	function_call_arguments  goto 200
-	variable  goto 124
-	arg_expr  goto 183
-	expr_value  goto 184
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	function_call_arguments  goto 193
+	variable  goto 120
+	arg_expr  goto 174
+	expr_value  goto 175
+	math_expr  goto 176
 
-state 148
+state 139
 	math_expr:  expr_value PLUS.expr_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 201
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	expr_value  goto 194
+	math_expr  goto 176
 
-state 149
+state 140
 	math_expr:  expr_value MINUS.expr_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 202
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	expr_value  goto 195
+	math_expr  goto 176
 
-state 150
+state 141
 	math_expr:  expr_value MULTIPLY.expr_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 203
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	expr_value  goto 196
+	math_expr  goto 176
 
-state 151
+state 142
 	math_expr:  expr_value DIVIDE.expr_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 204
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	expr_value  goto 197
+	math_expr  goto 176
 
-state 152
+state 143
 	math_expr:  expr_value DIVIDE_MOD.expr_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 205
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	expr_value  goto 198
+	math_expr  goto 176
 
-state 153
+state 144
 	math_expr:  expr_value STRING_CAT.expr_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	expr_value  goto 206
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	expr_value  goto 199
+	math_expr  goto 176
 
-state 154
+state 145
 	while_stmt:  WHILE cmp THEN.block END 
 	while_stmt:  WHILE cmp THEN.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 208
+	IF  shift 74
+	END  shift 201
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	block  goto 207
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 200
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -2121,296 +1966,292 @@ state 154
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 155
+state 146
 	cmp:  cmp AND.cmp 
 
-	FTRUE  shift 104
-	FFALSE  shift 105
+	FTRUE  shift 100
+	FFALSE  shift 101
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 102
+	OPEN_BRACKET  shift 98
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	IS  shift 106
-	NOT  shift 107
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	IS  shift 102
+	NOT  shift 103
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp  goto 209
-	cmp_value  goto 103
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp  goto 202
+	cmp_value  goto 99
+	math_expr  goto 82
 
-state 156
+state 147
 	cmp:  cmp OR.cmp 
 
-	FTRUE  shift 104
-	FFALSE  shift 105
+	FTRUE  shift 100
+	FFALSE  shift 101
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 102
+	OPEN_BRACKET  shift 98
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	IS  shift 106
-	NOT  shift 107
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	IS  shift 102
+	NOT  shift 103
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp  goto 210
-	cmp_value  goto 103
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp  goto 203
+	cmp_value  goto 99
+	math_expr  goto 82
 
-state 157
+state 148
 	cmp:  OPEN_BRACKET cmp.CLOSE_BRACKET 
 	cmp:  cmp.AND cmp 
 	cmp:  cmp.OR cmp 
 
-	CLOSE_BRACKET  shift 211
-	AND  shift 155
-	OR  shift 156
+	CLOSE_BRACKET  shift 204
+	AND  shift 146
+	OR  shift 147
 	.  error
 
 
-state 158
-	cmp_value:  expr.    (89)
+state 149
+	cmp_value:  expr.    (87)
 	expr:  OPEN_BRACKET expr.CLOSE_BRACKET 
 
-	CLOSE_BRACKET  shift 180
-	.  reduce 89 (src line 825)
+	CLOSE_BRACKET  shift 171
+	.  reduce 87 (src line 813)
 
 
-state 159
+state 150
 	cmp:  cmp_value LESS.cmp_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 212
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 205
+	math_expr  goto 82
 
-state 160
+state 151
 	cmp:  cmp_value MORE.cmp_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 213
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 206
+	math_expr  goto 82
 
-state 161
+state 152
 	cmp:  cmp_value EQUAL.cmp_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 214
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 207
+	math_expr  goto 82
 
-state 162
+state 153
 	cmp:  cmp_value MORE_OR_EQUAL.cmp_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 215
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 208
+	math_expr  goto 82
 
-state 163
+state 154
 	cmp:  cmp_value LESS_OR_EQUAL.cmp_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 216
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 209
+	math_expr  goto 82
 
-state 164
+state 155
 	cmp:  cmp_value NOT_EQUAL.cmp_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 217
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 210
+	math_expr  goto 82
 
-state 165
-	cmp:  IS cmp_value.    (85)
+state 156
+	cmp:  IS cmp_value.    (83)
 
-	.  reduce 85 (src line 791)
-
-
-state 166
-	cmp:  NOT cmp_value.    (86)
-
-	.  reduce 86 (src line 801)
+	.  reduce 83 (src line 779)
 
 
-167: shift/reduce conflict (shift 221(0), red'n 66(0)) on ELSEIF
-state 167
+state 157
+	cmp:  NOT cmp_value.    (84)
+
+	.  reduce 84 (src line 789)
+
+
+158: shift/reduce conflict (shift 214(0), red'n 64(0)) on ELSEIF
+state 158
 	if_stmt:  IF cmp THEN.block elseif_stmt_list else_stmt END 
 	if_stmt:  IF cmp THEN.elseif_stmt_list else_stmt END 
-	elseif_stmt_list: .    (66)
+	elseif_stmt_list: .    (64)
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
-	ELSEIF  shift 221
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
+	ELSEIF  shift 214
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 66 (src line 619)
+	.  reduce 64 (src line 607)
 
-	explicit_value  goto 96
-	block  goto 218
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 211
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -2424,163 +2265,161 @@ state 167
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	elseif_stmt_list  goto 219
-	elseif_stmt  goto 220
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	elseif_stmt_list  goto 212
+	elseif_stmt  goto 213
+	var_list  goto 77
+	math_expr  goto 82
 
-state 168
+state 159
 	return_value_list:  return_value_list ARG_SPLITTER.return_value 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 114
-	function_call  goto 83
-	variable  goto 115
-	expr_value  goto 94
-	expr  goto 116
-	return_value  goto 222
-	math_expr  goto 84
+	explicit_value  goto 110
+	function_call  goto 81
+	variable  goto 111
+	expr_value  goto 90
+	expr  goto 112
+	return_value  goto 215
+	math_expr  goto 82
 
-state 169
-	assign_stmt:  var ASSIGN assign_value.    (97)
+state 160
+	assign_stmt:  var ASSIGN assign_value.    (95)
 
-	.  reduce 97 (src line 889)
+	.  reduce 95 (src line 877)
 
 
-state 170
-	assign_value:  explicit_value.    (103)
-	expr_value:  explicit_value.    (129)
+state 161
+	assign_value:  explicit_value.    (101)
+	expr_value:  explicit_value.    (127)
+
+	DIVIDE_MOD  reduce 127 (src line 1170)
+	PLUS  reduce 127 (src line 1170)
+	MINUS  reduce 127 (src line 1170)
+	DIVIDE  reduce 127 (src line 1170)
+	MULTIPLY  reduce 127 (src line 1170)
+	STRING_CAT  reduce 127 (src line 1170)
+	.  reduce 101 (src line 939)
+
+
+state 162
+	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	assign_value:  variable.    (102)
+	expr_value:  variable.    (129)
 
 	DIVIDE_MOD  reduce 129 (src line 1182)
 	PLUS  reduce 129 (src line 1182)
 	MINUS  reduce 129 (src line 1182)
 	DIVIDE  reduce 129 (src line 1182)
 	MULTIPLY  reduce 129 (src line 1182)
+	COLON  shift 123
 	STRING_CAT  reduce 129 (src line 1182)
+	.  reduce 102 (src line 945)
+
+
+state 163
+	assign_value:  expr.    (103)
+
 	.  reduce 103 (src line 951)
 
 
-state 171
-	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	assign_value:  variable.    (104)
-	expr_value:  variable.    (131)
+state 164
+	assign_stmt:  var NEW_ASSIGN assign_value.    (96)
 
-	DIVIDE_MOD  reduce 131 (src line 1194)
-	PLUS  reduce 131 (src line 1194)
-	MINUS  reduce 131 (src line 1194)
-	DIVIDE  reduce 131 (src line 1194)
-	MULTIPLY  reduce 131 (src line 1194)
-	COLON  shift 127
-	STRING_CAT  reduce 131 (src line 1194)
-	.  reduce 104 (src line 957)
+	.  reduce 96 (src line 887)
+
+
+165: shift/reduce conflict (shift 121(0), red'n 97(0)) on OPEN_BRACKET
+state 165
+	function_call:  function_call.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	function_call:  function_call.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	multi_assign_stmt:  var_list ASSIGN function_call.    (97)
+
+	OPEN_BRACKET  shift 121
+	COLON  shift 122
+	.  reduce 97 (src line 899)
+
+
+166: shift/reduce conflict (shift 121(0), red'n 98(0)) on OPEN_BRACKET
+state 166
+	function_call:  function_call.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	function_call:  function_call.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	multi_assign_stmt:  var_list NEW_ASSIGN function_call.    (98)
+
+	OPEN_BRACKET  shift 121
+	COLON  shift 122
+	.  reduce 98 (src line 909)
+
+
+state 167
+	var_list:  var_list ARG_SPLITTER var.    (99)
+
+	.  reduce 99 (src line 921)
+
+
+state 168
+	var:  variable.    (111)
+
+	.  reduce 111 (src line 1033)
+
+
+state 169
+	variable:  IDENTIFIER.    (112)
+	variable:  IDENTIFIER.OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET 
+
+	OPEN_SQUARE_BRACKET  shift 137
+	.  reduce 112 (src line 1041)
+
+
+state 170
+	variable:  IDENTIFIER_DOT.    (115)
+
+	.  reduce 115 (src line 1066)
+
+
+state 171
+	expr:  OPEN_BRACKET expr CLOSE_BRACKET.    (116)
+
+	.  reduce 116 (src line 1076)
 
 
 state 172
-	assign_value:  expr.    (105)
+	math_expr:  OPEN_BRACKET math_expr CLOSE_BRACKET.    (119)
 
-	.  reduce 105 (src line 963)
+	.  reduce 119 (src line 1096)
 
 
 state 173
-	assign_stmt:  var NEW_ASSIGN assign_value.    (98)
-
-	.  reduce 98 (src line 899)
-
-
-174: shift/reduce conflict (shift 125(0), red'n 99(0)) on OPEN_BRACKET
-state 174
-	function_call:  function_call.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	function_call:  function_call.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	multi_assign_stmt:  var_list ASSIGN function_call.    (99)
-
-	OPEN_BRACKET  shift 125
-	COLON  shift 126
-	.  reduce 99 (src line 911)
-
-
-175: shift/reduce conflict (shift 125(0), red'n 100(0)) on OPEN_BRACKET
-state 175
-	function_call:  function_call.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	function_call:  function_call.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	multi_assign_stmt:  var_list NEW_ASSIGN function_call.    (100)
-
-	OPEN_BRACKET  shift 125
-	COLON  shift 126
-	.  reduce 100 (src line 921)
-
-
-state 176
-	var_list:  var_list ARG_SPLITTER var.    (101)
-
-	.  reduce 101 (src line 933)
-
-
-state 177
-	var:  variable.    (113)
-
-	.  reduce 113 (src line 1045)
-
-
-state 178
-	variable:  IDENTIFIER.    (114)
-	variable:  IDENTIFIER.OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET 
-
-	OPEN_SQUARE_BRACKET  shift 146
-	.  reduce 114 (src line 1053)
-
-
-state 179
-	variable:  IDENTIFIER_DOT.    (117)
-
-	.  reduce 117 (src line 1078)
-
-
-state 180
-	expr:  OPEN_BRACKET expr CLOSE_BRACKET.    (118)
-
-	.  reduce 118 (src line 1088)
-
-
-state 181
-	math_expr:  OPEN_BRACKET math_expr CLOSE_BRACKET.    (121)
-
-	.  reduce 121 (src line 1108)
-
-
-state 182
 	function_call:  function_call OPEN_BRACKET function_call_arguments.CLOSE_BRACKET 
 	function_call_arguments:  function_call_arguments.ARG_SPLITTER arg_expr 
 
-	ARG_SPLITTER  shift 224
-	CLOSE_BRACKET  shift 223
+	ARG_SPLITTER  shift 217
+	CLOSE_BRACKET  shift 216
 	.  error
 
 
-state 183
+state 174
 	function_call_arguments:  arg_expr.    (36)
 
 	.  reduce 36 (src line 359)
 
 
-state 184
+state 175
 	arg_expr:  expr_value.    (37)
 	math_expr:  expr_value.PLUS expr_value 
 	math_expr:  expr_value.MINUS expr_value 
@@ -2589,90 +2428,131 @@ state 184
 	math_expr:  expr_value.DIVIDE_MOD expr_value 
 	math_expr:  expr_value.STRING_CAT expr_value 
 
-	DIVIDE_MOD  shift 152
-	PLUS  shift 148
-	MINUS  shift 149
-	DIVIDE  shift 151
-	MULTIPLY  shift 150
-	STRING_CAT  shift 153
+	DIVIDE_MOD  shift 143
+	PLUS  shift 139
+	MINUS  shift 140
+	DIVIDE  shift 142
+	MULTIPLY  shift 141
+	STRING_CAT  shift 144
 	.  reduce 37 (src line 369)
 
 
-state 185
-	function_call:  function_call COLON IDENTIFIER.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+state 176
+	expr_value:  math_expr.    (126)
 
-	OPEN_BRACKET  shift 225
-	.  error
-
-
-state 186
-	function_call:  variable COLON IDENTIFIER.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-
-	OPEN_BRACKET  shift 226
-	.  error
+	.  reduce 126 (src line 1164)
 
 
-state 187
-	math_assign_stmt:  variable PLUS_ASSIGN assign_value.    (106)
+177: shift/reduce conflict (shift 121(0), red'n 128(0)) on OPEN_BRACKET
+state 177
+	function_call:  function_call.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	function_call:  function_call.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	expr_value:  function_call.    (128)
 
-	.  reduce 106 (src line 971)
-
-
-state 188
-	math_assign_stmt:  variable MINUS_ASSIGN assign_value.    (107)
-
-	.  reduce 107 (src line 981)
-
-
-state 189
-	math_assign_stmt:  variable DIVIDE_ASSIGN assign_value.    (108)
-
-	.  reduce 108 (src line 991)
+	OPEN_BRACKET  shift 121
+	COLON  shift 122
+	.  reduce 128 (src line 1176)
 
 
-state 190
-	math_assign_stmt:  variable MULTIPLY_ASSIGN assign_value.    (109)
+state 178
+	math_expr:  OPEN_BRACKET.math_expr CLOSE_BRACKET 
 
-	.  reduce 109 (src line 1001)
-
-
-state 191
-	math_assign_stmt:  variable DIVIDE_MOD_ASSIGN assign_value.    (110)
-
-	.  reduce 110 (src line 1011)
-
-
-state 192
-	for_stmt:  FOR block ARG_SPLITTER.cmp ARG_SPLITTER block THEN block END 
-	for_stmt:  FOR block ARG_SPLITTER.cmp ARG_SPLITTER block THEN END 
-
-	FTRUE  shift 104
-	FFALSE  shift 105
+	FTRUE  shift 33
+	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 102
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	IS  shift 106
-	NOT  shift 107
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp  goto 227
-	cmp_value  goto 103
-	math_expr  goto 84
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	expr_value  goto 90
+	math_expr  goto 218
 
-state 193
+state 179
+	function_call:  function_call COLON IDENTIFIER.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+
+	OPEN_BRACKET  shift 219
+	.  error
+
+
+state 180
+	function_call:  variable COLON IDENTIFIER.OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+
+	OPEN_BRACKET  shift 220
+	.  error
+
+
+state 181
+	math_assign_stmt:  variable PLUS_ASSIGN assign_value.    (104)
+
+	.  reduce 104 (src line 959)
+
+
+state 182
+	math_assign_stmt:  variable MINUS_ASSIGN assign_value.    (105)
+
+	.  reduce 105 (src line 969)
+
+
+state 183
+	math_assign_stmt:  variable DIVIDE_ASSIGN assign_value.    (106)
+
+	.  reduce 106 (src line 979)
+
+
+state 184
+	math_assign_stmt:  variable MULTIPLY_ASSIGN assign_value.    (107)
+
+	.  reduce 107 (src line 989)
+
+
+state 185
+	math_assign_stmt:  variable DIVIDE_MOD_ASSIGN assign_value.    (108)
+
+	.  reduce 108 (src line 999)
+
+
+state 186
+	for_stmt:  FOR block ARG_SPLITTER.cmp ARG_SPLITTER block THEN block END 
+	for_stmt:  FOR block ARG_SPLITTER.cmp ARG_SPLITTER block THEN END 
+
+	FTRUE  shift 100
+	FFALSE  shift 101
+	STRING_DEFINITION  shift 37
+	IDENTIFIER  shift 88
+	NUMBER  shift 35
+	OPEN_BRACKET  shift 98
+	FKFLOAT  shift 38
+	FKUUID  shift 36
+	OPEN_SQUARE_BRACKET  shift 41
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	IS  shift 102
+	NOT  shift 103
+	OPEN_BIG_BRACKET  shift 40
+	FNULL  shift 39
+	.  error
+
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp  goto 221
+	cmp_value  goto 99
+	math_expr  goto 82
+
+state 187
 	for_loop_stmt:  FOR var ASSIGN.for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN block END 
 	for_loop_stmt:  FOR var ASSIGN.for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN END 
 	assign_stmt:  var ASSIGN.assign_value 
@@ -2680,89 +2560,81 @@ state 193
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 229
-	function_call  goto 83
-	variable  goto 230
-	expr_value  goto 94
-	expr  goto 172
-	for_loop_value  goto 228
-	assign_value  goto 169
-	math_expr  goto 84
+	explicit_value  goto 223
+	function_call  goto 81
+	variable  goto 224
+	expr_value  goto 90
+	expr  goto 163
+	for_loop_value  goto 222
+	assign_value  goto 160
+	math_expr  goto 82
 
-state 194
-	math_expr:  OPEN_BRACKET math_expr.CLOSE_BRACKET 
-	expr_value:  math_expr.    (128)
-
-	CLOSE_BRACKET  shift 181
-	.  reduce 128 (src line 1176)
-
-
-state 195
+state 188
 	switch_stmt:  SWITCH cmp_value switch_case_list.DEFAULT block END 
 	switch_stmt:  SWITCH cmp_value switch_case_list.DEFAULT END 
 	switch_case_list:  switch_case_list.switch_case_define 
 
-	CASE  shift 197
-	DEFAULT  shift 231
+	CASE  shift 190
+	DEFAULT  shift 225
 	.  error
 
-	switch_case_define  goto 232
+	switch_case_define  goto 226
 
-state 196
-	switch_case_list:  switch_case_define.    (154)
+state 189
+	switch_case_list:  switch_case_define.    (150)
 
-	.  reduce 154 (src line 1407)
+	.  reduce 150 (src line 1376)
 
 
-state 197
+state 190
 	switch_case_define:  CASE.cmp_value THEN block 
 	switch_case_define:  CASE.cmp_value THEN 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp_value  goto 233
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp_value  goto 227
+	math_expr  goto 82
 
-state 198
+state 191
 	function_call:  IDENTIFIER OPEN_BRACKET function_call_arguments.CLOSE_BRACKET 
 	function_call_arguments:  function_call_arguments.ARG_SPLITTER arg_expr 
 
-	ARG_SPLITTER  shift 224
-	CLOSE_BRACKET  shift 234
+	ARG_SPLITTER  shift 217
+	CLOSE_BRACKET  shift 228
 	.  error
 
 
-state 199
+state 192
 	variable:  IDENTIFIER OPEN_SQUARE_BRACKET expr_value.CLOSE_SQUARE_BRACKET 
 	math_expr:  expr_value.PLUS expr_value 
 	math_expr:  expr_value.MINUS expr_value 
@@ -2771,144 +2643,142 @@ state 199
 	math_expr:  expr_value.DIVIDE_MOD expr_value 
 	math_expr:  expr_value.STRING_CAT expr_value 
 
-	DIVIDE_MOD  shift 152
-	PLUS  shift 148
-	MINUS  shift 149
-	DIVIDE  shift 151
-	MULTIPLY  shift 150
-	CLOSE_SQUARE_BRACKET  shift 235
-	STRING_CAT  shift 153
+	DIVIDE_MOD  shift 143
+	PLUS  shift 139
+	MINUS  shift 140
+	DIVIDE  shift 142
+	MULTIPLY  shift 141
+	CLOSE_SQUARE_BRACKET  shift 229
+	STRING_CAT  shift 144
 	.  error
 
 
-state 200
+state 193
 	function_call:  IDENTIFIER_DOT OPEN_BRACKET function_call_arguments.CLOSE_BRACKET 
 	function_call_arguments:  function_call_arguments.ARG_SPLITTER arg_expr 
 
-	ARG_SPLITTER  shift 224
-	CLOSE_BRACKET  shift 236
+	ARG_SPLITTER  shift 217
+	CLOSE_BRACKET  shift 230
 	.  error
 
 
-state 201
+state 194
 	math_expr:  expr_value.PLUS expr_value 
-	math_expr:  expr_value PLUS expr_value.    (122)
+	math_expr:  expr_value PLUS expr_value.    (120)
 	math_expr:  expr_value.MINUS expr_value 
 	math_expr:  expr_value.MULTIPLY expr_value 
 	math_expr:  expr_value.DIVIDE expr_value 
 	math_expr:  expr_value.DIVIDE_MOD expr_value 
 	math_expr:  expr_value.STRING_CAT expr_value 
 
-	DIVIDE_MOD  shift 152
-	DIVIDE  shift 151
-	MULTIPLY  shift 150
-	STRING_CAT  shift 153
-	.  reduce 122 (src line 1114)
+	DIVIDE_MOD  shift 143
+	DIVIDE  shift 142
+	MULTIPLY  shift 141
+	STRING_CAT  shift 144
+	.  reduce 120 (src line 1102)
 
 
-state 202
+state 195
 	math_expr:  expr_value.PLUS expr_value 
 	math_expr:  expr_value.MINUS expr_value 
-	math_expr:  expr_value MINUS expr_value.    (123)
+	math_expr:  expr_value MINUS expr_value.    (121)
 	math_expr:  expr_value.MULTIPLY expr_value 
 	math_expr:  expr_value.DIVIDE expr_value 
 	math_expr:  expr_value.DIVIDE_MOD expr_value 
 	math_expr:  expr_value.STRING_CAT expr_value 
 
-	DIVIDE_MOD  shift 152
-	DIVIDE  shift 151
-	MULTIPLY  shift 150
-	STRING_CAT  shift 153
-	.  reduce 123 (src line 1124)
+	DIVIDE_MOD  shift 143
+	DIVIDE  shift 142
+	MULTIPLY  shift 141
+	STRING_CAT  shift 144
+	.  reduce 121 (src line 1112)
 
 
-state 203
+state 196
 	math_expr:  expr_value.PLUS expr_value 
 	math_expr:  expr_value.MINUS expr_value 
 	math_expr:  expr_value.MULTIPLY expr_value 
-	math_expr:  expr_value MULTIPLY expr_value.    (124)
+	math_expr:  expr_value MULTIPLY expr_value.    (122)
 	math_expr:  expr_value.DIVIDE expr_value 
 	math_expr:  expr_value.DIVIDE_MOD expr_value 
 	math_expr:  expr_value.STRING_CAT expr_value 
 
-	STRING_CAT  shift 153
-	.  reduce 124 (src line 1134)
+	STRING_CAT  shift 144
+	.  reduce 122 (src line 1122)
 
 
-state 204
+state 197
 	math_expr:  expr_value.PLUS expr_value 
 	math_expr:  expr_value.MINUS expr_value 
 	math_expr:  expr_value.MULTIPLY expr_value 
 	math_expr:  expr_value.DIVIDE expr_value 
-	math_expr:  expr_value DIVIDE expr_value.    (125)
+	math_expr:  expr_value DIVIDE expr_value.    (123)
 	math_expr:  expr_value.DIVIDE_MOD expr_value 
 	math_expr:  expr_value.STRING_CAT expr_value 
 
-	STRING_CAT  shift 153
-	.  reduce 125 (src line 1144)
+	STRING_CAT  shift 144
+	.  reduce 123 (src line 1132)
 
 
-state 205
-	math_expr:  expr_value.PLUS expr_value 
-	math_expr:  expr_value.MINUS expr_value 
-	math_expr:  expr_value.MULTIPLY expr_value 
-	math_expr:  expr_value.DIVIDE expr_value 
-	math_expr:  expr_value.DIVIDE_MOD expr_value 
-	math_expr:  expr_value DIVIDE_MOD expr_value.    (126)
-	math_expr:  expr_value.STRING_CAT expr_value 
-
-	STRING_CAT  shift 153
-	.  reduce 126 (src line 1154)
-
-
-state 206
+state 198
 	math_expr:  expr_value.PLUS expr_value 
 	math_expr:  expr_value.MINUS expr_value 
 	math_expr:  expr_value.MULTIPLY expr_value 
 	math_expr:  expr_value.DIVIDE expr_value 
 	math_expr:  expr_value.DIVIDE_MOD expr_value 
+	math_expr:  expr_value DIVIDE_MOD expr_value.    (124)
 	math_expr:  expr_value.STRING_CAT expr_value 
-	math_expr:  expr_value STRING_CAT expr_value.    (127)
 
-	.  reduce 127 (src line 1164)
+	STRING_CAT  shift 144
+	.  reduce 124 (src line 1142)
 
 
-state 207
+state 199
+	math_expr:  expr_value.PLUS expr_value 
+	math_expr:  expr_value.MINUS expr_value 
+	math_expr:  expr_value.MULTIPLY expr_value 
+	math_expr:  expr_value.DIVIDE expr_value 
+	math_expr:  expr_value.DIVIDE_MOD expr_value 
+	math_expr:  expr_value.STRING_CAT expr_value 
+	math_expr:  expr_value STRING_CAT expr_value.    (125)
+
+	.  reduce 125 (src line 1152)
+
+
+state 200
 	block:  block.stmt 
 	while_stmt:  WHILE cmp THEN block.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 237
+	IF  shift 74
+	END  shift 231
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
 	while_stmt  goto 60
 	if_stmt  goto 61
 	return_stmt  goto 62
@@ -2921,371 +2791,371 @@ state 207
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
+
+state 201
+	while_stmt:  WHILE cmp THEN END.    (61)
+
+	.  reduce 61 (src line 564)
+
+
+202: shift/reduce conflict (shift 146(0), red'n 73(0)) on AND
+202: shift/reduce conflict (shift 147(0), red'n 73(0)) on OR
+state 202
+	cmp:  cmp.AND cmp 
+	cmp:  cmp AND cmp.    (73)
+	cmp:  cmp.OR cmp 
+
+	AND  shift 146
+	OR  shift 147
+	.  reduce 73 (src line 679)
+
+
+203: shift/reduce conflict (shift 146(0), red'n 74(0)) on AND
+203: shift/reduce conflict (shift 147(0), red'n 74(0)) on OR
+state 203
+	cmp:  cmp.AND cmp 
+	cmp:  cmp.OR cmp 
+	cmp:  cmp OR cmp.    (74)
+
+	AND  shift 146
+	OR  shift 147
+	.  reduce 74 (src line 689)
+
+
+state 204
+	cmp:  OPEN_BRACKET cmp CLOSE_BRACKET.    (72)
+
+	.  reduce 72 (src line 673)
+
+
+state 205
+	cmp:  cmp_value LESS cmp_value.    (75)
+
+	.  reduce 75 (src line 699)
+
+
+state 206
+	cmp:  cmp_value MORE cmp_value.    (76)
+
+	.  reduce 76 (src line 709)
+
+
+state 207
+	cmp:  cmp_value EQUAL cmp_value.    (77)
+
+	.  reduce 77 (src line 719)
+
 
 state 208
-	while_stmt:  WHILE cmp THEN END.    (63)
+	cmp:  cmp_value MORE_OR_EQUAL cmp_value.    (78)
 
-	.  reduce 63 (src line 576)
+	.  reduce 78 (src line 729)
 
 
-209: shift/reduce conflict (shift 155(0), red'n 75(0)) on AND
-209: shift/reduce conflict (shift 156(0), red'n 75(0)) on OR
 state 209
-	cmp:  cmp.AND cmp 
-	cmp:  cmp AND cmp.    (75)
-	cmp:  cmp.OR cmp 
+	cmp:  cmp_value LESS_OR_EQUAL cmp_value.    (79)
 
-	AND  shift 155
-	OR  shift 156
-	.  reduce 75 (src line 691)
+	.  reduce 79 (src line 739)
 
 
-210: shift/reduce conflict (shift 155(0), red'n 76(0)) on AND
-210: shift/reduce conflict (shift 156(0), red'n 76(0)) on OR
 state 210
-	cmp:  cmp.AND cmp 
-	cmp:  cmp.OR cmp 
-	cmp:  cmp OR cmp.    (76)
+	cmp:  cmp_value NOT_EQUAL cmp_value.    (80)
 
-	AND  shift 155
-	OR  shift 156
-	.  reduce 76 (src line 701)
+	.  reduce 80 (src line 749)
 
 
+211: shift/reduce conflict (shift 214(0), red'n 64(0)) on ELSEIF
 state 211
-	cmp:  OPEN_BRACKET cmp CLOSE_BRACKET.    (74)
+	block:  block.stmt 
+	if_stmt:  IF cmp THEN block.elseif_stmt_list else_stmt END 
+	elseif_stmt_list: .    (64)
 
-	.  reduce 74 (src line 685)
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
+	FTRUE  shift 33
+	FFALSE  shift 34
+	IF  shift 74
+	STRING_DEFINITION  shift 37
+	IDENTIFIER  shift 88
+	NUMBER  shift 35
+	OPEN_BRACKET  shift 80
+	FKFLOAT  shift 38
+	FOR  shift 84
+	FAKE  shift 85
+	FKUUID  shift 36
+	OPEN_SQUARE_BRACKET  shift 41
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
+	ELSEIF  shift 214
+	OPEN_BIG_BRACKET  shift 40
+	FNULL  shift 39
+	.  reduce 64 (src line 607)
 
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
+	while_stmt  goto 60
+	if_stmt  goto 61
+	return_stmt  goto 62
+	assign_stmt  goto 63
+	multi_assign_stmt  goto 64
+	break  goto 65
+	continue  goto 66
+	expr  goto 67
+	math_assign_stmt  goto 68
+	for_stmt  goto 69
+	for_loop_stmt  goto 70
+	fake_call_stmt  goto 71
+	switch_stmt  goto 72
+	var  goto 76
+	elseif_stmt_list  goto 232
+	elseif_stmt  goto 213
+	var_list  goto 77
+	math_expr  goto 82
 
 state 212
-	cmp:  cmp_value LESS cmp_value.    (77)
+	if_stmt:  IF cmp THEN elseif_stmt_list.else_stmt END 
+	elseif_stmt_list:  elseif_stmt_list.elseif_stmt 
+	else_stmt: .    (69)
 
-	.  reduce 77 (src line 711)
+	ELSE  shift 235
+	ELSEIF  shift 214
+	.  reduce 69 (src line 650)
 
+	else_stmt  goto 233
+	elseif_stmt  goto 234
 
 state 213
-	cmp:  cmp_value MORE cmp_value.    (78)
+	elseif_stmt_list:  elseif_stmt.    (66)
 
-	.  reduce 78 (src line 721)
+	.  reduce 66 (src line 620)
 
 
 state 214
-	cmp:  cmp_value EQUAL cmp_value.    (79)
-
-	.  reduce 79 (src line 731)
-
-
-state 215
-	cmp:  cmp_value MORE_OR_EQUAL cmp_value.    (80)
-
-	.  reduce 80 (src line 741)
-
-
-state 216
-	cmp:  cmp_value LESS_OR_EQUAL cmp_value.    (81)
-
-	.  reduce 81 (src line 751)
-
-
-state 217
-	cmp:  cmp_value NOT_EQUAL cmp_value.    (82)
-
-	.  reduce 82 (src line 761)
-
-
-218: shift/reduce conflict (shift 221(0), red'n 66(0)) on ELSEIF
-state 218
-	block:  block.stmt 
-	if_stmt:  IF cmp THEN block.elseif_stmt_list else_stmt END 
-	elseif_stmt_list: .    (66)
-
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
-	FTRUE  shift 33
-	FFALSE  shift 34
-	IF  shift 76
-	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
-	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
-	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
-	FKUUID  shift 36
-	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
-	ELSEIF  shift 221
-	OPEN_BIG_BRACKET  shift 40
-	FNULL  shift 39
-	.  reduce 66 (src line 619)
-
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
-	while_stmt  goto 60
-	if_stmt  goto 61
-	return_stmt  goto 62
-	assign_stmt  goto 63
-	multi_assign_stmt  goto 64
-	break  goto 65
-	continue  goto 66
-	expr  goto 67
-	math_assign_stmt  goto 68
-	for_stmt  goto 69
-	for_loop_stmt  goto 70
-	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	elseif_stmt_list  goto 238
-	elseif_stmt  goto 220
-	var_list  goto 79
-	math_expr  goto 84
-
-state 219
-	if_stmt:  IF cmp THEN elseif_stmt_list.else_stmt END 
-	elseif_stmt_list:  elseif_stmt_list.elseif_stmt 
-	else_stmt: .    (71)
-
-	ELSE  shift 241
-	ELSEIF  shift 221
-	.  reduce 71 (src line 662)
-
-	else_stmt  goto 239
-	elseif_stmt  goto 240
-
-state 220
-	elseif_stmt_list:  elseif_stmt.    (68)
-
-	.  reduce 68 (src line 632)
-
-
-state 221
 	elseif_stmt:  ELSEIF.cmp THEN block 
 	elseif_stmt:  ELSEIF.cmp THEN 
 
-	FTRUE  shift 104
-	FFALSE  shift 105
+	FTRUE  shift 100
+	FFALSE  shift 101
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 102
+	OPEN_BRACKET  shift 98
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	IS  shift 106
-	NOT  shift 107
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	IS  shift 102
+	NOT  shift 103
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 108
-	function_call  goto 83
-	variable  goto 109
-	expr_value  goto 94
-	expr  goto 110
-	cmp  goto 242
-	cmp_value  goto 103
-	math_expr  goto 84
+	explicit_value  goto 104
+	function_call  goto 81
+	variable  goto 105
+	expr_value  goto 90
+	expr  goto 106
+	cmp  goto 236
+	cmp_value  goto 99
+	math_expr  goto 82
 
-state 222
-	return_value_list:  return_value_list ARG_SPLITTER return_value.    (92)
+state 215
+	return_value_list:  return_value_list ARG_SPLITTER return_value.    (90)
 
-	.  reduce 92 (src line 851)
+	.  reduce 90 (src line 839)
 
 
-state 223
+state 216
 	function_call:  function_call OPEN_BRACKET function_call_arguments CLOSE_BRACKET.    (31)
 
 	.  reduce 31 (src line 296)
 
 
-state 224
+state 217
 	function_call_arguments:  function_call_arguments ARG_SPLITTER.arg_expr 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 140
-	variable  goto 124
-	arg_expr  goto 243
-	expr_value  goto 184
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	variable  goto 120
+	arg_expr  goto 237
+	expr_value  goto 175
+	math_expr  goto 176
 
-state 225
+state 218
+	math_expr:  OPEN_BRACKET math_expr.CLOSE_BRACKET 
+	expr_value:  math_expr.    (126)
+
+	CLOSE_BRACKET  shift 172
+	.  reduce 126 (src line 1164)
+
+
+state 219
 	function_call:  function_call COLON IDENTIFIER OPEN_BRACKET.function_call_arguments CLOSE_BRACKET 
 	function_call_arguments: .    (34)
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  reduce 34 (src line 346)
 
-	explicit_value  goto 96
-	function_call  goto 140
-	function_call_arguments  goto 244
-	variable  goto 124
-	arg_expr  goto 183
-	expr_value  goto 184
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	function_call_arguments  goto 238
+	variable  goto 120
+	arg_expr  goto 174
+	expr_value  goto 175
+	math_expr  goto 176
 
-state 226
+state 220
 	function_call:  variable COLON IDENTIFIER OPEN_BRACKET.function_call_arguments CLOSE_BRACKET 
 	function_call_arguments: .    (34)
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 141
+	OPEN_BRACKET  shift 178
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  reduce 34 (src line 346)
 
-	explicit_value  goto 96
-	function_call  goto 140
-	function_call_arguments  goto 245
-	variable  goto 124
-	arg_expr  goto 183
-	expr_value  goto 184
-	math_expr  goto 139
+	explicit_value  goto 92
+	function_call  goto 177
+	function_call_arguments  goto 239
+	variable  goto 120
+	arg_expr  goto 174
+	expr_value  goto 175
+	math_expr  goto 176
 
-state 227
+state 221
 	for_stmt:  FOR block ARG_SPLITTER cmp.ARG_SPLITTER block THEN block END 
 	for_stmt:  FOR block ARG_SPLITTER cmp.ARG_SPLITTER block THEN END 
 	cmp:  cmp.AND cmp 
 	cmp:  cmp.OR cmp 
 
-	ARG_SPLITTER  shift 246
-	AND  shift 155
-	OR  shift 156
+	ARG_SPLITTER  shift 240
+	AND  shift 146
+	OR  shift 147
 	.  error
 
 
-state 228
+state 222
 	for_loop_stmt:  FOR var ASSIGN for_loop_value.RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN block END 
 	for_loop_stmt:  FOR var ASSIGN for_loop_value.RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN END 
 
-	RIGHT_POINTER  shift 247
+	RIGHT_POINTER  shift 241
 	.  error
 
 
-state 229
-	for_loop_value:  explicit_value.    (58)
-	assign_value:  explicit_value.    (103)
-	expr_value:  explicit_value.    (129)
+state 223
+	for_loop_value:  explicit_value.    (56)
+	assign_value:  explicit_value.    (101)
+	expr_value:  explicit_value.    (127)
+
+	DIVIDE_MOD  reduce 127 (src line 1170)
+	PLUS  reduce 127 (src line 1170)
+	MINUS  reduce 127 (src line 1170)
+	DIVIDE  reduce 127 (src line 1170)
+	MULTIPLY  reduce 127 (src line 1170)
+	RIGHT_POINTER  reduce 56 (src line 511)
+	STRING_CAT  reduce 127 (src line 1170)
+	.  reduce 101 (src line 939)
+
+
+state 224
+	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
+	for_loop_value:  variable.    (57)
+	assign_value:  variable.    (102)
+	expr_value:  variable.    (129)
 
 	DIVIDE_MOD  reduce 129 (src line 1182)
 	PLUS  reduce 129 (src line 1182)
 	MINUS  reduce 129 (src line 1182)
 	DIVIDE  reduce 129 (src line 1182)
 	MULTIPLY  reduce 129 (src line 1182)
-	RIGHT_POINTER  reduce 58 (src line 523)
+	COLON  shift 123
+	RIGHT_POINTER  reduce 57 (src line 517)
 	STRING_CAT  reduce 129 (src line 1182)
-	.  reduce 103 (src line 951)
+	.  reduce 102 (src line 945)
 
 
-state 230
-	function_call:  variable.COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET 
-	for_loop_value:  variable.    (59)
-	assign_value:  variable.    (104)
-	expr_value:  variable.    (131)
-
-	DIVIDE_MOD  reduce 131 (src line 1194)
-	PLUS  reduce 131 (src line 1194)
-	MINUS  reduce 131 (src line 1194)
-	DIVIDE  reduce 131 (src line 1194)
-	MULTIPLY  reduce 131 (src line 1194)
-	COLON  shift 127
-	RIGHT_POINTER  reduce 59 (src line 529)
-	STRING_CAT  reduce 131 (src line 1194)
-	.  reduce 104 (src line 957)
-
-
-state 231
+state 225
 	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT.block END 
 	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 249
+	IF  shift 74
+	END  shift 243
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	block  goto 248
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 242
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -3299,111 +3169,107 @@ state 231
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 232
-	switch_case_list:  switch_case_list switch_case_define.    (155)
+state 226
+	switch_case_list:  switch_case_list switch_case_define.    (151)
 
-	.  reduce 155 (src line 1415)
+	.  reduce 151 (src line 1384)
 
 
-state 233
+state 227
 	switch_case_define:  CASE cmp_value.THEN block 
 	switch_case_define:  CASE cmp_value.THEN 
 
-	THEN  shift 250
+	THEN  shift 244
 	.  error
 
 
-state 234
+state 228
 	function_call:  IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET.    (29)
 
 	.  reduce 29 (src line 268)
 
 
-state 235
-	variable:  IDENTIFIER OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET.    (115)
+state 229
+	variable:  IDENTIFIER OPEN_SQUARE_BRACKET expr_value CLOSE_SQUARE_BRACKET.    (113)
 
-	.  reduce 115 (src line 1061)
+	.  reduce 113 (src line 1049)
 
 
-state 236
+state 230
 	function_call:  IDENTIFIER_DOT OPEN_BRACKET function_call_arguments CLOSE_BRACKET.    (30)
 
 	.  reduce 30 (src line 282)
 
 
-state 237
-	while_stmt:  WHILE cmp THEN block END.    (62)
+state 231
+	while_stmt:  WHILE cmp THEN block END.    (60)
 
-	.  reduce 62 (src line 567)
+	.  reduce 60 (src line 555)
 
 
-state 238
+state 232
 	if_stmt:  IF cmp THEN block elseif_stmt_list.else_stmt END 
 	elseif_stmt_list:  elseif_stmt_list.elseif_stmt 
-	else_stmt: .    (71)
+	else_stmt: .    (69)
 
-	ELSE  shift 241
-	ELSEIF  shift 221
-	.  reduce 71 (src line 662)
+	ELSE  shift 235
+	ELSEIF  shift 214
+	.  reduce 69 (src line 650)
 
-	else_stmt  goto 251
-	elseif_stmt  goto 240
+	else_stmt  goto 245
+	elseif_stmt  goto 234
 
-state 239
+state 233
 	if_stmt:  IF cmp THEN elseif_stmt_list else_stmt.END 
 
-	END  shift 252
+	END  shift 246
 	.  error
 
 
-state 240
-	elseif_stmt_list:  elseif_stmt_list elseif_stmt.    (67)
+state 234
+	elseif_stmt_list:  elseif_stmt_list elseif_stmt.    (65)
 
-	.  reduce 67 (src line 624)
+	.  reduce 65 (src line 612)
 
 
-state 241
+state 235
 	else_stmt:  ELSE.block 
-	else_stmt:  ELSE.    (73)
+	else_stmt:  ELSE.    (71)
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 73 (src line 675)
+	.  reduce 71 (src line 663)
 
-	explicit_value  goto 96
-	block  goto 253
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 247
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -3417,84 +3283,80 @@ state 241
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 242
+state 236
 	elseif_stmt:  ELSEIF cmp.THEN block 
 	elseif_stmt:  ELSEIF cmp.THEN 
 	cmp:  cmp.AND cmp 
 	cmp:  cmp.OR cmp 
 
-	THEN  shift 254
-	AND  shift 155
-	OR  shift 156
+	THEN  shift 248
+	AND  shift 146
+	OR  shift 147
 	.  error
 
 
-state 243
+state 237
 	function_call_arguments:  function_call_arguments ARG_SPLITTER arg_expr.    (35)
 
 	.  reduce 35 (src line 351)
 
 
-state 244
+state 238
 	function_call:  function_call COLON IDENTIFIER OPEN_BRACKET function_call_arguments.CLOSE_BRACKET 
 	function_call_arguments:  function_call_arguments.ARG_SPLITTER arg_expr 
 
-	ARG_SPLITTER  shift 224
-	CLOSE_BRACKET  shift 255
+	ARG_SPLITTER  shift 217
+	CLOSE_BRACKET  shift 249
 	.  error
 
 
-state 245
+state 239
 	function_call:  variable COLON IDENTIFIER OPEN_BRACKET function_call_arguments.CLOSE_BRACKET 
 	function_call_arguments:  function_call_arguments.ARG_SPLITTER arg_expr 
 
-	ARG_SPLITTER  shift 224
-	CLOSE_BRACKET  shift 256
+	ARG_SPLITTER  shift 217
+	CLOSE_BRACKET  shift 250
 	.  error
 
 
-state 246
+state 240
 	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER.block THEN block END 
 	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER.block THEN END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	block  goto 257
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 251
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -3508,71 +3370,67 @@ state 246
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 247
+state 241
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER.for_loop_value ARG_SPLITTER for_loop_value THEN block END 
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER.for_loop_value ARG_SPLITTER for_loop_value THEN END 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 178
+	IDENTIFIER  shift 169
 	NUMBER  shift 35
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 179
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 170
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 259
-	variable  goto 260
-	for_loop_value  goto 258
+	explicit_value  goto 253
+	variable  goto 254
+	for_loop_value  goto 252
 
-state 248
+state 242
 	block:  block.stmt 
 	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT block.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 261
+	IF  shift 74
+	END  shift 255
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
 	while_stmt  goto 60
 	if_stmt  goto 61
 	return_stmt  goto 62
@@ -3585,54 +3443,50 @@ state 248
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 249
-	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT END.    (153)
+state 243
+	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT END.    (149)
 
-	.  reduce 153 (src line 1395)
+	.  reduce 149 (src line 1364)
 
 
-state 250
+state 244
 	switch_case_define:  CASE cmp_value THEN.block 
-	switch_case_define:  CASE cmp_value THEN.    (157)
+	switch_case_define:  CASE cmp_value THEN.    (153)
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 157 (src line 1434)
+	.  reduce 153 (src line 1403)
 
-	explicit_value  goto 96
-	block  goto 262
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 256
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -3646,61 +3500,57 @@ state 250
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 251
+state 245
 	if_stmt:  IF cmp THEN block elseif_stmt_list else_stmt.END 
 
-	END  shift 263
+	END  shift 257
 	.  error
 
 
-state 252
-	if_stmt:  IF cmp THEN elseif_stmt_list else_stmt END.    (65)
+state 246
+	if_stmt:  IF cmp THEN elseif_stmt_list else_stmt END.    (63)
 
-	.  reduce 65 (src line 602)
+	.  reduce 63 (src line 590)
 
 
-state 253
+state 247
 	block:  block.stmt 
-	else_stmt:  ELSE block.    (72)
+	else_stmt:  ELSE block.    (70)
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 72 (src line 667)
+	.  reduce 70 (src line 655)
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
 	while_stmt  goto 60
 	if_stmt  goto 61
 	return_stmt  goto 62
@@ -3713,48 +3563,44 @@ state 253
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 254
+state 248
 	elseif_stmt:  ELSEIF cmp THEN.block 
-	elseif_stmt:  ELSEIF cmp THEN.    (70)
+	elseif_stmt:  ELSEIF cmp THEN.    (68)
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
+	IF  shift 74
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
-	.  reduce 70 (src line 651)
+	.  reduce 68 (src line 639)
 
-	explicit_value  goto 96
-	block  goto 264
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 258
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -3768,62 +3614,58 @@ state 254
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 255
+state 249
 	function_call:  function_call COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET.    (32)
 
 	.  reduce 32 (src line 310)
 
 
-state 256
+state 250
 	function_call:  variable COLON IDENTIFIER OPEN_BRACKET function_call_arguments CLOSE_BRACKET.    (33)
 
 	.  reduce 33 (src line 327)
 
 
-state 257
+state 251
 	block:  block.stmt 
 	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block.THEN block END 
 	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block.THEN END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	THEN  shift 265
+	IF  shift 74
+	THEN  shift 259
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
 	while_stmt  goto 60
 	if_stmt  goto 61
 	return_stmt  goto 62
@@ -3836,189 +3678,177 @@ state 257
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 258
+state 252
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value.ARG_SPLITTER for_loop_value THEN block END 
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value.ARG_SPLITTER for_loop_value THEN END 
 
-	ARG_SPLITTER  shift 266
+	ARG_SPLITTER  shift 260
 	.  error
 
 
+state 253
+	for_loop_value:  explicit_value.    (56)
+
+	.  reduce 56 (src line 511)
+
+
+state 254
+	for_loop_value:  variable.    (57)
+
+	.  reduce 57 (src line 517)
+
+
+state 255
+	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT block END.    (148)
+
+	.  reduce 148 (src line 1354)
+
+
+state 256
+	block:  block.stmt 
+	switch_case_define:  CASE cmp_value THEN block.    (152)
+
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
+	FTRUE  shift 33
+	FFALSE  shift 34
+	IF  shift 74
+	STRING_DEFINITION  shift 37
+	IDENTIFIER  shift 88
+	NUMBER  shift 35
+	OPEN_BRACKET  shift 80
+	FKFLOAT  shift 38
+	FOR  shift 84
+	FAKE  shift 85
+	FKUUID  shift 36
+	OPEN_SQUARE_BRACKET  shift 41
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
+	OPEN_BIG_BRACKET  shift 40
+	FNULL  shift 39
+	.  reduce 152 (src line 1394)
+
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
+	while_stmt  goto 60
+	if_stmt  goto 61
+	return_stmt  goto 62
+	assign_stmt  goto 63
+	multi_assign_stmt  goto 64
+	break  goto 65
+	continue  goto 66
+	expr  goto 67
+	math_assign_stmt  goto 68
+	for_stmt  goto 69
+	for_loop_stmt  goto 70
+	fake_call_stmt  goto 71
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
+
+state 257
+	if_stmt:  IF cmp THEN block elseif_stmt_list else_stmt END.    (62)
+
+	.  reduce 62 (src line 575)
+
+
+state 258
+	block:  block.stmt 
+	elseif_stmt:  ELSEIF cmp THEN block.    (67)
+
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
+	FTRUE  shift 33
+	FFALSE  shift 34
+	IF  shift 74
+	STRING_DEFINITION  shift 37
+	IDENTIFIER  shift 88
+	NUMBER  shift 35
+	OPEN_BRACKET  shift 80
+	FKFLOAT  shift 38
+	FOR  shift 84
+	FAKE  shift 85
+	FKUUID  shift 36
+	OPEN_SQUARE_BRACKET  shift 41
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
+	OPEN_BIG_BRACKET  shift 40
+	FNULL  shift 39
+	.  reduce 67 (src line 630)
+
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
+	while_stmt  goto 60
+	if_stmt  goto 61
+	return_stmt  goto 62
+	assign_stmt  goto 63
+	multi_assign_stmt  goto 64
+	break  goto 65
+	continue  goto 66
+	expr  goto 67
+	math_assign_stmt  goto 68
+	for_stmt  goto 69
+	for_loop_stmt  goto 70
+	fake_call_stmt  goto 71
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
+
 state 259
-	for_loop_value:  explicit_value.    (58)
-
-	.  reduce 58 (src line 523)
-
-
-state 260
-	for_loop_value:  variable.    (59)
-
-	.  reduce 59 (src line 529)
-
-
-state 261
-	switch_stmt:  SWITCH cmp_value switch_case_list DEFAULT block END.    (152)
-
-	.  reduce 152 (src line 1385)
-
-
-state 262
-	block:  block.stmt 
-	switch_case_define:  CASE cmp_value THEN block.    (156)
-
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
-	FTRUE  shift 33
-	FFALSE  shift 34
-	IF  shift 76
-	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
-	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
-	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
-	FKUUID  shift 36
-	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
-	OPEN_BIG_BRACKET  shift 40
-	FNULL  shift 39
-	.  reduce 156 (src line 1425)
-
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
-	while_stmt  goto 60
-	if_stmt  goto 61
-	return_stmt  goto 62
-	assign_stmt  goto 63
-	multi_assign_stmt  goto 64
-	break  goto 65
-	continue  goto 66
-	expr  goto 67
-	math_assign_stmt  goto 68
-	for_stmt  goto 69
-	for_loop_stmt  goto 70
-	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
-
-state 263
-	if_stmt:  IF cmp THEN block elseif_stmt_list else_stmt END.    (64)
-
-	.  reduce 64 (src line 587)
-
-
-state 264
-	block:  block.stmt 
-	elseif_stmt:  ELSEIF cmp THEN block.    (69)
-
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
-	FTRUE  shift 33
-	FFALSE  shift 34
-	IF  shift 76
-	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
-	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
-	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
-	FKUUID  shift 36
-	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
-	OPEN_BIG_BRACKET  shift 40
-	FNULL  shift 39
-	.  reduce 69 (src line 642)
-
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
-	while_stmt  goto 60
-	if_stmt  goto 61
-	return_stmt  goto 62
-	assign_stmt  goto 63
-	multi_assign_stmt  goto 64
-	break  goto 65
-	continue  goto 66
-	expr  goto 67
-	math_assign_stmt  goto 68
-	for_stmt  goto 69
-	for_loop_stmt  goto 70
-	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
-
-state 265
 	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN.block END 
 	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 268
+	IF  shift 74
+	END  shift 262
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	block  goto 267
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 261
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -4032,71 +3862,67 @@ state 265
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 266
+state 260
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER.for_loop_value THEN block END 
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER.for_loop_value THEN END 
 
 	FTRUE  shift 33
 	FFALSE  shift 34
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 178
+	IDENTIFIER  shift 169
 	NUMBER  shift 35
 	FKFLOAT  shift 38
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 179
-	IDENTIFIER_POINTER  shift 95
+	IDENTIFIER_DOT  shift 170
+	IDENTIFIER_POINTER  shift 91
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 259
-	variable  goto 260
-	for_loop_value  goto 269
+	explicit_value  goto 253
+	variable  goto 254
+	for_loop_value  goto 263
 
-state 267
+state 261
 	block:  block.stmt 
 	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN block.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 270
+	IF  shift 74
+	END  shift 264
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
 	while_stmt  goto 60
 	if_stmt  goto 61
 	return_stmt  goto 62
@@ -4109,69 +3935,65 @@ state 267
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 268
-	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN END.    (57)
+state 262
+	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN END.    (55)
 
-	.  reduce 57 (src line 510)
+	.  reduce 55 (src line 498)
 
 
-state 269
+state 263
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value.THEN block END 
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value.THEN END 
 
-	THEN  shift 271
+	THEN  shift 265
 	.  error
 
 
-state 270
-	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN block END.    (56)
+state 264
+	for_stmt:  FOR block ARG_SPLITTER cmp ARG_SPLITTER block THEN block END.    (54)
 
-	.  reduce 56 (src line 499)
+	.  reduce 54 (src line 487)
 
 
-state 271
+state 265
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN.block END 
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 273
+	IF  shift 74
+	END  shift 267
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	block  goto 272
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
+	explicit_value  goto 92
+	block  goto 266
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
 	stmt  goto 59
 	while_stmt  goto 60
 	if_stmt  goto 61
@@ -4185,49 +4007,45 @@ state 271
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 272
+state 266
 	block:  block.stmt 
 	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN block.END 
 
-	VAR_BEGIN  shift 91
-	RETURN  shift 77
-	BREAK  shift 80
-	WHILE  shift 75
+	VAR_BEGIN  shift 87
+	RETURN  shift 75
+	BREAK  shift 78
+	WHILE  shift 73
 	FTRUE  shift 33
 	FFALSE  shift 34
-	IF  shift 76
-	END  shift 274
+	IF  shift 74
+	END  shift 268
 	STRING_DEFINITION  shift 37
-	IDENTIFIER  shift 92
+	IDENTIFIER  shift 88
 	NUMBER  shift 35
-	OPEN_BRACKET  shift 82
+	OPEN_BRACKET  shift 80
 	FKFLOAT  shift 38
-	FOR  shift 86
-	FAKE  shift 87
+	FOR  shift 84
+	FAKE  shift 85
 	FKUUID  shift 36
 	OPEN_SQUARE_BRACKET  shift 41
-	IDENTIFIER_DOT  shift 93
-	IDENTIFIER_POINTER  shift 95
-	CONTINUE  shift 81
-	YIELD  shift 89
-	SLEEP  shift 88
-	SWITCH  shift 90
+	IDENTIFIER_DOT  shift 89
+	IDENTIFIER_POINTER  shift 91
+	CONTINUE  shift 79
+	SWITCH  shift 86
 	OPEN_BIG_BRACKET  shift 40
 	FNULL  shift 39
 	.  error
 
-	explicit_value  goto 96
-	function_call  goto 83
-	variable  goto 85
-	expr_value  goto 94
-	stmt  goto 100
+	explicit_value  goto 92
+	function_call  goto 81
+	variable  goto 83
+	expr_value  goto 90
+	stmt  goto 96
 	while_stmt  goto 60
 	if_stmt  goto 61
 	return_stmt  goto 62
@@ -4240,34 +4058,32 @@ state 272
 	for_stmt  goto 69
 	for_loop_stmt  goto 70
 	fake_call_stmt  goto 71
-	sleep  goto 72
-	yield  goto 73
-	switch_stmt  goto 74
-	var  goto 78
-	var_list  goto 79
-	math_expr  goto 84
+	switch_stmt  goto 72
+	var  goto 76
+	var_list  goto 77
+	math_expr  goto 82
 
-state 273
-	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN END.    (61)
+state 267
+	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN END.    (59)
 
-	.  reduce 61 (src line 551)
+	.  reduce 59 (src line 539)
 
 
-state 274
-	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN block END.    (60)
+state 268
+	for_loop_stmt:  FOR var ASSIGN for_loop_value RIGHT_POINTER for_loop_value ARG_SPLITTER for_loop_value THEN block END.    (58)
 
-	.  reduce 60 (src line 537)
+	.  reduce 58 (src line 525)
 
 
-69 terminals, 54 nonterminals
-158 grammar rules, 275/8000 states
+69 terminals, 52 nonterminals
+154 grammar rules, 269/8000 states
 56 shift/reduce, 0 reduce/reduce conflicts reported
-103 working sets used
-memory: parser 992/120000
-229 extra closures
-1380 shift entries, 82 exceptions
-282 goto entries
-583 entries saved by goto default
-Optimizer space used: output 1339/120000
-1339 table entries, 504 zero
-maximum spread: 69, maximum offset: 272
+101 working sets used
+memory: parser 935/120000
+210 extra closures
+1298 shift entries, 82 exceptions
+272 goto entries
+539 entries saved by goto default
+Optimizer space used: output 1305/120000
+1305 table entries, 508 zero
+maximum spread: 69, maximum offset: 266

@@ -192,12 +192,6 @@ func (c *compiler) compile_node(cg *codegen, node syntree_node) {
 	case est_struct_pointer:
 		cn := node.(*struct_pointer_node)
 		c.compile_struct_pointer(cg, cn)
-	case est_sleep:
-		ss := node.(*sleep_stmt)
-		c.compile_sleep_stmt(cg, ss)
-	case est_yield:
-		ys := node.(*yield_stmt)
-		c.compile_yield_stmt(cg, ys)
 	case est_switch_stmt:
 		ss := node.(*switch_stmt)
 		c.compile_switch_stmt(cg, ss)
@@ -1185,36 +1179,6 @@ func (c *compiler) compile_struct_pointer(cg *codegen, sn *struct_pointer_node) 
 	}
 
 	log_debug("[compiler] compile_struct_pointer %p OK", sn)
-}
-
-func (c *compiler) compile_sleep_stmt(cg *codegen, ss *sleep_stmt) {
-
-	log_debug("[compiler] compile_sleep_stmt %p", ss)
-
-	// 编译time
-	var time command
-	c.compile_node(cg, ss.time)
-	time = c.cur_addr
-
-	cg.push(_MAKE_OPCODE(OPCODE_SLEEP), ss.lineno())
-	cg.push(time, ss.lineno())
-
-	log_debug("[compiler] compile_sleep_stmt %p OK", ss)
-}
-
-func (c *compiler) compile_yield_stmt(cg *codegen, ys *yield_stmt) {
-
-	log_debug("[compiler] compile_yield_stmt %p", ys)
-
-	// 编译time
-	var time command
-	c.compile_node(cg, ys.time)
-	time = c.cur_addr
-
-	cg.push(_MAKE_OPCODE(OPCODE_YIELD), ys.lineno())
-	cg.push(time, ys.lineno())
-
-	log_debug("[compiler] compile_yield_stmt %p OK", ys)
 }
 
 func (c *compiler) compile_switch_stmt(cg *codegen, ss *switch_stmt) {

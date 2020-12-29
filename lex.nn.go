@@ -2159,182 +2159,6 @@ var dfas = []dfa{
 		},
 	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1, -1, -1, -1, -1}, nil},
 
-	// (yield)
-	{[]bool{false, false, false, false, false, true}, []func(rune) int{ // Transitions
-		func(r rune) int {
-			switch r {
-			case 100:
-				return -1
-			case 101:
-				return -1
-			case 105:
-				return -1
-			case 108:
-				return -1
-			case 121:
-				return 1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 100:
-				return -1
-			case 101:
-				return -1
-			case 105:
-				return 2
-			case 108:
-				return -1
-			case 121:
-				return -1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 100:
-				return -1
-			case 101:
-				return 3
-			case 105:
-				return -1
-			case 108:
-				return -1
-			case 121:
-				return -1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 100:
-				return -1
-			case 101:
-				return -1
-			case 105:
-				return -1
-			case 108:
-				return 4
-			case 121:
-				return -1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 100:
-				return 5
-			case 101:
-				return -1
-			case 105:
-				return -1
-			case 108:
-				return -1
-			case 121:
-				return -1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 100:
-				return -1
-			case 101:
-				return -1
-			case 105:
-				return -1
-			case 108:
-				return -1
-			case 121:
-				return -1
-			}
-			return -1
-		},
-	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1, -1}, nil},
-
-	// (sleep)
-	{[]bool{false, false, false, false, false, true}, []func(rune) int{ // Transitions
-		func(r rune) int {
-			switch r {
-			case 101:
-				return -1
-			case 108:
-				return -1
-			case 112:
-				return -1
-			case 115:
-				return 1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 101:
-				return -1
-			case 108:
-				return 2
-			case 112:
-				return -1
-			case 115:
-				return -1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 101:
-				return 3
-			case 108:
-				return -1
-			case 112:
-				return -1
-			case 115:
-				return -1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 101:
-				return 4
-			case 108:
-				return -1
-			case 112:
-				return -1
-			case 115:
-				return -1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 101:
-				return -1
-			case 108:
-				return -1
-			case 112:
-				return 5
-			case 115:
-				return -1
-			}
-			return -1
-		},
-		func(r rune) int {
-			switch r {
-			case 101:
-				return -1
-			case 108:
-				return -1
-			case 112:
-				return -1
-			case 115:
-				return -1
-			}
-			return -1
-		},
-	}, []int{ /* Start-of-input transitions */ -1, -1, -1, -1, -1, -1}, []int{ /* End-of-input transitions */ -1, -1, -1, -1, -1, -1}, nil},
-
 	// (switch)
 	{[]bool{false, false, false, false, false, false, true}, []func(rune) int{ // Transitions
 		func(r rune) int {
@@ -4111,213 +3935,203 @@ OUTER0:
 			}
 		case 26:
 			{
-				log_debug("YIELD")
-				return YIELD
-			}
-		case 27:
-			{
-				log_debug("SLEEP")
-				return SLEEP
-			}
-		case 28:
-			{
 				log_debug("SWITCH")
 				return SWITCH
 			}
-		case 29:
+		case 27:
 			{
 				log_debug("CASE")
 				return CASE
 			}
-		case 30:
+		case 28:
 			{
 				log_debug("DEFAULT")
 				return DEFAULT
 			}
-		case 31:
+		case 29:
 			{
 				log_debug("STRING_DEFINITION")
 				lval.s = yylex.Text()
 				lval.s = lval.s[1 : len(lval.s)-1]
 				return STRING_DEFINITION
 			}
-		case 32:
+		case 30:
 			{
 				log_debug("IDENTIFIER")
 				lval.s = yylex.Text()
 				return IDENTIFIER
 			}
-		case 33:
+		case 31:
 			{
 				log_debug("IDENTIFIER_DOT")
 				lval.s = yylex.Text()
 				return IDENTIFIER_DOT
 			}
-		case 34:
+		case 32:
 			{
 				log_debug("IDENTIFIER_POINTER")
 				lval.s = yylex.Text()
 				return IDENTIFIER_POINTER
 			}
-		case 35:
+		case 33:
 			{
 				log_debug("FKUUID")
 				lval.s = yylex.Text()
 				return FKUUID
 			}
-		case 36:
+		case 34:
 			{
 				log_debug("NUMBER")
 				lval.s = yylex.Text()
 				return NUMBER
 			}
-		case 37:
+		case 35:
 			{
 				log_debug("FKFLOAT")
 				lval.s = yylex.Text()
 				return FKFLOAT
 			}
-		case 38:
+		case 36:
 			{
 				log_debug("DIVIDE_MOD")
 				return DIVIDE_MOD
 			}
-		case 39:
+		case 37:
 			{
 				log_debug("ARG_SPLITTER")
 				return ARG_SPLITTER
 			}
-		case 40:
+		case 38:
 			{
 				log_debug("RIGHT_POINTER")
 				return RIGHT_POINTER
 			}
-		case 41:
+		case 39:
 			{
 				log_debug("INC")
 				return INC
 			}
-		case 42:
+		case 40:
 			{
 				log_debug("PLUS")
 				return PLUS
 			}
-		case 43:
+		case 41:
 			{
 				log_debug("MINUS")
 				return MINUS
 			}
-		case 44:
+		case 42:
 			{
 				log_debug("DIVIDE")
 				return DIVIDE
 			}
-		case 45:
+		case 43:
 			{
 				log_debug("MULTIPLY")
 				return MULTIPLY
 			}
-		case 46:
+		case 44:
 			{
 				log_debug("NEW_ASSIGN")
 				return NEW_ASSIGN
 			}
-		case 47:
+		case 45:
 			{
 				log_debug("PLUS_ASSIGN")
 				return PLUS_ASSIGN
 			}
-		case 48:
+		case 46:
 			{
 				log_debug("MINUS_ASSIGN")
 				return MINUS_ASSIGN
 			}
-		case 49:
+		case 47:
 			{
 				log_debug("DIVIDE_ASSIGN")
 				return DIVIDE_ASSIGN
 			}
-		case 50:
+		case 48:
 			{
 				log_debug("MULTIPLY_ASSIGN")
 				return MULTIPLY_ASSIGN
 			}
-		case 51:
+		case 49:
 			{
 				log_debug("DIVIDE_MOD_ASSIGN")
 				return DIVIDE_MOD_ASSIGN
 			}
-		case 52:
+		case 50:
 			{
 				log_debug("ASSIGN")
 				return ASSIGN
 			}
-		case 53:
+		case 51:
 			{
 				log_debug("MORE")
 				return MORE
 			}
-		case 54:
+		case 52:
 			{
 				log_debug("LESS")
 				return LESS
 			}
-		case 55:
+		case 53:
 			{
 				log_debug("MORE_OR_EQUAL")
 				return MORE_OR_EQUAL
 			}
-		case 56:
+		case 54:
 			{
 				log_debug("LESS_OR_EQUAL")
 				return LESS_OR_EQUAL
 			}
-		case 57:
+		case 55:
 			{
 				log_debug("EQUAL")
 				return EQUAL
 			}
-		case 58:
+		case 56:
 			{
 				log_debug("NOT_EQUAL")
 				return NOT_EQUAL
 			}
-		case 59:
+		case 57:
 			{
 				log_debug("OPEN_BRACKET")
 				return OPEN_BRACKET
 			}
-		case 60:
+		case 58:
 			{
 				log_debug("CLOSE_BRACKET")
 				return CLOSE_BRACKET
 			}
-		case 61:
+		case 59:
 			{
 				log_debug("COLON")
 				return COLON
 			}
-		case 62:
+		case 60:
 			{
 				log_debug("OPEN_SQUARE_BRACKET")
 				return OPEN_SQUARE_BRACKET
 			}
-		case 63:
+		case 61:
 			{
 				log_debug("CLOSE_SQUARE_BRACKET")
 				return CLOSE_SQUARE_BRACKET
 			}
-		case 64:
+		case 62:
 			{
 				log_debug("OPEN_BIG_BRACKET")
 				return OPEN_BIG_BRACKET
 			}
-		case 65:
+		case 63:
 			{
 				log_debug("CLOSE_BIG_BRACKET")
 				return CLOSE_BIG_BRACKET
 			}
-		case 66:
+		case 64:
 			{
 				log_debug("STRING_CAT")
 				return STRING_CAT

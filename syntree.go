@@ -34,8 +34,6 @@ const (
 	est_struct_memlist
 	est_struct_pointer
 	est_continue
-	est_sleep
-	est_yield
 	est_switch_stmt
 	est_switch_caselist
 	est_switch_case_node
@@ -75,8 +73,6 @@ var syntree_TYPE_name = map[int]string{
 	est_struct_memlist:    "est_struct_memlist",
 	est_struct_pointer:    "est_struct_pointer",
 	est_continue:          "est_continue",
-	est_sleep:             "est_sleep",
-	est_yield:             "est_yield",
 	est_switch_stmt:       "est_switch_stmt",
 	est_switch_caselist:   "est_switch_caselist",
 	est_switch_case_node:  "est_switch_case_node",
@@ -116,8 +112,6 @@ var syntree_TYPE_value = map[string]int32{
 	"est_struct_memlist":    est_struct_memlist,
 	"est_struct_pointer":    est_struct_pointer,
 	"est_continue":          est_continue,
-	"est_sleep":             est_sleep,
-	"est_yield":             est_yield,
 	"est_switch_stmt":       est_switch_stmt,
 	"est_switch_caselist":   est_switch_caselist,
 	"est_switch_case_node":  est_switch_case_node,
@@ -976,46 +970,6 @@ func (sn *continue_stmt) dump(indent int) string {
 	ret := ""
 	ret += sn.gentab(indent)
 	ret += "[continue]:\n"
-	return ret
-}
-
-//////////////////////////////////////////////////////////////////
-
-type sleep_stmt struct {
-	syntree_node_base
-	time syntree_node
-}
-
-func (sn *sleep_stmt) gettype() int {
-	return est_sleep
-}
-func (sn *sleep_stmt) dump(indent int) string {
-	ret := ""
-	ret += sn.gentab(indent)
-	ret += "[sleep]:\n"
-	ret += sn.gentab(indent + 1)
-	ret += "[time]:\n"
-	ret += sn.time.dump(indent + 2)
-	return ret
-}
-
-//////////////////////////////////////////////////////////////////
-
-type yield_stmt struct {
-	syntree_node_base
-	time syntree_node
-}
-
-func (sn *yield_stmt) gettype() int {
-	return est_yield
-}
-func (sn *yield_stmt) dump(indent int) string {
-	ret := ""
-	ret += sn.gentab(indent)
-	ret += "[yield]:\n"
-	ret += sn.gentab(indent + 1)
-	ret += "[time]:\n"
-	ret += sn.time.dump(indent + 2)
 	return ret
 }
 
