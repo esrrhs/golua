@@ -58,9 +58,6 @@ const (
 
 	OPCODE_CALL
 
-	OPCODE_SLEEP
-	OPCODE_YIELD
-
 	OPCODE_FOR
 
 	OPCODE_MAX
@@ -188,11 +185,6 @@ func opcodeStr(opcode int) string {
 
 	case OPCODE_CALL:
 		return "OPCODE_CALL"
-
-	case OPCODE_SLEEP:
-		return "OPCODE_SLEEP"
-	case OPCODE_YIELD:
-		return "OPCODE_YIELD"
 
 	case OPCODE_FOR:
 		return "OPCODE_FOR"

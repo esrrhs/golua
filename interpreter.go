@@ -433,6 +433,23 @@ func (inter *interpreter) run() {
 			if b {
 				inter.ip = ip
 			}
+		case OPCODE_RETURN:
+			returnnum := _COMMAND_CODE(inter.GET_CMD(inter.fb, inter.ip))
+			if returnnum == 0 {
+				inter.ip = inter.fb.binary_size()
+				break
+			}
+			inter.ip++
+
+			// 塞给ret
+			for i := 0; i < returnnum; i++ {
+				ret := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+				inter.ip++
+
+				inter.ret[i] = *ret
+			}
+
+			inter.ip = inter.fb.binary_size()
 		}
 	}
 }

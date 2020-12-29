@@ -467,18 +467,6 @@ stmt:
 		$$.sn = $1.sn
 	}
 	|
-	sleep
-	{
-		log_debug("[yacc]: stmt <- sleep_stmt");
-		$$.sn = $1.sn
-	}
-	|
-	yield
-	{
-		log_debug("[yacc]: stmt <- yield_stmt");
-		$$.sn = $1.sn
-	}
-	|
 	switch_stmt
 	{
 		log_debug("[yacc]: stmt <- switch_stmt");
@@ -1363,25 +1351,6 @@ continue:
 	}
 	;
 
-sleep:
-	SLEEP expr_value 
-	{
-		log_debug("[yacc]: SLEEP");
-		p := &sleep_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		p.time = $2.sn
-		$$.sn = p
-	}
-	
-yield:
-	YIELD expr_value
-	{
-		log_debug("[yacc]: YIELD");
-		p := &yield_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
-		p.time = $2.sn
-		$$.sn = p
-	}
-	;
-	
 switch_stmt:
 	SWITCH cmp_value switch_case_list DEFAULT block END
 	{

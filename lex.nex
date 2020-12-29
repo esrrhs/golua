@@ -24,8 +24,6 @@
 /(is)/ { log_debug("IS"); return IS }
 /(not)/ { log_debug("NOT"); return NOT }
 /(continue)/ { log_debug("CONTINUE"); return CONTINUE }
-/(yield)/ { log_debug("YIELD"); return YIELD }
-/(sleep)/ { log_debug("SLEEP"); return SLEEP }
 /(switch)/ { log_debug("SWITCH"); return SWITCH }
 /(case)/ { log_debug("CASE"); return CASE }
 /(default)/ { log_debug("DEFAULT"); return DEFAULT }
