@@ -32,7 +32,8 @@ func Run(fun string, p ...interface{}) (ret []interface{}, err error) {
 	inter.call(funcv, ps, nil)
 	inter.run()
 
-	ret = ps.pops()
+	ps.vlist = inter.ret
+	ret = ps.trans()
 	return
 }
 
@@ -153,7 +154,6 @@ func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
 
 		// 分配入参
 		copy(inter.stack[inter.bp:], ps.vlist)
-		ps.clear()
 
 		// 清空栈区
 		for i := 0; i < fb.maxstack-fb.paramnum; i++ {
@@ -219,7 +219,12 @@ func (inter *interpreter) run() {
 					oldretpos := inter.BP_GET_RETPOS(oldbp, oldretnum, i)
 
 					ret := inter.GET_VARIANT(inter.fb, inter.bp, oldretpos)
-					*ret = inter.ret[i]
+
+					if i < len(inter.ret) {
+						*ret = inter.ret[i]
+					} else {
+						(*ret).V_SET_NIL()
+					}
 				}
 			}
 			continue
@@ -442,6 +447,9 @@ func (inter *interpreter) run() {
 			inter.ip++
 
 			// 塞给ret
+			if len(inter.ret) < returnnum {
+				inter.ret = make([]variant, returnnum)
+			}
 			for i := 0; i < returnnum; i++ {
 				ret := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
 				inter.ip++

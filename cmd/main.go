@@ -12,10 +12,21 @@ func main() {
 		fmt.Printf("parse %v\n", err)
 		return
 	}
-	ret, err := fakego.Run("json.test_run", 1, "2")
+	test_return_value()
+}
+
+func test_return_value() {
+	ret, err := fakego.Run("mypackage.test_return_value", 1, "2")
 	if err != nil {
-		fmt.Printf("Run %v\n", err)
-		return
+		panic(err)
 	}
-	fmt.Printf("Run ok %v\n", ret)
+	if len(ret) != 2 {
+		panic("fail")
+	}
+	if ret[0] != 1 {
+		panic("fail")
+	}
+	if ret[1] != "a" {
+		panic("fail")
+	}
 }

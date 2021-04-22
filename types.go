@@ -6,6 +6,8 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -24,11 +26,36 @@ func log_debug(format string, a ...interface{}) {
 		}
 		defer f.Close()
 		mw := io.MultiWriter(os.Stdout, f)
-		log.SetFlags(log.LstdFlags | log.Lmicroseconds | log.Lshortfile)
+		log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 		log.SetOutput(mw)
-		log.SetPrefix("[DEBUG]:")
+		file, _, line := getFunc()
+		file = filepath.Base(file)
+		log.SetPrefix("[DEBUG]" + fmt.Sprintf(" [%v:%v] ", file, line))
 		log.Printf(format, a...)
 	}
+}
+
+func getFunc() (string, string, int) {
+	pc := make([]uintptr, 5)
+	n := runtime.Callers(0, pc)
+	if n == 0 {
+		return "NIL", "NIL", 0
+	}
+
+	pc = pc[:n]
+	frames := runtime.CallersFrames(pc)
+
+	n = 4
+	for i := 0; i < n; i++ {
+		frame, more := frames.Next()
+		if i == n-1 {
+			return frame.File, frame.Function, frame.Line
+		}
+		if !more {
+			break
+		}
+	}
+	return "NIL", "NIL", 0
 }
 
 func vartostring(v variant) string {

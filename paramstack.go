@@ -2,18 +2,12 @@ package fakego
 
 type paramstack struct {
 	vlist []variant
-	len   int
 }
 
 func (ps *paramstack) push(i interface{}) {
-	if ps.len < len(ps.vlist) {
-		ps.vlist[ps.len].from(i)
-	} else {
-		var v variant
-		v.from(i)
-		ps.vlist = append(ps.vlist, v)
-	}
-	ps.len++
+	var v variant
+	v.from(i)
+	ps.vlist = append(ps.vlist, v)
 }
 
 func (ps *paramstack) pushs(a []interface{}) {
@@ -23,8 +17,9 @@ func (ps *paramstack) pushs(a []interface{}) {
 }
 
 func (ps *paramstack) pop() interface{} {
-	v := ps.vlist[ps.len-1]
-	ps.len--
+	n := len(ps.vlist)
+	v := ps.vlist[n-1]
+	ps.vlist = ps.vlist[0 : n-1]
 	return v.to()
 }
 
@@ -36,9 +31,12 @@ func (ps *paramstack) pops() (a []interface{}) {
 }
 
 func (ps *paramstack) size() int {
-	return ps.len
+	return len(ps.vlist)
 }
 
-func (ps *paramstack) clear() {
-	ps.len = 0
+func (ps *paramstack) trans() (a []interface{}) {
+	for _, v := range ps.vlist {
+		a = append(a, v.to())
+	}
+	return
 }

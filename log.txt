@@ -29,6 +29,7 @@
 2020.12.7:加interpreter的MATH_ASSIGN_OPER
 2020.12.25:加interpreter的FOR
 2020.12.29:结束加interpreter，下一步测试纯脚本
+2021.4.22:返回常量值，ok。整理下日志。下一步测试分支
 
 
 
