@@ -2,13 +2,15 @@
 
 [<img src="https://img.shields.io/github/license/esrrhs/fakego">](https://github.com/esrrhs/fakego)
 [<img src="https://img.shields.io/github/languages/top/esrrhs/fakego">](https://github.com/esrrhs/fakego)
+[![Go Report Card](https://goreportcard.com/badge/github.com/esrrhs/fakego)](https://goreportcard.com/report/github.com/esrrhs/fakego)
+[<img src="https://img.shields.io/github/v/release/esrrhs/fakego">](https://github.com/esrrhs/fakego/releases)
+[<img src="https://img.shields.io/github/downloads/esrrhs/fakego/total">](https://github.com/esrrhs/fakego/releases)
 [<img src="https://img.shields.io/github/workflow/status/esrrhs/fakego/Go">](https://github.com/esrrhs/fakego/actions)
 
 轻量级嵌入式脚本语言
 
-## 简介[english](./README_EN.md)
+## 简介[english]
 **fakego**是一款轻量级的嵌入式脚本语言，使用Golang语言编写，语法吸取自lua、golang、erlang，基于nex、goyacc生成语法树，编译成字节码解释执行。
-<a href="https://github.com/esrrhs/fake">C/C++版本fake</a>
 
 ## 脚本特性
 * 语法类似lua
@@ -111,20 +113,9 @@ func myfunc1(arg1, arg2)
 end
 ```
 
-## Golang示例
-
+## 使用
 ```
-
-
+fakego.Parse("test.fk")
+ret, err := fakego.Run("mypackage.test_return_value", 1, "2")
+fmt.Println(ret)
 ```
-
-
-## 调试环境
-* IDE
-
-![image](img/ide.png)
-
-* 命令行
-
-![image](img/debug.png)
-
