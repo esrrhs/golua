@@ -611,9 +611,6 @@ func (inter *interpreter) MATH_OPER(fb *func_binary, bp int) (variant, variant, 
 	}
 	dest := inter.GET_VARIANT(fb, bp, inter.ip)
 	inter.ip++
-	if !(inter.CHECK_CONST_ARRAY_POS(*dest) || inter.CHECK_CONST_MAP_POS(*dest)) {
-		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter assign error, dest is const container")
-	}
 
 	//log_debug("math left %s right %s", vartostring(left), vartostring(right))
 	return *left, *right, dest
@@ -675,6 +672,7 @@ func (inter *interpreter) V_AND(left variant, right variant, dest *variant) {
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_OR(left variant, right variant, dest *variant) {
@@ -685,6 +683,7 @@ func (inter *interpreter) V_OR(left variant, right variant, dest *variant) {
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_FOR_LESS(left variant, right variant, dest *bool) {
@@ -705,6 +704,7 @@ func (inter *interpreter) V_LESS(left variant, right variant, dest *variant) {
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_MORE(left variant, right variant, dest *variant) {
@@ -715,6 +715,7 @@ func (inter *interpreter) V_MORE(left variant, right variant, dest *variant) {
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_EQUAL(left variant, right variant, dest *variant) {
@@ -725,6 +726,7 @@ func (inter *interpreter) V_EQUAL(left variant, right variant, dest *variant) {
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_MOREEQUAL(left variant, right variant, dest *variant) {
@@ -735,6 +737,7 @@ func (inter *interpreter) V_MOREEQUAL(left variant, right variant, dest *variant
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_LESSEQUAL(left variant, right variant, dest *variant) {
@@ -745,6 +748,7 @@ func (inter *interpreter) V_LESSEQUAL(left variant, right variant, dest *variant
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_NOTEQUAL(left variant, right variant, dest *variant) {
@@ -755,6 +759,7 @@ func (inter *interpreter) V_NOTEQUAL(left variant, right variant, dest *variant)
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) MATH_SINGLE_OPER(fb *func_binary, bp int) (variant, *variant) {
@@ -778,6 +783,7 @@ func (inter *interpreter) V_NOT(left variant, dest *variant) {
 	} else {
 		dest.data = float64(0)
 	}
+	dest.ty = REAL
 }
 
 func (inter *interpreter) MATH_OPER_JNE(fb *func_binary, bp int) (variant, variant, int) {

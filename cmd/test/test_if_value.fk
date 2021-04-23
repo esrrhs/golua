@@ -1,0 +1,8 @@
+package mypackage
+
+func test_if_value(a, b)
+    if a == 1 then
+        return "yes"
+    end
+    return "no"
+end

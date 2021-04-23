@@ -126,7 +126,7 @@ func (v *variant) V_EQUAL_V(v2 variant) bool {
 	if v.ty != v2.ty {
 		return false
 	} else {
-		return v.data != v2.data
+		return v.data == v2.data
 	}
 }
 

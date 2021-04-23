@@ -210,31 +210,11 @@ const (
 )
 
 func fkxtoa(d command, wid int) string {
-	ret := ""
-
-	var tmpbuf [32]byte
-	idx := 31
-
-	// special case '0'
-	if d == 0 {
-		ret = "0"
-	} else {
-		// add numbers
-		chars := "0123456789ABCDEF"
-		for d != 0 && idx != 0 {
-			idx = idx - 1
-			tmpbuf[idx] = chars[(d % 16)]
-			d /= 16
-		}
-
-		ret = string(tmpbuf[idx:])
-	}
-
+	ret := fmt.Sprintf("%016x", d)
 	if len(ret) < wid {
 		tmp := strings.Repeat("0", wid-len(ret))
 		ret = tmp + ret
 	}
-
 	tmp := "0x"
 	ret = tmp + ret
 	return ret

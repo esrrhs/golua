@@ -3,30 +3,26 @@ package main
 import (
 	"fmt"
 	"github.com/esrrhs/fakego"
+	"os"
 )
 
 func main() {
-	fakego.SetConfig(fakego.FakeConfig{OpenLog: true})
-	err := fakego.Parse("test.fk")
-	if err != nil {
-		fmt.Printf("parse %v\n", err)
+	if len(os.Args) < 2 {
+		fmt.Println("eg: ./fakego test.fk param...")
 		return
 	}
-	test_return_value()
-}
-
-func test_return_value() {
-	ret, err := fakego.Run("mypackage.test_return_value", 1, "2")
+	err := fakego.Parse(os.Args[1])
 	if err != nil {
-		panic(err)
+		fmt.Printf("Parse fail %v\n", err)
+		return
 	}
-	if len(ret) != 2 {
-		panic("fail")
+
+	var params []string
+	params = append(params, os.Args[2:]...)
+	ret, err := fakego.Run("mypackage.test_return_value", params)
+	if err != nil {
+		fmt.Printf("Run fail %v\n", err)
+		return
 	}
-	if ret[0] != 1 {
-		panic("fail")
-	}
-	if ret[1] != "a" {
-		panic("fail")
-	}
+	fmt.Println(ret)
 }
