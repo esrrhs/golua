@@ -9,7 +9,7 @@
 
 轻量级嵌入式脚本语言
 
-## 简介[english]
+## 简介
 **fakego**是一款轻量级的嵌入式脚本语言，使用Golang语言编写，语法吸取自lua、golang、erlang，基于nex、goyacc生成语法树，编译成字节码解释执行。
 
 ## 脚本特性
