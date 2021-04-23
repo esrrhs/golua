@@ -1,7 +1,42 @@
 package mypackage
 
-func test_if_value(a, b)
+func test_if_value1(a, b)
     if a == 1 then
+        return "yes"
+    end
+    return "no"
+end
+
+func test_if_value2(a, b)
+    if a > 1 then
+        return "yes"
+    end
+    return "no"
+end
+
+func test_if_value3(a, b)
+    if a >= 1 then
+        return "yes"
+    end
+    return "no"
+end
+
+func test_if_value4(a, b)
+    if a < 1 then
+        return "yes"
+    end
+    return "no"
+end
+
+func test_if_value5(a, b)
+    if a <= 1 then
+        return "yes"
+    end
+    return "no"
+end
+
+func test_if_value6(a, b)
+    if a != 1 then
         return "yes"
     end
     return "no"
