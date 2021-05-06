@@ -1,0 +1,33 @@
+package mypackage
+
+func test_for1(a, b)
+    ret := 0
+    for var i = a, i < b, i++ then
+        ret += a
+    end
+    return ret
+end
+
+func test_for2(a, b)
+    ret := 0
+    for var i = a, i < b, i++ then
+        ret += i
+    end
+    return ret
+end
+
+func test_for3(a, b)
+    ret := 0
+    for var i = a -> b, 1 then
+        ret += a
+    end
+    return ret
+end
+
+func test_for4(a, b)
+    ret := 0
+    for var i = a -> b, 1 then
+        ret += i
+    end
+    return ret
+end

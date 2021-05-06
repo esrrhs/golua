@@ -211,3 +211,67 @@ func Test_if_value6(t *testing.T) {
 		}
 	}
 }
+
+func Test_for1(t *testing.T) {
+	load(t, "./test/test_for.fk")
+	{
+		ret, err := fakego.Run("mypackage.test_for1", 1, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != 9 {
+			t.Fatalf("fail")
+		}
+	}
+}
+
+func Test_for2(t *testing.T) {
+	load(t, "./test/test_for.fk")
+	{
+		ret, err := fakego.Run("mypackage.test_for2", 1, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != 45 {
+			t.Fatalf("fail")
+		}
+	}
+}
+
+func Test_for3(t *testing.T) {
+	load(t, "./test/test_for.fk")
+	{
+		ret, err := fakego.Run("mypackage.test_for3", 1, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != 9 {
+			t.Fatalf("fail")
+		}
+	}
+}
+
+func Test_for4(t *testing.T) {
+	load(t, "./test/test_for.fk")
+	{
+		ret, err := fakego.Run("mypackage.test_for4", 1, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != 45 {
+			t.Fatalf("fail")
+		}
+	}
+}

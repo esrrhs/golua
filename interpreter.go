@@ -588,7 +588,7 @@ func (inter *interpreter) MATH_ASSIGN_OPER(fb *func_binary, bp int) (variant, *v
 	}
 	dest := inter.GET_VARIANT(fb, bp, inter.ip)
 	inter.ip++
-	if !(inter.CHECK_CONST_ARRAY_POS(*dest) || inter.CHECK_CONST_MAP_POS(*dest)) {
+	if inter.CHECK_CONST_ARRAY_POS(*dest) || inter.CHECK_CONST_MAP_POS(*dest) {
 		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "interpreter assign error, dest is const container")
 	}
 
