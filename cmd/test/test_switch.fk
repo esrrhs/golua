@@ -1,0 +1,12 @@
+package mypackage
+
+func test_switch1(a, b)
+    switch a
+        case 1 then
+            return a
+        case "a" then
+            return b
+        default
+            return a + b
+    end
+end

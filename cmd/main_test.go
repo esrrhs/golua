@@ -275,3 +275,43 @@ func Test_for4(t *testing.T) {
 		}
 	}
 }
+
+func Test_switch1(t *testing.T) {
+	load(t, "./test/test_switch.fk")
+	{
+		ret, err := fakego.Run("mypackage.test_switch1", 1, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != 1 {
+			t.Fatalf("fail")
+		}
+	}
+	{
+		ret, err := fakego.Run("mypackage.test_switch1", "a", 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != 10 {
+			t.Fatalf("fail")
+		}
+	}
+	{
+		ret, err := fakego.Run("mypackage.test_switch1", 2, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != 12 {
+			t.Fatalf("fail")
+		}
+	}
+}

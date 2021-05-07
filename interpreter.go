@@ -632,18 +632,21 @@ func (inter *interpreter) V_PLUS(left variant, right variant, dest *variant) {
 	inter.V_ASSERT_CAN_CAL(left)
 	inter.V_ASSERT_CAN_CAL(right)
 	dest.data = left.data.(float64) + right.data.(float64)
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_MINUS(left variant, right variant, dest *variant) {
 	inter.V_ASSERT_CAN_CAL(left)
 	inter.V_ASSERT_CAN_CAL(right)
 	dest.data = left.data.(float64) - right.data.(float64)
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_MULTIPLY(left variant, right variant, dest *variant) {
 	inter.V_ASSERT_CAN_CAL(left)
 	inter.V_ASSERT_CAN_CAL(right)
 	dest.data = left.data.(float64) * right.data.(float64)
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_DIVIDE(left variant, right variant, dest *variant) {
@@ -651,6 +654,7 @@ func (inter *interpreter) V_DIVIDE(left variant, right variant, dest *variant) {
 	inter.V_ASSERT_CAN_CAL(right)
 	inter.V_ASSERT_CAN_DIVIDE(right)
 	dest.data = left.data.(float64) / right.data.(float64)
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_DIVIDE_MOD(left variant, right variant, dest *variant) {
@@ -658,6 +662,7 @@ func (inter *interpreter) V_DIVIDE_MOD(left variant, right variant, dest *varian
 	inter.V_ASSERT_CAN_CAL(right)
 	inter.V_ASSERT_CAN_DIVIDE(right)
 	dest.data = float64(int64(left.data.(float64)) % int64(right.data.(float64)))
+	dest.ty = REAL
 }
 
 func (inter *interpreter) V_STRING_CAT(left variant, right variant, dest *variant) {
@@ -719,9 +724,7 @@ func (inter *interpreter) V_MORE(left variant, right variant, dest *variant) {
 }
 
 func (inter *interpreter) V_EQUAL(left variant, right variant, dest *variant) {
-	inter.V_ASSERT_CAN_CAL(left)
-	inter.V_ASSERT_CAN_CAL(right)
-	if left.data.(float64) == right.data.(float64) {
+	if left.ty == right.ty && left.data == right.data {
 		dest.data = float64(1)
 	} else {
 		dest.data = float64(0)
