@@ -77,6 +77,7 @@ func (c *compiler) compile_func(funcnode *func_desc_node) {
 
 	mf := c.mf
 	c.cur_compile_func = funcnode.funcname
+	c.func_ret_num = 1
 
 	// 不检测重名，直接替换掉老的
 	var cg codegen

@@ -1,0 +1,15 @@
+package mypackage
+
+func test_funccall_son1(a)
+    return a * a
+end
+
+func test_funccall_son2(a)
+    return a + a
+end
+
+func test_funccall1(a, b)
+    newa := test_funccall_son1(a)
+    newb := test_funccall_son2(b)
+    return newa - newb
+end

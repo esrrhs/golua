@@ -704,7 +704,6 @@ func (sn *return_value_list_node) dump(indent int) string {
 	ret += sn.gentab(indent)
 	ret += "[return_value_list]:\n"
 	for i := range sn.returnlist {
-		ret += sn.gentab(indent + 1)
 		ret += sn.returnlist[i].dump(indent + 1)
 		ret += "\n"
 	}

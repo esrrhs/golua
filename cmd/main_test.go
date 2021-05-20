@@ -315,3 +315,19 @@ func Test_switch1(t *testing.T) {
 		}
 	}
 }
+
+func Test_funccall1(t *testing.T) {
+	load(t, "./test/test_funccall.fk")
+	{
+		ret, err := fakego.Run("mypackage.test_funccall1", 2, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != -16 {
+			t.Fatalf("fail")
+		}
+	}
+}
