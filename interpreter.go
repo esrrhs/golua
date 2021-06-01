@@ -172,12 +172,46 @@ func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
 		inter.fb = fb
 		inter.ip = 0
 
-	} else if f.havebif {
-		// TODO
+		return
+	}
+
+	// 记录profile
+	var calltime int64
+	if gfs.cfg.OpenProfile {
+		calltime = inter.BP_GET_CALLTIME(inter.bp)
+	}
+
+	if f.havebif {
+		// 绑定函数
+		f.bif(inter, ps)
 	} else if f.haveff {
+		// 内置函数
 		// TODO
 	} else {
 		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "run no func %s fail", vartostring(fun))
+	}
+
+	// 返回值
+	// 这种情况是直接跳过脚本调用了C函数
+	if inter.BP_END(inter.bp) {
+		var cret variant
+		cret = ps.vlist[len(ps.vlist)-1]
+		inter.isend = true
+		// 直接塞返回值
+		inter.ret[0] = cret
+	} else {
+		// 否则塞到当前堆栈上
+		// 塞返回值
+		for i := 0; i < retnum; i++ {
+			ret := inter.GET_VARIANT(inter.fb, inter.bp, retpos[i])
+			cret := ps.vlist[i]
+			*ret = cret
+		}
+	}
+
+	// 记录profile
+	if gfs.cfg.OpenProfile {
+		gfs.pf.add_func_sample(inter.fb.name, fkgetmstick()-calltime)
 	}
 }
 

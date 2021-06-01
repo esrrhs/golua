@@ -40,3 +40,7 @@ func (ps *paramstack) trans() (a []interface{}) {
 	}
 	return
 }
+
+func (ps *paramstack) clear() {
+	ps.vlist = ps.vlist[0:0]
+}

@@ -331,3 +331,31 @@ func Test_funccall1(t *testing.T) {
 		}
 	}
 }
+
+func Test_print1(t *testing.T) {
+	load(t, "./test/test_print.fk")
+	{
+		ret, err := fakego.Run("mypackage.test_print1", 2, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != "2 10" {
+			t.Fatalf("fail")
+		}
+	}
+	{
+		ret, err := fakego.Run("mypackage.test_print1", "a", "b")
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != "a b" {
+			t.Fatalf("fail")
+		}
+	}
+}

@@ -1,0 +1,5 @@
+package mypackage
+
+func test_print1(a, b)
+    return print(a, b)
+end

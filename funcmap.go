@@ -2,8 +2,11 @@ package fakego
 
 import "sync"
 
+type bifunc func(inter *interpreter, ps *paramstack)
+
 type funcunion struct {
 	fb      *func_binary
+	bif     bifunc
 	haveff  bool
 	havebif bool
 	havefb  bool
@@ -25,6 +28,12 @@ func (fm *funcmap) add_func(name variant, fb *func_binary) {
 	f := fm.add_func_union(name)
 	f.fb = fb
 	f.havefb = true
+}
+
+func (fm *funcmap) add_buildin_func(name variant, bif bifunc) {
+	f := fm.add_func_union(name)
+	f.bif = bif
+	f.havebif = true
 }
 
 func (fm *funcmap) add_func_union(name variant) *funcunion {

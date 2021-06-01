@@ -7,6 +7,10 @@ import (
 
 var gfs fakeStruct
 
+func init() {
+	gfs.bif.openbasefunc()
+}
+
 type fakeStruct struct {
 	cfg FakeConfig
 	pa  parser
@@ -14,6 +18,7 @@ type fakeStruct struct {
 	bin binary
 	fm  funcmap
 	pf  profile
+	bif buildinfunc
 }
 
 type FakeErr struct {
