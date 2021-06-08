@@ -12,5 +12,5 @@ func testReg(a int, b string) int {
 
 func Test0003(t *testing.T) {
 	gfs.cfg.OpenLog = true
-	Reg("testReg", testReg)
+	RegFunc("testReg", testReg)
 }
