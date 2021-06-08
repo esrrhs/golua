@@ -181,12 +181,22 @@ func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
 		calltime = inter.BP_GET_CALLTIME(inter.bp)
 	}
 
-	if f.havebif {
+	if f.haveff {
 		// 绑定函数
-		f.bif(inter, ps)
-	} else if f.haveff {
+
+		// 检查参数数目对不对
+		if ps.size() != f.ff.argnum {
+			inter.isend = true
+			seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "bind func %s param not match, give %d need %d", vartostring(fun), ps.size(), f.ff.argnum)
+			return
+		}
+
+		f.ff.Invoke(inter, ps)
+
+	} else if f.havebif {
 		// 内置函数
-		// TODO
+		f.bif(inter, ps)
+
 	} else {
 		seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "run no func %s fail", vartostring(fun))
 	}
@@ -201,6 +211,14 @@ func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
 		inter.ret[0] = cret
 	} else {
 		// 否则塞到当前堆栈上
+
+		// 检查返回值数目对不对
+		if ps.size() != retnum {
+			inter.isend = true
+			seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "native func %s param not match, give %d need %d", vartostring(fun), ps.size(), retnum)
+			return
+		}
+
 		// 塞返回值
 		for i := 0; i < retnum; i++ {
 			ret := inter.GET_VARIANT(inter.fb, inter.bp, retpos[i])
