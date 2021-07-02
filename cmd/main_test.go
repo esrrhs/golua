@@ -359,3 +359,36 @@ func Test_print1(t *testing.T) {
 		}
 	}
 }
+
+func bind_func1(a int, b int) int {
+	return a - b
+}
+
+func Test_bind1(t *testing.T) {
+	load(t, "./test/test_bind.fk")
+	fakego.RegFunc("bind_func1", bind_func1)
+	{
+		ret, err := fakego.Run("mypackage.test_bind1", 2, 10)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != -8 {
+			t.Fatalf("fail")
+		}
+	}
+	{
+		ret, err := fakego.Run("mypackage.test_bind1", 10, 4)
+		if err != nil {
+			panic(err)
+		}
+		if len(ret) != 1 {
+			t.Fatalf("fail")
+		}
+		if ret[0] != 6 {
+			t.Fatalf("fail")
+		}
+	}
+}

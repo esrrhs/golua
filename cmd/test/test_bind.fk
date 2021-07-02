@@ -1,0 +1,6 @@
+package mypackage
+
+func test_bind1(a, b)
+    ret := bind_func1(a, b)
+    return ret
+end
