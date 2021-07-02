@@ -12,6 +12,11 @@
 ## 简介
 **fakego**是一款轻量级的嵌入式脚本语言，使用Golang语言编写，语法吸取自lua、golang、erlang，基于nex、goyacc生成语法树，编译成字节码解释执行。
 
+[C++版本fake](https://github.com/esrrhs/fake)
+
+[Java版本fake](https://github.com/esrrhs/fakejava)
+
+
 ## 脚本特性
 * 语法类似lua
 * 全部为函数
