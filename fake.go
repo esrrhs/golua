@@ -10,6 +10,9 @@ import (
 
 var gfs fakeStruct
 
+// Version is the current release version of fakescript_go.
+const Version = "v1.0.0"
+
 func init() {
 	gfs.cfg.check()
 	gfs.bif.openbasefunc()
