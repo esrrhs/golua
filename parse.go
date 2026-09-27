@@ -1,7 +1,7 @@
 package fakescript_go
 
 import (
-	"bufio"
+	"bytes"
 	"errors"
 	"os"
 	"strconv"
@@ -61,12 +61,17 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 
 	file = strings.TrimSuffix(file, "\n")
 	file = strings.TrimSuffix(file, "\r")
-	f, err := os.OpenFile(file, os.O_RDONLY, os.ModeType)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		seterror(file, 0, "", err.Error())
 	}
-	fr := bufio.NewReader(f)
-	lex := NewLexer(fr)
+	lex := NewLexer(bytes.NewReader(content))
+	defer func() {
+		select {
+		case lex.ch_stop <- true:
+		default:
+		}
+	}()
 
 	mf := myflexer{}
 	mf.fileName = file
@@ -83,7 +88,6 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	}
 
 	log_debug("yyParse ok" + file)
-	f.Close()
 
 	// parse include file
 	for _, f := range mf.includelist {

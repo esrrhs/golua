@@ -25,6 +25,7 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           check-latest: true
+          cache: false
 
       - name: Vet
         run: go vet ./...
