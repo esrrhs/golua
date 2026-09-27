@@ -64,4 +64,4 @@
 /(\})/ { log_debug("CLOSE_BIG_BRACKET"); return CLOSE_BIG_BRACKET }
 /(\.\.)/ { log_debug("STRING_CAT"); return STRING_CAT }
 //
-package fakego
+package fakescript_go

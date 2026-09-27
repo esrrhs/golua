@@ -1,4 +1,7 @@
-package fakego
+package fakescript_go
+
+//go:generate nex lex.nex
+//go:generate goyacc -o yacc.go yacc.y
 
 import (
 	"fmt"
@@ -8,6 +11,7 @@ import (
 var gfs fakeStruct
 
 func init() {
+	gfs.cfg.check()
 	gfs.bif.openbasefunc()
 }
 

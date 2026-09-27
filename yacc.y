@@ -1,5 +1,5 @@
 %{
-package fakego
+package fakescript_go
 
 %}
 

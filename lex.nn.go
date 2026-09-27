@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 import (
 	"bufio"
@@ -140,23 +140,12 @@ func NewLexerWithInit(in io.Reader, initFun func(*Lexer)) *Lexer {
 					text := string(buf[:matchn])
 					buf = buf[matchn:]
 					matchn = -1
-					for {
-						sent := false
-						select {
-						case ch <- frame{matchi, text, line, column}:
-							{
-								sent = true
-							}
-						case stopped = <-ch_stop:
-							{
-							}
-						default:
-							{
-								// nothing
-							}
+					select {
+					case ch <- frame{matchi, text, line, column}:
+						{
 						}
-						if stopped || sent {
-							break
+					case stopped = <-ch_stop:
+						{
 						}
 					}
 					if stopped {

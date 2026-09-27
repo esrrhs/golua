@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 type paramstack struct {
 	vlist []variant
@@ -11,8 +11,8 @@ func (ps *paramstack) push(i interface{}) {
 }
 
 func (ps *paramstack) pushs(a []interface{}) {
-	for i, _ := range a {
-		ps.push(a[i])
+	for _, v := range a {
+		ps.push(v)
 	}
 }
 

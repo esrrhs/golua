@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 import (
 	"errors"
@@ -88,7 +88,7 @@ func (v *variant) V_GET_POINTER() interface{} {
 	} else if v.ty == NIL {
 		return nil
 	} else {
-		panic(errors.New(fmt.Sprintf("variant get pointer fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v))))
+		panic(fmt.Errorf("variant get pointer fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v)))
 	}
 }
 
@@ -98,7 +98,7 @@ func (v *variant) V_GET_REAL() float64 {
 	} else if v.ty == NIL {
 		return 0
 	} else {
-		panic(errors.New(fmt.Sprintf("variant get real fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v))))
+		panic(fmt.Errorf("variant get real fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v)))
 	}
 }
 
@@ -108,7 +108,7 @@ func (v *variant) V_GET_STRING() string {
 	} else if v.ty == NIL {
 		return ""
 	} else {
-		panic(errors.New(fmt.Sprintf("variant get string fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v))))
+		panic(fmt.Errorf("variant get string fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v)))
 	}
 }
 
@@ -118,7 +118,7 @@ func (v *variant) V_GET_UUID() uint64 {
 	} else if v.ty == NIL {
 		return 0
 	} else {
-		panic(errors.New(fmt.Sprintf("variant get uuid fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v))))
+		panic(fmt.Errorf("variant get uuid fail, the variant is %s %s", vartypetostring(v.ty), vartostring(*v)))
 	}
 }
 
@@ -138,208 +138,180 @@ func (v *variant) V_ISBOOL() bool {
 }
 
 func (v *variant) from(i interface{}) {
-	switch i.(type) {
+	switch d := i.(type) {
 	case nil:
 		v.V_SET_NIL()
 	case bool:
-		d := i.(bool)
 		if d {
 			v.V_SET_REAL(1)
 		} else {
 			v.V_SET_REAL(0)
 		}
 	case int:
-		d := i.(int)
 		v.V_SET_REAL(float64(d))
 	case int8:
-		d := i.(int8)
 		v.V_SET_REAL(float64(d))
 	case uint8:
-		d := i.(uint8)
 		v.V_SET_REAL(float64(d))
 	case int16:
-		d := i.(int16)
 		v.V_SET_REAL(float64(d))
 	case uint16:
-		d := i.(uint16)
 		v.V_SET_REAL(float64(d))
 	case int32:
-		d := i.(int32)
 		v.V_SET_REAL(float64(d))
 	case uint32:
-		d := i.(uint32)
 		v.V_SET_REAL(float64(d))
 	case float32:
-		d := i.(float32)
 		v.V_SET_REAL(float64(d))
 	case float64:
-		d := i.(float64)
 		v.V_SET_REAL(d)
 	case int64:
-		d := i.(int64)
 		v.V_SET_UUID(uint64(d))
 	case uint64:
-		d := i.(uint64)
 		v.V_SET_UUID(d)
 	case string:
-		d := i.(string)
 		v.V_SET_STRING(d)
 	case []bool:
-		d := i.([]bool)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int:
-		d := i.([]int)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int8:
-		d := i.([]int8)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []uint8:
-		d := i.([]uint8)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int16:
-		d := i.([]int16)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []uint16:
-		d := i.([]uint16)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int32:
-		d := i.([]int32)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []uint32:
-		d := i.([]uint32)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []float32:
-		d := i.([]float32)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []float64:
-		d := i.([]float64)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []int64:
-		d := i.([]int64)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []uint64:
-		d := i.([]uint64)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []string:
-		d := i.([]string)
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case []interface{}:
-		d := i.([]interface{})
 		va := gfs.con.newarray()
-		for i, _ := range d {
+		for idx := range d {
 			var kv variant
-			kv.V_SET_REAL(float64(i))
+			kv.V_SET_REAL(float64(idx))
 			var vv variant
-			vv.from(d[i])
+			vv.from(d[idx])
 			va.con_array_set(kv, &vv)
 		}
 		v.V_SET_ARRAY(va)
 	case map[interface{}]interface{}:
-		d := i.(map[interface{}]interface{})
 		vm := gfs.con.newmap()
 		for k, v := range d {
 			var kv variant
@@ -377,7 +349,7 @@ func (v *variant) to() interface{} {
 		va := v.data.(*variant_array)
 		tmp := va.con_array_to()
 		d := make([]interface{}, len(tmp))
-		for i, _ := range tmp {
+		for i := range tmp {
 			vv := tmp[i]
 			if vv != nil {
 				d[i] = vv.to()

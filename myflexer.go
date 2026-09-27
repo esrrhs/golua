@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 import (
 	"sync"
@@ -38,8 +38,8 @@ func (mf *myflexer) add_const_desc(name string, p syntree_node) {
 	mf.constmap.Store(name, ev)
 }
 
-func (mf *myflexer) get_const_map() sync.Map {
-	return mf.constmap
+func (mf *myflexer) get_const_map() *sync.Map {
+	return &mf.constmap
 }
 
 func (mf *myflexer) add_func_desc(p *func_desc_node) {
@@ -64,7 +64,7 @@ func (mf *myflexer) is_have_struct(name string) bool {
 }
 
 func (mf *myflexer) is_have_func(funcname string) bool {
-	for i, _ := range mf.funclist {
+	for i := range mf.funclist {
 		p := mf.funclist[i]
 		if p.funcname == funcname {
 			return true

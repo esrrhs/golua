@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 import (
 	"math"
@@ -229,13 +229,10 @@ func dump_addr(code int) string {
 	switch addrtype {
 	case ADDR_STACK:
 		ret += "STACK"
-		break
 	case ADDR_CONST:
 		ret += "CONST"
-		break
 	case ADDR_CONTAINER:
 		ret += "CONTAINER"
-		break
 	default:
 		ret += "unknow "
 		ret += strconv.Itoa(int(addrtype))
@@ -327,29 +324,17 @@ func (fb *func_binary) dump(pos int) string {
 		ret += "\t"
 		switch ty {
 		case COMMAND_OPCODE:
-			{
-				ret += "["
-				ret += opcodeStr(code)
-				ret += "]\t"
-			}
-			break
+			ret += "["
+			ret += opcodeStr(code)
+			ret += "]\t"
 		case COMMAND_ADDR:
-			{
-				ret += "[ ADDR ]\t"
-				ret += dump_addr(code)
-			}
-			break
+			ret += "[ ADDR ]\t"
+			ret += dump_addr(code)
 		case COMMAND_POS:
-			{
-				ret += "[ POS  ]\t"
-				ret += strconv.Itoa(code)
-			}
-			break
+			ret += "[ POS  ]\t"
+			ret += strconv.Itoa(code)
 		default:
-			{
-				ret += "[unknow]\t"
-			}
-			break
+			ret += "[unknow]\t"
 		}
 		ret += "\n"
 	}

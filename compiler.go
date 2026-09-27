@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 import (
 	"fmt"
@@ -303,7 +303,7 @@ func (c *compiler) compile_while_stmt(cg *codegen, ws *while_stmt) {
 
 	// 替换掉break
 	bplist := c.loop_break_pos_stack[len(c.loop_break_pos_stack)-1]
-	for i, _ := range bplist {
+	for i := range bplist {
 		cg.set(bplist[i], _MAKE_POS(cg.byte_code_size()))
 	}
 	c.loop_break_pos_stack = c.loop_break_pos_stack[0 : len(c.loop_break_pos_stack)-1]
@@ -377,14 +377,14 @@ func (c *compiler) compile_for_stmt(cg *codegen, fs *for_stmt) {
 
 	// 替换掉break
 	bplist := c.loop_break_pos_stack[len(c.loop_break_pos_stack)-1]
-	for i, _ := range bplist {
+	for i := range bplist {
 		cg.set(bplist[i], _MAKE_POS(cg.byte_code_size()))
 	}
 	c.loop_break_pos_stack = c.loop_break_pos_stack[0 : len(c.loop_break_pos_stack)-1]
 
 	// 替换掉continue
 	cplist := c.continue_end_pos_stack[len(c.continue_end_pos_stack)-1]
-	for i, _ := range cplist {
+	for i := range cplist {
 		cg.set(cplist[i], _MAKE_POS(continuepos))
 	}
 	c.continue_end_pos_stack = c.continue_end_pos_stack[0 : len(c.continue_end_pos_stack)-1]
@@ -472,14 +472,14 @@ func (c *compiler) compile_for_loop_stmt(cg *codegen, fs *for_loop_stmt) {
 
 	// 替换掉break
 	bplist := c.loop_break_pos_stack[len(c.loop_break_pos_stack)-1]
-	for i, _ := range bplist {
+	for i := range bplist {
 		cg.set(bplist[i], _MAKE_POS(cg.byte_code_size()))
 	}
 	c.loop_break_pos_stack = c.loop_break_pos_stack[0 : len(c.loop_break_pos_stack)-1]
 
 	// 替换掉continue
 	cplist := c.continue_end_pos_stack[len(c.continue_end_pos_stack)-1]
-	for i, _ := range cplist {
+	for i := range cplist {
 		cg.set(cplist[i], _MAKE_POS(continuepos))
 	}
 	c.continue_end_pos_stack = c.continue_end_pos_stack[0 : len(c.continue_end_pos_stack)-1]
@@ -504,7 +504,7 @@ func (c *compiler) compile_multi_assign_stmt(cg *codegen, as *multi_assign_stmt)
 
 	// 挨个编译var
 	var varlist []command
-	for i, _ := range as.varlist.varlist {
+	for i := range as.varlist.varlist {
 		c.new_var = as.isnew
 		c.compile_node(cg, as.varlist.varlist[i])
 		c.new_var = false
@@ -512,7 +512,7 @@ func (c *compiler) compile_multi_assign_stmt(cg *codegen, as *multi_assign_stmt)
 	}
 
 	// 挨个赋值
-	for i, _ := range as.varlist.varlist {
+	for i := range as.varlist.varlist {
 		var varc command
 		var value command
 
@@ -670,7 +670,7 @@ func (c *compiler) compile_if_stmt(cg *codegen, is *if_stmt) {
 	// 开始处理elseif的
 	if is.elseifs != nil {
 		list := is.elseifs.stmtlist
-		for i, _ := range list {
+		for i := range list {
 			eis := list[i].(*elseif_stmt)
 
 			// 跳转到else if
@@ -719,7 +719,7 @@ func (c *compiler) compile_if_stmt(cg *codegen, is *if_stmt) {
 	}
 
 	// 跳转到结束
-	for i, _ := range jmpifpos {
+	for i := range jmpifpos {
 		cg.set(jmpifpos[i], _MAKE_POS(cg.byte_code_size()))
 	}
 
@@ -747,7 +747,7 @@ func (c *compiler) compile_return_stmt(cg *codegen, rs *return_stmt) {
 
 		cg.push(_MAKE_OPCODE(OPCODE_RETURN), rs.lineno())
 		cg.push(_MAKE_POS(len(rs.returnlist.returnlist)), rs.lineno())
-		for i, _ := range rs.returnlist.returnlist {
+		for i := range rs.returnlist.returnlist {
 			cg.push(c.cur_addrs[i], rs.lineno())
 		}
 	} else {
@@ -763,7 +763,7 @@ func (c *compiler) compile_return_value_list(cg *codegen, rn *return_value_list_
 	log_debug("[compiler] compile_return_value_list %p", rn)
 
 	tmp := make([]command, len(rn.returnlist))
-	for i, _ := range rn.returnlist {
+	for i := range rn.returnlist {
 		c.compile_node(cg, rn.returnlist[i])
 		tmp[i] = c.cur_addr
 	}
@@ -920,7 +920,7 @@ func (c *compiler) compile_function_call_node(cg *codegen, fn *function_call_nod
 	// 参数
 	var arglist []command
 	if fn.arglist != nil {
-		for i, _ := range fn.arglist.arglist {
+		for i := range fn.arglist.arglist {
 			sn := fn.arglist.arglist[i]
 			c.compile_node(cg, sn)
 			arglist = append(arglist, c.cur_addr)
@@ -1006,7 +1006,7 @@ func (c *compiler) compile_function_call_node(cg *codegen, fn *function_call_nod
 		cg.push(ret[i], fn.lineno())
 	}
 	cg.push(argnum, fn.lineno())
-	for i, _ := range arglist {
+	for i := range arglist {
 		cg.push(arglist[i], fn.lineno())
 	}
 
@@ -1164,7 +1164,7 @@ func (c *compiler) compile_struct_pointer(cg *codegen, sn *struct_pointer_node) 
 		con = _MAKE_ADDR(ADDR_STACK, pos)
 	}
 
-	for i, _ := range tmp {
+	for i := range tmp {
 		keystr := tmp[i]
 
 		// 编译key
@@ -1204,7 +1204,7 @@ func (c *compiler) compile_switch_stmt(cg *codegen, ss *switch_stmt) {
 	var jmpswitchposlist []int
 
 	// 挨个和case的比较
-	for i, _ := range scln.list {
+	for i := range scln.list {
 		oper := _MAKE_OPCODE(OPCODE_EQUAL)
 		left := caseleft
 		right := command(0)
@@ -1255,7 +1255,7 @@ func (c *compiler) compile_switch_stmt(cg *codegen, ss *switch_stmt) {
 	cg.pop_stack_identifiers()
 
 	// 塞跳出的
-	for i, _ := range jmpswitchposlist {
+	for i := range jmpswitchposlist {
 		cg.set(jmpswitchposlist[i], _MAKE_POS(cg.byte_code_size()))
 	}
 

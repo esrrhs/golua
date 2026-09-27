@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 import (
 	"errors"
@@ -71,9 +71,11 @@ func DebugRun(fun string, p ...interface{}) (ret interface{}, err error) {
 	return
 }
 
-/**************
+/*
+*************
 [ret pos] .. [ret pos] [ret num] [old ip] [call time] [old fb] [old bp]
-**************/
+*************
+*/
 const (
 	BP_SIZE = 5
 )
@@ -164,7 +166,7 @@ func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
 		if len(inter.ret) <= 0 {
 			inter.ret = make([]variant, 1)
 		}
-		for i, _ := range inter.ret {
+		for i := range inter.ret {
 			inter.ret[i].V_SET_NIL()
 		}
 
@@ -204,8 +206,7 @@ func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
 	// 返回值
 	// 这种情况是直接跳过脚本调用了C函数
 	if inter.BP_END(inter.bp) {
-		var cret variant
-		cret = ps.vlist[len(ps.vlist)-1]
+		cret := ps.vlist[len(ps.vlist)-1]
 		inter.isend = true
 		// 直接塞返回值
 		inter.ret[0] = cret

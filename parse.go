@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 import (
 	"bufio"

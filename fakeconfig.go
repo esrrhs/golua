@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 type FakeConfig struct {
 	OpenLog        bool          // 开启日志

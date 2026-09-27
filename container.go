@@ -1,7 +1,6 @@
-package fakego
+package fakescript_go
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -94,7 +93,7 @@ func (va *variant_array) con_array_get(k variant) *variant {
 
 	index := int(k.V_GET_REAL())
 	if index < 0 {
-		panic(errors.New(fmt.Sprintf("interpreter get array fail, index %d", index)))
+		panic(fmt.Errorf("interpreter get array fail, index %d", index))
 	}
 
 	if index >= len(va.va) {
@@ -116,7 +115,7 @@ func (va *variant_array) con_array_set(k variant, v *variant) {
 
 	index := int(k.V_GET_REAL())
 	if index < 0 {
-		panic(errors.New(fmt.Sprintf("interpreter set array fail, index %d", index)))
+		panic(fmt.Errorf("interpreter set array fail, index %d", index))
 	}
 
 	if index >= len(va.va) {

@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 import (
 	"strconv"
@@ -145,7 +145,7 @@ func (sn *syntree_node_base) gentab(n int) string {
 	return ret
 }
 
-//////////////////////////////////////////////////////////////////
+// ////////////////////////////////////////////////////////////////
 type struct_desc_memlist_node struct {
 	syntree_node_base
 	memlist []string

@@ -1,3 +1,3 @@
-module github.com/esrrhs/fakego
+module github.com/esrrhs/fakescript_go
 
-go 1.19
+go 1.22

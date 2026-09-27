@@ -1,4 +1,4 @@
-package fakego
+package fakescript_go
 
 type block_identifiers struct {
 	name string
@@ -92,7 +92,7 @@ func (cg *codegen) alloc_stack_identifier() int {
 
 func (cg *codegen) getconst(v variant) int {
 
-	for i, _ := range cg.const_list {
+	for i := range cg.const_list {
 		vv := cg.const_list[i]
 		if vv.V_EQUAL_V(v) {
 			return i
@@ -108,7 +108,7 @@ func (cg *codegen) getvariable(name string) int {
 	// 从下往上找
 	for i := len(cg.block_identifiers_stack) - 1; i >= 0; i-- {
 		list := cg.block_identifiers_stack[i]
-		for j, _ := range list {
+		for j := range list {
 			if name == list[j].name {
 				return list[j].pos
 			}
@@ -118,7 +118,7 @@ func (cg *codegen) getvariable(name string) int {
 }
 
 func (cg *codegen) getcontaineraddr(con command, key command) int {
-	for i, _ := range cg.containeraddr_list {
+	for i := range cg.containeraddr_list {
 		pc := cg.containeraddr_list[i]
 		if con == pc.con && key == pc.key {
 			return i
