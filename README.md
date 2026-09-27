@@ -6,51 +6,56 @@
 [<img src="https://img.shields.io/github/v/release/esrrhs/fakescript_go">](https://github.com/esrrhs/fakescript_go/releases)
 [<img src="https://img.shields.io/github/actions/workflow/status/esrrhs/fakescript_go/go.yml?branch=master">](https://github.com/esrrhs/fakescript_go/actions)
 
-轻量级嵌入式脚本语言 (Go 1.22+)
+> **A lightweight, embeddable scripting language implemented in pure Go with zero external dependencies (Go 1.22+).**
 
-[README_EN](./README_EN.md)
+[English](#english) | [中文说明](#中文说明)
 
-## 简介
-**fakescript_go** 是一款轻量级的嵌入式脚本语言，纯 Go 实现，无第三方外部依赖。语法吸取自 Lua、Golang、Erlang，基于 nex、goyacc 生成语法树，编译成字节码解释执行。
+---
 
-* [C++ 版本 fake](https://github.com/esrrhs/fake)
-* [Java 版本 fake](https://github.com/esrrhs/fakejava)
+<span id="english"></span>
+## Introduction
 
-## 脚本特性
-* **语法类似 Lua**：简洁易学，兼具动态语言灵活性与表达力
-* **零外部依赖**：仅依赖 Go 标准库
-* **丰富数据类型**：支持 array、map（可无限嵌套）、struct、Int64、const 常量
-* **函数与多返回值**：支持函数定义、多返回值返回与接收
-* **Go 双向绑定**：支持将 Go 原生函数直接注册到脚本中调用
-* **控制流完善**：支持 if-elseif-else、while、for、switch-case
-* **性能与统计**：自带 profile 功能，可获取脚本各函数的执行耗时
-* **安全沙箱**：内置执行调用栈深保护，杜绝死循环导致内存耗尽
+**fakescript_go** is a lightweight, embeddable scripting language written in pure Go without any external dependencies. Its syntax draws inspiration from Lua, Go, and Erlang. The engine generates syntax trees via `nex` and `goyacc`, compiling scripts into bytecode for virtual machine interpretation.
 
-## 脚本示例
+* [fake for C++](https://github.com/esrrhs/fake)
+* [fake for Java](https://github.com/esrrhs/fakejava)
+
+## Key Features
+
+* **Lua-like Syntax**: Simple, expressive, and easy to learn.
+* **Zero External Dependencies**: Pure Go implementation; only relies on the Go standard library.
+* **Rich Data Types**: Built-in support for array, map (with unlimited nesting), struct, Int64, and constants.
+* **Multi-Return Values**: First-class support for functions with multiple return values.
+* **Seamless Go Interoperability**: Easily bind Go native functions for scripts to invoke.
+* **Comprehensive Control Flow**: Supports `if-elseif-else`, `while`, `for`, and `switch-case`.
+* **Built-in Profiler**: Measure runtime execution time per script function.
+* **Execution Safety**: Call stack depth protection against infinite loops and memory exhaustion.
+
+## Script Example
 
 ```lua
--- 当前包名
+-- Current package name
 package mypackage.test
 
--- 引入的文件
+-- Include other scripts
 include "common.fk"
 
--- 结构体定义
+-- Struct definition
 struct teststruct
 	sample_a
 	sample_b
 	sample_c
 end
 
--- 常量值
+-- Constants
 const hellostring = "hello"
 const helloint = 1234
 const hellomap = {1 : "a" 2 : "b" 3 : [1 2 3]}
 
--- 函数定义
+-- Function definition
 func myfunc1(arg1, arg2)
 
-	-- 分支
+	-- Branching
 	if arg1 < arg2 then
 		print("arg1 < arg2")
 	elseif arg1 == arg2 then
@@ -59,16 +64,16 @@ func myfunc1(arg1, arg2)
 		print("else")
 	end
 
-	-- for 循环
+	-- For loop
 	for var i = 0, i < arg2, i++ then
 		print("i = ", i)
 	end
 
-	-- 数组
+	-- Arrays
 	var a = array()
 	a[1] = 3
 
-	-- 集合 (map)
+	-- Maps
 	var b = map()
 	b[a] = 1
 	b[1] = a
@@ -77,13 +82,13 @@ func myfunc1(arg1, arg2)
 	var uid = 1241515236123614u
 	print("uid = ", uid)
 
-	-- 结构体
+	-- Structs
 	var tt = teststruct()
 	tt->sample_a = 1
 	tt->sample_b = teststruct()
 	tt->sample_b->sample_a = 10
 
-	-- switch 分支
+	-- Switch statements
 	switch arg1
 		case 1 then
 			print("1")
@@ -93,14 +98,98 @@ func myfunc1(arg1, arg2)
 			print("default")
 	end
 
-	-- 多返回值
+	-- Multiple return values
 	return arg1, arg2 + 10
 end
 ```
 
-## Go 中使用
+## Go Usage
 
-### 1. 快速执行
+### 1. Basic Execution
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/esrrhs/fakescript_go"
+)
+
+func main() {
+	// Parse script file
+	if err := fakescript_go.Parse("test.fk"); err != nil {
+		panic(err)
+	}
+
+	// Run script function
+	ret, err := fakescript_go.Run("mypackage.test.myfunc1", 1, 2)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(ret) // [1 12]
+}
+```
+
+### 2. Binding Go Functions
+```go
+// Register a Go function for scripts to call
+fakescript_go.RegFunc("add", func(a int, b int) int {
+	return a + b
+})
+```
+
+### 3. Engine Configuration
+```go
+fakescript_go.SetConfig(fakescript_go.FakeConfig{
+	OpenLog:        false, // Enable debug logging
+	ArrayGrowSpeed: 50,    // Array resize factor (%)
+	StackMax:       10000, // Maximum call stack depth
+	OpenProfile:    false, // Enable performance profiler
+	FakePrint: func(str string) {
+		fmt.Print(str)    // Custom print handler
+	},
+})
+```
+
+## Command-Line Tool (CLI)
+```bash
+# Build CLI binary
+go build -o fakescript_go ./cmd
+
+# Execute script with arguments
+./fakescript_go script.fk mypackage.myfunc arg1 arg2
+```
+
+## Regenerating Parser / Lexer
+Standard `//go:generate` and cross-platform generator scripts are supported:
+```bash
+# Linux / macOS
+./gen.sh
+# or
+go generate ./...
+
+# Windows
+gen.bat
+```
+
+---
+
+<span id="中文说明"></span>
+## 中文说明
+
+**fakescript_go** 是一款纯 Go 实现的轻量级嵌入式脚本语言，不依赖任何第三方外部库。语法借鉴自 Lua、Golang 和 Erlang，通过 `nex` 与 `goyacc` 构建抽象语法树，编译生成字节码并在虚拟机中解释执行。
+
+### 脚本特性
+* **语法类似 Lua**：语法简洁明了，易于上手，兼具动态语言的灵活性。
+* **零外部依赖**：仅使用 Go 原生标准库实现。
+* **丰富数据结构**：原生支持 array、map（可无限级嵌套）、struct、Int64、const 常量。
+* **多返回值机制**：完整支持多参数返回与解构接收。
+* **Go 双向绑定**：支持将 Go 语言函数直接注入到脚本中透明调用。
+* **完善流程控制**：支持 `if-elseif-else`、`while`、`for` 与 `switch-case`。
+* **内置 Profile 采样**：自带函数级性能度量与耗时统计。
+* **安全沙箱保护**：内置执行调用栈深度限制，防范死循环与内存溢出。
+
+### Go 快速上手
+
 ```go
 package main
 
@@ -124,15 +213,14 @@ func main() {
 }
 ```
 
-### 2. 绑定 Go 原生函数
+#### 注册 Go 函数
 ```go
-// 注册 Go 函数供脚本调用
 fakescript_go.RegFunc("add", func(a int, b int) int {
 	return a + b
 })
 ```
 
-### 3. 配置引擎参数
+#### 配置参数
 ```go
 fakescript_go.SetConfig(fakescript_go.FakeConfig{
 	OpenLog:        false, // 是否输出调试日志
@@ -145,7 +233,7 @@ fakescript_go.SetConfig(fakescript_go.FakeConfig{
 })
 ```
 
-## CLI 工具
+### 命令行工具 (CLI)
 ```bash
 # 编译命令行工具
 go build -o fakescript_go ./cmd
@@ -154,8 +242,7 @@ go build -o fakescript_go ./cmd
 ./fakescript_go script.fk mypackage.myfunc arg1 arg2
 ```
 
-## 重新生成词法/语法解析器
-项目已配置标准 `//go:generate` 及跨平台生成脚本：
+### 代码生成
 ```bash
 # Linux / macOS
 ./gen.sh
