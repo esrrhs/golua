@@ -2,7 +2,6 @@
 
 [<img src="https://img.shields.io/github/license/esrrhs/fakescript_go">](https://github.com/esrrhs/fakescript_go)
 [<img src="https://img.shields.io/github/languages/top/esrrhs/fakescript_go">](https://github.com/esrrhs/fakescript_go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/esrrhs/fakescript_go)](https://goreportcard.com/report/github.com/esrrhs/fakescript_go)
 [<img src="https://img.shields.io/github/v/release/esrrhs/fakescript_go">](https://github.com/esrrhs/fakescript_go/releases)
 [<img src="https://img.shields.io/github/actions/workflow/status/esrrhs/fakescript_go/go.yml?branch=master">](https://github.com/esrrhs/fakescript_go/actions)
 
