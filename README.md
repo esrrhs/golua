@@ -1,110 +1,116 @@
 # fakescript_go
 
-[<img src="https://img.shields.io/github/license/esrrhs/fakescript_go">](https://github.com/esrrhs/fakescript_go)
-[<img src="https://img.shields.io/github/languages/top/esrrhs/fakescript_go">](https://github.com/esrrhs/fakescript_go)
-[<img src="https://img.shields.io/github/v/release/esrrhs/fakescript_go">](https://github.com/esrrhs/fakescript_go/releases)
-[<img src="https://img.shields.io/github/actions/workflow/status/esrrhs/fakescript_go/go.yml?branch=master">](https://github.com/esrrhs/fakescript_go/actions)
+[![License](https://img.shields.io/github/license/esrrhs/fakescript_go)](https://github.com/esrrhs/fakescript_go)
+[![Language](https://img.shields.io/github/languages/top/esrrhs/fakescript_go)](https://github.com/esrrhs/fakescript_go)
+[![Release](https://img.shields.io/github/v/release/esrrhs/fakescript_go)](https://github.com/esrrhs/fakescript_go/releases)
+[![Build Status](https://github.com/esrrhs/fakescript_go/actions/workflows/go.yml/badge.svg?branch=master)](https://github.com/esrrhs/fakescript_go/actions)
 
-> **A lightweight, embeddable scripting language implemented in pure Go with zero external dependencies (Go 1.22+).**
+A lightweight embedded scripting language written in pure Go with zero external dependencies (Go 1.22+).
 
-[English](#english) | [中文说明](#中文说明)
+[简体中文](./README_CN.md)
 
 ---
 
-<span id="english"></span>
-## Introduction
+## Overview
 
-**fakescript_go** is a lightweight, embeddable scripting language written in pure Go without any external dependencies. Its syntax draws inspiration from Lua, Go, and Erlang. The engine generates syntax trees via `nex` and `goyacc`, compiling scripts into bytecode for virtual machine interpretation.
-
-* [fake for C++](https://github.com/esrrhs/fake)
-* [fake for Java](https://github.com/esrrhs/fakejava)
+**fakescript_go** is a lightweight, embeddable scripting language implemented in pure Go without any third-party dependencies. Its syntax draws inspiration from Lua, Go, and Erlang. The compiler utilizes `nex` and `goyacc` to generate syntax trees, compiles source code into bytecode, and executes it via an internal virtual machine interpreter.
 
 ## Key Features
 
-* **Lua-like Syntax**: Simple, expressive, and easy to learn.
+* **Clean Syntax**: Lua-inspired, concise, and clean grammar.
 * **Zero External Dependencies**: Pure Go implementation; only relies on the Go standard library.
-* **Rich Data Types**: Built-in support for array, map (with unlimited nesting), struct, Int64, and constants.
-* **Multi-Return Values**: First-class support for functions with multiple return values.
-* **Seamless Go Interoperability**: Easily bind Go native functions for scripts to invoke.
-* **Comprehensive Control Flow**: Supports `if-elseif-else`, `while`, `for`, and `switch-case`.
+* **Pure Functional**: Everything is modeled as functions; supports multiple return values.
+* **Rich Containers**: Built-in dynamic arrays (`array()`) and maps (`map()`) with arbitrary nesting.
+* **Struct Support**: Lightweight user-defined data structures (`struct`).
+* **Modular System**: Namespace separation using `package` and `include`.
+* **Types & Constants**: Built-in support for Int64 (`UUID`), `const` definitions, numbers, and strings.
+* **Seamless Go Interoperability**: Direct and easy binding for Go native functions.
 * **Built-in Profiler**: Measure runtime execution time per script function.
-* **Execution Safety**: Call stack depth protection against infinite loops and memory exhaustion.
+* **Sandbox Safety**: Call stack depth protection against infinite loops and stack overflow.
 
-## Script Example
+---
 
-```lua
--- Current package name
+## FakeScript Syntax Example
+
+```fakescript
+-- Define package namespace
 package mypackage.test
 
--- Include other scripts
+-- Include external script files
 include "common.fk"
 
 -- Struct definition
-struct teststruct
-	sample_a
-	sample_b
-	sample_c
+struct User
+    id
+    name
+    extra
 end
 
 -- Constants
-const hellostring = "hello"
-const helloint = 1234
-const hellomap = {1 : "a" 2 : "b" 3 : [1 2 3]}
+const MAX_COUNT = 100
+const DEFAULT_NAME = "Guest"
+const CONFIG_MAP = {1 : "Alpha" 2 : "Beta"}
 
 -- Function definition
-func myfunc1(arg1, arg2)
+func process_user(arg1, arg2)
 
-	-- Branching
-	if arg1 < arg2 then
-		print("arg1 < arg2")
-	elseif arg1 == arg2 then
-		print("elseif")
-	else
-		print("else")
-	end
+    -- Calling bound Go native functions
+    var sum = add(arg1, 10)
 
-	-- For loop
-	for var i = 0, i < arg2, i++ then
-		print("i = ", i)
-	end
+    -- Conditional statements
+    if arg1 < arg2 then
+        print("arg1 < arg2")
+    elseif arg1 == arg2 then
+        print("Values are equal")
+    else
+        print("arg1 is greater than arg2")
+    end
 
-	-- Arrays
-	var a = array()
-	a[1] = 3
+    -- For loop
+    for var i = 0, i < arg2, i++ then
+        print("Loop index: ", i)
+    end
 
-	-- Maps
-	var b = map()
-	b[a] = 1
-	b[1] = a
+    -- Dynamic Array
+    var arr = array()
+    arr[0] = 100
+    arr[1] = 200
 
-	-- Int64 (UUID)
-	var uid = 1241515236123614u
-	print("uid = ", uid)
+    -- Dynamic Map
+    var m = map()
+    m["key"] = "value"
+    m[1] = arr
 
-	-- Structs
-	var tt = teststruct()
-	tt->sample_a = 1
-	tt->sample_b = teststruct()
-	tt->sample_b->sample_a = 10
+    -- Int64 (UUID)
+    var uid = 1241515236123614u
+    print("uid = ", uid)
 
-	-- Switch statements
-	switch arg1
-		case 1 then
-			print("1")
-		case "a" then
-			print("a")
-		default
-			print("default")
-	end
+    -- Struct usage
+    var u = User()
+    u->id = 1001
+    u->name = "Alice"
 
-	-- Multiple return values
-	return arg1, arg2 + 10
+    -- Switch case
+    switch arg1
+        case 1 then
+            print("case 1")
+        case "a" then
+            print("case a")
+        default
+            print("default")
+    end
+
+    -- Return multiple values
+    return sum, m["key"]
 end
 ```
 
-## Go Usage
+---
+
+## Go Integration Example
 
 ### 1. Basic Execution
+
 ```go
 package main
 
@@ -114,29 +120,31 @@ import (
 )
 
 func main() {
-	// Parse script file
+	// 1. Parse script file
 	if err := fakescript_go.Parse("test.fk"); err != nil {
 		panic(err)
 	}
 
-	// Run script function
-	ret, err := fakescript_go.Run("mypackage.test.myfunc1", 1, 2)
+	// 2. Run script function
+	ret, err := fakescript_go.Run("mypackage.test.process_user", 1, 2)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(ret) // [1 12]
+	fmt.Println("Result:", ret) // [11 value]
 }
 ```
 
 ### 2. Binding Go Functions
+
 ```go
-// Register a Go function for scripts to call
+// Register a Go function to be called within scripts
 fakescript_go.RegFunc("add", func(a int, b int) int {
 	return a + b
 })
 ```
 
 ### 3. Engine Configuration
+
 ```go
 fakescript_go.SetConfig(fakescript_go.FakeConfig{
 	OpenLog:        false, // Enable debug logging
@@ -149,103 +157,32 @@ fakescript_go.SetConfig(fakescript_go.FakeConfig{
 })
 ```
 
+---
+
 ## Command-Line Tool (CLI)
+
 ```bash
 # Build CLI binary
 go build -o fakescript_go ./cmd
 
-# Execute script with arguments
+# Execute script and call function
 ./fakescript_go script.fk mypackage.myfunc arg1 arg2
-```
-
-## Regenerating Parser / Lexer
-Standard `//go:generate` and cross-platform generator scripts are supported:
-```bash
-# Linux / macOS
-./gen.sh
-# or
-go generate ./...
-
-# Windows
-gen.bat
 ```
 
 ---
 
-<span id="中文说明"></span>
-## 中文说明
+## Building from Source & Code Generation
 
-**fakescript_go** 是一款纯 Go 实现的轻量级嵌入式脚本语言，不依赖任何第三方外部库。语法借鉴自 Lua、Golang 和 Erlang，通过 `nex` 与 `goyacc` 构建抽象语法树，编译生成字节码并在虚拟机中解释执行。
+Standard `//go:generate` and cross-platform generator scripts are supported:
 
-### 脚本特性
-* **语法类似 Lua**：语法简洁明了，易于上手，兼具动态语言的灵活性。
-* **零外部依赖**：仅使用 Go 原生标准库实现。
-* **丰富数据结构**：原生支持 array、map（可无限级嵌套）、struct、Int64、const 常量。
-* **多返回值机制**：完整支持多参数返回与解构接收。
-* **Go 双向绑定**：支持将 Go 语言函数直接注入到脚本中透明调用。
-* **完善流程控制**：支持 `if-elseif-else`、`while`、`for` 与 `switch-case`。
-* **内置 Profile 采样**：自带函数级性能度量与耗时统计。
-* **安全沙箱保护**：内置执行调用栈深度限制，防范死循环与内存溢出。
-
-### Go 快速上手
-
-```go
-package main
-
-import (
-	"fmt"
-	"github.com/esrrhs/fakescript_go"
-)
-
-func main() {
-	// 解析脚本
-	if err := fakescript_go.Parse("test.fk"); err != nil {
-		panic(err)
-	}
-
-	// 运行指定函数
-	ret, err := fakescript_go.Run("mypackage.test.myfunc1", 1, 2)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(ret) // 输出返回值列表 [1 12]
-}
-```
-
-#### 注册 Go 函数
-```go
-fakescript_go.RegFunc("add", func(a int, b int) int {
-	return a + b
-})
-```
-
-#### 配置参数
-```go
-fakescript_go.SetConfig(fakescript_go.FakeConfig{
-	OpenLog:        false, // 是否输出调试日志
-	ArrayGrowSpeed: 50,    // 数组扩容步长百分比
-	StackMax:       10000, // 栈深度限制
-	OpenProfile:    false, // 是否开启性能采样分析
-	FakePrint: func(str string) {
-		fmt.Print(str)    // 自定义脚本 print 输出
-	},
-})
-```
-
-### 命令行工具 (CLI)
 ```bash
-# 编译命令行工具
-go build -o fakescript_go ./cmd
+# Run tests
+go test -v -race ./...
 
-# 执行脚本并调用函数
-./fakescript_go script.fk mypackage.myfunc arg1 arg2
-```
-
-### 代码生成
-```bash
+# Regenerate lexer and parser (requires nex and goyacc)
 # Linux / macOS
 ./gen.sh
-# 或
+# or
 go generate ./...
 
 # Windows
