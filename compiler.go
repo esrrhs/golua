@@ -196,6 +196,12 @@ func (c *compiler) compile_node(cg *codegen, node syntree_node) {
 	case est_switch_stmt:
 		ss := node.(*switch_stmt)
 		c.compile_switch_stmt(cg, ss)
+	case est_sleep_stmt:
+		ss := node.(*sleep_stmt)
+		c.compile_sleep_stmt(cg, ss)
+	case est_yield_stmt:
+		ys := node.(*yield_stmt)
+		c.compile_yield_stmt(cg, ys)
 	default:
 		c.compile_seterror(node, "compile node type error %d", ty)
 	}
@@ -1260,4 +1266,20 @@ func (c *compiler) compile_switch_stmt(cg *codegen, ss *switch_stmt) {
 	}
 
 	log_debug("[compiler] compile_switch_stmt %p OK", ss)
+}
+
+func (c *compiler) compile_sleep_stmt(cg *codegen, ss *sleep_stmt) {
+	log_debug("[compiler] compile_sleep_stmt %p", ss)
+	c.compile_node(cg, ss.time)
+	cg.push(_MAKE_OPCODE(OPCODE_SLEEP), ss.lineno())
+	cg.push(c.cur_addr, ss.lineno())
+	log_debug("[compiler] compile_sleep_stmt %p OK", ss)
+}
+
+func (c *compiler) compile_yield_stmt(cg *codegen, ys *yield_stmt) {
+	log_debug("[compiler] compile_yield_stmt %p", ys)
+	c.compile_node(cg, ys.time)
+	cg.push(_MAKE_OPCODE(OPCODE_YIELD), ys.lineno())
+	cg.push(c.cur_addr, ys.lineno())
+	log_debug("[compiler] compile_yield_stmt %p OK", ys)
 }

@@ -28,11 +28,11 @@ func Run(fun string, p ...interface{}) (ret []interface{}, err error) {
 	var funcv variant
 	funcv.V_SET_STRING(fun)
 
-	inter := &interpreter{}
-	inter.call(funcv, ps, nil)
-	inter.run()
+	pro := newProcessor()
+	entryRoutine := pro.start_routine(funcv, ps, nil)
+	pro.run()
 
-	ps.vlist = inter.ret
+	ps.vlist = entryRoutine.inter.ret
 	ret = ps.trans()
 	return
 }
@@ -81,13 +81,17 @@ const (
 )
 
 type interpreter struct {
-	stack []variant
-	ip    int
-	bp    int
-	sp    int
-	fb    *func_binary
-	ret   []variant
-	isend bool
+	stack      []variant
+	ip         int
+	bp         int
+	sp         int
+	fb         *func_binary
+	ret        []variant
+	isend      bool
+	pro        *processor
+	sleeping   bool
+	wakeuptime int64
+	yieldtime  int
 }
 
 func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
@@ -213,15 +217,15 @@ func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
 	} else {
 		// 否则塞到当前堆栈上
 
-		// 检查返回值数目对不对
-		if ps.size() != retnum {
+		// 检查返回值数目对不对 (允许函数返回值少于期望槽数，例如 void 函数作为语句调用时)
+		if ps.size() > retnum {
 			inter.isend = true
 			seterror(inter.getcurfile(), inter.getcurline(), inter.getcurfunc(), "native func %s param not match, give %d need %d", vartostring(fun), ps.size(), retnum)
 			return
 		}
 
-		// 塞返回值
-		for i := 0; i < retnum; i++ {
+		// 塞返回值 (多余的 retpos 槽保持 NIL)
+		for i := 0; i < ps.size(); i++ {
 			ret := inter.GET_VARIANT(inter.fb, inter.bp, retpos[i])
 			cret := ps.vlist[i]
 			*ret = cret
@@ -234,7 +238,7 @@ func (inter *interpreter) call(fun variant, ps *paramstack, retpos []int) {
 	}
 }
 
-func (inter *interpreter) run() {
+func (inter *interpreter) run(cmdnum int) int {
 
 	// 栈溢出检查
 	if len(inter.stack) > gfs.cfg.StackMax {
@@ -242,10 +246,31 @@ func (inter *interpreter) run() {
 	}
 
 	if inter.isend {
-		return
+		return 0
 	}
 
+	if inter.sleeping {
+		if inter.wakeuptime > 0 {
+			if fkgetmstick() < inter.wakeuptime {
+				return 0
+			}
+			inter.wakeuptime = 0
+			inter.sleeping = false
+		} else if inter.yieldtime > 0 {
+			inter.yieldtime--
+			if inter.yieldtime <= 0 {
+				inter.sleeping = false
+			} else {
+				return 0
+			}
+		}
+	}
+
+	runcmdnum := 0
 	for {
+		if cmdnum > 0 && runcmdnum >= cmdnum {
+			return runcmdnum
+		}
 		// 当前函数走完
 		if inter.ip >= inter.fb.binary_size() {
 			// 记录profile
@@ -465,7 +490,9 @@ func (inter *interpreter) run() {
 			if calltype == CALL_NORMAL {
 				inter.call(*callpos, ps, retpos)
 			} else {
-				// TODO
+				if inter.pro != nil {
+					inter.pro.start_routine(*callpos, ps, retpos)
+				}
 			}
 		case OPCODE_FOR:
 			iter := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
@@ -511,8 +538,23 @@ func (inter *interpreter) run() {
 			}
 
 			inter.ip = inter.fb.binary_size()
+		case OPCODE_SLEEP:
+			timev := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			inter.ip++
+			sleeptime := int64(timev.V_GET_REAL())
+			inter.wakeuptime = fkgetmstick() + sleeptime
+			inter.sleeping = true
+			return runcmdnum + 1
+		case OPCODE_YIELD:
+			timev := inter.GET_VARIANT(inter.fb, inter.bp, inter.ip)
+			inter.ip++
+			inter.yieldtime = int(timev.V_GET_REAL())
+			inter.sleeping = true
+			return runcmdnum + 1
 		}
+		runcmdnum++
 	}
+	return runcmdnum
 }
 
 func (inter *interpreter) getcurfile() string {

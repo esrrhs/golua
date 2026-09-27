@@ -6,6 +6,7 @@ type FakeConfig struct {
 	StackMax       int           // stack最大尺寸
 	OpenProfile    bool          // 开启性能统计
 	FakePrint      FakePrintFunc // 打印函数
+	PerFrameCmdNum int           // 每帧/每轮调度执行指令数
 }
 
 type FakePrintFunc func(str string)
@@ -16,6 +17,9 @@ func (fc *FakeConfig) check() {
 	}
 	if fc.StackMax <= 0 {
 		fc.StackMax = 10000
+	}
+	if fc.PerFrameCmdNum <= 0 {
+		fc.PerFrameCmdNum = 100
 	}
 }
 

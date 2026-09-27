@@ -24,6 +24,12 @@ func Parse(file string) error {
 	return gfs.pa.parse(ctx, file)
 }
 
+// ParseString compiles and loads a script from an in-memory string src.
+// The virtual filename "<string>" is used in error messages.
+func ParseString(src string) error {
+	return gfs.pa.parseString("<string>", src)
+}
+
 func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	var ll *lexerwarpper
 	defer func() {
@@ -107,6 +113,61 @@ func (pa *parser) parse(ctx *parseContent, file string) (err error) {
 	ctx.includelist = ctx.includelist[0 : len(ctx.includelist)-1]
 
 	log_debug("start parse ok" + file)
+
+	return nil
+}
+
+func (pa *parser) parseString(name string, src string) (err error) {
+	var ll *lexerwarpper
+	defer func() {
+		if r := recover(); r != nil {
+			line := 0
+			if ll != nil {
+				line = ll.yyLexer.(*Lexer).Line()
+			}
+			switch x := r.(type) {
+			case string:
+				err = errors.New(name + ":" + strconv.Itoa(line) + ":" + x)
+			case error:
+				panic(x)
+			case FakeErr:
+				err = &x
+			default:
+				err = errors.New("unknown panic error")
+			}
+		}
+	}()
+
+	log_debug("start parseString " + name)
+
+	lex := NewLexer(bytes.NewReader([]byte(src)))
+	defer func() {
+		select {
+		case lex.ch_stop <- true:
+		default:
+		}
+	}()
+
+	mf := myflexer{}
+	mf.fileName = name
+
+	l := lexerwarpper{
+		lex,
+		&mf,
+	}
+	ll = &l
+
+	ret := yyParse(l)
+	if ret != 0 {
+		seterror(name, 0, "", "yyParse fail "+strconv.Itoa(ret))
+	}
+
+	log_debug("yyParse ok" + name)
+
+	mc := compiler{}
+	mc.compile(&mf)
+
+	log_debug("parseString compile ok " + name)
 
 	return nil
 }

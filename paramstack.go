@@ -10,6 +10,10 @@ func (ps *paramstack) push(i interface{}) {
 	ps.vlist = append(ps.vlist, v)
 }
 
+func (ps *paramstack) pushVariant(v variant) {
+	ps.vlist = append(ps.vlist, v)
+}
+
 func (ps *paramstack) pushs(a []interface{}) {
 	for _, v := range a {
 		ps.push(v)

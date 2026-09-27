@@ -472,6 +472,38 @@ stmt:
 		log_debug("[yacc]: stmt <- switch_stmt");
 		$$.sn = $1.sn
 	}
+	|
+	sleep_stmt
+	{
+		log_debug("[yacc]: stmt <- sleep_stmt");
+		$$.sn = $1.sn
+	}
+	|
+	yield_stmt
+	{
+		log_debug("[yacc]: stmt <- yield_stmt");
+		$$.sn = $1.sn
+	}
+	;
+
+sleep_stmt:
+	SLEEP expr_value
+	{
+		log_debug("[yacc]: sleep_stmt <- SLEEP expr_value");
+		p := &sleep_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.time = $2.sn
+		$$.sn = p
+	}
+	;
+
+yield_stmt:
+	YIELD expr_value
+	{
+		log_debug("[yacc]: yield_stmt <- YIELD expr_value");
+		p := &yield_stmt{syntree_node_base: syntree_node_base{yylex.(lexerwarpper).yyLexer.(*Lexer).Line()}}
+		p.time = $2.sn
+		$$.sn = p
+	}
 	;
 
 fake_call_stmt:

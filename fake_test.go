@@ -165,3 +165,48 @@ func TestParamstackPops(t *testing.T) {
 		t.Fatalf("expected empty stack after pops, got size %d", ps.size())
 	}
 }
+
+func TestRoutineAndSleepYield(t *testing.T) {
+	var results []int
+	err := RegFunc("record_val", func(v int) {
+		results = append(results, v)
+	})
+	if err != nil {
+		t.Fatalf("RegFunc failed: %v", err)
+	}
+
+	script := `
+package testroutine
+
+func task(id)
+	yield 1
+	record_val(id)
+	sleep 10
+	record_val(id * 10)
+end
+
+func main_task()
+	fake task(1)
+	fake task(2)
+	record_val(0)
+	return 999
+end
+`
+	file := createTempScript(t, script)
+	if err := Parse(file); err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+
+	ret, err := Run("testroutine.main_task")
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if len(ret) != 1 || ret[0] != 999 {
+		t.Fatalf("expected 999, got %v", ret)
+	}
+
+	if len(results) != 5 {
+		t.Fatalf("expected 5 results, got %d: %v", len(results), results)
+	}
+}
+

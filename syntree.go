@@ -42,6 +42,8 @@ const (
 	est_constmaplist
 	est_constmapvalue
 	est_constarraylist
+	est_sleep_stmt
+	est_yield_stmt
 )
 
 var syntree_TYPE_name = map[int]string{
@@ -81,6 +83,8 @@ var syntree_TYPE_name = map[int]string{
 	est_constmaplist:      "est_constmaplist",
 	est_constmapvalue:     "est_constmapvalue",
 	est_constarraylist:    "est_constarraylist",
+	est_sleep_stmt:        "est_sleep_stmt",
+	est_yield_stmt:        "est_yield_stmt",
 }
 
 var syntree_TYPE_value = map[string]int32{
@@ -1050,3 +1054,39 @@ func (sn *switch_case_node) dump(indent int) string {
 }
 
 //////////////////////////////////////////////////////////////////
+
+type sleep_stmt struct {
+	syntree_node_base
+	time syntree_node
+}
+
+func (sn *sleep_stmt) gettype() int {
+	return est_sleep_stmt
+}
+
+func (sn *sleep_stmt) dump(indent int) string {
+	ret := sn.gentab(indent) + "[sleep]:\n"
+	if sn.time != nil {
+		ret += sn.time.dump(indent + 1)
+	}
+	return ret
+}
+
+//////////////////////////////////////////////////////////////////
+
+type yield_stmt struct {
+	syntree_node_base
+	time syntree_node
+}
+
+func (sn *yield_stmt) gettype() int {
+	return est_yield_stmt
+}
+
+func (sn *yield_stmt) dump(indent int) string {
+	ret := sn.gentab(indent) + "[yield]:\n"
+	if sn.time != nil {
+		ret += sn.time.dump(indent + 1)
+	}
+	return ret
+}
