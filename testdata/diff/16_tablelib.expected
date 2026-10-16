@@ -1,0 +1,40 @@
+12345	1,2,3,4,5	2,3,4
+	1
+false	invalid value (table) at index 2 in table for 'concat'
+1,2,3,4,5,6
+0,1,2,3,4,5,6
+6	0,1,2,3,4,5
+0	1,2,3,4,5
+false	bad argument #2 to 'table.insert' (position out of bounds)
+false	bad argument #2 to 'table.remove' (position out of bounds)
+3	1	nil	3
+1	2	3
+2	3
+2	3
+false	too many results to unpack
+1,2,1,2,3
+1,2,1,2,3
+moved
+1,2,3,4,5
+5,4,3,2,1
+true
+a,bb,ccc
+2
+nil
+x	1	nil
+true	nil
+false	invalid key to 'next'
+pairs	1	one
+idx:1	idx:foo
+MM
+nil
+1	1
+99	0
+false	true
+true
+true
+float-one	float-one
+x
+true	2
+false	bad argument #2 to 'table.remove' (number has no integer representation)
+true	1,2

@@ -1,0 +1,28 @@
+msg
+stack traceback:
+	05_traceback.lua:1: in main chunk
+	[C]: in ?
+in-inner
+stack traceback:
+	05_traceback.lua:3: in function <05_traceback.lua:2>
+	(...tail calls...)
+	05_traceback.lua:8: in main chunk
+	[C]: in ?
+true	via-pcall
+stack traceback:
+	05_traceback.lua:9: in function <05_traceback.lua:9>
+	[C]: in function 'pcall'
+	05_traceback.lua:9: in main chunk
+	[C]: in ?
+in-co
+stack traceback:
+	05_traceback.lua:11: in function <05_traceback.lua:10>
+true
+false	05_traceback.lua:14: kaboom
+05_traceback.lua:14: kaboom
+deep
+stack traceback:
+	05_traceback.lua:22: in function <05_traceback.lua:21>
+	(...tail calls...)
+	05_traceback.lua:25: in main chunk
+	[C]: in ?

@@ -1,0 +1,15 @@
+-- utf8 library and unicode-aware string functions.
+print(utf8.charpattern)
+print(utf8.char(0x41, 0x4E2D, 0x1F600))
+print(utf8.codepoint("A中😀"))
+print(utf8.codepoint("A中😀", 2))
+print(utf8.codepoint("A中😀", 2, 2))
+print(utf8.len("A中😀"))
+print(utf8.len("A中😀", 2))
+print(pcall(utf8.len, "\xff"))
+print(utf8.offset("A中😀", 1), utf8.offset("A中😀", 2), utf8.offset("A中😀", -1))
+print(utf8.offset("A中😀", 1, 2))
+for p, c in utf8.codes("A中") do print(p, c) end
+print(pcall(function() for p, c in utf8.codes("\xff") do print(p, c) end end))
+print(("中文"):len(), #"中文")
+print(("Hello, 世界"):upper())

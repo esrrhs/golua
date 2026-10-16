@@ -1,0 +1,1 @@
+lua: 12_tbc.lua:105: attempt to assign to const variable 'c'

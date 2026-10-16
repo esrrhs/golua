@@ -1,0 +1,14 @@
+true	paused
+true	dead	b:nil,a:nil
+false	in-co
+
+nil/false closed:	0
+false	table: 0xADDR
+a:table: 0xADDR
+false	boom
+b:boom,a:boom
+lua: 04_close_coroutine.lua:41: cannot close a running coroutine
+stack traceback:
+	[C]: in function 'coroutine.close'
+	04_close_coroutine.lua:41: in main chunk
+	[C]: in ?

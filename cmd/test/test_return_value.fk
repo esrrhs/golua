@@ -1,9 +1,0 @@
-package mypackage
-
-func test_return_value1(a, b)
-    return a
-end
-
-func test_return_value2(a, b)
-    return 1, "a"
-end

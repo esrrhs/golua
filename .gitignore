@@ -32,3 +32,6 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+
+# WorkBuddy session data (project notes, never part of the source tree)
+.workbuddy/

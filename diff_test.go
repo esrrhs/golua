@@ -1,0 +1,245 @@
+// Differential conformance suite.
+//
+// Every testdata/diff/*.lua case is run through this port and its output is
+// compared byte for byte against a golden file captured from the reference
+// interpreter (PUC-Lua 5.4.9, built from source).  The cases cover the
+// virtual machine, the standard libraries, error messages and their
+// positions -- the things a "drop-in Lua" has to get exactly right.
+//
+// Two host-dependent details are normalised away:
+//
+//   - argv[0] in "prog: file:line: msg" (the two binaries have
+//     different paths);
+//   - heap addresses in "table: 0x...", "function: 0x...".
+//
+// The cases are run through the standalone interpreter built from
+// ./cmd/lua rather than through the API directly: the golden files were
+// captured from the reference 'lua' binary, whose observable output
+// includes the "prog: " prefix of uncaught errors and the trailing
+// "[C]: in ?" host frame of every traceback. Running the same program
+// makes the comparison meaningful.
+package lua
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"testing"
+)
+
+// Heap addresses differ between the two implementations and cannot be
+// compared; everything else must match byte for byte.
+var diffAddrRe = regexp.MustCompile(`0x[0-9a-f]+`)
+
+// diffNormalise removes host-dependent details from captured output.
+func diffNormalise(s string) string {
+	return diffAddrRe.ReplaceAllString(s, "0xADDR")
+}
+
+var (
+	diffBin    string
+	diffBinDir string
+	diffBinErr error
+	diffBinOne sync.Once
+)
+
+// diffBuild builds ./cmd/lua once for the whole suite.
+func diffBuild(t *testing.T) string {
+	t.Helper()
+	diffBinOne.Do(func() {
+		dir, err := os.MkdirTemp("", "luadiff")
+		if err != nil {
+			diffBinErr = err
+			return
+		}
+		bin := filepath.Join(dir, "lua")
+		cmd := exec.Command("go", "build", "-o", bin, "./cmd/lua")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			diffBinErr = &diffBuildError{string(out), err}
+			return
+		}
+		diffBin = bin
+		/* the binary is shared by every test in the package (the CLI
+		   tests run it too), so it must outlive the test that happened
+		   to build it: TestMain removes it at the end of the run. */
+		diffBinDir = dir
+	})
+	if diffBinErr != nil {
+		t.Fatalf("cannot build ./cmd/lua: %v", diffBinErr)
+	}
+	return diffBin
+}
+
+// TestMain removes the interpreter built by 'diffBuild' once every test
+// in the package has finished with it.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if diffBinDir != "" {
+		os.RemoveAll(diffBinDir)
+	}
+	os.Exit(code)
+}
+
+type diffBuildError struct {
+	out   string
+	cause error
+}
+
+func (e *diffBuildError) Error() string {
+	return e.cause.Error() + "\n" + e.out
+}
+
+// diffRunCase runs one case file the way the reference interpreter was
+// invoked ("lua <file>" with the case directory as the working directory,
+// so that chunk names and 'arg' match) and returns stdout+stderr merged,
+// as "2>&1" does.
+func diffRunCase(t *testing.T, path string) string {
+	t.Helper()
+	bin := diffBuild(t)
+	cmd := &exec.Cmd{
+		Path: bin,
+		Args: []string{"lua", filepath.Base(path)}, /* argv[0] decides the message prefix */
+		Dir:  filepath.Dir(path),
+	}
+	out, _ := cmd.CombinedOutput() /* the exit status is not part of the golden output */
+	return string(out)
+}
+
+func TestDifferentialSuite(t *testing.T) {
+	files, err := filepath.Glob("testdata/diff/*.lua")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no differential cases found: %v", err)
+	}
+	for _, path := range files {
+		base := strings.TrimSuffix(path, ".lua")
+		want, err := os.ReadFile(base + ".expected")
+		if err != nil {
+			t.Errorf("%s: missing golden file: %v", filepath.Base(path), err)
+			continue
+		}
+		got := diffRunCase(t, path)
+		if diffNormalise(got) != diffNormalise(string(want)) {
+			t.Errorf("%s: output differs from PUC-Lua 5.4.9\n--- want ---\n%s\n--- got ---\n%s",
+				filepath.Base(path), want, got)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------
+// regressions found by the differential suite
+// ---------------------------------------------------------------------
+
+// TestHexDigitValue pins luaO_hexavalue: C lower-cases with
+// 'c | ('A' ^ 'a')', and getting that wrong corrupts every hexadecimal
+// literal, '\x..' escape and '\u{..}' escape.
+func TestHexDigitValue(t *testing.T) {
+	for c, want := range map[byte]int{
+		'0': 0, '9': 9, 'A': 10, 'F': 15, 'a': 10, 'f': 15,
+	} {
+		if got := luaO_hexavalue(c); got != want {
+			t.Errorf("luaO_hexavalue(%q) = %d, want %d", c, got, want)
+		}
+	}
+}
+
+// TestCeilLog2 pins luaO_ceillog2 and its 256-entry table. A single missing
+// entry used to make 'luaH_newkey' panic on large integer keys.
+func TestCeilLog2(t *testing.T) {
+	for x, want := range map[uint32]int{
+		1: 0, 2: 1, 3: 2, 127: 7, 128: 7, 129: 8,
+		255: 8, 256: 8, 257: 9, 0x7FFFFFFF: 31, 0x80000000: 31,
+	} {
+		if got := luaO_ceillog2(x); got != want {
+			t.Errorf("luaO_ceillog2(%d) = %d, want %d", x, got, want)
+		}
+	}
+}
+
+// TestBigHexConstant loads a chunk whose constant table has to grow past
+// 2^31/2 entries of numbering, the case that used to panic in 'rehash'.
+func TestBigHexConstant(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	if err := runLua(t, L, "return 0x7fffffff"); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := L.ToInteger(-1); n != 0x7fffffff {
+		t.Fatalf("0x7fffffff = %d", n)
+	}
+}
+
+// TestLoadMode checks that 'load' honours its mode string the way C's
+// 'f_parser' does: the first byte decides whether 'b' or 't' is required.
+func TestLoadMode(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	if err := runLua(t, L, `
+		local ok, err = load("return 1", "=x", "b")
+		assert(not ok and err == "attempt to load a text chunk (mode is 'b')", err)
+		local ok2, err2 = load(string.dump(function() return 7 end), "=y", "t")
+		assert(not ok2 and err2 == "attempt to load a binary chunk (mode is 't')", err2)
+		return true
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if !L.ToBoolean(-1) {
+		t.Fatal("mode checks failed")
+	}
+}
+
+// TestCloseDeadCoroutine checks 'coroutine.close' on a coroutine that ended
+// with an error: it reports that error once again, and only once.
+func TestCloseDeadCoroutine(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	if err := runLua(t, L, `
+		local co = coroutine.create(function() error("x") end)
+		assert(select(1, coroutine.resume(co)) == false)
+		local ok, msg = coroutine.close(co)
+		assert(ok == false and msg ~= nil, "first close must report the error")
+		assert(coroutine.close(co) == true, "second close must succeed")
+		return true
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if !L.ToBoolean(-1) {
+		t.Fatal("coroutine.close semantics differ")
+	}
+}
+
+// TestErrorInErrorHandling checks that a message handler which itself
+// raises stops with LUA_ERRERR instead of recursing forever.
+func TestErrorInErrorHandling(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	if err := runLua(t, L, `
+		local ok, msg = xpcall(function() error("x") end,
+		                      function(e) error("in handler") end)
+		return ok == false and msg == "error in error handling"
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if !L.ToBoolean(-1) {
+		t.Fatal("expected 'error in error handling'")
+	}
+}
+
+// runLua loads and runs 'src', returning a Go error (not a Lua one).
+func runLua(t *testing.T, L *State, src string) error {
+	t.Helper()
+	if err := L.LoadBytes([]byte(src), "=test"); err != nil {
+		return err
+	}
+	if status := L.PCall(0, LUA_MULTRET, 0); status != LUA_OK {
+		s, _ := L.ToString(-1)
+		return &LuaError{Status: status, Message: s}
+	}
+	return nil
+}

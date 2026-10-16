@@ -1,0 +1,16 @@
+13	7	30	3.3333333333333	1	1000.0	-10	3
+2	11	9	-11	80	1
+99	true	false	false	true	true
+obj(10)	3
+set:7
+idx:missing
+add,close:nil
+hi bob
+true
+locked
+false	cannot change a protected metatable
+true	false
+hi amy
+false	09_metatable.lua:53: attempt to perform arithmetic on a nil value
+false	09_metatable.lua:54: attempt to perform arithmetic on a table value
+false	09_metatable.lua:55: attempt to get length of a function value (global 'print')
