@@ -396,6 +396,125 @@ func mathSetRandFunc(L *State) {
 }
 
 // ---------------------------------------------------------------------
+// deprecated functions (for compatibility only)
+// ---------------------------------------------------------------------
+//
+// luaconf.h defines 'LUA_COMPAT_MATHLIB' and the reference build does
+// not turn it off, so 'math.sinh', 'math.cosh', 'math.tanh', 'math.pow',
+// 'math.frexp', 'math.ldexp', 'math.log10' and 'math.atan2' are all
+// there even though Lua 5.4 dropped them from the manual.  A program
+// that calls them cannot be run by a port that leaves them out, so
+// they are all here.
+
+// mathMaxLog is log(MaxFloat64), the argument at which exp overflows,
+// and mathMaxLog2 is log(2 * MaxFloat64), the one at which half of it
+// overflows too.
+const (
+	mathMaxLog  = 7.09782712893383973096e+02
+	mathMaxLog2 = 7.10475860073943863429e+02
+)
+
+// mathLn2Hi and mathLn2Lo are ln 2 split in two, so that 'n * ln 2'
+// keeps the low bits that a single float64 would drop.
+const (
+	mathLn2Hi = 6.93147180369123816490e-01
+	mathLn2Lo = 1.90821492927058770002e-10
+)
+
+// mathHalfExp is exp('x') / 2 for a non-negative 'x', the value both
+// 'sinh' and 'cosh' tend to as 'x' grows, worked out so that it does
+// not overflow before it has to.  Go's math.Sinh does overflow early:
+// exp(710) is 2.2e308 and twice MaxFloat64, so Go answers +Inf, but
+// sinh(710) is exp(710) / 2, which is 1.1e308 and representable, and
+// C's libm answers that.
+//
+// The halving cannot simply be folded into the argument as exp(x - ln
+// 2), because subtracting ln 2 from a number this large rounds, and the
+// rounding shows: that answers 9.0542048151528e+307 for sinh(709.79)
+// where C answers 9.0542048151523e+307.  The argument is reduced modulo
+// ln 2 instead, with both halves of the constant, and exp is asked
+// about the remainder, which is small enough that scaling its answer up
+// by a power of two is exact.
+func mathHalfExp(x float64) float64 {
+	switch {
+	case x < mathMaxLog: /* exp(x) does not overflow */
+		return math.Exp(x) / 2
+	case x >= mathMaxLog2: /* not even the half of it fits */
+		return math.Inf(1)
+	}
+	n := int(math.Round(x / math.Ln2)) /* 1024 or 1025 in this range */
+	r := (x - float64(n)*mathLn2Hi) - float64(n)*mathLn2Lo
+	return math.Ldexp(math.Exp(r), n-1)
+}
+
+func mathSinh(L *State) int {
+	x := L.CheckNumber(1)
+	s := math.Sinh(x)
+	if math.IsInf(s, 0) && !math.IsInf(x, 0) {
+		/* exp(|x|) overflowed; exp(|x|) / 2 may not have */
+		y := mathHalfExp(math.Abs(x))
+		if !math.IsInf(y, 1) {
+			if x < 0 {
+				L.PushNumber(-y)
+			} else {
+				L.PushNumber(y)
+			}
+			return 1
+		}
+	}
+	L.PushNumber(s)
+	return 1
+}
+
+func mathCosh(L *State) int {
+	x := L.CheckNumber(1)
+	s := math.Cosh(x)
+	if math.IsInf(s, 0) && !math.IsInf(x, 0) {
+		/* 'cosh' tends to the same value as 'sinh', and is never negative */
+		if y := mathHalfExp(math.Abs(x)); !math.IsInf(y, 1) {
+			L.PushNumber(y)
+			return 1
+		}
+	}
+	L.PushNumber(s)
+	return 1
+}
+
+func mathTanh(L *State) int {
+	L.PushNumber(math.Tanh(L.CheckNumber(1)))
+	return 1
+}
+
+func mathPow(L *State) int {
+	x := L.CheckNumber(1)
+	y := L.CheckNumber(2)
+	L.PushNumber(math.Pow(x, y))
+	return 1
+}
+
+// mathFrexp is math.frexp (lmathlib.c).  It returns the fraction and
+// the exponent, in that order.
+func mathFrexp(L *State) int {
+	f, e := math.Frexp(L.CheckNumber(1))
+	L.PushNumber(f)
+	L.PushInteger(int64(e))
+	return 2
+}
+
+// mathLdexp is math.ldexp (lmathlib.c).  C truncates the exponent to
+// an 'int', so a huge one wraps here as it does there.
+func mathLdexp(L *State) int {
+	x := L.CheckNumber(1)
+	L.PushNumber(math.Ldexp(x, int(int32(L.CheckInteger(2)))))
+	return 1
+}
+
+func mathLog10(L *State) int {
+	L.PushNumber(math.Log10(L.CheckNumber(1)))
+	return 1
+}
+
+// ---------------------------------------------------------------------
 // library registration
 // ---------------------------------------------------------------------
 
@@ -421,6 +540,15 @@ var mathLib = []Reg{
 	{Name: "sqrt", Func: mathSqrt},
 	{Name: "tan", Func: mathTan},
 	{Name: "type", Func: mathType},
+	/* the ones 'LUA_COMPAT_MATHLIB' adds (lmathlib.c) */
+	{Name: "atan2", Func: mathAtan},
+	{Name: "cosh", Func: mathCosh},
+	{Name: "sinh", Func: mathSinh},
+	{Name: "tanh", Func: mathTanh},
+	{Name: "pow", Func: mathPow},
+	{Name: "frexp", Func: mathFrexp},
+	{Name: "ldexp", Func: mathLdexp},
+	{Name: "log10", Func: mathLog10},
 }
 
 // OpenMath opens the math library (luaopen_math).

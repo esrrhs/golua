@@ -1025,6 +1025,71 @@ func strCheckFormat(L *State, form, flags string, precision bool) {
 	}
 }
 
+// strFmtSpec is a conversion specification broken into the parts C's
+// printf acts on: the flags, the width and the precision.  The port
+// needs a view of them of its own, because Go's fmt does not do the
+// same things with them that C does.  It counts a width in runes and
+// not in bytes, it drops the sign of a zero written with a precision of
+// zero, and it pads the digits of a '%#05x' where C pads the field.
+type strFmtSpec struct {
+	left  bool /* '-': pad on the right */
+	plus  bool /* '+': always write a sign */
+	space bool /* ' ': write a space where a sign would go */
+	zero  bool /* '0': pad with zeros */
+	alt   bool /* '#': the alternative form */
+	width int
+	prec  int /* -1 when no precision was given */
+}
+
+// strParseFormat breaks a conversion specification into its parts.
+// 'form' is exactly what strCheckFormat has accepted: '%', then flags,
+// then a width, then '.' and a precision, then the conversion.
+func strParseFormat(form string) (f strFmtSpec) {
+	i := 1
+	for ; i < len(form)-1 && strings.IndexByte("-+ #0", form[i]) >= 0; i++ {
+		switch form[i] {
+		case '-':
+			f.left = true
+		case '+':
+			f.plus = true
+		case ' ':
+			f.space = true
+		case '0':
+			f.zero = true
+		case '#':
+			f.alt = true
+		}
+	}
+	for ; i < len(form)-1 && form[i] >= '0' && form[i] <= '9'; i++ {
+		f.width = f.width*10 + int(form[i]-'0')
+	}
+	f.prec = -1
+	if i < len(form)-1 && form[i] == '.' {
+		f.prec = 0 /* '%.s' names a precision of zero, not "no precision" */
+		for i++; i < len(form)-1 && form[i] >= '0' && form[i] <= '9'; i++ {
+			f.prec = f.prec*10 + int(form[i]-'0')
+		}
+	}
+	return f
+}
+
+// strPadField writes 's' into a field of 'f.width' characters the way
+// C's printf does: '-' moves the padding to the right, '0' pads with
+// zeros, and a precision overrides '0' and brings the spaces back.
+func strPadField(f strFmtSpec, s string) string {
+	if pad := f.width - len(s); pad > 0 {
+		switch {
+		case f.left:
+			return s + strings.Repeat(" ", pad)
+		case f.zero && f.prec < 0:
+			return strings.Repeat("0", pad) + s
+		default:
+			return strings.Repeat(" ", pad) + s
+		}
+	}
+	return s
+}
+
 // strFormatS formats '%s' with a width and a precision, the way C does.
 //
 // C counts both of them in *bytes* (lstrlib.c str_format hands the
@@ -1034,42 +1099,92 @@ func strCheckFormat(L *State, form, flags string, precision bool) {
 // characters, so C pads it with nothing and Go padded it with four
 // spaces, and 'string.format("%.3s", ...)' is the first three bytes --
 // one character -- where Go took the first three characters.
-//
-// 'form' is exactly what strCheckFormat has already accepted: '%', then
-// '-' flags, then at most two digits of width, then '.' and at most two
-// digits of precision, then the conversion character.
 func strFormatS(form, s string) string {
-	i := 1
-	left := false
-	for i < len(form) && form[i] == '-' {
-		left = true
-		i++
+	f := strParseFormat(form)
+	if f.prec >= 0 && len(s) > f.prec {
+		s = s[:f.prec] /* the precision is a byte count */
 	}
-	width := 0
-	for i < len(form)-1 && form[i] >= '0' && form[i] <= '9' {
-		width = width*10 + int(form[i]-'0')
-		i++
+	return strPadField(f, s)
+}
+
+// strFormatZeroInt is what C's printf does for a zero integer written
+// with a precision of zero: there are no digits, but the sign -- or the
+// space that stands in for one -- is written anyway, and the width is
+// padded to with spaces even when the '0' flag is given, a flag a
+// precision overrides.  Go's fmt writes nothing at all: fmtInteger
+// returns before it reaches the sign.  So
+// 'string.format("%+.0d", 0)' answered "" where PUC-Lua answers "+",
+// 'string.format("% .0d", 0)' answered "" instead of " ", and
+// 'string.format("%+5.0d", 0)' answered five spaces instead of "    +".
+func strFormatZeroInt(f strFmtSpec) string {
+	sign := ""
+	if f.plus {
+		sign = "+"
+	} else if f.space {
+		sign = " " /* '+' wins over ' ' when both are given */
 	}
-	prec := -1
-	if i < len(form)-1 && form[i] == '.' {
-		i++
-		prec = 0 /* '%.s' is a precision of zero, not "no precision" */
-		for i < len(form)-1 && form[i] >= '0' && form[i] <= '9' {
-			prec = prec*10 + int(form[i]-'0')
-			i++
+	if f.zero && f.prec < 0 {
+		/* the sign goes before the zeros, as it does in C */
+		if pad := f.width - len(sign); pad > 0 {
+			if f.left {
+				return sign + strings.Repeat(" ", pad)
+			}
+			return sign + strings.Repeat("0", pad)
+		}
+		return sign
+	}
+	return strPadField(f, sign)
+}
+
+// strFormatUnsigned formats '%o', '%x' and '%X' the way C's printf
+// does, which is not what Go's fmt does in two places.
+//
+// The width of a '%#05x' is the width of the whole field, prefix
+// included: C answers "0x001" for the value 1, padding the two
+// characters of the prefix and the one digit up to five with zeros.
+// Go's fmt takes the width as the width of the digits and writes
+// "0x00001".  And '#' on a '%o' keeps a zero written with a precision
+// of zero from vanishing, because the flag raises the precision until
+// the first digit is a zero: C answers "0" where Go answers "".
+func strFormatUnsigned(f strFmtSpec, n uint64, spec byte) string {
+	base := 16
+	if spec == 'o' {
+		base = 8
+	}
+	digits := strconv.FormatUint(n, base)
+	if spec == 'X' {
+		digits = strings.ToUpper(digits)
+	}
+	if f.prec == 0 && n == 0 {
+		digits = "" /* a precision of zero writes no digits for a zero */
+	} else if len(digits) < f.prec {
+		digits = strings.Repeat("0", f.prec-len(digits)) + digits
+	}
+	prefix := ""
+	switch {
+	case spec == 'o' && f.alt && !strings.HasPrefix(digits, "0"):
+		prefix = "0" /* '#' raises the precision to force a leading zero */
+	case spec != 'o' && f.alt && n != 0:
+		/* '#' prefixes a non-zero hexadecimal value only */
+		if spec == 'X' {
+			prefix = "0X"
+		} else {
+			prefix = "0x"
 		}
 	}
-	if prec >= 0 && len(s) > prec {
-		s = s[:prec] /* precision is a byte count */
-	}
-	if pad := width - len(s); pad > 0 {
-		spaces := strings.Repeat(" ", pad)
-		if left {
-			return s + spaces
+	body := len(prefix) + len(digits)
+	if pad := f.width - body; pad > 0 {
+		switch {
+		case f.left:
+			return prefix + digits + strings.Repeat(" ", pad)
+		case f.zero && f.prec < 0:
+			/* the zeros go between the prefix and the digits */
+			return prefix + strings.Repeat("0", pad) + digits
+		default:
+			return strings.Repeat(" ", pad) + prefix + digits
 		}
-		return spaces + s
 	}
-	return s
+	return prefix + digits
 }
 
 // strGetFormat gets a conversion specification starting at 'i' (just
@@ -1481,19 +1596,22 @@ func strFormat(L *State) int {
 			b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", string([]byte{byte(L.CheckInteger(arg))})))
 		case 'd', 'i':
 			strCheckFormat(L, form, strFmtFlagsI, true)
-			b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", L.CheckInteger(arg)))
+			n := L.CheckInteger(arg)
+			if f := strParseFormat(form); n == 0 && f.prec == 0 {
+				/* C's printf still writes the sign when there are no
+				   digits to write; Go's fmt returns before it gets
+				   there.  See strFormatZeroInt. */
+				b.AddString(strFormatZeroInt(f))
+			} else {
+				b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", n))
+			}
 		case 'u':
 			strCheckFormat(L, form, strFmtFlagsU, true)
 			b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", uint64(L.CheckInteger(arg))))
 		case 'o', 'x', 'X':
 			strCheckFormat(L, form, strFmtFlagsX, true)
-			n := uint64(L.CheckInteger(arg))
-			f := form
-			if n == 0 && spec != 'o' && strings.IndexByte(form, '#') >= 0 {
-				/* C's '#' adds the "0x" prefix to a non-zero value only */
-				f = strings.Replace(form, "#", "", 1)
-			}
-			b.AddString(fmt.Sprintf(f, n))
+			b.AddString(strFormatUnsigned(strParseFormat(form),
+				uint64(L.CheckInteger(arg)), spec))
 		case 'a', 'A':
 			strCheckFormat(L, form, strFmtFlagsF, true)
 			b.AddString(strNumber2StrX(L, form, L.CheckNumber(arg)))
