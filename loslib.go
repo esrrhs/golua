@@ -410,6 +410,10 @@ func osExit(L *State) int {
 	if L.ToBoolean(2) {
 		L.Close()
 	}
+	/* 'exit' flushes the buffers of the streams that are still open; it
+	   does not run '__gc', so a file that was never closed keeps what
+	   was written to it. */
+	ioFlushAll()
 	os.Exit(status)
 	return 0
 }

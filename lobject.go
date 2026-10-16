@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -525,6 +526,20 @@ func tostringbuff(obj *Value) string {
 	return s
 }
 
+// fmtNaN is the word C's printf writes for a NaN.
+//
+// Whether it is spelled with a '-' is up to the library: Apple's C
+// library writes "nan" whatever the sign bit is, glibc writes "-nan"
+// when it is set.  Both 'tostring' and 'string.format' go through
+// printf in C, so they have to agree with whichever of the two the
+// platform happens to use.
+func fmtNaN(f float64) string {
+	if runtime.GOOS == "darwin" || !math.Signbit(f) {
+		return "nan"
+	}
+	return "-nan"
+}
+
 // fmtFloat formats a float with C's "%.14g" (LUAI_NUMFFORMAT).
 //
 // Go spells the non-finite values the way Go spells them ("NaN",
@@ -533,7 +548,7 @@ func tostringbuff(obj *Value) string {
 func fmtFloat(f float64) string {
 	switch {
 	case math.IsNaN(f):
-		return "nan"
+		return fmtNaN(f)
 	case math.IsInf(f, +1):
 		return "inf"
 	case math.IsInf(f, -1):

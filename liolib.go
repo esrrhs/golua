@@ -16,7 +16,9 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
+	"weak"
 )
 
 // ioIsWindows tells whether the host runs Windows (the shell used by
@@ -329,9 +331,73 @@ func ioToFile(L *State) *ioStream {
 // creation of file handles
 // ---------------------------------------------------------------------
 
+// ioOpenStreams is every file handle that has been created, held weakly.
+//
+// C's 'exit' flushes the buffer of every stdio stream that is still
+// open, so 'os.exit' has to do the same: a script that writes to a file
+// and then calls 'os.exit' without closing it keeps what it wrote in C,
+// and would lose it here.  The handles are held weakly so that the list
+// does not keep them -- and their buffers -- alive itself.
+var (
+	ioOpenStreamsMu sync.Mutex
+	ioOpenStreams   []weak.Pointer[ioStream]
+)
+
+// ioOpenMax is how long the list is allowed to get before the handles
+// that have gone are dropped from it.
+const ioOpenMax = 1024
+
+func ioTrackStream(s *ioStream) {
+	ioOpenStreamsMu.Lock()
+	ioOpenStreams = append(ioOpenStreams, weak.Make(s))
+	n := len(ioOpenStreams)
+	ioOpenStreamsMu.Unlock()
+	if n >= ioOpenMax {
+		ioPruneOpen()
+	}
+}
+
+// ioPruneOpen drops the entries whose handle has gone.
+func ioPruneOpen() {
+	ioOpenStreamsMu.Lock()
+	old := ioOpenStreams
+	ioOpenStreams = nil
+	ioOpenStreamsMu.Unlock()
+	keep := make([]weak.Pointer[ioStream], 0, len(old))
+	for i := range old {
+		if old[i].Value() == nil {
+			continue
+		}
+		keep = append(keep, old[i])
+	}
+	ioOpenStreamsMu.Lock()
+	ioOpenStreams = append(ioOpenStreams, keep...)
+	ioOpenStreamsMu.Unlock()
+}
+
+// ioFlushAll writes out what is still in the buffers of the open
+// handles.  It is what C's 'exit' does on the way out.
+func ioFlushAll() {
+	ioOpenStreamsMu.Lock()
+	old := ioOpenStreams
+	ioOpenStreams = nil
+	ioOpenStreamsMu.Unlock()
+	keep := make([]weak.Pointer[ioStream], 0, len(old))
+	for i := range old {
+		if s := old[i].Value(); s != nil {
+			s.flush()
+			keep = append(keep, old[i])
+		}
+	}
+	ioOpenStreamsMu.Lock()
+	ioOpenStreams = append(ioOpenStreams, keep...)
+	ioOpenStreamsMu.Unlock()
+}
+
 // ioNewPreFile creates a closed file handle (newprefile).
 func ioNewPreFile(L *State) *ioStream {
 	s := &ioStream{}
+	ioTrackStream(s)
 	L.NewUserData(s, 0)
 	ioSetMetaTableByName(L, ioFileHandle)
 	return s

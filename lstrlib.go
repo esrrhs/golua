@@ -927,7 +927,9 @@ func strGsub(L *State) int {
 	p := L.CheckString(2)   /* pattern */
 	tr := L.Type(3)         /* replacement type */
 	maxS := L.OptInteger(4, int64(len(src))+1)
-	L.ArgCheck(tr == LUA_TNUMBER || tr == LUA_TSTRING ||
+	/* lstrlib.c uses 'luaL_argexpected' here, so the message names the
+	   type that came: "string/function/table expected, got boolean". */
+	L.ArgExpected(tr == LUA_TNUMBER || tr == LUA_TSTRING ||
 		tr == LUA_TFUNCTION || tr == LUA_TTABLE, 3, "string/function/table")
 	pat := p
 	anchor := false
@@ -1083,7 +1085,7 @@ func strNumber2StrX(L *State, form string, x float64) string {
 	switch {
 	case math.IsNaN(x):
 		finite = false
-		body = "nan"
+		body = fmtNaN(x) /* see fmtNaN: the sign is the library's choice */
 	case math.IsInf(x, 0):
 		finite = false
 		body = "inf"
@@ -1092,7 +1094,8 @@ func strNumber2StrX(L *State, form string, x float64) string {
 	}
 	/* the sign: '-' wins over '+'/' '; NaN never gets a '+' or a ' ' */
 	var sign string
-	if math.Signbit(x) {
+	if math.Signbit(x) && !math.IsNaN(x) {
+		/* a NaN carries its '-' (if any) inside the word already */
 		sign = "-"
 	} else if finite || !math.IsNaN(x) {
 		if strings.IndexByte(flags, '+') >= 0 {
@@ -1366,14 +1369,12 @@ func strFormatFloat(form string, n float64) string {
 		/* C prints a non-finite value as a word: neither the precision
 		   nor the '0' flag applies to it, so "%.2f" of inf is "inf"
 		   (and not "in") and "%010.2f" of it is "       inf". */
-		s := "nan"
+		s := fmtNaN(n) /* see fmtNaN: the sign is the library's choice */
 		switch {
 		case math.IsInf(n, 1):
 			s = "inf"
 		case math.IsInf(n, -1):
 			s = "-inf"
-		case math.Signbit(n):
-			s = "-nan"
 		}
 		/* a NaN never takes the '+' or ' ' flag (only its own sign bit) */
 		if !strings.HasPrefix(s, "-") && !math.IsNaN(n) {

@@ -698,7 +698,13 @@ func dbHookFunc(L *State, ar *dbAr) {
 	} else {
 		L.PushNil()
 	}
-	L.PCall(2, 0, 0) /* call hook function */
+	/* ldblib.c uses lua_call here, not lua_pcall: an error raised by the
+	   hook function leaves the hook and travels to whatever protected
+	   call is underneath (the chunk's, or a coroutine's 'resume').
+	   'lua_call' also means the hook itself is a non-yieldable call, so
+	   'coroutine.yield' inside a hook raises "attempt to yield across a
+	   C-call boundary". */
+	L.Call(2, 0)
 }
 
 // dbMakeMask converts a string mask into a bit mask (makemask).

@@ -176,7 +176,7 @@ Weak tables and `__gc` are supported and pass their own tests —
 two of which count collections with `require"tracegc"` — see §6 for how
 they are done.
 
-The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (25
+The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (28
 cases) is compared byte for byte against golden files captured from
 PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
 interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the
@@ -215,7 +215,8 @@ a channel round trip rather than a swap of stack pointers.
 3. **The collector is Go's, so its observable timing is not PUC-Lua's** — `collectgarbage("count")` reports the Go heap rather than PUC-Lua's own allocator, and `__gc` runs where this port runs a cycle (a collector step, `collectgarbage`, or `Close()`) rather than where PUC-Lua's step would have run it. Objects with a `__gc` are held between cycles so that Go cannot finalise them at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not — which is what C does and what makes `<close>`, `Close()` and weak tables deterministic: a sweep removes an entry once nothing but the table refers to it.
 4. **Weak tables need two collector cycles** — a Go `weak.Pointer` is cleared in the cycle after the one that frees its object, so an entry survives one cycle longer than PUC-Lua would have kept it. Strings, numbers and booleans are never weakened, exactly as in PUC-Lua.
 5. **Only the `"C"` locale is available** — `os.setlocale` has no libc locale database behind it, so any other name returns `nil` (as PUC-Lua does when the locale is not installed). Number formatting and parsing always use `.` as the decimal point.
-6. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
+6. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `asin`, `acos` and `atan` are Go's implementations rather than the ones libc links. They agree to 16 significant digits and differ in the last one for roughly a quarter of the arguments (one unit in the last place); `sqrt`, `log` and every arithmetic operation are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it.
+7. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
 
 ---
 

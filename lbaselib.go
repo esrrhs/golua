@@ -214,7 +214,9 @@ func baseRawEqual(L *State) int {
 
 func baseRawLen(L *State) int {
 	t := L.Type(1)
-	L.ArgCheck(t == LUA_TTABLE || t == LUA_TSTRING, 1, "table or string")
+	/* lbaselib.c uses 'luaL_argexpected', so the message names the type
+	   that came: "table or string expected, got boolean". */
+	L.ArgExpected(t == LUA_TTABLE || t == LUA_TSTRING, 1, "table or string")
 	L.PushInteger(int64(L.RawLen(1)))
 	return 1
 }
