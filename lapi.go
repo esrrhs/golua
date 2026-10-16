@@ -734,6 +734,7 @@ func (L *State) SetMetaTable(idx int) {
 	case LUA_TTABLE:
 		hvalue(v).metatable = mt
 		luaC_checkFinalizer(L, v, mt)
+		luaC_checkWeakMode(L, hvalue(v), mt)
 	case LUA_TUSERDATA:
 		uvalue(v).metatable = mt
 		luaC_checkFinalizer(L, v, mt)

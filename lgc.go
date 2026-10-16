@@ -52,7 +52,7 @@ const gcStepDebt = 1024
 // object is being watched for '__gc', and at most once every
 // 'gcStepDebt' allocations.
 func (L *State) gcStep() {
-	if gcWatched.Load() == 0 {
+	if gcWatched.Load() == 0 && gcWeakCount.Load() == 0 {
 		return
 	}
 	L.g.gcDebt++
@@ -60,6 +60,7 @@ func (L *State) gcStep() {
 		return
 	}
 	L.g.gcDebt = 0
+	L.gcSweepWeak()
 	/* Go's collector scans the whole stack slice, while Lua's only ever
 	   sees the slots below 'top'.  What sits above 'top' is garbage as
 	   far as the program is concerned -- a slot a call has left behind
@@ -191,5 +192,23 @@ func makeTableValue(t *Table) Value {
 func makeUdataValue(u *Udata) Value {
 	var v Value
 	setuvalue(&v, u)
+	return v
+}
+
+func makeLClosureValue(c *LClosure) Value {
+	var v Value
+	setclLvalue(&v, c)
+	return v
+}
+
+func makeCClosureValue(c *CClosure) Value {
+	var v Value
+	setclCvalue(&v, c)
+	return v
+}
+
+func makeThreadValue(th *State) Value {
+	var v Value
+	setthvalue(&v, th)
 	return v
 }

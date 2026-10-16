@@ -655,6 +655,13 @@ func luaV_execute(L *State, ci *CallInfo) {
 				L.top = ra + n
 				ci.savedpc = pc
 				luaV_concat(L, n)
+				/* a concatenation allocates a string, and a program can
+				   wait for the collector on that alone */
+				if gcHasPending() {
+					L.runFinalizers()
+					continue
+				}
+				L.gcStep()
 			case OP_CLOSE:
 				luaF_close(L, ra, LUA_OK, true)
 			case OP_TBC:
