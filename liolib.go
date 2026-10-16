@@ -211,7 +211,17 @@ func ioStrError(err error) string {
 }
 
 // ioFileResult is luaL_fileresult: true, or nil + message + errno.
-func ioFileResult(L *State, stat bool, fname string, err error) int {
+//
+// 'fname' is a pointer, because C asks whether it is NULL and not
+// whether it is empty (lauxlib.c):
+//
+//	if (fname != NULL) lua_pushfstring(L, "%s: %s", fname, strerror(en));
+//	else               lua_pushfstring(L, "%s", strerror(en));
+//
+// so 'io.open("")' reports ": No such file or directory", with the
+// colon and the space and nothing in front of them, where a nil here
+// used to drop the prefix entirely and answer without it.
+func ioFileResult(L *State, stat bool, fname *string, err error) int {
 	if stat {
 		L.PushBoolean(true)
 		return 1
@@ -221,8 +231,8 @@ func ioFileResult(L *State, stat bool, fname string, err error) int {
 	if en != 0 {
 		msg = ioStrError(err)
 	}
-	if fname != "" {
-		msg = fname + ": " + msg
+	if fname != nil {
+		msg = *fname + ": " + msg
 	}
 	L.PushNil()
 	L.PushString(msg)
@@ -761,7 +771,7 @@ func ioGWrite(L *State, s *ioStream, arg int) int {
 	if status {
 		return 1 /* file handle already on stack top */
 	}
-	return ioFileResult(L, false, "", ioWriteError)
+	return ioFileResult(L, false, nil, ioWriteError)
 }
 
 var ioWriteError = errors.New("error writing to file")
@@ -879,7 +889,7 @@ func ioFGc(L *State) int {
 func ioFClose(L *State) int {
 	s := ioToLStream(L)
 	err := s.doClose()
-	return ioFileResult(L, err == nil, "", err)
+	return ioFileResult(L, err == nil, nil, err)
 }
 
 // ioPClose is the close function of 'popen' files (io_pclose).
@@ -887,7 +897,7 @@ func ioPClose(L *State) int {
 	s := ioToLStream(L)
 	what, code, err := s.waitPipe()
 	if err != nil {
-		return ioFileResult(L, false, "", err)
+		return ioFileResult(L, false, nil, err)
 	}
 	return ioExecResult(L, what, code)
 }
@@ -908,7 +918,7 @@ func ioOpen(L *State) int {
 	s := ioNewFile(L)
 	f, err := ioOpenFile(filename, mode)
 	if err != nil {
-		return ioFileResult(L, false, filename, err)
+		return ioFileResult(L, false, &filename, err)
 	}
 	s.f = f
 	return 1
@@ -933,7 +943,7 @@ func ioPOpen(L *State) int {
 		err = cmd.Start()
 	}
 	if err != nil {
-		return ioFileResult(L, false, filename, err)
+		return ioFileResult(L, false, &filename, err)
 	}
 	s.cmd = cmd
 	s.closef = ioPClose
@@ -952,7 +962,7 @@ func ioTmpFile(L *State) int {
 	s := ioNewFile(L)
 	f, err := os.CreateTemp("", "lua_")
 	if err != nil {
-		return ioFileResult(L, false, "", err)
+		return ioFileResult(L, false, nil, err)
 	}
 	s.f = f
 	s.tmpname = f.Name()
@@ -961,12 +971,12 @@ func ioTmpFile(L *State) int {
 
 func ioFlush(L *State) int {
 	s := ioGetIOFile(L, ioOutputKey)
-	return ioFileResult(L, s.flush() == nil, "", nil)
+	return ioFileResult(L, s.flush() == nil, nil, nil)
 }
 
 func ioFFlush(L *State) int {
 	s := ioToFile(L)
-	return ioFileResult(L, s.flush() == nil, "", nil)
+	return ioFileResult(L, s.flush() == nil, nil, nil)
 }
 
 // ---------------------------------------------------------------------
@@ -1054,11 +1064,11 @@ func ioFSeek(L *State) int {
 	op := L.CheckOption(2, "cur", modenames)
 	offset := L.OptInteger(3, 0)
 	if s.f == nil {
-		return ioFileResult(L, false, "", errors.New("not a seekable file"))
+		return ioFileResult(L, false, nil, errors.New("not a seekable file"))
 	}
 	pos, err := s.seek(offset, op)
 	if err != nil {
-		return ioFileResult(L, false, "", err)
+		return ioFileResult(L, false, nil, err)
 	}
 	L.PushInteger(pos)
 	return 1
@@ -1099,7 +1109,7 @@ func ioFSetVBuf(L *State) int {
 	if s.vbuf == "no" {
 		s.buf = nil /* disabling buffering drops the read buffer */
 	}
-	return ioFileResult(L, true, "", nil)
+	return ioFileResult(L, true, nil, nil)
 }
 
 // ---------------------------------------------------------------------

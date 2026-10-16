@@ -1,0 +1,96 @@
+== create and status ==
+suspended	true|true|3
+suspended	true|true|20
+dead	true|false|"cannot resume dead coroutine"
+false|"bad argument #1 to 'coroutine.resume' (thread expected, got number)"
+false|"bad argument #1 to 'coroutine.create' (function expected, got number)"
+false|"bad argument #1 to 'coroutine.create' (function expected, got no value)"
+== a coroutine that fails ==
+true|false|"58_codbg.lua:48: inside"
+dead
+true|false|"cannot resume dead coroutine"
+== running ==
+thread: 0x1029d1988|true
+true
+false
+thread: 0x1029d6898|false
+true
+"running"
+true|true
+== wrap ==
+true|1	true|2	false|"cannot resume dead coroutine"
+false|"bad argument #1 to 'coroutine.wrap' (function expected, got number)"	false|"bad argument #1 to 'coroutine.wrap' (function expected, got no value)"
+== yield across a metamethod and a C boundary ==
+true|true|"mm"	true|true|"v"
+true|false|"attempt to yield across a C-call boundary"
+true|false|"cannot resume dead coroutine"
+true|false|"attempt to yield across a C-call boundary"
+== close ==
+true|true
+true|true
+dead
+true|true
+false|"bad argument #1 to 'coroutine.close' (thread expected, got number)"
+false|"bad argument #1 to 'coroutine.close' (thread expected, got no value)"
+true|true	dead
+true|false|"58_codbg.lua:100: x"	true|false|"58_codbg.lua:100: x"
+== to-be-closed in a coroutine ==
+true|true|"y"
+true|true
+"c"
+== debug.getinfo ==
+true|table: 0x7968c11640
+"58_codbg.lua"|115|-1|"Lua"|"@58_codbg.lua"|0|1|false|true
+nil|"@58_codbg.lua"|-1|0|true|false
+125|"main"
+table: 0x7968c11c40
+true|nil
+false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
+false|"bad argument #2 to 'debug.getinfo' (invalid option)"
+"C"|"[C]"
+nil|""
+== debug.getlocal and setlocal ==
+"a"|10
+99
+true|nil	true|nil
+true|nil	true|nil
+false|"bad argument #1 to 'debug.getlocal' (level out of range)"	false|"bad argument #1 to 'debug.setlocal' (level out of range)"
+== upvalues ==
+"up"|"x"
+true	true
+"up"	"y"
+true
+false|"bad argument #1 to 'debug.getupvalue' (function expected, got number)"	false|"bad argument #1 to 'debug.setupvalue' (function expected, got number)"
+true
+false|"bad argument #1 to 'debug.upvalueid' (function expected, got number)"	true|nil
+true
+false|"bad argument #1 to 'debug.upvaluejoin' (function expected, got number)"
+== traceback and sethook ==
+stack traceback:
+	58_codbg.lua:157: in main chunk
+	[C]: in ?
+msg
+stack traceback:
+	58_codbg.lua:158: in main chunk
+	[C]: in ?
+msg
+stack traceback:
+	[C]: in ?
+true|"5\
+stack traceback:\
+\9[C]: in function 'pcall'\
+\00958_codbg.lua:33: in local 'rec'\
+\00958_codbg.lua:160: in main chunk\
+\9[C]: in ?"
+true
+true
+true
+false|"bad argument #1 to 'debug.sethook' (function expected, got number)"
+nil
+true|nil	nil
+"table"
+true|5
+true|nil	false|"bad argument #1 to 'debug.setuservalue' (userdata expected, got number)"
+number	number
+false|"bad argument #1 to 'debug.setcstacklimit' (number expected, got string)"
+done

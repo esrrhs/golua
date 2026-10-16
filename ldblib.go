@@ -769,8 +769,15 @@ func dbSetHook(L *State) int {
 	}
 	mask := dbMakeMask(smask, count)
 	L1.setHook(hook, mask, count)
+	/* Whether a hook was installed is what 'gethook' asks about, and
+	   'lua_sethook' installs none when the mask is empty (ldebug.c):
+	   "turn off hooks" sets both the mask and the function to zero.  A
+	   mask with no recognised character in it -- 'debug.sethook(f, "z")'
+	   -- is such an empty mask, so the function is stored in the hook
+	   table but the hook itself is off, and 'debug.gethook()' answers
+	   nil rather than the function. */
 	dbHooks.Lock()
-	if hook == nil {
+	if L1.hook == nil {
 		delete(dbHooks.m, L1)
 	} else {
 		dbHooks.m[L1] = dbHookInfo{mask: mask, count: count}

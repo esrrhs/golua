@@ -296,14 +296,14 @@ func osExecute(L *State) int {
 func osRemove(L *State) int {
 	filename := L.CheckString(1)
 	err := os.Remove(filename)
-	return ioFileResult(L, err == nil, filename, err)
+	return ioFileResult(L, err == nil, &filename, err)
 }
 
 func osRename(L *State) int {
 	fromname := L.CheckString(1)
 	toname := L.CheckString(2)
 	err := os.Rename(fromname, toname)
-	return ioFileResult(L, err == nil, "", err)
+	return ioFileResult(L, err == nil, nil, err)
 }
 
 // osTmpName is os_tmpname (loslib.c).  The C library builds the name with
