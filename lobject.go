@@ -284,6 +284,7 @@ type Table struct {
 	lastfree  int
 	metatable *Table
 	weakMode  byte // 0 or "k"/"v"/"kv" bits, replacing GC-driven weakness
+	finalized bool // a Go finalizer has been set to run its '__gc'
 }
 
 func isrealasize(t *Table) bool { return t.flags&BITRAS == 0 }
@@ -302,6 +303,7 @@ type Udata struct {
 	metatable *Table
 	uv        []Value // user values
 	val       any     // the Go value carried by this userdata
+	finalized bool    // a Go finalizer has been set to run its '__gc'
 }
 
 // ---------------------------------------------------------------------

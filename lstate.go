@@ -90,6 +90,7 @@ type globalState struct {
 	warnf      WarnFunc
 	udWarn     any
 	memErrMsg  *TString
+	gcDebt     int // allocations since the last collector step
 }
 
 // State is the Go equivalent of lua_State.

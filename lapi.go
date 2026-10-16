@@ -733,8 +733,10 @@ func (L *State) SetMetaTable(idx int) {
 	switch ttype(v) {
 	case LUA_TTABLE:
 		hvalue(v).metatable = mt
+		luaC_checkFinalizer(L, v, mt)
 	case LUA_TUSERDATA:
 		uvalue(v).metatable = mt
+		luaC_checkFinalizer(L, v, mt)
 	default:
 		L.g.mt[ttype(v)] = mt
 	}
