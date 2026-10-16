@@ -1923,6 +1923,30 @@ func strPackBits(buf *bytes.Buffer, bits uint64, n int, islittle bool) {
 	}
 }
 
+// strPadBytes appends 'n' padding bytes -- the tail of a 'cN' field.
+//
+// C pads it one byte at a time (lstrlib.c):
+//
+//	while (len++ < (size_t)size)
+//	  luaL_addchar(&b, LUAL_PACKPADBYTE);
+//
+// and 'n' can be enormous: 'string.pack("c1000000000000", 1)' asks for a
+// gigabyte, and PUC-Lua spends a couple of seconds producing it.  The loop
+// is written in chunks, and 'n' bytes are never materialised as one slice,
+// because a straight transliteration that grows the string on every step
+// would be quadratic and would never finish.
+func strPadBytes(buf *bytes.Buffer, n int) {
+	const chunk = 64 * 1024
+	pad := make([]byte, chunk)
+	for n >= chunk {
+		buf.Write(pad)
+		n -= chunk
+	}
+	if n > 0 {
+		buf.Write(pad[:n])
+	}
+}
+
 func strUnpackBits(data string, pos, n int, islittle bool) uint64 {
 	var b [8]byte
 	if islittle {
@@ -1976,11 +2000,8 @@ func strPack(L *State) int {
 		case strKchar: /* fixed-size string */
 			s := L.CheckString(arg)
 			L.ArgCheck(len(s) <= size, arg, "string longer than given size")
-			buf.WriteString(s)  /* add string */
-			for len(s) < size { /* pad extra space */
-				buf.WriteByte(strPackPadByte)
-				s += " "
-			}
+			buf.WriteString(s)             /* add string */
+			strPadBytes(&buf, size-len(s)) /* pad extra space */
 		case strKstring: /* strings with length count */
 			s := L.CheckString(arg)
 			L.ArgCheck(size >= strPackAlignSize || len(s) < 1<<uint(size*strNB),

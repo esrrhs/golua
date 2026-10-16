@@ -1,0 +1,154 @@
+== os.setlocale ==
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+false|"bad argument #2 to 'os.setlocale' (invalid option 'bogus')"
+true|nil
+false|"bad argument #2 to 'os.setlocale' (invalid option '5')"
+true|nil
+true|"C"
+== os.time ==
+true|-28800
+true|-28800
+true|951796800
+true|951796800
+true|951793200
+true|2147454847
+true|-115200
+false|"field 'year' missing in date table"
+true|-28739
+true|31550400
+true|2692800
+true|-2664000
+true|-72000
+true|61200
+true|-28800
+false|"bad argument #1 to 'os.time' (table expected, got number)"
+false|"bad argument #1 to 'os.time' (table expected, got string)"
+== os.date ==
+true|"1970-01-01 00:00:00"
+true|"2033-05-18 03:33:20"
+true|"1969-12-31 23:59:59"
+true|"Thu Thursday Jan January"
+true|"Thu Jan  1 00:00:00 1970"
+true|"01/01/70 00:00:00"
+true|"AM 12"
+true|"001 00 00 4"
+true|"% \
+ \9"
+true|"19 70 1970 70 4 01"
+false|"bad argument #1 to 'os.date' (invalid conversion specifier '%k %l %s')"
+true|"UTC"
+true|"1970"
+true|table: 0x7824805040
+true|table: 0x7824805100
+true|table: 0x78248051c0
+false|"date result cannot be represented in this installation"
+false|"date result cannot be represented in this installation"
+true|""
+false|"bad argument #2 to 'os.date' (number expected, got string)"
+true|""
+true|"5"
+false|"bad argument #2 to 'os.date' (number has no integer representation)"
+false|"bad argument #2 to 'os.date' (number has no integer representation)"
+false|"bad argument #1 to 'os.date' (invalid conversion specifier '%Q')"
+== os.difftime / clock / tmpname / getenv ==
+true|50
+true|-50
+false|"bad argument #2 to 'os.difftime' (number expected, got no value)"
+true|50
+false|"bad argument #1 to 'os.difftime' (number expected, got no value)"
+number
+string	true
+string	true
+true|nil
+true|nil
+false|"bad argument #1 to 'os.getenv' (string expected, got no value)"
+true|nil
+== package ==
+"/\
+;\
+?\
+!\
+-\
+"
+"/usr/local/share/lua/5.4/?.lua;/usr/local/share/lua/5.4/?/init.lua;/usr/local/lib/lua/5.4/?.lua;/usr/local/lib/lua/5.4/?/init.lua;./?.lua;./?/init.lua"
+"/usr/local/lib/lua/5.4/?.so;/usr/local/lib/lua/5.4/loadall.so;./?.so"
+table	table	table
+4	function	function	function	function
+function	function
+_G,coroutine,debug,io,math,os,package,string,table,utf8
+true|nil|"no file '/usr/local/share/lua/5.4/no/such/module.lua'\
+\9no file '/usr/local/share/lua/5.4/no/such/module/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/no/such/module.lua'\
+\9no file '/usr/local/lib/lua/5.4/no/such/module/init.lua'\
+\9no file './no/such/module.lua'\
+\9no file './no/such/module/init.lua'"
+true|nil|"no file './a.lua'\
+\9no file 'a'"
+true|nil|"no file './a.lua'"
+true|nil|"no file './a/b.lua'"
+true|nil|"no file './a:b.lua'"
+true|nil|"no file ''"
+true|nil|"no file 'a'"
+true|nil|"no file '5'"
+false|"bad argument #2 to 'package.searchpath' (string expected, got no value)"
+false|"bad argument #1 to 'package.searchpath' (string expected, got no value)"
+true|nil|"no file '5'"
+== require ==
+false|"module 'no_such_module_xyz' not found:\
+\9no field package.preload['no_such_module_xyz']\
+\9no file '/usr/local/share/lua/5.4/no_such_module_xyz.lua'\
+\9no file '/usr/local/share/lua/5.4/no_such_module_xyz/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/no_such_module_xyz.lua'\
+\9no file '/usr/local/lib/lua/5.4/no_such_module_xyz/init.lua'\
+\9no file './no_such_module_xyz.lua'\
+\9no file './no_such_module_xyz/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/no_such_module_xyz.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './no_such_module_xyz.so'"
+true|table: 0x10077e560	true|table: 0x10077e610
+nil
+true|42|"/tmp/p36dir/m1.lua"	true|42
+true|true|"/tmp/p36dir/m2.lua"	true|true
+true|true|"/tmp/p36dir/m3.lua"
+true|"sub.m4"|"/tmp/p36dir/sub/m4.lua"
+true|"sub.m4"|"/tmp/p36dir/sub/m4.lua"
+false|"error loading module 'bad' from file '/tmp/p36dir/bad.lua':\
+\9/tmp/p36dir/bad.lua:2: unexpected symbol near <eof>"
+false|"/tmp/p36dir/err.lua:1: boom"
+true|"argm"|"/tmp/p36dir/argm.lua"
+42	true	true
+false|"error loading module 'circ2' from file '/tmp/p36dir/circ2.lua':\
+\9C stack overflow"
+false|"bad argument #1 to 'require' (string expected, got no value)"
+false|"module '5' not found:\
+\9no field package.preload['5']\
+\9no file '/tmp/p36dir/5.lua'\
+\9no file '/tmp/p36dir/5/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/5.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './5.so'"
+true|"pre:pre1"|":preload:"	true|"pre:pre1"
+true|"already"
+false|"module 'pre3' not found:\
+\9no field package.preload['pre3']\
+\9no file '/tmp/p36dir/pre3.lua'\
+\9no file '/tmp/p36dir/pre3/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/pre3.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './pre3.so'"
+false|"module 'pre3' not found:\
+\9no field package.preload['pre3']\
+\9no file '/tmp/p36dir/pre3.lua'\
+\9no file '/tmp/p36dir/pre3/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/pre3.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './pre3.so'"
+done

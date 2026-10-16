@@ -155,7 +155,7 @@
 弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、`gengc`、
 `cstack`、`locals`（后两个用 `require"tracegc"` 数回收次数），做法见 §7。
 
-`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（59 个用例）与从 PUC-Lua 5.4.9
+`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（65 个用例）与从 PUC-Lua 5.4.9
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
 
@@ -236,12 +236,12 @@ go build -o lua ./cmd/lua
 ## 7. 已知差异与限制（相对 PUC-Lua 5.4.9）
 
 1. **`file:read(n)` 的计数超过 2 GiB 时按文件末尾处理**：C 把计数直接交给分配器，荒谬的计数是被分配器拒绝的（报 "not enough memory"；负数计数必然如此，本实现已还原这一点）。本实现不会做那个量级的分配，所以过大的计数读到空。二进制 chunk 不受影响：`string.dump` 产出的字节与 PUC-Lua 5.4.9 **完全一致**（strip 与否都一样），两边互相都能加载对方的产物。
-2. **不加载 C 动态库**：`package.cpath` / `package.loadlib` 保留符号但返回不支持；C 扩展请用 Go 模块注册（`RegisterModule` / `package.preload`）改写。
+2. **不加载 C 动态库**：`package.cpath` 与平台一致；`package.loadlib` 返回 `nil, "dynamic libraries not enabled", "absent"`——这正是 PUC-Lua 在没有 `LUA_USE_DLOPEN` 时逐字的回答，开了动态加载的参考构建则返回一条 `dlopen` 消息加 `"open"`。`package.searchpath`、四个 searcher、`package.preload`、`package.loaded`、`require` 全部完整，含 searcher 自己的报错格式与循环检测。C 扩展请用 Go 模块注册（`RegisterModule` / `package.preload`）改写。
 3. **收集器是 Go 的，可观测时机与 PUC-Lua 不同**：`collectgarbage("count")` 报的是 Go 堆而非 PUC-Lua 分配器的口径；`__gc` 在本实现自己跑一轮的地方执行（收集步进、`collectgarbage`、`Close()`），而不是 PUC-Lua 步进的位置。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法，也正是 `<close>`、`Close()` 与弱表确定的原因：没有别处引用就会被清掉。`collectgarbage("step")` 是唯一无法对齐的返回值：PUC-Lua 只在「这一步把收集器带回了暂停态」时才返回 true，而单步几乎从不如此——它连续几百次都返回 false，紧接在一次完整收集之后也一样——而本实现的一步就是一整轮，所以返回 true。若改成返回 false，文档里的惯用法 `while not collectgarbage("step") do end` 就会永远转下去，两害相权取其轻。
 4. **弱表条目要多存活一轮**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，因此条目比 PUC-Lua 多活一个周期。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
 5. **错误信息文案**：与 PUC-Lua 保持一致（直译带来的好处），但 `ldebug` 的源码片段回显在部分路径可能省略。
 6. **只支持 `"C"` locale**：`os.setlocale` 背后没有 libc 的 locale 数据库，其它名字一律返回 `nil`（与 PUC-Lua 在该 locale 未安装时的行为一致）；数字格式化与解析始终用 `.` 作小数点。
-7. **`os.time` 接受宿主 `mktime` 拒绝的日期，`os.date("!%z")` 给出 UTC 偏移而非本地偏移**：PUC-Lua 用 C 库的 `mktime` 构造时间，返回 -1 时报 “time result cannot be represented in this installation”。哪些日期会被拒绝由 C 库决定：macOS 上所有归一化后落在 1900 年之前的都被拒，glibc 则接受。Go 的 `time.Date` 没有这个上限，所以本移植返回一个数值。PUC-Lua 自己判定的部分全部复现——字段进入 `struct tm` 前必须满足的边界（"field 'year' is out-of-bound"）、缺失字段与非整数字段，以及结果恰好为 -1 的情形。`%z` 则相反：加了 `!` 之后时间是 UTC，但宿主的 `gmtime` 把偏移量留在本地值上，于是 PUC-Lua 打印本地偏移，而本移植打印 `+0000`。
+7. **`os.date` 拒绝的时间范围略有出入，`os.time` 接受宿主 `mktime` 拒绝的日期，`os.date("!%z")` 给出 UTC 偏移而非本地偏移**：`struct tm` 的年份字段是 `int`，宿主 `gmtime`/`localtime` 一旦放不下就返回 NULL，PUC-Lua 的 “date result cannot be represented in this installation” 正来源于此。本移植按 `tm_year` 判同一条件，上界**完全吻合**——67768036191676799 是最后一个可表示的秒（2147485547 年，`tm_year` 恰为 `INT_MAX`），再加一秒即被拒；宿主的下界离 `INT_MIN` 还差一点，所以最负端约 2×10¹⁴ 秒的窗口内本移植给出答案而参考实现拒绝，再往外两边都不给。至于 `os.time`：PUC-Lua 用 C 库的 `mktime` 构造时间，返回 -1 时报 “time result cannot be represented in this installation”。哪些日期会被拒绝由 C 库决定：macOS 上所有归一化后落在 1900 年之前的都被拒，glibc 则接受。Go 的 `time.Date` 没有这个上限，所以本移植返回一个数值。PUC-Lua 自己判定的部分全部复现——字段进入 `struct tm` 前必须满足的边界（"field 'year' is out-of-bound"）、缺失字段与非整数字段，以及结果恰好为 -1 的情形。`%z` 则相反：加了 `!` 之后时间是 UTC，但宿主的 `gmtime` 把偏移量留在本地值上，于是 PUC-Lua 打印本地偏移，而本移植打印 `+0000`。
 8. **数学库是 Go 的，不是平台 libm**：`math.sin`、`cos`、`tan`、`exp`、`log`、`log10`、`sqrt`、`asin`、`acos`、`atan`、`atan2`、`pow`、`sinh`、`cosh`、`tanh`、`frexp`、`ldexp` 用的是 Go 的实现，与 libc 链接的那份不同。15 位有效数字一致，最后一位或两位在一部分入参上不同：在横跨 15 个数量级的 120 个入参上实测，`sqrt` 从不出现差异，`exp`、`log` 只有个位数（小于 1 ulp），`log10`、`tanh`、`asin`、`acos`、`atan` 有几十个（约 1 ulp），`sin`、`cos`、`tan` 占四分之一到一半。超过 2^53 之后需要先做参数归约，差距会拉大——`tan` 偏 6 ulp、`sin` 偏 7 ulp——因为两边都不是正确舍入，归约方式也不同。所有算术运算、`sqrt` 与两种整数转换都是精确的。NaN 按平台 C 库的写法拼写（macOS 恒为 `"nan"`，glibc 符号位为 1 时是 `"-nan"`），因为 C 的 `printf` 就是这么做的。唯一刻意绕开 Go 实现的地方是 `exp(|x|)` 溢出而 `sinh(x)`、`cosh(x)` 尚未溢出的那条带（709.78 < |x| < 710.48）：Go 的 `math.Sinh` 对 `math.sinh(710)` 返回 `inf`，而其真值是 `exp(710)/2` = 1.1e308、完全可表示，所以那里把「减半」折进了参数里。
 9. **性能**：`Instruction` 使用结构体而非位压缩 uint32，分派有额外开销；P7 阶段做基准后再决定是否改回位编码。
 

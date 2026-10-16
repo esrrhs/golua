@@ -379,6 +379,21 @@ func osDate(L *State) int {
 	} else {
 		tm = time.Unix(t, 0)
 	}
+	/* 'struct tm' keeps the year in an 'int', and the C functions
+	   answer NULL when it does not fit (loslib.c):
+	      if (stm == NULL)
+	        return luaL_error(L,
+	          "date result cannot be represented in this installation");
+	   Go has no such limit -- time.Unix answers with the year
+	   146138514283 for 2^62 -- so the cut-off has to be asked for
+	   here.  On this host the top of the range is exactly the int
+	   boundary: 67768036191676799 is the last representable second
+	   (year 2147485547, 'tm_year' INT_MAX) and one more is refused.
+	   The bottom of the range stops a little short of INT_MIN, so
+	   the two ends are not quite symmetric. */
+	if y := tm.Year(); y-1900 > math.MaxInt32 || y-1900 < math.MinInt32 {
+		return L.Error2("date result cannot be represented in this installation")
+	}
 	if s == "*t" {
 		L.CreateTable(0, 9) /* 9 = number of fields */
 		osSetAllFields(L, tm)

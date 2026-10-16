@@ -47,6 +47,7 @@ type ioStream struct {
 	buf     *bufio.Reader  // read buffer (Go files are unbuffered)
 	wbuf    *bufio.Writer  // write buffer: a FILE has one, and so must we
 	nobuf   bool           // a standard stream: see writer()
+	rderr   error          // the error flag of the FILE ('ferror')
 }
 
 // ---------------------------------------------------------------------
@@ -112,11 +113,37 @@ func (s *ioStream) writeString(str string) error {
 	return err
 }
 
+// ioErrWatch is the reader the read buffer is filled from, with the
+// error flag of the FILE beside it.  A FILE remembers that a read failed
+// and 'g_read' asks it once every format has been read (liolib.c):
+//
+//	clearerr(f);
+//	errno = 0;
+//	...
+//	if (ferror(f))
+//	  return luaL_fileresult(L, 0, NULL);
+//
+// so reading a file that was opened for writing only answers nil, "Bad
+// file descriptor", 9 -- not the empty string a readable file at its end
+// answers.  Reaching the end of the file is not an error.
+type ioErrWatch struct {
+	r    io.Reader
+	flag *error
+}
+
+func (w *ioErrWatch) Read(p []byte) (int, error) {
+	n, err := w.r.Read(p)
+	if err != nil && err != io.EOF {
+		*w.flag = err
+	}
+	return n, err
+}
+
 // bufferedReader returns the read buffer of the stream, creating it when
 // needed (in C this is the buffer of the FILE object).
 func (s *ioStream) bufferedReader() *bufio.Reader {
 	if s.buf == nil {
-		s.buf = bufio.NewReaderSize(s.reader(), ioBufSize)
+		s.buf = bufio.NewReaderSize(&ioErrWatch{r: s.reader(), flag: &s.rderr}, ioBufSize)
 	}
 	return s.buf
 }
@@ -141,7 +168,18 @@ func (s *ioStream) doClose() error {
 // waitPipe closes a popen handle and waits for the child (io.pclose).
 func (s *ioStream) waitPipe() (what string, code int, err error) {
 	if s.wr != nil {
+		/* 'pclose' closes a FILE and 'fclose' flushes what is still in
+		   its buffer, so the writing end has to be emptied before it is
+		   closed: closing it on its own drops the last bufferful, and
+		   'io.popen("wc -c", "w")' then counts nothing at all.  A
+		   flush that fails is what C reports through 'pclose', so it
+		   is answered as an error rather than as the child's status. */
+		ferr := s.flush()
 		s.wr.Close()
+		if ferr != nil {
+			s.cmd.Wait()
+			return "", 0, ferr
+		}
 	} else if s.rd != nil {
 		s.rd.Close()
 	}
@@ -689,6 +727,7 @@ func ioGRead(L *State, s *ioStream, first int) int {
 	nargs := L.GetTop() - 1
 	n := first
 	success := true
+	s.rderr = nil   /* clearerr(f) ... errno = 0 */
 	if nargs == 0 { /* no arguments? */
 		success = ioReadLine(L, s, true)
 		n = first + 1 /* to return 1 result */
@@ -727,6 +766,9 @@ func ioGRead(L *State, s *ioStream, first int) int {
 			}
 			n++
 		}
+	}
+	if s.rderr != nil { /* ferror(f) */
+		return ioFileResult(L, false, nil, s.rderr)
 	}
 	if !success {
 		L.Pop(1)    /* remove last result */
@@ -1103,7 +1145,13 @@ func (s *ioStream) seek(offset int64, op int) (int64, error) {
 func ioFSetVBuf(L *State) int {
 	modenames := []string{"no", "full", "line"}
 	s := ioToFile(L)
-	op := L.CheckOption(2, "", modenames)
+	/* C passes NULL as the default (liolib.c), and 'luaL_checkoption'
+	   asks for the argument outright when the default is NULL:
+	      const char *name = (def != NULL) ? luaL_optstring(L, arg, def)
+	                                       : luaL_checkstring(L, arg);
+	   so 'f:setvbuf()' reports "string expected, got no value" rather
+	   than "invalid option ''". */
+	op := L.CheckOption(2, L.CheckString(2), modenames)
 	L.OptInteger(3, ioBufSize)
 	s.vbuf = modenames[op]
 	if s.vbuf == "no" {
