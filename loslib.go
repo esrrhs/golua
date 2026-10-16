@@ -9,6 +9,7 @@ package lua
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"runtime"
@@ -124,6 +125,16 @@ func osGetField(L *State, key string, d, delta int) int {
 			return L.Error2("field '%s' missing in date table", key)
 		}
 		return d
+	}
+	/* The field has to survive both the subtraction of 'delta' and a
+	   trip through 'struct tm', whose members are 'int' (loslib.c):
+	      if (!(res >= 0 ? res - delta <= INT_MAX : INT_MIN + delta <= res))
+	        return luaL_error(L, "field '%s' is out-of-bound", key);
+	   'os.time{year = -2147483648}' is out of bound for that reason --
+	   'tm_year' would be -2147485548 -- while '2147483647' is not. */
+	if !(v >= 0 && v-int64(delta) <= math.MaxInt32 ||
+		v < 0 && math.MinInt32+int64(delta) <= v) {
+		return L.Error2("field '%s' is out-of-bound", key)
 	}
 	return int(v) - delta
 }
@@ -407,14 +418,30 @@ func osTime(L *State) int {
 		}
 	}
 	osSetAllFields(L, t) /* update fields with normalized values */
+	/* C refuses a result of exactly -1, the value 'mktime' answers when
+	   it cannot represent the time (loslib.c):
+	      if (t != (time_t)(l_timet)t || t == (time_t)(-1))
+	        return luaL_error(L,
+	          "time result cannot be represented in this installation"); */
+	if t.Unix() == -1 {
+		return L.Error2("time result cannot be represented in this installation")
+	}
 	L.PushInteger(t.Unix())
 	return 1
 }
 
+// osDiffTime is os.difftime (loslib.c).  The subtraction is done in
+// floating point, because that is what C's 'difftime' does: 'os.difftime'
+// hands its two 'time_t' to the C library and the difference comes back
+// as a double.  Subtracting the integers first and converting after
+// overflows instead -- 'os.difftime(0, math.mininteger)' answered
+// -9.2233720368548e+18 where PUC-Lua answers +9.2233720368548e+18, and
+// 'os.difftime(math.maxinteger, math.mininteger)' answered -1.0 instead
+// of 1.844674407371e+19.
 func osDiffTime(L *State) int {
 	t1 := L.CheckInteger(1)
 	t2 := L.CheckInteger(2)
-	L.PushNumber(float64(t1 - t2))
+	L.PushNumber(float64(t1) - float64(t2))
 	return 1
 }
 
