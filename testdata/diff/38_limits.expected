@@ -1,0 +1,156 @@
+locals	199	true|nil
+locals	200	true|nil
+locals	201	nil|"g:1: too many local variables (limit is 200) in main function near 'return'"
+locals	300	nil|"g:1: too many local variables (limit is 200) in main function near ','"
+upvals	254	nil|"g:1: too many local variables (limit is 200) in main function near ','"
+upvals	255	nil|"g:1: too many local variables (limit is 200) in main function near ','"
+upvals	256	nil|"g:1: too many local variables (limit is 200) in main function near ','"
+regs	100	true|5050
+regs	200	true|20100
+regs	250	true|31375
+regs	300	true|45150
+ctor	100	true|table: 0x7be48043c0
+ctor	250	true|table: 0x7be4804700
+ctor	300	true|table: 0x7be48046c0
+paren	10	true|1
+paren	199	nil|"C stack overflow\
+stack traceback:\
+\9[C]: in function 'load'\
+\00938_limits.lua:21: in local 'try'\
+\00938_limits.lua:58: in main chunk\
+\9[C]: in ?"
+paren	200	nil|"C stack overflow\
+stack traceback:\
+\9[C]: in function 'load'\
+\00938_limits.lua:21: in local 'try'\
+\00938_limits.lua:58: in main chunk\
+\9[C]: in ?"
+paren	201	nil|"C stack overflow\
+stack traceback:\
+\9[C]: in function 'load'\
+\00938_limits.lua:21: in local 'try'\
+\00938_limits.lua:58: in main chunk\
+\9[C]: in ?"
+table	10	true|table: 0x7be4804a00
+table	199	nil|"C stack overflow\
+stack traceback:\
+\9[C]: in function 'load'\
+\00938_limits.lua:21: in local 'try'\
+\00938_limits.lua:61: in main chunk\
+\9[C]: in ?"
+table	200	nil|"C stack overflow\
+stack traceback:\
+\9[C]: in function 'load'\
+\00938_limits.lua:21: in local 'try'\
+\00938_limits.lua:61: in main chunk\
+\9[C]: in ?"
+table	201	nil|"C stack overflow\
+stack traceback:\
+\9[C]: in function 'load'\
+\00938_limits.lua:21: in local 'try'\
+\00938_limits.lua:61: in main chunk\
+\9[C]: in ?"
+unary	10	true|nil
+unary	199	true|nil
+unary	200	true|nil
+unary	201	true|nil
+consts	1000	nil|"g:1: <eof> expected near 'return'"
+consts	5000	nil|"g:1: <eof> expected near 'return'"
+calls	3000	false|"g:1: attempt to call a nil value (global 'f')"
+args	10	true|10
+args	100	true|100
+args	1000	nil|"g:1: function or expression needs too many registers near '254'"
+0                     	true|0
+1                     	true|1
+0x10                  	true|16
+0X10                  	true|16
+0x1p4                 	true|16.0
+0x1p-2                	true|0.25
+0x.8p1                	true|1.0
+0x                    	nil|"g:1: malformed number near '0x'"
+0x1p                  	nil|"g:1: malformed number near '0x1p'"
+.5                    	true|0.5
+5.                    	true|5.0
+1e2                   	true|100.0
+1E2                   	true|100.0
+1e+2                  	true|100.0
+1e-2                  	true|0.01
+1e                    	nil|"g:1: malformed number near '1e'"
+.5e2                  	true|50.0
+5.e2                  	true|500.0
+0x7fffffffffffffff    	true|9223372036854775807
+0x8000000000000000    	true|-9223372036854775808
+0xffffffffffffffff    	true|-1
+9223372036854775807   	true|9223372036854775807
+9223372036854775808   	true|9.2233720368548e+18
+1e400                 	true|inf
+-1e400                	true|-inf
+3                     	true|3
+3.0                   	true|3.0
+0.0                   	true|0.0
+-0.0                  	true|-0.0
+1e308                 	true|1e+308
+1e309                 	true|inf
+2^63                  	true|9.2233720368548e+18
+true|1.0715086071863e+301
+true|inf
+"\n"            	true|"\
+"
+"\t"            	true|"\9"
+"\\"            	true|"\\"
+"\""            	true|"\""
+"\'"            	true|"'"
+"\a"            	true|"\7"
+"\b"            	true|"\8"
+"\f"            	true|"\12"
+"\v"            	true|"\11"
+"\r"            	true|"\13"
+"\0"            	true|"\0"
+"\1"            	true|"\1"
+"\255"          	true|"ˇ"
+"\x41"          	true|"A"
+"\x4"           	nil|"g:1: hexadecimal digit expected near '\"\\x4\"'"
+"\x"            	nil|"g:1: hexadecimal digit expected near '\"\\x\"'"
+"\u{41}"        	true|"A"
+"\u{1F600}"     	true|"üòÄ"
+"\u{}"          	nil|"g:1: hexadecimal digit expected near '\"\\u{}'"
+"\u{110000}"    	true|"ÙêÄÄ"
+"\z
+  x"        	true|"x"
+"\65"           	true|"A"
+"\256"          	nil|"g:1: decimal escape too large near '\"\\256\"'"
+"\9"            	true|"\9"
+true|"abc"	true|"a]]b"
+true|""	true|"a\
+\
+b"
+true|"leading newline"
+nil|"g:1: unfinished string near <eof>"
+nil|"g:1: unfinished string near <eof>"
+true|nil
+true|nil
+true|nil
+nil|"g:1: unexpected symbol near '#'"
+true|1
+true|1
+true|1
+true|nil
+true|"Lua 5.4"
+nil|"g:1: <name> expected near '<\\226>'"
+nil|"g:1: <eof> expected near '2'"
+nil|"g:1: <eof> expected near 'b'"
+true|5001
+nil|"C stack overflow\
+stack traceback:\
+\9[C]: in function 'load'\
+\00938_limits.lua:21: in local 'try'\
+\00938_limits.lua:128: in main chunk\
+\9[C]: in ?"
+nil|"C stack overflow\
+stack traceback:\
+\9[C]: in function 'load'\
+\00938_limits.lua:21: in local 'try'\
+\00938_limits.lua:129: in main chunk\
+\9[C]: in ?"
+true|1
+done

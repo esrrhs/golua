@@ -269,6 +269,16 @@ retry:
 }
 
 // ccall is the common part of luaD_call / luaD_callnoyield (ldo.c).
+// luaE_incCstack counts one more C level and raises when there are none
+// left (lstate.c).  Only the lower 16 bits of 'nCcalls' count levels; the
+// upper 16 only say "not yieldable" and must not look like depth.
+func luaE_incCstack(L *State) {
+	L.nCcalls++
+	if L.nCcalls&0xffff >= LUAI_MAXCCALLS {
+		luaE_checkcstack(L)
+	}
+}
+
 func ccall(L *State, funcIdx, nresults int, inc int) {
 	L.nCcalls += inc
 	if L.nCcalls&0xffff >= LUAI_MAXCCALLS {

@@ -158,15 +158,14 @@ type FuncState struct {
 // error handling
 // ---------------------------------------------------------------------
 
-// enterlevel is luaE_incCstack.  Only the lower 16 bits of 'nCcalls'
-// count C levels; the upper 16 bits only say "not yieldable", and must
-// not make the parser think the stack overflowed.
-func enterlevel(ls *LexState) {
-	ls.L.nCcalls++
-	if ls.L.nCcalls&0xffff >= LUAI_MAXCCALLS {
-		luaX_syntaxerror(ls, "chunk has too many syntax levels")
-	}
-}
+// enterlevel is C's '#define enterlevel(ls) luaE_incCstack(ls->L)'.
+//
+// Releases before 5.4.7 raised "chunk has too many syntax levels" here;
+// 5.4.9 dropped that message, so the parser now just runs out of C levels
+// like any other deeply nested C call: a chunk nested too deeply reports
+// "C stack overflow" (with the host's message handler appending a
+// traceback) instead of a syntax error.
+func enterlevel(ls *LexState) { luaE_incCstack(ls.L) }
 
 func leavelevel(ls *LexState) { ls.L.nCcalls-- }
 

@@ -155,7 +155,7 @@
 弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、`gengc`、
 `cstack`、`locals`（后两个用 `require"tracegc"` 数回收次数），做法见 §7。
 
-`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（36 个用例）与从 PUC-Lua 5.4.9
+`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（38 个用例）与从 PUC-Lua 5.4.9
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
 
