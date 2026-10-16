@@ -1744,15 +1744,17 @@ func mainfunc(ls *LexState, fs *FuncState) {
 	close_func(ls)
 }
 
-// luaY_parser compiles a chunk, returning the closure for its main function.
-func luaY_parser(L *State, src []byte, dyd *Dyndata, name string) *LClosure {
+// luaY_parser compiles a chunk, returning the closure for its main
+// function.  'fill' pulls further input when 'src' runs out; it is nil
+// when the whole chunk is already in 'src'.
+func luaY_parser(L *State, src []byte, dyd *Dyndata, name string, fill func() []byte) *LClosure {
 	var lexstate LexState
 	var funcstate FuncState
 	cl := luaF_newLclosure(L, 1) /* create main closure */
 	lexstate.h = luaH_new(L)     /* create table for scanner */
 	funcstate.f = luaF_newproto(L)
 	cl.p = funcstate.f
-	funcstate.f.source = luaS_new(L, name)
+	funcstate.f.source = luaS_newCStr(L, name) /* C measures the name with strlen */
 	lexstate.dyd = dyd
 	dyd.actvar.n = 0
 	dyd.gt.n = 0
@@ -1762,7 +1764,7 @@ func luaY_parser(L *State, src []byte, dyd *Dyndata, name string) *LClosure {
 		firstchar = int(src[0])
 		src = src[1:]
 	}
-	luaX_setinput(L, &lexstate, src, funcstate.f.source, firstchar)
+	luaX_setinput(L, &lexstate, src, funcstate.f.source, firstchar, fill)
 	mainfunc(&lexstate, &funcstate)
 	luaF_initupvals(L, cl)
 	return cl

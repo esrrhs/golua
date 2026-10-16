@@ -8,7 +8,6 @@
 package lua
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -485,38 +484,48 @@ func baseLoadFile(L *State) int {
 	return baseLoadAux(L, err, env)
 }
 
-// baseLoadReader collects the pieces returned by the reader function
-// (the C code feeds them to lua_load through generic_reader).
+// baseLoadReader is generic_reader: it calls the reader function once
+// and hands back what it returned, or nil when the chunk is over.
 //
-// In C the reader is called from inside lua_load, which is protected, so
-// an error raised by the reader (or the "must return a string" check)
-// becomes the status of lua_load and 'load' returns nil plus the message.
-// Here the call is protected explicitly to get the same behaviour.
-func baseLoadReader(L *State) ([]byte, error) {
-	var sb strings.Builder
-	for {
+// In C the reader is called from inside the parser, which is protected,
+// so an error raised by the reader -- or by the "must return a string"
+// check -- becomes the status of 'lua_load' and 'load' returns nil plus
+// the message.  Raising the error here does the same: the parser runs
+// inside 'rawRunProtected', which turns it into the status of the load.
+//
+// The function is called through 'LoadStream', which pulls the pieces
+// one at a time as the lexer needs them; that is what lets a chunk that
+// fails to parse stop the reader instead of draining it.
+func baseLoadReader(L *State) func() []byte {
+	done := false /* the reader said it was over: do not ask again */
+	return func() []byte {
+		if done {
+			return nil
+		}
 		L.PushValue(1) /* get function */
 		if L.PCall(0, 1, 0) != LUA_OK {
-			msg, _ := L.ToString(-1)
-			L.Pop(1)
-			return nil, fmt.Errorf("%s", msg)
+			L.Error()  /* the reader's own error, with its position */
+			return nil /* not reached */
 		}
 		if L.IsNil(-1) {
 			L.Pop(1) /* pop result */
-			break
+			done = true
+			return nil /* end of chunk */
 		}
 		if !L.IsString(-1) {
 			L.Pop(1)
-			return nil, fmt.Errorf("reader function must return a string")
+			L.PushString("reader function must return a string")
+			L.Error()
+			return nil /* not reached */
 		}
 		s, _ := L.ToString(-1)
 		L.Pop(1)
 		if s == "" { /* empty string ends the chunk */
-			break
+			done = true
+			return nil
 		}
-		sb.WriteString(s)
+		return []byte(s)
 	}
-	return []byte(sb.String()), nil
 }
 
 func baseLoad(L *State) int {
@@ -539,14 +548,34 @@ func baseLoad(L *State) int {
 	chunkname := L.OptString(2, "=(load)")
 	L.CheckType(1, LUA_TFUNCTION)
 	L.SetTop(5) /* create reserved slot */
-	data, err := baseLoadReader(L)
-	if err != nil {
-		return baseLoadAux(L, err, env)
+	more := baseLoadReader(L)
+	/* f_parser reads the first character *inside* the protected call
+	   (ldo.c), so an error raised by the very first call to the reader
+	   is the status of the load; it must not escape 'load' itself. */
+	var first []byte
+	top := L.top
+	if status := L.rawRunProtected(func() { first = more() }); status != LUA_OK {
+		msg := ""
+		if L.top > top {
+			msg = valueToStr(&L.stack[L.top-1])
+		}
+		L.top = top
+		return baseLoadAux(L, &LuaError{Status: status, Message: msg}, env)
 	}
-	if len(data) > 0 && data[0] == dmpSignature[0] {
+	if len(first) > 0 && first[0] == dmpSignature[0] {
+		/* a precompiled chunk: undump wants the whole thing, so the
+		   rest of it is collected before it starts */
+		data := append([]byte{}, first...)
+		for {
+			piece := more()
+			if piece == nil {
+				break
+			}
+			data = append(data, piece...)
+		}
 		return baseLoadAux(L, luaU_loadBinary(L, data, chunkname, mode), env)
 	}
-	return baseLoadAux(L, L.LoadBytesMode(data, chunkname, mode), env)
+	return baseLoadAux(L, L.LoadStream(first, more, chunkname, mode), env)
 }
 
 func baseDoFile(L *State) int {

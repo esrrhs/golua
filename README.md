@@ -176,7 +176,7 @@ Weak tables and `__gc` are supported and pass their own tests —
 two of which count collections with `require"tracegc"` — see §6 for how
 they are done.
 
-The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (28
+The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (30
 cases) is compared byte for byte against golden files captured from
 PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
 interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the

@@ -13,6 +13,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -69,6 +70,29 @@ func tIsDST(t time.Time) bool {
 		return offset == janOffset
 	}
 	return offset == julOffset
+}
+
+// tHasDSTRules reports whether the location of t ever keeps daylight-
+// saving time.  mktime ignores 'tm_isdst' in a zone that has no such
+// rule, and honours it in one that has, even in a year the rule does not
+// touch -- so the answer is not "is t in DST" but "does this zone know
+// about DST at all".  The scan is what the timezone database gives us:
+// Go exposes no list of transitions, so the years are sampled.
+var dstRules sync.Map /* *time.Location -> bool */
+
+func tHasDSTRules(t time.Time) bool {
+	loc := t.Location()
+	if v, ok := dstRules.Load(loc); ok {
+		return v.(bool)
+	}
+	has := false
+	for year := 1900; year <= 2100 && !has; year++ {
+		_, jan := time.Date(year, time.January, 1, 0, 0, 0, 0, loc).Zone()
+		_, jul := time.Date(year, time.July, 1, 0, 0, 0, 0, loc).Zone()
+		has = jan != jul
+	}
+	dstRules.Store(loc, has)
+	return has
 }
 
 // osGetBoolField reads a boolean field of the table at the top; it
@@ -359,8 +383,29 @@ func osTime(L *State) int {
 	hour := osGetField(L, "hour", 12, 0)
 	min := osGetField(L, "min", 0, 0)
 	sec := osGetField(L, "sec", 0, 0)
-	osGetBoolField(L, "isdst") /* kept for compatibility: Go decides DST */
+	isdst := osGetBoolField(L, "isdst") /* -1: work it out, 0: no, 1: yes */
 	t := time.Date(year, time.Month(month), day, hour, min, sec, 0, time.Local)
+	/* mktime reads 'tm_isdst' as an instruction rather than as a
+	   question: 1 means "read the wall clock as daylight-saving time",
+	   0 means "read it as standard time", and -1 (the field absent)
+	   means "work it out".  When the instruction disagrees with the
+	   zone, the absolute time moves by the daylight-saving step while
+	   the wall clock stays where it was -- that is why a winter
+	   'isdst = true' in New York answers with 11 o'clock and not 12,
+	   and why the fields written back into the table say 11 too.  Every
+	   zone in general use steps by an hour.  A zone with no
+	   daylight-saving rule at all has nothing to disagree about and
+	   ignores the field -- which is why 'isdst = true' changes nothing
+	   in UTC but shifts by an hour in Shanghai, whose rules still hold
+	   the daylight-saving time China kept in the late 1980s. */
+	if isdst >= 0 && tHasDSTRules(t) {
+		switch {
+		case isdst > 0 && !tIsDST(t):
+			t = t.Add(-time.Hour)
+		case isdst == 0 && tIsDST(t):
+			t = t.Add(time.Hour)
+		}
+	}
 	osSetAllFields(L, t) /* update fields with normalized values */
 	L.PushInteger(t.Unix())
 	return 1

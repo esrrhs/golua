@@ -113,22 +113,51 @@ type LexState struct {
 	L          *State
 	src        []byte // input stream (replaces ZIO)
 	pos        int
-	buff       []byte // buffer for tokens (replaces Mbuffer)
-	h          *Table // to avoid collection/reuse strings
-	dyd        *Dyndata
-	source     *TString // current source name
-	envn       *TString // environment variable name
+	// fill pulls the next piece of the stream; it is what C's ZIO does
+	// with a reader function (lzio.c).  nil means the whole chunk is
+	// already in 'src'.  The pieces are asked for one at a time and only
+	// when the lexer runs out, so a chunk that fails to parse stops the
+	// reader instead of draining it.
+	fill   func() []byte
+	buff   []byte // buffer for tokens (replaces Mbuffer)
+	h      *Table // to avoid collection/reuse strings
+	dyd    *Dyndata
+	source *TString // current source name
+	envn   *TString // environment variable name
 }
 
 // --- input stream (lzio.h) ---
 
 // next reads the next character from the input stream.
 func (ls *LexState) next() {
+	if ls.pos >= len(ls.src) {
+		ls.pull()
+	}
 	if ls.pos < len(ls.src) {
 		ls.current = int(ls.src[ls.pos])
 		ls.pos++
 	} else {
 		ls.current = EOZ
+	}
+}
+
+// pull asks the reader for the next piece of the stream, dropping what
+// has been consumed already (lzio.c's luaZ_fill).  An empty piece, or a
+// nil one, is the end of the stream.
+func (ls *LexState) pull() {
+	if ls.fill == nil {
+		return
+	}
+	piece := ls.fill()
+	if len(piece) == 0 {
+		ls.fill = nil /* end of stream */
+		return
+	}
+	if ls.pos > 0 {
+		ls.src = append(ls.src[ls.pos:], piece...)
+		ls.pos = 0
+	} else {
+		ls.src = append(ls.src, piece...)
 	}
 }
 
@@ -284,13 +313,14 @@ func (ls *LexState) inclinenumber() {
 }
 
 // luaX_setinput initializes the lexer for a new chunk (llex.c).
-func luaX_setinput(L *State, ls *LexState, src []byte, source *TString, firstchar int) {
+func luaX_setinput(L *State, ls *LexState, src []byte, source *TString, firstchar int, fill func() []byte) {
 	ls.t.token = 0
 	ls.L = L
 	ls.current = firstchar
 	ls.lookahead.token = TK_EOS /* no look-ahead token */
 	ls.src = src
 	ls.pos = 0
+	ls.fill = fill
 	ls.fs = nil
 	ls.linenumber = 1
 	ls.lastline = 1

@@ -903,12 +903,25 @@ func (L *State) LoadBytesMode(data []byte, chunkname, mode string) error {
 		   the parser (ldo.c f_parser) */
 		return luaU_loadBinary(L, data, chunkname, mode)
 	}
+	return L.LoadStream(data, nil, chunkname, mode)
+}
+
+// LoadStream compiles a chunk that arrives in pieces, the way 'lua_load'
+// reads a reader function through a ZIO (lzio.c): 'first' is what has
+// been read so far and 'more' returns the next piece, or nil at the end
+// of the stream.
+//
+// The pieces are pulled only as the parser needs them -- which is what
+// makes 'load' answer with a syntax error, instead of reading for ever,
+// when the function never returns nil: C's lexer reaches the malformed
+// token long before the reader runs dry.
+func (L *State) LoadStream(first []byte, more func() []byte, chunkname, mode string) error {
 	var dyd Dyndata
 	oldtop := L.top
 	incnny(L) /* cannot yield during parsing */
 	status := L.rawRunProtected(func() {
 		checkLoadMode(L, mode, "text")
-		cl := luaY_parser(L, data, &dyd, chunkname)
+		cl := luaY_parser(L, first, &dyd, chunkname, more)
 		if cl.nupvalues >= 1 {
 			/* set the globals table as the first upvalue (the _ENV) */
 			var gt Value

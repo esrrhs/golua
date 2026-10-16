@@ -8,7 +8,10 @@
 // unbounded growth that a strong map would cause.
 package lua
 
-import "weak"
+import (
+	"strings"
+	"weak"
+)
 
 const (
 	LUAI_MAXSHORTLEN = 40
@@ -108,6 +111,18 @@ func luaS_newlstr(L *State, s string) *TString {
 
 // luaS_new is luaS_newlstr for a Go string.
 func luaS_new(L *State, s string) *TString { return luaS_newlstr(L, s) }
+
+// luaS_newCStr is what C does when it hands a 'const char *' to
+// luaS_new: the string stops at the first '\0' (lstring.c's luaS_new
+// measures the name with strlen).  A chunk name reaches the parser that
+// way, so 'load("return 1", "=a\0b")' reports its errors as "a:1: ..."
+// and not "a\0b:1: ...".
+func luaS_newCStr(L *State, s string) *TString {
+	if i := strings.IndexByte(s, 0); i >= 0 {
+		s = s[:i]
+	}
+	return luaS_newlstr(L, s)
+}
 
 // luaS_init initialises the string table (lstring.c).
 func luaS_init(L *State) {
