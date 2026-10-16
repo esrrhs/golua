@@ -1,0 +1,113 @@
+== utf8.char ==
+"ABC"
+""
+"\0"
+"\127"
+"Â€"
+"ß¿"
+"à €"
+"ï¿¿"
+"ğ€€"
+"ô¿¿"
+true|"ô€€"
+false|"bad argument #1 to 'utf8.char' (value out of range)"
+false|"bad argument #1 to 'utf8.char' (number has no integer representation)"
+false|"bad argument #1 to 'utf8.char' (number expected, got string)"
+true|"ı¿¿¿¿¿"
+14
+== utf8.codepoint ==
+65
+66
+66|67
+67
+65|66|67
+false|"bad argument #2 to 'utf8.codepoint' (out of bounds)"
+false|"bad argument #3 to 'utf8.codepoint' (out of bounds)"
+false|"bad argument #3 to 'utf8.codepoint' (out of bounds)"
+true
+false|"invalid UTF-8 code"
+false|"bad argument #3 to 'utf8.codepoint' (out of bounds)"
+false|"bad argument #1 to 'utf8.codepoint' (string expected, got no value)"
+true|52
+128512
+== utf8.len ==
+3
+3
+0
+2
+2
+1
+nil|1
+nil|1
+nil|1
+true|2
+false|"bad argument #2 to 'utf8.len' (initial position out of bounds)"
+false|"bad argument #2 to 'utf8.len' (initial position out of bounds)"
+true|2
+== utf8.offset ==
+1
+2
+6
+7
+6
+6
+2
+true|nil
+false|"bad argument #3 to 'utf8.offset' (position out of bounds)"
+true|1
+true|1
+false|"bad argument #2 to 'utf8.offset' (number expected, got no value)"
+false|"bad argument #2 to 'utf8.offset' (number expected, got string)"
+== utf8.codes ==
+1:65 2:128512 6:67
+[]
+false|"44_utf8gc.lua:97: invalid UTF-8 code"
+false|"bad argument #1 to 'utf8.codes' (string expected, got no value)"
+true|function: 0x1040c5d04|"42"|0
+1|65
+
+
+== weak tables ==
+true
+true
+true
+true
+nil
+false
+true|table: 0x7552c08c80
+true|table: 0x7552c08680
+"table"
+== __gc ==
+true
+2
+true|table: 0x7552c085c0
+== to-be-closed ==
+body,c
+false	44_utf8gc.lua:171: boom	c
+false	44_utf8gc.lua:180: boom	b,a
+true|function: 0x7552c049c0
+true|function: 0x7552c04a50
+== coroutine state machine ==
+"suspended"
+true|true|1
+"dead"
+true|false|"cannot resume dead coroutine"
+"dead"
+true|true|1
+"suspended"
+true|false|"44_utf8gc.lua:197: x"
+"dead"
+true
+"dead"
+true|true
+false
+thread: 0x104715988|true
+true
+true
+false|"bad argument #1 to 'coroutine.close' (thread expected, got no value)"
+false|"bad argument #1 to 'coroutine.close' (thread expected, got number)"
+false|"bad argument #1 to 'coroutine.status' (thread expected, got number)"
+false|"bad argument #1 to 'coroutine.create' (function expected, got number)"
+1
+true
+done

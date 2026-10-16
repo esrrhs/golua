@@ -1,0 +1,42 @@
+== repeat sees its own body ==
+4
+3
+true|nil
+== numeric for ==
+1,2,3
+3,2,1
+[]
+0.0,0.5,1.0
+true|function: 0x7b3ac04930
+true|function: 0x7b3ac049c0
+true|function: 0x7b3ac04a50
+true|function: 0x7b3ac04ae0
+true|function: 0x7b3ac04b70
+true|function: 0x7b3ac04c00
+true|function: 0x7b3ac04c90
+true|function: 0x7b3ac04870
+"3,3,2,1,0,0,0"
+55
+== generic for ==
+a1,b2
+1:10,2:20,3:30
+true|function: 0x7b3ac04a80
+true|function: 0x7b3ac04b10
+0
+== goto and labels ==
+"1,2,4,5"
+true|nil|"[string \"goto nowhere\"]:1: no visible label 'nowhere' for <goto> at line 1"
+true|nil|"[string \"::x:: ::x::\"]:1: label 'x' already defined on line 1"
+true|function: 0x7b3ac04d80
+true|function: 0x7b3ac04e10
+true|nil|"[string \"::x:: do ::x:: end\"]:1: label 'x' already defined on line 1"
+true|function: 0x7b3ac04ed0
+4
+== closures in loops ==
+1|2|3
+"a"|"b"
+1|2|3
+== local function ==
+120
+false|"[string \"local fact = function(n) if n <= 1 then retur...\"]:1: attempt to call a nil value (global 'fact')"
+done

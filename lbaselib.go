@@ -467,7 +467,10 @@ func baseLoadFile(L *State) int {
 	   try to open a file with no name, and fails. */
 	stdin := L.IsNoneOrNil(1)
 	fname := L.OptString(1, "")
-	L.OptString(2, "") /* mode (not used by this port) */
+	/* 'luaL_optstring(L, 2, NULL)': C gives 'lua_load' a NULL mode when
+	   the argument is absent, and 'checkmode' does nothing then.  "bt"
+	   allows the same two kinds of chunk, so it stands in for NULL. */
+	mode := L.OptString(2, "bt")
 	env := 0
 	if !L.IsNone(3) { /* 'env' index or 0 if no 'env' */
 		env = 3
@@ -476,10 +479,10 @@ func baseLoadFile(L *State) int {
 	if stdin { /* no file name: read the standard input */
 		var data []byte
 		if data, err = baseReadStdin(); err == nil {
-			err = L.LoadBytes(data, "=stdin")
+			err = L.LoadBytesMode(data, "=stdin", mode)
 		}
 	} else {
-		err = L.LoadFile(fname)
+		err = L.LoadFileMode(fname, mode)
 	}
 	return baseLoadAux(L, err, env)
 }

@@ -949,8 +949,21 @@ func (L *State) LoadString(s, chunkname string) error {
 	return L.LoadBytes([]byte(s), chunkname)
 }
 
-// LoadFile compiles a Lua file (luaL_loadfilex).
+// LoadFile compiles a Lua file (luaL_loadfile).
 func (L *State) LoadFile(path string) error {
+	return L.LoadFileMode(path, "bt")
+}
+
+// LoadFileMode compiles a Lua file with an explicit mode, the way
+// 'luaL_loadfilex' hands its 'mode' argument to 'lua_load'.  Opening a
+// file is not the same as compiling it: 'loadfile(name, "b")' on a text
+// file answers "attempt to load a text chunk (mode is 'b')" just as
+// 'load' would, and 'loadfile(name, "t")' on a precompiled chunk answers
+// the binary form of that message.
+//
+// 'bt', the mode 'LoadFile' uses, is what C's NULL 'mode' amounts to:
+// 'checkmode' is skipped for NULL, and "bt" allows both kinds of chunk.
+func (L *State) LoadFileMode(path, mode string) error {
 	/* C opens the file and then reads from it, and the two can fail
 	   differently -- 'fopen' on a directory succeeds on some systems
 	   and it is the read that reports "Is a directory". */
@@ -966,7 +979,7 @@ func (L *State) LoadFile(path string) error {
 	/* 'skipcomment' is part of loading a *file*, not of loading a chunk:
 	   'load("#")' is a syntax error, while a file starting with
 	   "#!/usr/bin/lua" is a valid script. */
-	return L.LoadBytes(skipFileComment(data), "@"+path)
+	return L.LoadBytesMode(skipFileComment(data), "@"+path, mode)
 }
 
 // skipFileComment drops a leading UTF-8 BOM and, when what follows starts
