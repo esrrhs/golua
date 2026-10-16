@@ -816,7 +816,7 @@ func dbTraceback(L *State) int {
 		if L != L1 {
 			level = 0
 		}
-		L.Traceback(L1, msg, int(L.OptInteger(arg+2, level)))
+		L.Traceback(L1, msg, ok, int(L.OptInteger(arg+2, level)))
 	} else {
 		L.PushValue(arg + 1) /* return it untouched */
 	}

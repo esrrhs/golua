@@ -1340,11 +1340,32 @@ func strToLString(L *State, idx int) string {
 	return s
 }
 
+// strFormFlagsWidth takes a format item ('%-10.3f') apart into its flags
+// and its width, dropping the precision: a non-finite value is printed as
+// a word, so neither the precision nor the '0' flag applies to it.
+func strFormFlagsWidth(form string) (flags, width string) {
+	end := len(form) - 1 /* the conversion specifier */
+	if j := strings.IndexByte(form, '.'); j >= 0 && j < end {
+		end = j
+	}
+	i := 1 /* the flags come first, then the width */
+	for i < end && strings.IndexByte(strFmtFlagsF, form[i]) >= 0 {
+		if form[i] != '0' { /* "inf" is padded with blanks, not zeroes */
+			flags += string(form[i])
+		}
+		i++
+	}
+	return flags, form[i:end]
+}
+
 // strFormatFloat applies a floating-point conversion of 'form'
 // ('f', 'e', 'E', 'g' or 'G') to 'n'.  C's default precision (6) is
 // made explicit for Go.
 func strFormatFloat(form string, n float64) string {
 	if math.IsNaN(n) || math.IsInf(n, 0) {
+		/* C prints a non-finite value as a word: neither the precision
+		   nor the '0' flag applies to it, so "%.2f" of inf is "inf"
+		   (and not "in") and "%010.2f" of it is "       inf". */
 		s := "nan"
 		switch {
 		case math.IsInf(n, 1):
@@ -1354,7 +1375,20 @@ func strFormatFloat(form string, n float64) string {
 		case math.Signbit(n):
 			s = "-nan"
 		}
-		return fmt.Sprintf(form[:len(form)-1]+"s", s)
+		/* a NaN never takes the '+' or ' ' flag (only its own sign bit) */
+		if !strings.HasPrefix(s, "-") && !math.IsNaN(n) {
+			switch {
+			case strings.IndexByte(form, '+') >= 0:
+				s = "+" + s
+			case strings.IndexByte(form, ' ') >= 0:
+				s = " " + s
+			}
+		}
+		if form[len(form)-1] == 'E' || form[len(form)-1] == 'G' {
+			s = strings.ToUpper(s) /* C spells it in the case of the specifier */
+		}
+		flags, width := strFormFlagsWidth(form)
+		return fmt.Sprintf("%"+flags+width+"s", s)
 	}
 	f := form
 	if !strings.Contains(form, ".") {
@@ -1405,7 +1439,13 @@ func strFormat(L *State) int {
 			b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", uint64(L.CheckInteger(arg))))
 		case 'o', 'x', 'X':
 			strCheckFormat(L, form, strFmtFlagsX, true)
-			b.AddString(fmt.Sprintf(form, uint64(L.CheckInteger(arg))))
+			n := uint64(L.CheckInteger(arg))
+			f := form
+			if n == 0 && spec != 'o' && strings.IndexByte(form, '#') >= 0 {
+				/* C's '#' adds the "0x" prefix to a non-zero value only */
+				f = strings.Replace(form, "#", "", 1)
+			}
+			b.AddString(fmt.Sprintf(f, n))
 		case 'a', 'A':
 			strCheckFormat(L, form, strFmtFlagsF, true)
 			b.AddString(strNumber2StrX(L, form, L.CheckNumber(arg)))

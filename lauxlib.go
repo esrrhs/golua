@@ -376,8 +376,12 @@ func (b *Buffer) AddSize(n int) {}
 // ---------------------------------------------------------------------
 
 // Traceback pushes a traceback of the current stack (luaL_traceback).
-func (L *State) Traceback(L1 *State, msg string, level int) {
-	L.PushString(L.stackTraceback(L1, msg, level))
+// 'hasMsg' is C's 'msg != NULL': when a message is given it is written
+// first, followed by a newline -- and that happens even for the empty
+// string, which is why 'debug.traceback("", 1)' starts with a newline
+// while 'debug.traceback(nil, 1)' does not.
+func (L *State) Traceback(L1 *State, msg string, hasMsg bool, level int) {
+	L.PushString(L.stackTraceback(L1, msg, hasMsg, level))
 }
 
 // tracebackLevels1 / tracebackLevels2 are LEVELS1 / LEVELS2 of lauxlib.c.
@@ -476,14 +480,14 @@ func (L *State) lastLevel() int {
 
 // stackTraceback is 'luaL_traceback' (lauxlib.c). 'L' is the state that
 // receives the message, 'L1' the one whose stack is walked.
-func (L *State) stackTraceback(L1 *State, msg string, level int) string {
+func (L *State) stackTraceback(L1 *State, msg string, hasMsg bool, level int) string {
 	var sb strings.Builder
 	last := L1.lastLevel()
 	limit2show := -1
 	if last-level > tracebackLevels1+tracebackLevels2 {
 		limit2show = tracebackLevels1
 	}
-	if msg != "" {
+	if hasMsg { /* 'if (msg)' in C: a NULL pointer, not an empty string */
 		sb.WriteString(msg)
 		sb.WriteByte('\n')
 	}

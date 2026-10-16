@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"runtime"
@@ -127,22 +128,53 @@ func ioErrno(err error) int64 {
 	return 0
 }
 
+// ioCapitalise raises the first letter of a message: Go spells a system
+// error the way 'strerror' does, only in lower case ("no such file or
+// directory" instead of "No such file or directory").
+func ioCapitalise(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// ioStrError renders an error of a file operation the way C does, with
+// 'strerror(errno)'.  Go wraps the system error in a *fs.PathError whose
+// text reads "open /x: no such file or directory": only the errno part
+// is what C reports, and it is what must reach the Lua program.
+func ioStrError(err error) string {
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		err = pe.Err
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return "No such file or directory"
+	case errors.Is(err, fs.ErrPermission):
+		return "Permission denied"
+	case errors.Is(err, fs.ErrExist):
+		return "File exists"
+	}
+	return ioCapitalise(err.Error())
+}
+
 // ioFileResult is luaL_fileresult: true, or nil + message + errno.
 func ioFileResult(L *State, stat bool, fname string, err error) int {
 	if stat {
 		L.PushBoolean(true)
 		return 1
 	}
-	msg := "(no extra info)"
-	if err != nil {
-		msg = err.Error()
+	en := ioErrno(err)
+	msg := "(no extra info)" /* C: 'en != 0 ? strerror(en) : ...' */
+	if en != 0 {
+		msg = ioStrError(err)
 	}
 	if fname != "" {
 		msg = fname + ": " + msg
 	}
 	L.PushNil()
 	L.PushString(msg)
-	L.PushInteger(ioErrno(err))
+	L.PushInteger(en)
 	return 3
 }
 
@@ -324,7 +356,7 @@ func ioOpenCheck(L *State, fname, mode string) {
 	s := ioNewFile(L)
 	f, err := ioOpenFile(fname, mode)
 	if err != nil {
-		L.Error2("cannot open file '%s' (%s)", fname, err)
+		L.Error2("cannot open file '%s' (%s)", fname, ioStrError(err))
 	}
 	s.f = f
 }
@@ -901,13 +933,35 @@ func ioFSeek(L *State) int {
 	if s.f == nil {
 		return ioFileResult(L, false, "", errors.New("not a seekable file"))
 	}
-	pos, err := s.f.Seek(offset, []int{io.SeekStart, io.SeekCurrent, io.SeekEnd}[op])
-	s.buf = nil /* the read buffer is no longer valid */
+	pos, err := s.seek(offset, op)
 	if err != nil {
 		return ioFileResult(L, false, "", err)
 	}
 	L.PushInteger(pos)
 	return 1
+}
+
+// seek moves the stream the way C's 'fseek' does and returns the new
+// position the way 'ftell' does.  The base of a "cur" seek is the
+// *logical* position, which stops short of the descriptor's: bytes that
+// a 'read' already pulled into the buffer but that the caller has not
+// consumed yet are not part of it, while the descriptor has moved past
+// them.  Any seek drops the buffer, as 'fseek' does.
+func (s *ioStream) seek(offset int64, op int) (int64, error) {
+	whence := []int{io.SeekStart, io.SeekCurrent, io.SeekEnd}[op]
+	if s.buf != nil {
+		buffered := int64(s.buf.Buffered())
+		s.buf = nil /* 'fseek' discards whatever has been buffered */
+		if op == 1 {
+			pos, err := s.f.Seek(0, io.SeekCurrent)
+			if err != nil {
+				return 0, err
+			}
+			offset += pos - buffered
+			whence = io.SeekStart
+		}
+	}
+	return s.f.Seek(offset, whence)
 }
 
 func ioFSetVBuf(L *State) int {

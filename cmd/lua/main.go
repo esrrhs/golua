@@ -469,8 +469,9 @@ func msghandler(L *lua.State) int {
 			return 1 /* that is the message */
 		}
 		msg = fmt.Sprintf("(error object is a %s value)", L.TypeName(1))
+		ok = true
 	}
-	L.Traceback(L, msg, 1)
+	L.Traceback(L, msg, ok, 1)
 	return 1
 }
 
