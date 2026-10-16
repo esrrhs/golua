@@ -1,0 +1,79 @@
+6	8	2
+== width ==
+"%s"  	"[你好]"
+"%1s" 	"[你好]"
+"%2s" 	"[你好]"
+"%3s" 	"[你好]"
+"%5s" 	"[你好]"
+"%6s" 	"[你好]"
+"%7s" 	"[ 你好]"
+"%10s"	"[    你好]"
+"%-1s"	"[你好]"
+"%-6s"	"[你好]"
+"%-10s"	"[你好    ]"
+"%.s" 	"[]"
+"%99s"	"[                                                                                             你好]"
+== precision ==
+"%.s"   	"[]"
+"%.1s"  	"[�]"
+"%.2s"  	"[�]"
+"%.3s"  	"[你]"
+"%.4s"  	"[你�]"
+"%.5s"  	"[你�]"
+"%.6s"  	"[你好]"
+"%.7s"  	"[你好]"
+"%.0s"  	"[]"
+"%6.3s" 	"[   你]"
+"%-6.3s"	"[你   ]"
+"%3.1s" 	"[  �]"
+"%10.2s"	"[        �]"
+== four bytes per character ==
+"%s"  	"[😀😁]"
+"%4s" 	"[😀😁]"
+"%8s" 	"[😀😁]"
+"%-8s"	"[😀😁]"
+"%.4s"	"[😀]"
+"%.1s"	"[�]"
+"%8.4s"	"[    😀]"
+== bytes that are not UTF-8 ==
+"%s"  	"[��]"
+"%4s" 	"[  ��]"
+"%-4s"	"[��  ]"
+"%.1s"	"[�]"
+"%.2s"	"[��]"
+"%4.1s"	"[   �]"
+== ASCII is the same either way ==
+"%s"  	"[abc]"
+"%5s" 	"[  abc]"
+"%-5s"	"[abc  ]"
+"%.2s"	"[ab]"
+"%5.2s"	"[   ab]"
+"%-5.2s"	"[ab   ]"
+"%5s" 	"[     ]"
+"%-5s"	"[     ]"
+"%.2s"	"[]"
+== the length is what decides, not the characters ==
+"a"	8	8	1	"       a"
+"ab"	8	8	2	"      ab"
+"abc"	8	8	2	"     abc"
+"é"	8	8	2	"      é"
+"éè"	8	8	2	"    éè"
+"中文字"	9	9	2	"中文字"
+== a string too long to be formatted ==
+100	120
+10	10
+10	"你�"
+120
+== zeros and the other specifiers ==
+false|"bad argument #2 to 'string.format' (string contains zeros)"
+false|"bad argument #2 to 'string.format' (string contains zeros)"
+"[   42]"
+"[42   ]"
+"[ 3.14]"
+"[    a1]"
+"[ab你好]"
+lua: 54_fmtwidth.lua:85: invalid conversion '%1$' to 'format'
+stack traceback:
+	[C]: in function 'string.format'
+	54_fmtwidth.lua:85: in main chunk
+	[C]: in ?

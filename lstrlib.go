@@ -1025,6 +1025,53 @@ func strCheckFormat(L *State, form, flags string, precision bool) {
 	}
 }
 
+// strFormatS formats '%s' with a width and a precision, the way C does.
+//
+// C counts both of them in *bytes* (lstrlib.c str_format hands the
+// string to its own formatter, which walks 'strlen' bytes), while Go's
+// fmt counts runes.  The two disagree for every string that is not
+// ASCII: 'string.format("%6s", "\u{4f60}\u{597d}")' is six bytes and two
+// characters, so C pads it with nothing and Go padded it with four
+// spaces, and 'string.format("%.3s", ...)' is the first three bytes --
+// one character -- where Go took the first three characters.
+//
+// 'form' is exactly what strCheckFormat has already accepted: '%', then
+// '-' flags, then at most two digits of width, then '.' and at most two
+// digits of precision, then the conversion character.
+func strFormatS(form, s string) string {
+	i := 1
+	left := false
+	for i < len(form) && form[i] == '-' {
+		left = true
+		i++
+	}
+	width := 0
+	for i < len(form)-1 && form[i] >= '0' && form[i] <= '9' {
+		width = width*10 + int(form[i]-'0')
+		i++
+	}
+	prec := -1
+	if i < len(form)-1 && form[i] == '.' {
+		i++
+		prec = 0 /* '%.s' is a precision of zero, not "no precision" */
+		for i < len(form)-1 && form[i] >= '0' && form[i] <= '9' {
+			prec = prec*10 + int(form[i]-'0')
+			i++
+		}
+	}
+	if prec >= 0 && len(s) > prec {
+		s = s[:prec] /* precision is a byte count */
+	}
+	if pad := width - len(s); pad > 0 {
+		spaces := strings.Repeat(" ", pad)
+		if left {
+			return s + spaces
+		}
+		return spaces + s
+	}
+	return s
+}
+
 // strGetFormat gets a conversion specification starting at 'i' (just
 // after the '%'); it returns the specification ('%...') and the index
 // of its last character (getformat).
@@ -1479,7 +1526,7 @@ func strFormat(L *State) int {
 					/* no precision and string is too long to be formatted */
 					b.AddValue() /* keep entire string */
 				} else { /* format the string */
-					b.AddString(fmt.Sprintf(form, s))
+					b.AddString(strFormatS(form, s))
 					L.Pop(1) /* remove result from 'strToLString' */
 				}
 			}
