@@ -159,18 +159,24 @@ and compared. **`all.lua` is driven file by file**, because it needs the C
 extension libraries pre-compiled; `main.lua` spawns the interpreter as a
 subprocess and is therefore included.
 
-**22 of 33 files produce byte-identical output.** The remaining 11 differ
-only for reasons that follow from the design (no GC) or from the test
-environment:
+**25 of the 31 comparable files produce byte-identical output.**
+(`all.lua` needs the C extension libraries pre-compiled and `heavy.lua`
+times out on both sides, so neither is part of the count.) The remaining
+6 differ only for reasons that follow from the design — there is no
+collector of our own — or from the test environment:
 
 | File | Why it differs |
 |---|---|
-| `gc`, `gengc`, `all`, `closure`, `db`, `coroutine`, `cstack`, `locals` | rely on `__gc`, `collectgarbage()` accounting or weak tables (e.g. `tracegc.lua` writes a `.` per collected object) |
-| `attrib` | needs the pre-compiled C extension (`package.loadlib`) |
+| `gc`, `gengc` | `collectgarbage("count")` accounting: PUC-Lua answers with what its own allocator handed out, here it is the Go heap — the tests assert on the exact number |
+| `cstack` | counts C-stack levels per collector step; the count depends on when Go happens to collect |
+| `locals` | `require"tracegc"` prints a `.` per collected object |
 | `literals` | `os.setlocale("pt_BR")` is unavailable here (see §6), so the decimal-point tests are skipped |
-| `heavy` | memory-throughput test: both sides time out |
+| `attrib` | needs the pre-compiled C extension (`package.loadlib`) |
 
-The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (21
+Weak tables and `__gc` are supported and pass their own tests
+(`closure`, `db`, `coroutine`); see §6 for how they are done.
+
+The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (22
 cases) is compared byte for byte against golden files captured from
 PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
 interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the
@@ -205,8 +211,8 @@ a channel round trip rather than a swap of stack pointers.
 
 1. **Binary chunks are not compatible** — `string.dump`/`load` use this implementation's own format.
 2. **No C dynamic library loading** — `package.cpath` / `package.loadlib` exist but report unsupported; port C extensions to Go modules (`RegisterModule` / `package.preload`).
-3. **`__gc` timing is not deterministic** — backed by `runtime.SetFinalizer`. `<close>` and `Close()` paths are deterministic.
-4. **String keys in weak tables are never weakened** — Go cannot weaken `string`.
+3. **The collector is Go's, so its observable timing is not PUC-Lua's** — `__gc` runs when Go finds the object unreachable, which is later than PUC-Lua's step would have run it, and `collectgarbage("count")` reports the Go heap rather than PUC-Lua's own allocator. `<close>` and `Close()` are deterministic, as are weak tables: a sweep removes an entry once nothing but the table refers to it.
+4. **Weak tables need two collector cycles** — a Go `weak.Pointer` is cleared in the cycle after the one that frees its object, so an entry survives one cycle longer than PUC-Lua would have kept it. Strings, numbers and booleans are never weakened, exactly as in PUC-Lua.
 5. **Only the `"C"` locale is available** — `os.setlocale` has no libc locale database behind it, so any other name returns `nil` (as PUC-Lua does when the locale is not installed). Number formatting and parsing always use `.` as the decimal point.
 6. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
 
