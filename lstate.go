@@ -90,7 +90,8 @@ type globalState struct {
 	warnf      WarnFunc
 	udWarn     any
 	memErrMsg  *TString
-	gcDebt     int // allocations since the last collector step
+	gcDebt     int  // allocations since the last collector step
+	closing    bool // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
 }
 
 // State is the Go equivalent of lua_State.
@@ -368,6 +369,7 @@ func NewState() *State {
 	L.baseCI.top = 1
 	L.baseCI.callstatus = CIST_C
 	L.baseCI.nresults = 0
+	gcTrackThread(L) /* so that the collector can clear its stale slots */
 
 	g.nilValue = Value{tt: LUA_VNIL}
 	g.strt = newStringTable()
@@ -393,10 +395,11 @@ func NewState() *State {
 
 // Close closes a state (replaces lua_close).
 func (L *State) Close() {
-	g := L.g
+	L = L.g.mainthread /* only the main thread can be closed */
+	// the '__gc' metamethods run on closing, as they do in C
+	L.closeFinalizers()
 	// close all coroutines of this state
 	// (nothing to free: the Go GC does it)
-	_ = g
 	L.status = LUA_OK
 	L.dead = true
 	if L.co != nil && !L.isMain {
@@ -423,6 +426,7 @@ func (L *State) NewThread() *State {
 	L1.baseCI.top = 1
 	L1.baseCI.callstatus = CIST_C
 	L1.baseCI.nresults = 0
+	gcTrackThread(L1) /* so that the collector can clear its stale slots */
 	/* a new thread inherits the hook of the creating thread */
 	L1.hook = L.hook
 	L1.hookmask = L.hookmask

@@ -143,18 +143,17 @@
 归一化掉程序路径、`0x…` 地址、耗时、`os.tmpname` 结果、随机数种子后逐字节比对
 （`all.lua` 需要预编译 C 扩展，改为按文件驱动；`main.lua` 会派生子进程，也包含在内）。
 
-**31 个可比用例中 25 个输出完全一致**（`all.lua` 需要预编译 C 扩展，`heavy.lua`
-两边都超时，都不计入）。其余 6 个的差异全部来自设计取舍（没有自己的收集器）或测试环境：
+**31 个可比用例中 27 个输出完全一致**（`all.lua` 需要预编译 C 扩展，`heavy.lua`
+两边都超时，都不计入）。其余 4 个的差异全部来自设计取舍（没有自己的收集器）或测试环境：
 
 | 用例 | 差异原因 |
 |---|---|
 | `gc` `gengc` | `collectgarbage("count")` 的口径：PUC-Lua 报自己的分配器发出多少，这里报 Go 堆——用例对精确数值做断言 |
-| `cstack` | 按收集器步进统计 C 栈层数，次数取决于 Go 何时收集 |
-| `locals` | `require"tracegc"` 每回收一个对象写一个 `.` |
 | `literals` | `os.setlocale("pt_BR")` 在本实现不可用（见 §7），跳过了小数点用例 |
 | `attrib` | 需要预编译的 C 扩展（`package.loadlib`） |
 
-弱表与 `__gc` 均已实现并通过各自用例（`closure`、`db`、`coroutine`），做法见 §7。
+弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、
+`cstack`、`locals`（后两个用 `require"tracegc"` 数回收次数），做法见 §7。
 
 `go test` 内也镜像了这套比对：`testdata/diff/*.lua`（22 个用例）与从 PUC-Lua 5.4.9
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
@@ -238,7 +237,7 @@ go build -o lua ./cmd/lua
 
 1. **二进制 chunk 不兼容**：`string.dump`/`load` 产出的是本实现自有格式（自洽可用，不能喂给 PUC-Lua）。
 2. **不加载 C 动态库**：`package.cpath` / `package.loadlib` 保留符号但返回不支持；C 扩展请用 Go 模块注册（`RegisterModule` / `package.preload`）改写。
-3. **收集器是 Go 的，可观测时机与 PUC-Lua 不同**：`__gc` 在 Go 判定对象不可达后才执行，比 PUC-Lua 的步进更晚；`collectgarbage("count")` 报的是 Go 堆而非 PUC-Lua 分配器的口径。`<close>` 与 `Close()` 路径是确定的，弱表也是确定的——没有别处引用就会被清掉。
+3. **收集器是 Go 的，可观测时机与 PUC-Lua 不同**：`collectgarbage("count")` 报的是 Go 堆而非 PUC-Lua 分配器的口径；`__gc` 在本实现自己跑一轮的地方执行（收集步进、`collectgarbage`、`Close()`），而不是 PUC-Lua 步进的位置。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法，也正是 `<close>`、`Close()` 与弱表确定的原因：没有别处引用就会被清掉。
 4. **弱表条目要多存活一轮**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，因此条目比 PUC-Lua 多活一个周期。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
 5. **错误信息文案**：与 PUC-Lua 保持一致（直译带来的好处），但 `ldebug` 的源码片段回显在部分路径可能省略。
 6. **只支持 `"C"` locale**：`os.setlocale` 背后没有 libc 的 locale 数据库，其它名字一律返回 `nil`（与 PUC-Lua 在该 locale 未安装时的行为一致）；数字格式化与解析始终用 `.` 作小数点。
