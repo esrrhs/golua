@@ -231,6 +231,16 @@ func (L *State) ArgCheck(cond bool, arg int, extramsg string) {
 	}
 }
 
+// ArgExpected raises an error when cond is false, naming the type that
+// was expected and the type that came (luaL_argexpected).  It is what
+// 'setmetatable' and 'debug.setmetatable' use for a second argument that
+// may be one of two types: "nil or table expected, got number".
+func (L *State) ArgExpected(cond bool, arg int, tname string) {
+	if !cond {
+		L.typeError(arg, tname)
+	}
+}
+
 // Where pushes a string with the current position (luaL_where).
 func (L *State) Where2(level int) {
 	s := L.Where(level)

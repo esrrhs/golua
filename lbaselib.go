@@ -192,7 +192,7 @@ func baseGetMetatable(L *State) int {
 func baseSetMetatable(L *State) int {
 	t := L.Type(2)
 	L.CheckType(1, LUA_TTABLE)
-	L.ArgCheck(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table")
+	L.ArgExpected(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table")
 	if L.GetMetaField(1, "__metatable") != LUA_TNIL {
 		return L.Error2("cannot change a protected metatable")
 	}

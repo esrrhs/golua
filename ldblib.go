@@ -404,7 +404,7 @@ func dbGetMetaTable(L *State) int {
 
 func dbSetMetaTable(L *State) int {
 	t := L.Type(2)
-	L.ArgCheck(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table")
+	L.ArgExpected(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table")
 	L.SetTop(2)
 	L.SetMetaTable(1)
 	return 1 /* return 1st argument */
