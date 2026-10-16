@@ -43,6 +43,8 @@ type ioStream struct {
 	vbuf    string         // file:setvbuf mode (informational)
 	closef  GoFunc         // close function; nil marks a closed handle
 	buf     *bufio.Reader  // read buffer (Go files are unbuffered)
+	wbuf    *bufio.Writer  // write buffer: a FILE has one, and so must we
+	nobuf   bool           // a standard stream: see writer()
 }
 
 // ---------------------------------------------------------------------
@@ -61,14 +63,51 @@ func (s *ioStream) reader() io.Reader {
 	return nil
 }
 
+// writer is the stream buffered for writing, which is what C's 'fwrite'
+// writes to: a FILE accumulates up to LUAL_BUFFERSIZE bytes and only then
+// reaches the descriptor.  Without it every 'io.write' of a small piece is
+// a system call of its own, and a program that writes a large file one
+// field at a time spends nearly all of its time in the kernel.
 func (s *ioStream) writer() io.Writer {
-	if s.f != nil {
-		return s.f
+	var raw io.Writer
+	switch {
+	case s.f != nil:
+		raw = s.f
+	case s.wr != nil:
+		raw = s.wr
+	default:
+		return nil
 	}
-	if s.wr != nil {
-		return s.wr
+	/* A standard stream is not buffered here.  In C 'print' and
+	   'io.write' share one FILE, so their output interleaves in program
+	   order however that FILE is buffered; here 'print' writes to the
+	   descriptor itself, so buffering this stream on its own would send
+	   what 'io.write' wrote out of order. */
+	if s.nobuf {
+		return raw
 	}
-	return nil
+	if s.wbuf == nil {
+		s.wbuf = bufio.NewWriterSize(raw, ioBufSize)
+	}
+	return s.wbuf
+}
+
+// flush empties the write buffer (io.fclose and 'flush' do this).
+func (s *ioStream) flush() error {
+	if s.wbuf == nil {
+		return nil
+	}
+	return s.wbuf.Flush()
+}
+
+// writeString writes a piece of text to the stream.
+func (s *ioStream) writeString(str string) error {
+	w := s.writer()
+	if w == nil {
+		return ioWriteError
+	}
+	_, err := w.Write([]byte(str))
+	return err
 }
 
 // bufferedReader returns the read buffer of the stream, creating it when
@@ -86,7 +125,10 @@ func (s *ioStream) doClose() error {
 	if s.f == nil {
 		return nil
 	}
-	err := s.f.Close()
+	err := s.flush() /* 'fclose' flushes what is still in the buffer */
+	if cerr := s.f.Close(); err == nil {
+		err = cerr
+	}
 	if s.tmpname != "" {
 		os.Remove(s.tmpname)
 		s.tmpname = ""
@@ -111,9 +153,6 @@ func (s *ioStream) waitPipe() (what string, code int, err error) {
 	}
 	return what, code, nil
 }
-
-// flush is a no-op: writes go straight to the file/pipe.
-func (s *ioStream) flush() error { return nil }
 
 // ---------------------------------------------------------------------
 // auxlib helpers missing from lauxlib.go (luaL_fileresult and friends)
@@ -617,7 +656,6 @@ func ioFRead(L *State) int {
 func ioGWrite(L *State, s *ioStream, arg int) int {
 	nargs := L.GetTop() - arg
 	status := true
-	w := s.writer()
 	for ; nargs > 0; nargs-- {
 		var str string
 		if L.Type(arg) == LUA_TNUMBER {
@@ -631,7 +669,7 @@ func ioGWrite(L *State, s *ioStream, arg int) int {
 		} else {
 			str = L.CheckString(arg)
 		}
-		_, err := ioWriteString(w, str)
+		err := s.writeString(str)
 		status = status && err == nil
 		arg++
 	}
@@ -949,6 +987,9 @@ func ioFSeek(L *State) int {
 // them.  Any seek drops the buffer, as 'fseek' does.
 func (s *ioStream) seek(offset int64, op int) (int64, error) {
 	whence := []int{io.SeekStart, io.SeekCurrent, io.SeekEnd}[op]
+	if err := s.flush(); err != nil { /* 'fseek' writes out the buffer first */
+		return 0, err
+	}
 	if s.buf != nil {
 		buffered := int64(s.buf.Buffered())
 		s.buf = nil /* 'fseek' discards whatever has been buffered */
@@ -1028,6 +1069,9 @@ func ioCreateStdFile(L *State, f *os.File, k, fname string) {
 	s := ioNewPreFile(L)
 	s.f = f
 	s.closef = ioNoClose
+	if f == os.Stdout || f == os.Stderr {
+		s.nobuf = true /* see writer() */
+	}
 	if k != "" {
 		L.PushValue(-1)
 		L.SetField(LUA_REGISTRYINDEX, k) /* add file to registry */
