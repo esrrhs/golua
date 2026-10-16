@@ -288,13 +288,31 @@ func pkSearcherC(L *State) int {
 	return pkCheckLoad(L, nil, filename)
 }
 
-// pkSearcherCRoot is searcher_Croot: the root of a C submodule.
+// pkSearcherCRoot is searcher_Croot: a C submodule may live inside the
+// library named by the part of the module name before the first dot.
 //
-// deviation: with no dynamic libraries there is no root to load, so it
-// returns no result at all, as C does for a name without a dot.
+// deviation: Go cannot dlopen, so nothing can ever be loaded from the
+// root.  The search for it still happens, though, because that is what
+// contributes its "no file" lines to the message 'require' builds:
+// 'require("a.b.c")' lists "./a.so" as well as "./a/b/c.so".
 func pkSearcherCRoot(L *State) int {
-	L.CheckString(1)
-	return 0
+	name := L.CheckString(1)
+	dot := strings.IndexByte(name, '.')
+	if dot < 0 {
+		return 0 /* is root: no error */
+	}
+	root := name[:dot]
+	filename, ok := pkFindFile(L, root, "cpath", pkCSUBSEP)
+	if !ok {
+		return 1 /* root not found */
+	}
+	if pkLoadFunc(L, filename, name) != 0 {
+		L.Pop(1) /* remove the message pushed by lsys_load/lsys_sym */
+		L.PushString(pkDLMsg)
+		return 1
+	}
+	L.PushString(filename) /* will be 2nd argument to module */
+	return 2
 }
 
 // pkSearcherPreload is searcher_preload: it looks the module up in
