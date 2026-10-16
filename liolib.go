@@ -159,6 +159,17 @@ func (s *ioStream) waitPipe() (what string, code int, err error) {
 // ---------------------------------------------------------------------
 
 // ioErrno extracts a C-like errno from an error (0 when there is none).
+// ioFileError renders a failed file operation the way lauxlib.c's
+// 'errfile' does, for the messages of 'loadfile' and 'dofile':
+// "cannot open x: No such file or directory".  A Go error would read
+// "open x: no such file or directory", which is neither.
+func ioFileError(what, fname string, err error) string {
+	if ioErrno(err) == 0 { /* C leaves the reason out when errno is 0 */
+		return "cannot " + what + " " + fname
+	}
+	return "cannot " + what + " " + fname + ": " + ioStrError(err)
+}
+
 func ioErrno(err error) int64 {
 	var en syscall.Errno
 	if errors.As(err, &en) {

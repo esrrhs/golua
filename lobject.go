@@ -38,6 +38,7 @@ const (
 	LUA_ERRSYNTAX = 3
 	LUA_ERRMEM    = 4
 	LUA_ERRERR    = 5
+	LUA_ERRFILE   = LUA_ERRERR + 1 /* 'luaL_loadfilex': a file could not be opened */
 )
 
 // Stack limits (luaconf.h / lua.h).

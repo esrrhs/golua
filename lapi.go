@@ -938,9 +938,17 @@ func (L *State) LoadString(s, chunkname string) error {
 
 // LoadFile compiles a Lua file (luaL_loadfilex).
 func (L *State) LoadFile(path string) error {
-	data, err := os.ReadFile(path)
+	/* C opens the file and then reads from it, and the two can fail
+	   differently -- 'fopen' on a directory succeeds on some systems
+	   and it is the read that reports "Is a directory". */
+	f, err := os.Open(path)
 	if err != nil {
-		return err
+		return &LuaError{Status: LUA_ERRFILE, Message: ioFileError("open", path, err)}
+	}
+	data, err := io.ReadAll(f)
+	f.Close()
+	if err != nil {
+		return &LuaError{Status: LUA_ERRFILE, Message: ioFileError("read", path, err)}
 	}
 	/* 'skipcomment' is part of loading a *file*, not of loading a chunk:
 	   'load("#")' is a syntax error, while a file starting with
