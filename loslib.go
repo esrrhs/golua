@@ -233,9 +233,18 @@ func osFormatSpec(t time.Time, spec string) string {
 	case 'w':
 		return fmt.Sprintf("%d", int(t.Weekday()))
 	case 'U':
-		return fmt.Sprintf("%02d", (t.YearDay()+7-int(t.Weekday()))/7)
+		/* C's 'tm_yday' counts from zero and Go's YearDay from one, so
+		   the day of the year has to be shifted back before the week
+		   number is taken: strftime counts a week that has started as
+		   soon as 'yday + 7 - wday' reaches 7, and starting the count
+		   at one makes every week start a day early.  A first of
+		   January that is a Monday is week 00 in C and was week 01
+		   here. */
+		yday := t.YearDay() - 1
+		return fmt.Sprintf("%02d", (yday+7-int(t.Weekday()))/7)
 	case 'W':
-		return fmt.Sprintf("%02d", (t.YearDay()+7-(int(t.Weekday())+6)%7)/7)
+		yday := t.YearDay() - 1
+		return fmt.Sprintf("%02d", (yday+7-(int(t.Weekday())+6)%7)/7)
 	case 'V':
 		_, week := t.ISOWeek()
 		return fmt.Sprintf("%02d", week)
