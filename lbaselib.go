@@ -313,9 +313,19 @@ func baseCollectGarbage(L *State) int {
 		L.gcCycle()
 		L.PushBoolean(true)
 		return 1
-	case baseGCSetPause, baseGCSetStepMul:
-		L.OptInteger(2, 0)
-		L.PushInteger(0)
+	case baseGCSetPause:
+		p := int(L.OptInteger(2, 0))
+		L.PushInteger(int64(L.g.gcPause))
+		if p != 0 {
+			L.g.gcPause = p
+		}
+		return 1
+	case baseGCSetStepMul:
+		m := int(L.OptInteger(2, 0))
+		L.PushInteger(int64(L.g.gcStepMul))
+		if m != 0 {
+			L.g.gcStepMul = m
+		}
 		return 1
 	case baseGCIsRunning:
 		/* C answers with 'gcstp == 0': stopped by the program counts,

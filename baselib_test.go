@@ -442,8 +442,11 @@ func TestBaseCollectGarbage(t *testing.T) {
 	baseCheck(t, L, `r = tostring(collectgarbage("count") > 0)`, "r", "true")
 	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "true")
 	baseCheck(t, L, `r = tostring(collectgarbage("step"))`, "r", "true")
-	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 100))`, "r", "0")
+	/* both answer with the value they replaced */
+	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "200")
+	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "100")
+	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 100))`, "r", "100")
+	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 50))`, "r", "100")
 	/* changing modes answers with the mode it replaced (gc.lua lines
 	   12-18): a script can put the collector back the way it found it.
 	   A fresh state reports "generational" until it is switched. */

@@ -94,6 +94,8 @@ type globalState struct {
 	closing    bool   // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
 	gcMode     string // "incremental" or "generational": see baseSetMode
 	gcStopped  bool   // 'gcstp & GCSTPUSR': the program stopped the collector
+	gcPause    int    // 'gcpause': LUAI_GCPAUSE, remembered for 'setpause'
+	gcStepMul  int    // 'gcstepmul': LUAI_GCMUL, remembered for 'setstepmul'
 }
 
 // State is the Go equivalent of lua_State.
@@ -381,6 +383,11 @@ func NewState() *State {
 	   "generational", and only an explicit
 	   'collectgarbage("incremental")' makes it answer "incremental"
 	   (which is why gc.lua switches modes before it asserts). */
+	/* LUAI_GCPAUSE and LUAI_GCMUL: 'setpause' and 'setstepmul' answer
+	   with the value they replaced, so the two are remembered even
+	   though Go's collector pays no attention to them. */
+	g.gcPause = 200
+	g.gcStepMul = 100
 	g.gcMode = gcModeGen
 	g.nilValue = Value{tt: LUA_VNIL}
 	g.strt = newStringTable()
