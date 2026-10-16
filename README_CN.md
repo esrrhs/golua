@@ -143,19 +143,19 @@
 归一化掉程序路径、`0x…` 地址、耗时、`os.tmpname` 结果、随机数种子后逐字节比对
 （`all.lua` 需要预编译 C 扩展，改为按文件驱动；`main.lua` 会派生子进程，也包含在内）。
 
-**31 个可比用例中 27 个输出完全一致**（`all.lua` 需要预编译 C 扩展，`heavy.lua`
-两边都超时，都不计入）。其余 4 个的差异全部来自设计取舍（没有自己的收集器）或测试环境：
+**31 个可比用例中 28 个输出完全一致**（`all.lua` 需要预编译 C 扩展，`heavy.lua`
+两边都超时，都不计入）。其余 3 个的差异全部来自设计取舍（没有自己的收集器）或测试环境：
 
 | 用例 | 差异原因 |
 |---|---|
-| `gc` `gengc` | `collectgarbage("count")` 的口径：PUC-Lua 报自己的分配器发出多少，这里报 Go 堆——用例对精确数值做断言 |
+| `gc` | 两处口径：`collectgarbage("count")` 报的是 Go 堆（PUC-Lua 报自己的分配器）；`collectgarbage("step", n)` 的粒度——PUC-Lua 的 step 只做定量工作，故 `dosteps(10) < dosteps(2)`，而 Go 的收集器要么全做要么不做，一次 step 就是一整轮，两边都是 1 次 |
 | `literals` | `os.setlocale("pt_BR")` 在本实现不可用（见 §7），跳过了小数点用例 |
 | `attrib` | 需要预编译的 C 扩展（`package.loadlib`） |
 
-弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、
+弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、`gengc`、
 `cstack`、`locals`（后两个用 `require"tracegc"` 数回收次数），做法见 §7。
 
-`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（22 个用例）与从 PUC-Lua 5.4.9
+`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（23 个用例）与从 PUC-Lua 5.4.9
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
 

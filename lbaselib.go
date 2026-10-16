@@ -260,10 +260,27 @@ const (
 	baseGCIncremental
 )
 
-// basePushMode pushes the name of the collector mode (pushmode).
+// basePushMode pushes the name of a collector mode (pushmode).
 func basePushMode(L *State, mode string) int {
 	L.PushString(mode)
 	return 1
+}
+
+// gcModeInc / gcModeGen are the two collector modes.  PUC-Lua remembers
+// which one is in force and 'collectgarbage("generational")' /
+// 'collectgarbage("incremental")' answer with the one it replaced, which
+// is what lets a script put the mode back the way it found it.
+const (
+	gcModeInc = "incremental"
+	gcModeGen = "generational"
+)
+
+// baseSetMode is 'lua_gc(L, LUA_GCGEN | LUA_GCINC)': it answers with the
+// previous mode and switches to the new one.
+func baseSetMode(L *State, mode string) int {
+	previous := L.g.gcMode
+	L.g.gcMode = mode
+	return basePushMode(L, previous)
 }
 
 // gcCount is 'lua_gc(L, LUA_GCCOUNT)' expressed the way lbaselib.c does
@@ -287,32 +304,49 @@ func baseCollectGarbage(L *State) int {
 		return 1
 	case baseGCStep:
 		L.OptInteger(2, 0)
-		L.PushBoolean(true) /* a step always "completes" a cycle */
+		/* PUC-Lua's step does a bounded amount of work and says whether
+		   it finished a cycle; with a step size of 0 it finishes one,
+		   which is what every script that calls
+		   'collectgarbage("step")' and then looks at a weak table is
+		   asking for.  Go's collector is all or nothing, so the step
+		   is a whole cycle. */
+		L.gcCycle()
+		L.PushBoolean(true)
 		return 1
 	case baseGCSetPause, baseGCSetStepMul:
 		L.OptInteger(2, 0)
 		L.PushInteger(0)
 		return 1
 	case baseGCIsRunning:
-		L.PushBoolean(true) /* the Go collector is always running */
+		/* C answers with 'gcstp == 0': stopped by the program counts,
+		   Go's collector being unable to stop does not. */
+		L.PushBoolean(!L.g.gcStopped)
 		return 1
 	case baseGCGenerational:
 		L.OptInteger(2, 0)
 		L.OptInteger(3, 0)
-		return basePushMode(L, "generational")
+		return baseSetMode(L, gcModeGen)
 	case baseGCIncremental:
 		L.OptInteger(2, 0)
 		L.OptInteger(3, 0)
 		L.OptInteger(4, 0)
-		return basePushMode(L, "incremental")
+		return baseSetMode(L, gcModeInc)
 	case baseGCCollect:
 		L.fullCollect()
 		L.PushInteger(0)
 		return 1
-	default: /* stop, restart */
+	case baseGCStop:
+		L.g.gcStopped = true
+		L.PushInteger(0)
+		return 1
+	case baseGCRestart:
+		L.g.gcStopped = false
 		L.PushInteger(0)
 		return 1
 	}
+	/* not reached: CheckOption accepts nothing else */
+	L.PushInteger(0)
+	return 1
 }
 
 // ---------------------------------------------------------------------

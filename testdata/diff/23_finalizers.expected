@@ -1,0 +1,8 @@
+gc	dropped
+gc	in a coroutine
+generational
+generational
+false
+true
+done
+gc	reachable

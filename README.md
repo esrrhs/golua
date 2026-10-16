@@ -159,24 +159,24 @@ and compared. **`all.lua` is driven file by file**, because it needs the C
 extension libraries pre-compiled; `main.lua` spawns the interpreter as a
 subprocess and is therefore included.
 
-**27 of the 31 comparable files produce byte-identical output.**
+**28 of the 31 comparable files produce byte-identical output.**
 (`all.lua` needs the C extension libraries pre-compiled and `heavy.lua`
 times out on both sides, so neither is part of the count.) The remaining
-4 differ only for reasons that follow from the design — there is no
+3 differ only for reasons that follow from the design — there is no
 collector of our own — or from the test environment:
 
 | File | Why it differs |
 |---|---|
-| `gc`, `gengc` | `collectgarbage("count")` accounting: PUC-Lua answers with what its own allocator handed out, here it is the Go heap — the tests assert on the exact number |
+| `gc` | `collectgarbage("count")` accounting, and the granularity of `collectgarbage("step", n)`: PUC-Lua's step does a bounded amount of work, so `dosteps(10) < dosteps(2)`; Go's collector is all or nothing, so a step is a whole cycle and both take one |
 | `literals` | `os.setlocale("pt_BR")` is unavailable here (see §6), so the decimal-point tests are skipped |
 | `attrib` | needs the pre-compiled C extension (`package.loadlib`) |
 
 Weak tables and `__gc` are supported and pass their own tests —
-`closure`, `db`, `coroutine`, `cstack` and `locals`, the last two of
-which count collections with `require"tracegc"` — see §6 for how they
-are done.
+`closure`, `db`, `coroutine`, `gengc`, `cstack` and `locals`, the last
+two of which count collections with `require"tracegc"` — see §6 for how
+they are done.
 
-The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (22
+The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (23
 cases) is compared byte for byte against golden files captured from
 PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
 interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the

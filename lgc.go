@@ -214,6 +214,9 @@ func (L *State) gcStep() {
 	if gcWatched.Load() == 0 && gcWeakCount.Load() == 0 {
 		return
 	}
+	if L.g.gcStopped { /* 'collectgarbage("stop")' */
+		return
+	}
 	L.g.gcDebt++
 	if L.g.gcDebt < gcStepDebt {
 		return

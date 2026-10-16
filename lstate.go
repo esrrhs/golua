@@ -90,8 +90,10 @@ type globalState struct {
 	warnf      WarnFunc
 	udWarn     any
 	memErrMsg  *TString
-	gcDebt     int  // allocations since the last collector step
-	closing    bool // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
+	gcDebt     int    // allocations since the last collector step
+	closing    bool   // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
+	gcMode     string // "incremental" or "generational": see baseSetMode
+	gcStopped  bool   // 'gcstp & GCSTPUSR': the program stopped the collector
 }
 
 // State is the Go equivalent of lua_State.
@@ -371,6 +373,15 @@ func NewState() *State {
 	L.baseCI.nresults = 0
 	gcTrackThread(L) /* so that the collector can clear its stale slots */
 
+	/* PUC-Lua declares the incremental mode in 'lua_newstate', but what
+	   'collectgarbage("generational")' reports is 'isdecGCmodegen',
+	   which is also true while 'lastatomic != 0' -- and the
+	   collections of a freshly opened state are always judged "bad",
+	   which sets it.  A fresh state therefore answers
+	   "generational", and only an explicit
+	   'collectgarbage("incremental")' makes it answer "incremental"
+	   (which is why gc.lua switches modes before it asserts). */
+	g.gcMode = gcModeGen
 	g.nilValue = Value{tt: LUA_VNIL}
 	g.strt = newStringTable()
 	g.memErrMsg = luaS_new(L, "not enough memory")

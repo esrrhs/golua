@@ -444,11 +444,19 @@ func TestBaseCollectGarbage(t *testing.T) {
 	baseCheck(t, L, `r = tostring(collectgarbage("step"))`, "r", "true")
 	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "0")
 	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 100))`, "r", "0")
+	/* changing modes answers with the mode it replaced (gc.lua lines
+	   12-18): a script can put the collector back the way it found it.
+	   A fresh state reports "generational" until it is switched. */
+	baseCheck(t, L, `r = collectgarbage("incremental")`, "r", "generational")
+	baseCheck(t, L, `r = collectgarbage("generational")`, "r", "incremental")
 	baseCheck(t, L, `r = collectgarbage("generational")`, "r", "generational")
+	baseCheck(t, L, `r = collectgarbage("incremental")`, "r", "generational")
 	baseCheck(t, L, `r = collectgarbage("incremental")`, "r", "incremental")
 	baseCheck(t, L, `r = tostring(collectgarbage("collect"))`, "r", "0")
 	baseCheck(t, L, `r = tostring(collectgarbage("stop"))`, "r", "0")
+	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "false")
 	baseCheck(t, L, `r = tostring(collectgarbage("restart"))`, "r", "0")
+	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "true")
 	if msg := baseRunErr(t, `collectgarbage("foo")`); !strings.Contains(msg, "invalid option") {
 		t.Errorf("collectgarbage('foo') = %q", msg)
 	}
