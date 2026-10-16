@@ -155,7 +155,7 @@
 弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、`gengc`、
 `cstack`、`locals`（后两个用 `require"tracegc"` 数回收次数），做法见 §7。
 
-`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（40 个用例）与从 PUC-Lua 5.4.9
+`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（42 个用例）与从 PUC-Lua 5.4.9
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
 
@@ -235,7 +235,7 @@ go build -o lua ./cmd/lua
 
 ## 7. 已知差异与限制（相对 PUC-Lua 5.4.9）
 
-1. **二进制 chunk 不兼容**：`string.dump`/`load` 产出的是本实现自有格式（自洽可用，不能喂给 PUC-Lua）。
+1. **`file:read(n)` 的计数超过 2 GiB 时按文件末尾处理**：C 把计数直接交给分配器，荒谬的计数是被分配器拒绝的（报 "not enough memory"；负数计数必然如此，本实现已还原这一点）。本实现不会做那个量级的分配，所以过大的计数读到空。二进制 chunk 不受影响：`string.dump` 产出的字节与 PUC-Lua 5.4.9 **完全一致**（strip 与否都一样），两边互相都能加载对方的产物。
 2. **不加载 C 动态库**：`package.cpath` / `package.loadlib` 保留符号但返回不支持；C 扩展请用 Go 模块注册（`RegisterModule` / `package.preload`）改写。
 3. **收集器是 Go 的，可观测时机与 PUC-Lua 不同**：`collectgarbage("count")` 报的是 Go 堆而非 PUC-Lua 分配器的口径；`__gc` 在本实现自己跑一轮的地方执行（收集步进、`collectgarbage`、`Close()`），而不是 PUC-Lua 步进的位置。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法，也正是 `<close>`、`Close()` 与弱表确定的原因：没有别处引用就会被清掉。
 4. **弱表条目要多存活一轮**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，因此条目比 PUC-Lua 多活一个周期。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。

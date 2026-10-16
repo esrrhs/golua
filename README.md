@@ -176,7 +176,7 @@ Weak tables and `__gc` are supported and pass their own tests —
 two of which count collections with `require"tracegc"` — see §6 for how
 they are done.
 
-The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (40
+The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (42
 cases) is compared byte for byte against golden files captured from
 PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
 interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the
@@ -210,7 +210,7 @@ a channel round trip rather than a swap of stack pointers.
 
 ## 6. Known differences from PUC-Lua 5.4.9
 
-1. **Binary chunks are not compatible** — `string.dump`/`load` use this implementation's own format.
+1. **`file:read(n)` with a count above 2 GiB is treated as end of file** — C hands the count straight to the allocator, and it is the allocator that rejects an absurd one ("not enough memory", which a negative count always is and this port reproduces). This port will not allocate on that scale, so a count that large reads nothing. Binary chunks are not affected: `string.dump` produces the same bytes PUC-Lua 5.4.9 produces — stripped or not — and each loads the other's.
 2. **No C dynamic library loading** — `package.cpath` / `package.loadlib` exist but report unsupported; port C extensions to Go modules (`RegisterModule` / `package.preload`).
 3. **The collector is Go's, so its observable timing is not PUC-Lua's** — `collectgarbage("count")` reports the Go heap rather than PUC-Lua's own allocator, and `__gc` runs where this port runs a cycle (a collector step, `collectgarbage`, or `Close()`) rather than where PUC-Lua's step would have run it. Objects with a `__gc` are held between cycles so that Go cannot finalise them at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not — which is what C does and what makes `<close>`, `Close()` and weak tables deterministic: a sweep removes an entry once nothing but the table refers to it.
 4. **Weak tables need two collector cycles** — a Go `weak.Pointer` is cleared in the cycle after the one that frees its object, so an entry survives one cycle longer than PUC-Lua would have kept it. Strings, numbers and booleans are never weakened, exactly as in PUC-Lua.

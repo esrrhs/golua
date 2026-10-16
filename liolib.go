@@ -656,7 +656,15 @@ func ioReadAll(L *State, s *ioStream) {
 
 // ioReadChars reads n characters (read_chars).
 func ioReadChars(L *State, s *ioStream, n int64) bool {
-	if n < 0 || n > int64(1)<<31 || s.reader() == nil {
+	if n < 0 {
+		/* C hands 'n' to the allocator as a 'size_t', so a negative
+		   count asks for SIZE_MAX bytes and no allocator has those:
+		   'file:read(-1)' reports "not enough memory". */
+		luaG_runerror(L, "not enough memory")
+	}
+	if n > int64(1)<<31 || s.reader() == nil {
+		/* deviation: a count that large is read as end of file instead
+		   of being handed to the allocator, which C would do. */
 		L.PushString("")
 		return false
 	}
