@@ -101,6 +101,19 @@ func gcTakePending() []gcFinalizer {
 	return items
 }
 
+// fullCollect runs a complete collection, the way
+// 'collectgarbage("collect")' does: the slots above the stack top are
+// cleared (see gcStep), weak tables are swept, and the '__gc' metamethods
+// of what has become unreachable are run.
+func (L *State) fullCollect() {
+	for i := L.top; i < len(L.stack); i++ {
+		setnilvalue(&L.stack[i])
+	}
+	L.gcSweepWeak()
+	runtime.GC()
+	L.runFinalizers()
+}
+
 // luaC_checkFinalizer is 'luaC_checkfinalizer' (lgc.c): an object that
 // gets a metatable with a '__gc' field starts to be watched, so that the
 // metamethod runs when the object becomes unreachable.

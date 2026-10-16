@@ -305,7 +305,11 @@ func baseCollectGarbage(L *State) int {
 		L.OptInteger(3, 0)
 		L.OptInteger(4, 0)
 		return basePushMode(L, "incremental")
-	default: /* stop, restart, collect */
+	case baseGCCollect:
+		L.fullCollect()
+		L.PushInteger(0)
+		return 1
+	default: /* stop, restart */
 		L.PushInteger(0)
 		return 1
 	}
