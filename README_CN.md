@@ -176,6 +176,7 @@
 | 协程 yield/resume，2×10⁵ 次 | 25.7 ms | 140.7 ms | 5.5× |
 | `pcall` 一个 Lua 函数，5×10⁵ 次 | 60.8 ms | 80.3 ms | 1.3× |
 | `string.gmatch` + `gsub`，1 MB | 26.8 ms | 41.1 ms | 1.5× |
+| `verybig.lua`：写 120 KB 源码再编译 | 110 ms | 250 ms | 2.3× |
 
 慢在哪：`Instruction` 是结构体而非位压缩的 uint32（每条指令要现解码），
 每次 `TValue` 访问都要过一遍类型分支，协程跑在独立的 goroutine 上，

@@ -199,6 +199,7 @@ through the two interpreters (Apple M1 Pro, PUC-Lua 5.4.9 built with
 | coroutine yield/resume, 2×10⁵ | 25.7 ms | 140.7 ms | 5.5× |
 | `pcall` of a Lua function, 5×10⁵ | 60.8 ms | 80.3 ms | 1.3× |
 | `string.gmatch` + `gsub` over 1 MB | 26.8 ms | 41.1 ms | 1.5× |
+| `verybig.lua`: write a 120 KB chunk, then compile it | 110 ms | 250 ms | 2.3× |
 
 Where the time goes: `Instruction` is a struct instead of a packed
 uint32 (decoded on the fly), every `TValue` access goes through a tag
