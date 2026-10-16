@@ -1,0 +1,103 @@
+== load with a reader ==
+ok|function: 0x760b0045a0
+ok|function: 0x760b0046c0
+ok|function: 0x760b0047e0
+ok|function: 0x760b004900
+ok|function: 0x760b004a20
+ok|
+ok|
+ok|
+ok|function: 0x760b004ea0
+ok|function: 0x760b004fc0
+ok|function: 0x760b0050b0
+ok|function: 0x760b005170
+ok|function: 0x760b005230
+ok|
+ok|
+ok|5
+ok|function: 0x760ac05920
+ok|function: 0x760b005530
+ok|
+ok|
+err|attempt to call a nil value
+== varargs and select ==
+ok|
+ok|
+ok|
+ok|
+ok|
+ok|
+err|bad argument #1 to 'select' (index out of range)
+err|bad argument #1 to 'select' (index out of range)
+ok|
+ok|
+ok|
+ok|
+ok|
+ok|
+ok|
+== table.unpack limits ==
+ok|table: 0x760b002800
+ok|table: 0x760b002880|2
+ok|table: 0x760b002940|1|3
+ok|table: 0x760b002a00|1|4
+ok|table: 0x760b002ac0|2|1
+ok|table: 0x760b002b80
+ok|table: 0x760b002c00|1|0
+ok|
+ok|table: 0x760b000f80|0
+ok|table: 0x760b001140|-1
+ok|table: 0x760b001200|-3
+ok|table: 0x760b0012c0|-4
+ok|table: 0x760b001380|1|-1
+err|attempt to get length of a number value
+err|bad argument #2 to 'table.unpack' (number has no integer representation)
+err|bad argument #3 to 'table.unpack' (number has no integer representation)
+ok|table: 0x760b001540|2147483648
+ok|
+ok|
+err|too many results to unpack
+== table.move / insert / remove edges ==
+ok|table: 0x760b0010c0|1|3|1
+ok|table: 0x760b0011c0|1|3|2
+ok|table: 0x760b0012c0|2|3|1
+ok|table: 0x760b0013c0|1|0|1
+ok|table: 0x760b0014c0|0|2|1
+ok|table: 0x760b0015c0|1|3|0
+ok|table: 0x760b0016c0|1|3|4
+ok|table: 0x760b001800|1|0|1|table: 0x760b001840
+err|bad argument #5 to 'table.move' (table expected, got number)
+err|bad argument #2 to 'table.move' (number expected, got no value)
+ok|table: 0x760b0019c0|"1"|3|1
+ok|table: 0x760b001ac0|5
+err|bad argument #2 to 'table.insert' (position out of bounds)
+ok|table: 0x760b001bc0|4|5
+err|bad argument #2 to 'table.insert' (position out of bounds)
+err|wrong number of arguments to 'insert'
+err|wrong number of arguments to 'insert'
+ok|table: 0x760b001d80
+ok|table: 0x760b001e00|3
+ok|table: 0x760b001ec0|4
+err|bad argument #2 to 'table.remove' (position out of bounds)
+ok|table: 0x760b001fc0
+ok|table: 0x760b002040|3|4
+== coroutine.wrap and close ==
+ok|	ok|
+err|69_loadvar.lua:132: in co
+err|69_loadvar.lua:133: in co
+ok|
+ok|
+err|bad argument #1 to 'coroutine.wrap' (function expected, got number)
+ok|thread: 0x101085518
+ok|thread: 0x1010808d8
+ok|
+ok|
+ok|
+err|bad argument #1 to 'coroutine.close' (thread expected, got number)
+err|bad argument #1 to 'coroutine.close' (thread expected, got no value)
+ok|
+ok|
+ok|
+err|bad argument #1 to 'coroutine.status' (thread expected, got number)
+ok|
+done

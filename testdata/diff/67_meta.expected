@@ -1,0 +1,103 @@
+== arithmetic, one operand at a time ==
+__add	ok|	ok|	ok|	ok|	ok|
+__sub	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value (upvalue 'on2')	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value	err|attempt to perform arithmetic on a table value (upvalue 'both')
+__mul	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value (upvalue 'on2')	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value	err|attempt to perform arithmetic on a table value (upvalue 'both')
+__div	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value (upvalue 'on2')	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value	err|attempt to perform arithmetic on a table value (upvalue 'both')
+__idiv	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value (upvalue 'on2')	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value	err|attempt to perform arithmetic on a table value (upvalue 'both')
+__mod	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value (upvalue 'on2')	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value	err|attempt to perform arithmetic on a table value (upvalue 'both')
+__pow	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value (upvalue 'on2')	err|attempt to perform arithmetic on a table value (upvalue 'on1')	err|attempt to perform arithmetic on a table value	err|attempt to perform arithmetic on a table value (upvalue 'both')
+__unm	ok|	err|attempt to perform arithmetic on a table value
+== bitwise ==
+__band	ok|	ok|	err|attempt to perform bitwise operation on a table value
+__bor	err|attempt to perform bitwise operation on a table value (upvalue 'on1')	err|attempt to perform bitwise operation on a table value (upvalue 'on2')	err|attempt to perform bitwise operation on a table value
+__bxor	err|attempt to perform bitwise operation on a table value (upvalue 'on1')	err|attempt to perform bitwise operation on a table value (upvalue 'on2')	err|attempt to perform bitwise operation on a table value
+__bnot	ok|	err|attempt to perform bitwise operation on a table value
+__shl	err|attempt to perform bitwise operation on a table value (upvalue 'on1')	err|attempt to perform bitwise operation on a table value (upvalue 'on2')	err|attempt to perform bitwise operation on a table value
+__shr	err|attempt to perform bitwise operation on a table value (upvalue 'on1')	err|attempt to perform bitwise operation on a table value (upvalue 'on2')	err|attempt to perform bitwise operation on a table value
+== concat ==
+ok|	ok|
+ok|
+ok|
+ok|
+ok|
+err|attempt to concatenate a table value
+err|attempt to concatenate a table value
+== length and comparison ==
+ok|	ok|
+ok|
+ok|
+ok|	ok|
+ok|	ok|
+ok|
+ok|
+ok|	ok|
+ok|
+ok|	ok|
+ok|
+err|attempt to compare two table values
+err|attempt to compare two table values
+ok|
+err|attempt to compare table with number	err|attempt to compare number with table
+== index and newindex ==
+ok|	ok|
+ok|	ok|
+ok|
+ok|
+err|attempt to index a number value
+ok|
+ok|
+ok|
+err|in __index
+N1	N1
+7
+err|attempt to index a number value
+err|in __newindex
+ok|
+err|ro	1
+== call ==
+ok|
+ok|
+err|attempt to call a number value
+ok|
+err|in __call
+ok|
+== tostring, name, metatable, mode, pairs ==
+ok|TS
+ok|42
+err|bad
+ok|MyType: 0x7846825340
+ok|table: 0x7846825400
+ok|
+ok|table: 0x7846825540	err|cannot change a protected metatable
+err|cannot change a protected metatable
+ok|
+err|bad argument #2 to 'setmetatable' (nil or table expected, got number)
+ok|table: 0x7846825780|nil
+ok|1	ok|nil
+ok|
+err|'__index' chain too long; possible loop
+ok|
+ok|
+ok|
+ok|table: 0x7846825d00
+ok|
+err|attempt to call a number value
+== raw ==
+ok|table: 0x7846825f00|"x"	ok|
+ok|table: 0x7846825f00	ok|"abc"	err|bad argument #1 to 'rawlen' (table or string expected, got number)	ok|table: 0x78468260c0
+ok|table: 0x7846825f00|table: 0x7846826140	ok|1|1	ok|1|"1"
+err|bad argument #1 to 'rawlen' (table or string expected, got no value)	err|bad argument #2 to 'rawequal' (value expected)
+== a metamethod that is reached through __index ==
+err|attempt to perform arithmetic on a table value (upvalue 'indir')
+err|attempt to concatenate a table value (upvalue 'indir')
+== close ==
+ok|
+err|c1
+err|c1
+err|attempt to call a number value (metamethod 'close')
+ok|
+err|variable 'x' got a non-closable value
+ok|
+ok|
+ok|
+done
