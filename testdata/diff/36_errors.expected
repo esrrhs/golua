@@ -1,0 +1,93 @@
+false|"36_errors.lua:23: attempt to divide by zero"	false|"36_errors.lua:23: attempt to divide by zero"	false|"36_errors.lua:24: attempt to perform 'n%0'"	false|"36_errors.lua:24: attempt to perform 'n%0'"
+true|-9223372036854775808	true|0
+inf|-inf|nan|nan
+3|-4|1|1|3.0|-1
+false|"36_errors.lua:34: number (local 'a') has no integer representation"	false|"36_errors.lua:25: number (local 'a') has no integer representation"
+true|0	true|0
+true|0	true|2
+-9223372036854775808|0|1|-1|0
+false|"36_errors.lua:25: attempt to perform bitwise operation on a string value (local 'a')"	false|"36_errors.lua:25: attempt to perform bitwise operation on a string value (local 'a')"
+11|20|3|1|1.0|16
+integer	integer	integer
+false|"36_errors.lua:76: attempt to index a nil value (local 'mylocal')"
+false|"36_errors.lua:80: attempt to index a nil value (upvalue 'up')"
+false|"36_errors.lua:82: attempt to index a nil value (global 'undefinedglobal')"
+false|"36_errors.lua:84: attempt to index a nil value (field 'k')"
+false|"36_errors.lua:85: attempt to index a nil value (field 'integer index')"
+false|"36_errors.lua:86: attempt to call a nil value (field 'k')"
+false|"36_errors.lua:87: attempt to call a nil value (method 'method')"
+false|"36_errors.lua:90: attempt to perform arithmetic on a table value (upvalue 'a')"
+false|"36_errors.lua:91: attempt to call a table value (upvalue 'a')"
+false|"36_errors.lua:95: bad 'for' initial value (number expected, got string)"
+false|"36_errors.lua:96: bad 'for' limit (number expected, got string)"
+false|"36_errors.lua:97: bad 'for' step (number expected, got string)"
+false|"36_errors.lua:98: 'for' step is zero"
+false|"36_errors.lua:99: 'for' step is zero"
+false|"36_errors.lua:100: bad 'for' step (number expected, got nil)"
+forstep	44
+mt	add	true|"ok:add"
+mtbad	add	false|"36_errors.lua:21: attempt to call a number value (metamethod 'add')"
+mterr	add	false|"36_errors.lua:122: in add"
+mt	sub	true|"ok:sub"
+mtbad	sub	false|"36_errors.lua:22: attempt to call a number value (metamethod 'sub')"
+mterr	sub	false|"36_errors.lua:122: in sub"
+mt	idiv	true|"ok:idiv"
+mtbad	idiv	false|"36_errors.lua:23: attempt to call a number value (metamethod 'idiv')"
+mterr	idiv	false|"36_errors.lua:122: in idiv"
+mt	mod	true|"ok:mod"
+mtbad	mod	false|"36_errors.lua:24: attempt to call a number value (metamethod 'mod')"
+mterr	mod	false|"36_errors.lua:122: in mod"
+mt	band	true|"ok:band"
+mtbad	band	false|"36_errors.lua:25: attempt to call a number value (metamethod 'band')"
+mterr	band	false|"36_errors.lua:122: in band"
+mt	shl	true|"ok:shl"
+mtbad	shl	false|"36_errors.lua:26: attempt to call a number value (metamethod 'shl')"
+mterr	shl	false|"36_errors.lua:122: in shl"
+mt	concat	true|"ok:concat"
+mtbad	concat	false|"36_errors.lua:27: attempt to call a number value (metamethod 'concat')"
+mterr	concat	false|"36_errors.lua:122: in concat"
+mt	lt	true|true
+mtbad	lt	false|"36_errors.lua:29: attempt to call a number value (metamethod 'lt')"
+mterr	lt	false|"36_errors.lua:122: in lt"
+mt	le	true|true
+mtbad	le	false|"36_errors.lua:30: attempt to call a number value (metamethod 'le')"
+mterr	le	false|"36_errors.lua:122: in le"
+true|"U"
+true|7
+true|"7"
+false|"36_errors.lua:28: attempt to call a number value (metamethod 'len')"
+true|"k!"
+false|"36_errors.lua:31: attempt to index a number value"
+false|"36_errors.lua:32: attempt to index a number value"
+true|"C"
+false|"36_errors.lua:33: attempt to call a number value (local 'a')"
+true
+true|true
+false|OBJ
+false|42
+false|MyType: 0x7bb8c28180
+MyType: 0x7bb8c28280
+false|table: 0x7bb8c28300
+false|"36_errors.lua:149: variable 'x' got a non-closable value"
+true
+true
+false|"36_errors.lua:152: closing"
+false|"36_errors.lua:155: body"
+b
+a
+true|"ok"
+true
+false|"36_errors.lua:163: variable 'x' got a non-closable value"
+true|nil|"[string \"goto nowhere\"]:1: no visible label 'nowhere' for <goto> at line 1"
+true|nil|"[string \"::a:: ::a::\"]:1: label 'a' already defined on line 1"
+true|function: 0x7bb8c08c90
+true|nil|"[string \"for i=1,10 do goto cont end\"]:1: no visible label 'cont' for <goto> at line 1"
+true|nil|"[string \"local x <nope> = 1\"]:1: unknown attribute 'nope'"
+true|nil|"[string \"local x <const> = 1; x = 2\"]:1: attempt to assign to const variable 'x'"
+true|nil|"[string \"break\"]:1: break outside loop at line 1"
+true|nil|"[string \"return 1 return 2\"]:1: <eof> expected near 'return'"
+true|nil|"[string \"function 1() end\"]:1: <name> expected near '1'"
+true|function: 0x7bb8c08870
+true|function: 0x7bb8c08960
+true|nil|"[string \"x::<label>\"]:1: syntax error near '::'"
+function: 0x7bb8c08a50	true|function: 0x7bb8c08ae0

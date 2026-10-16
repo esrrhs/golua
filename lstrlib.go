@@ -1773,6 +1773,11 @@ func strPack(L *State) int {
 	arg := 1                   /* current argument to pack */
 	h := strHeader{}
 	strInitHeader(L, &h)
+	/* C pushes a nil here to separate the arguments from the string
+	   buffer (lstrlib.c's str_pack).  The slot is observable: an
+	   absent argument sits where that nil is, so 'string.pack("B")'
+	   reports "number expected, got nil" instead of "got no value". */
+	L.PushNil()
 	var buf bytes.Buffer
 	totalsize := 0 /* accumulate total size of result */
 	for i := 0; i < len(fmtstr); {

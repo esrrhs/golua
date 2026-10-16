@@ -63,7 +63,10 @@ func (L *State) Error2(format string, args ...any) int {
 	return L.Error()
 }
 
-func (L *State) CheckAny(arg int) { L.checkNElems(1) }
+// CheckAny raises an error when the argument is absent (luaL_checkany).
+// C only asks whether there *is* a value -- not what it is -- so the
+// message is "bad argument #n to 'f' (value expected)".
+func (L *State) CheckAny(arg int) { L.checkNElems(arg) }
 
 // CheckType checks the type of an argument (luaL_checktype).
 func (L *State) CheckType(arg, t int) {

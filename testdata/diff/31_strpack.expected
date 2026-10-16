@@ -1,0 +1,152 @@
+false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+false|"bad argument #3 to 'string.pack' (number expected, got nil)"
+false|"bad argument #3 to 'string.pack' (number expected, got nil)"
+false|"bad argument #2 to 'string.pack' (string expected, got nil)"
+false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+false|"bad argument #1 to 'math.abs' (number expected, got no value)"
+false|"bad argument #1 to 'string.rep' (string expected, got no value)"
+b	true|1
+B	true|1
+h	true|2
+H	true|2
+l	true|8
+L	true|8
+j	true|8
+J	true|8
+T	true|8
+f	true|4
+d	true|8
+n	true|8
+i	true|4
+I	true|4
+i1	true|1
+i2	true|2
+i4	true|4
+i8	true|8
+i16	true|16
+I1	true|1
+I8	true|8
+I16	true|16
+x	true|1
+z	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+s	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+s1	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+s4	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+s8	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+Xi	true|0
+Xs	true|0
+Xn	true|0
+X1	false|"invalid format option '1'"
+X4	false|"invalid format option '4'"
+X8	false|"invalid format option '8'"
+X0	false|"invalid format option '0'"
+X16	false|"invalid format option '1'"
+b	00	01	ff
+B	00	01	bad argument #2 to 'string.pack' (unsigned overflow)
+h	0000	0100	ffff
+H	0000	0100	bad argument #2 to 'string.pack' (unsigned overflow)
+l	0000000000000000	0100000000000000	ffffffffffffffff
+L	0000000000000000	0100000000000000	ffffffffffffffff
+j	0000000000000000	0100000000000000	ffffffffffffffff
+J	0000000000000000	0100000000000000	ffffffffffffffff
+T	0000000000000000	0100000000000000	ffffffffffffffff
+04030201	01020304
+04030201	04030201
+ffffffffffffffff	ffffffffffffffff
+7fffffffffffffff	ffffffffffffff7f
+i1	ff	ff
+i2	ffff	ffff
+i3	ffffff	ffffff
+i4	ffffffff	ffffffff
+i5	ffffffffff	ffffffffff
+i6	ffffffffffff	ffffffffffff
+i7	ffffffffffffff	ffffffffffffff
+i8	ffffffffffffffff	ffffffffffffffff
+i9	ffffffffffffffffff	ffffffffffffffffff
+i10	ffffffffffffffffffff	ffffffffffffffffffff
+i11	ffffffffffffffffffffff	ffffffffffffffffffffff
+i12	ffffffffffffffffffffffff	ffffffffffffffffffffffff
+i13	ffffffffffffffffffffffffff	ffffffffffffffffffffffffff
+i14	ffffffffffffffffffffffffffff	ffffffffffffffffffffffffffff
+i15	ffffffffffffffffffffffffffffff	ffffffffffffffffffffffffffffff
+i16	ffffffffffffffffffffffffffffffff	ffffffffffffffffffffffffffffffff
+I1	ff	ff
+I2	ff00	00ff
+I3	ff0000	0000ff
+I4	ff000000	000000ff
+I5	ff00000000	00000000ff
+I6	ff0000000000	0000000000ff
+I7	ff000000000000	000000000000ff
+I8	ff00000000000000	00000000000000ff
+I9	ff0000000000000000	0000000000000000ff
+I10	ff000000000000000000	000000000000000000ff
+I11	ff00000000000000000000	00000000000000000000ff
+I12	ff0000000000000000000000	0000000000000000000000ff
+I13	ff000000000000000000000000	000000000000000000000000ff
+I14	ff00000000000000000000000000	00000000000000000000000000ff
+I15	ff0000000000000000000000000000	0000000000000000000000000000ff
+I16	ff000000000000000000000000000000	000000000000000000000000000000ff
+false|"bad argument #2 to 'string.pack' (integer overflow)"	false|"bad argument #2 to 'string.pack' (unsigned overflow)"
+false|"integral size (17) out of limits [1,16]"	false|"integral size (0) out of limits [1,16]"
+false|"bad argument #2 to 'string.pack' (number has no integer representation)"	false|"bad argument #2 to 'string.pack' (number expected, got table)"
+0000803f	3f800000
+000000000000f03f	3ff0000000000000
+0000000000000000	0000000000000080
+000000000000f07f	000000000000f0ff
+000000000000f87f
+0000807f	0000c07f
+db0f4940	40490fdb
+inf|5
+0.1|9
+false|"bad argument #2 to 'string.pack' (number expected, got string)"
+050000000000000068656c6c6f
+0568656c6c6f	050068656c6c6f
+0500000068656c6c6f	0000000568656c6c6f
+68656c6c6f00
+	68656c6c6f
+68690000000000000000
+false|"bad argument #2 to 'string.pack' (string longer than given size)"
+false|"bad argument #2 to 'string.pack' (string length does not fit in given size)"
+false|"bad argument #2 to 'string.pack' (string contains zeros)"
+true|"\2\0\0\0\0\0\0\00042"
+"hi"|4
+"hi"|4
+"abc"|4
+false|"bad argument #2 to 'string.unpack' (unfinished string for format 'z')"
+false|"bad argument #2 to 'string.unpack' (data string too short)"
+000000
+	true|0
+false|"integral size (0) out of limits [1,16]"	true|0
+	
+01000000	01
+01000000	000000000000f03f
+false|"bad argument #1 to 'string.packsize' (invalid next option for option 'X')"	false|"invalid format option 'q'"
+false|"invalid format option 'q'"	true|0
+false|"invalid format option '4'"	false|"bad argument #1 to 'string.packsize' (string expected, got no value)"
+0100feff616263
+1|-2|"abc"|8
+-2|5
+"abc"|8
+false|"bad argument #3 to 'string.unpack' (initial position out of string)"
+true|1|3
+true|25442|8
+false|"bad argument #2 to 'string.unpack' (data string too short)"
+2|3
+<I4<i4	bad argument #2 to 'string.pack' (unsigned overflow)
+>I4>i4	bad argument #2 to 'string.pack' (unsigned overflow)
+<i1<i2<i4<i8	15|-3|-3|-3|-3|16
+>I1>I2>I4>I8	bad argument #2 to 'string.pack' (unsigned overflow)
+<f<d	12|1.5|1.5|13
+>f>d	12|1.5|1.5|13
+<s	10|"xy"|11
+>s4	6|"xy"|7
+z	3|"xy"|4
+<c4	4|"xy\0\0"|5
+<I3>I3	bad argument #2 to 'string.pack' (unsigned overflow)
+false|"bad argument #2 to 'string.pack' (integer overflow)"
+false|"bad argument #2 to 'string.pack' (unsigned overflow)"	false|"bad argument #2 to 'string.pack' (unsigned overflow)"
+true|"ÿÿÿÿÿÿÿÿ"
+false|"bad argument #2 to 'string.pack' (number has no integer representation)"
+integer
+integer
+255|2

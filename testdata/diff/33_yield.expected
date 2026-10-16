@@ -1,0 +1,54 @@
+true|1
+true
+true|1|2|3
+true|1|2|3
+false|"33_yield.lua:26: boom"
+false|"boom"
+false|table: 0x77f0c116c0
+false|T
+true|"x"|"y"
+true|1	true|2	false|"cannot resume dead coroutine"
+dead
+suspended	true	dead
+thread: 0x10159d988|true
+true|"thread: 0x77f14041c8|false"
+true
+true
+false
+running
+running
+true	true	dead
+true|false|"cannot resume non-suspended coroutine"
+false|"cannot close a running coroutine"
+true|1
+true|1|2
+true|1
+true|"add"
+true|"idx"
+false|"attempt to yield across a C-call boundary"
+true|"call"
+false|"attempt to yield across a C-call boundary"
+false|"attempt to yield across a C-call boundary"
+true|nil|"attempt to yield across a C-call boundary"
+true|"iter"
+true|"a"
+true|"body"
+1	2	false|"cannot resume dead coroutine"
+false|"33_yield.lua:113: in wrap"	false|"cannot resume dead coroutine"
+false|"in wrap"
+false|table: 0x77f0c136c0
+1	2
+true|"o1"
+true|"o2"
+true|true|true|"iend"
+true|false|"cannot resume non-suspended coroutine"
+true
+true	true	dead
+true	true	false|"cannot resume dead coroutine"
+false|"33_yield.lua:169: x"	false|"33_yield.lua:169: x"
+true	true
+true	false|"33_yield.lua:178: in close"	dead
+false|"bad argument #1 to 'coroutine.close' (thread expected, got number)"	false|"bad argument #1 to 'coroutine.close' (thread expected, got no value)"
+false|"bad argument #1 to 'coroutine.resume' (thread expected, got number)"	false|"bad argument #1 to 'coroutine.resume' (thread expected, got no value)"
+false|"bad argument #1 to 'coroutine.status' (thread expected, got number)"	false|"bad argument #1 to 'coroutine.create' (function expected, got number)"
+false|"bad argument #1 to 'coroutine.wrap' (function expected, got number)"
