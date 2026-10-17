@@ -1,0 +1,255 @@
+dense set 16 -> 0
+dense set 4 -> 0
+dense del 4 -> 0
+dense del 3 -> 0
+dense set 13 -> 0
+dense set 4 -> 0
+dense set 14 -> 0
+dense set 1 -> 1
+dense set 3 -> 4
+dense set 16 -> 4
+dense set 5 -> 5
+dense set 11 -> 5
+dense set 15 -> 5
+dense set 3 -> 5
+dense del 13 -> 5
+dense del 5 -> 4
+dense set 9 -> 4
+dense set 7 -> 4
+dense set 6 -> 4
+dense del 11 -> 4
+dense set 9 -> 4
+dense set 16 -> 4
+dense set 10 -> 16
+dense set 9 -> 16
+dense set 14 -> 16
+dense set 15 -> 16
+dense set 2 -> 16
+dense set 4 -> 16
+dense set 7 -> 16
+dense set 14 -> 16
+dense del 1 -> 16
+dense set 16 -> 16
+dense del 13 -> 16
+dense set 8 -> 16
+dense set 5 -> 16
+dense set 11 -> 16
+dense set 5 -> 16
+dense del 16 -> 15
+dense del 10 -> 15
+dense set 15 -> 15
+dense set 16 -> 16
+dense set 7 -> 16
+dense set 9 -> 16
+dense del 2 -> 16
+dense set 12 -> 16
+dense set 9 -> 16
+dense set 3 -> 16
+dense set 7 -> 16
+dense del 3 -> 16
+dense set 15 -> 16
+dense set 9 -> 16
+dense set 12 -> 16
+dense set 9 -> 16
+dense del 12 -> 16
+dense set 6 -> 16
+dense set 11 -> 16
+dense set 16 -> 16
+dense del 1 -> 16
+dense del 1 -> 16
+dense set 12 -> 16
+sparse 1000 -> 0
+sparse 2000 -> 0
+sparse set 37 -> 0
+sparse del 1196 -> 0
+sparse set 205 -> 0
+sparse set 1632 -> 0
+sparse set 611 -> 0
+sparse set 1763 -> 0
+sparse set 154 -> 0
+sparse set 581 -> 0
+sparse del 1117 -> 0
+sparse del 699 -> 0
+sparse set 596 -> 0
+sparse set 7 -> 0
+sparse del 1590 -> 0
+sparse set 421 -> 0
+sparse set 1746 -> 0
+sparse set 1979 -> 0
+sparse set 1755 -> 0
+sparse set 1726 -> 0
+sparse del 1654 -> 0
+sparse set 484 -> 0
+sparse set 389 -> 0
+sparse del 76 -> 0
+sparse set 1713 -> 0
+sparse del 239 -> 0
+sparse del 825 -> 0
+sparse del 326 -> 0
+sparse set 1918 -> 0
+sparse del 697 -> 0
+sparse set 74 -> 0
+sparse del 715 -> 0
+sparse set 228 -> 0
+sparse del 518 -> 0
+sparse set 468 -> 0
+sparse set 1447 -> 0
+sparse set 118 -> 0
+sparse del 10 -> 0
+sparse set 833 -> 0
+sparse del 980 -> 0
+sparse set 1749 -> 0
+sparse del 1506 -> 0
+prefix full -> 64
+prefix del 64 -> 63
+prefix del 61 -> 63
+prefix del 58 -> 63
+prefix del 55 -> 63
+prefix del 52 -> 63
+prefix del 49 -> 63
+prefix del 46 -> 63
+prefix del 43 -> 63
+prefix del 40 -> 63
+prefix del 37 -> 63
+prefix del 34 -> 63
+prefix del 31 -> 63
+prefix del 28 -> 63
+prefix del 25 -> 63
+prefix del 22 -> 63
+prefix del 19 -> 63
+prefix del 16 -> 63
+prefix del 13 -> 63
+prefix del 10 -> 63
+prefix del 7 -> 63
+prefix del 4 -> 63
+prefix del 1 -> 63
+shrink del 1 -> 64
+shrink del 4 -> 64
+shrink del 7 -> 64
+shrink del 10 -> 64
+shrink del 13 -> 64
+shrink del 16 -> 64
+shrink del 19 -> 64
+shrink del 22 -> 64
+shrink del 25 -> 64
+shrink del 28 -> 64
+shrink del 31 -> 64
+shrink del 34 -> 64
+shrink del 37 -> 64
+shrink del 40 -> 64
+shrink del 43 -> 64
+shrink del 46 -> 64
+shrink del 49 -> 64
+shrink del 52 -> 64
+shrink del 55 -> 64
+shrink del 58 -> 64
+shrink del 61 -> 64
+shrink del 64 -> 63
+float -> 3
+float del -> 3
+emptied -> 0
+refilled 1 -> 1
+refilled 2 -> 2
+refilled 4 -> 4
+refilled 3 -> 4
+insert 1 -> 1
+insert 2 -> 2
+insert 3 -> 3
+insert 4 -> 4
+insert 5 -> 5
+insert 6 -> 6
+insert 7 -> 7
+insert 8 -> 8
+insert 9 -> 9
+insert 10 -> 10
+remove -> 9
+remove -> 8
+remove -> 7
+remove -> 6
+remove -> 5
+remove -> 4
+remove -> 3
+remove -> 2
+remove -> 1
+remove -> 0
+mixed set 90 -> 0
+mixed del 47 -> 0
+mixed del 39 -> 0
+mixed set 106 -> 0
+mixed del 1 -> 0
+mixed set 38 -> 0
+mixed set 107 -> 0
+mixed set 112 -> 0
+mixed set 17 -> 0
+mixed del 94 -> 0
+mixed del 54 -> 0
+mixed set 91 -> 0
+mixed set 95 -> 0
+mixed set 51 -> 0
+mixed set 65 -> 0
+mixed set 93 -> 0
+mixed set 107 -> 0
+mixed set 12 -> 0
+mixed del 51 -> 0
+mixed set 116 -> 0
+mixed set 98 -> 0
+mixed set 92 -> 0
+mixed set 31 -> 0
+mixed del 104 -> 0
+mixed del 28 -> 0
+mixed del 36 -> 0
+mixed del 2 -> 0
+mixed set 80 -> 0
+mixed set 29 -> 0
+mixed set 110 -> 0
+mixed set 71 -> 0
+mixed set 12 -> 0
+mixed set 22 -> 0
+mixed set 81 -> 0
+mixed set 69 -> 0
+mixed del 74 -> 0
+mixed set 99 -> 0
+mixed set 114 -> 0
+mixed set 61 -> 0
+mixed set 3 -> 0
+mixed del 13 -> 0
+mixed del 127 -> 0
+mixed set 95 -> 0
+mixed set 125 -> 0
+mixed set 71 -> 0
+mixed set 52 -> 0
+mixed del 68 -> 0
+mixed del 73 -> 0
+mixed set 114 -> 0
+mixed del 88 -> 0
+mixed set 115 -> 0
+mixed del 68 -> 0
+mixed set 28 -> 0
+mixed set 63 -> 0
+mixed del 95 -> 0
+mixed set 24 -> 0
+mixed del 123 -> 0
+mixed set 72 -> 0
+mixed set 101 -> 0
+mixed set 58 -> 0
+mixed set 116 -> 0
+mixed del 94 -> 0
+mixed set 80 -> 0
+mixed set 108 -> 0
+mixed set 25 -> 0
+mixed set 120 -> 0
+mixed set 86 -> 0
+mixed del 59 -> 0
+mixed del 36 -> 0
+mixed set 27 -> 0
+mixed set 27 -> 0
+mixed set 127 -> 0
+mixed del 127 -> 0
+mixed del 85 -> 0
+mixed set 43 -> 0
+mixed del 96 -> 0
+mixed set 61 -> 0
+mixed del 66 -> 0
+mixed set 2 -> 0
+mixed set 77 -> 0
+OK
