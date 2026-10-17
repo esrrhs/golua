@@ -18,8 +18,14 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"unsafe"
 	"weak"
 )
+
+// ioStreamClosed is called when the handle is closed: the FILE* is
+// released and the block cleared, which is what lets an extension see a
+// closed handle the way PUC-Lua shows it one.  It is nil without cgo.
+var ioStreamClosed func(s *ioStream)
 
 // ioIsWindows tells whether the host runs Windows (the shell used by
 // io.popen and os.execute depends on it).
@@ -36,7 +42,15 @@ const (
 )
 
 // ioStream is the Go counterpart of luaL_Stream.
+//
+// 'u' and 'cfp' are what make the handle work for an extension: C is
+// handed the address of a block laid out the way luaL_Stream is (see
+// cdlbridge.h), with a real FILE* in it, so that an extension which
+// casts a file handle to a luaL_Stream -- LuaFileSystem's setmode does --
+// finds what it expects instead of a zeroed block or, worse, nothing.
 type ioStream struct {
+	u       *Udata         // the userdata behind this handle
+	cfp     unsafe.Pointer // the FILE* in it, nil if there is none
 	f       *os.File       // the file; nil for a popen handle
 	rd      io.ReadCloser  // popen: the child's standard output
 	wr      io.WriteCloser // popen: the child's standard input
@@ -154,9 +168,16 @@ func (s *ioStream) doClose() error {
 	if s.f == nil {
 		return nil
 	}
+	/* The FILE* has a descriptor of its own, so releasing it cannot come
+	   before the file itself is closed: the flush goes through the Go
+	   file, and closing the FILE first would close the descriptor the
+	   flush is about to write to. */
 	err := s.flush() /* 'fclose' flushes what is still in the buffer */
 	if cerr := s.f.Close(); err == nil {
 		err = cerr
+	}
+	if ioStreamClosed != nil {
+		ioStreamClosed(s) /* the FILE* C was shown goes with the file */
 	}
 	if s.tmpname != "" {
 		os.Remove(s.tmpname)
@@ -447,6 +468,7 @@ func ioNewPreFile(L *State) *ioStream {
 	s := &ioStream{}
 	ioTrackStream(s)
 	L.NewUserData(s, 0)
+	s.u = uvalue(&L.stack[L.top-1]) /* the handle C will be handed */
 	ioSetMetaTableByName(L, ioFileHandle)
 	return s
 }

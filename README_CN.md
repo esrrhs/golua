@@ -220,7 +220,27 @@ print(1.5)                -- 然后检查数字长什么样
 的实跑结果，存在 `testdata/luasocket/expected.txt`。MIT 许可，随
 `testdata/luasocket/LICENSE` 一并再分发。
 
-### 5.5 覆盖盘点
+### 5.5 第四个扩展：LuaFileSystem，它伸手进了解释器造的东西
+
+[LuaFileSystem](https://lunarmodules.github.io/luafilesystem/) 是第四个，也是第一个「伸手进
+解释器造的东西」而不是自己造的东西的扩展：`lfs.setmode` 接过 `io.open` 给的文件句柄，把
+userdata 强转成 `luaL_Stream`（一个 `FILE*` 加一个关闭函数，就这个顺序），然后直接读。
+它找出两件事，第一件其实与文件无关：
+
+| LuaFileSystem 做的事 | 错在哪 |
+|---|---|
+| 对文件句柄调 `luaL_testudata`，然后读结果的 `closef` | Go 造的 userdata（文件句柄正是）回答 NULL，C 拿到「什么都没有」再去读它之后 8 字节。它不是报错，是**崩**。现在每个 userdata 都有一个代表它的块，在 C 第一次索要时生成——因为 PUC-Lua 对任何 full userdata 都回答一个地址，从不回答 NULL |
+| 从那个块里读 `FILE*` | 块是零值的，于是每个句柄在 C 看来都是「已关闭」。`io` 的文件是 Go 的 `*os.File`，没有 `FILE*`，所以现在按 `luaL_Stream` 的布局填块：一个**副本描述符**上的真 `FILE*`（同一个描述符两个主人，先关的那个会把文件从另一个手下关掉），文件关闭时清空——这正是 C 在 PUC-Lua 里看到已关闭句柄的方式 |
+
+它此前还根本编译不过：`include/lualib.h` 不存在，而扩展包含它是理所当然的事。`lua.h`
+也没定义 `LUA_API`/`LUALIB_API`/`LUAMOD_API`，而 PUC-Lua 的 `luaconf.h` 定义了，扩展声明
+自己的 `luaopen_` 时要用。两者现在都在。
+
+它的用例会创建文件、链接与目录，所以跑在自己的临时目录里。它打印的每一行都取自
+PUC-Lua 5.4.9 的实跑结果，存在 `testdata/luafilesystem/expected.txt`。MIT 许可，随
+`testdata/luafilesystem/LICENSE` 一并再分发。
+
+### 5.6 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
 `testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
@@ -251,7 +271,7 @@ print(1.5)                -- 然后检查数字长什么样
 `<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
 `require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
 
-### 5.6 性能
+### 5.7 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时

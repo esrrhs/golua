@@ -49,6 +49,47 @@ func cgoNewUserBlock(L *State, sz, uv int) unsafe.Pointer {
 	return block
 }
 
+// udataCBlock is what lua_touserdata answers for a userdata that has no
+// C block of its own -- one made in Go, which is what a file handle is.
+//
+// C is never given NULL for a full userdata, and an extension relies on
+// that: LuaFileSystem takes a file handle, casts it to a luaL_Stream and
+// reads 'closef' out of it, which is a read of 8 bytes past the pointer
+// it was handed.  Given NULL it does not fail, it dies.  So every
+// userdata gets a block to stand for it, made the first time C asks.
+//
+// It is not the object: it is zeroed, and nothing of the Go value is in
+// it.  It exists so that the pointer C is given is one C may read.
+func udataCBlock(L *State, u *Udata) unsafe.Pointer {
+	if u.cblock != nil {
+		return u.cblock
+	}
+	block := C.malloc(C.size_t(udataBlockSize))
+	if block == nil {
+		return nil
+	}
+	C.memset(block, 0, C.size_t(udataBlockSize))
+	u.cblock = block
+	u.len = udataBlockSize
+	setUdataFinalizer(L, u) /* the block is freed with the userdata */
+	if udataBlockFill != nil {
+		udataBlockFill(u, block) /* a file handle: put a FILE* in it */
+	}
+	return block
+}
+
+// udataBlockFill is called on a block that was just made for a userdata,
+// before C is given it.  It is the one chance to put something in it,
+// and it is nil without cgo.  See liolib_cgo.go, where a file handle
+// gets the FILE* an extension expects to find.
+var udataBlockFill func(u *Udata, block unsafe.Pointer)
+
+// udataBlockSize is how much C may read through the pointer it is given
+// for a userdata made in Go: a luaL_Stream is a FILE* and a close
+// function, and reading those two is the commonest thing an extension
+// does with a file handle it did not make.
+const udataBlockSize = 2 * 8
+
 // cdlUserFrees counts the userdata blocks that have been freed. It is
 // here so the test can see that the finalizer runs at all.
 var cdlUserFrees atomic.Uint64
@@ -151,9 +192,9 @@ func cdlTestUserData(L *State, arg int, tname string, check bool) unsafe.Pointer
 	}
 	L.Pop(2)
 	if block, ok := p.(unsafe.Pointer); ok {
-		return block
+		return block /* it was made by lua_newuserdata: C's own block */
 	}
-	return nil
+	return udataCBlock(L, uvalue(index2value(L, arg))) /* made in Go */
 }
 
 // dbUpValueJoin2 is dbUpValueJoin for lua_upvaluejoin, which takes the

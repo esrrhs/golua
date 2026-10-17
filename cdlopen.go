@@ -335,11 +335,17 @@ func lua_rawlen(p *C.lua_State, idx C.int) C.lua_Unsigned {
 
 //export lua_touserdata
 func lua_touserdata(p *C.lua_State, idx C.int) unsafe.Pointer {
-	ud := stateOf(p).ToUserData(idxInt(idx))
+	L := stateOf(p)
+	ud := L.ToUserData(idxInt(idx))
 	if p2, ok := ud.(unsafe.Pointer); ok {
 		return p2
 	}
-	return nil
+	if ud == nil {
+		return nil /* not a userdata at all: PUC-Lua answers NULL */
+	}
+	/* A userdata made in Go still has an address, and C is entitled to
+	   read through it -- see udataCBlock. */
+	return udataCBlock(L, uvalue(index2value(L, idxInt(idx))))
 }
 
 //export lua_topointer

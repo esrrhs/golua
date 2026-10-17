@@ -24,6 +24,19 @@
 #define LUA_VERSION_NUM     504
 #define LUA_RELEASE         "Lua 5.4.9"
 
+/*
+** The decoration PUC-Lua puts on every declaration in its headers.
+** luaconf.h defines these, and an extension that declares its own
+** 'luaopen_' with them -- or includes a header of ours that does --
+** has to be able to use them, so they are here: the port's lua.h stands
+** for lua.h and luaconf.h together.  They are empty because the names
+** are resolved when the module is loaded, not when it is linked, so
+** there is nothing for a declaration to export.
+*/
+#define LUA_API
+#define LUALIB_API  LUA_API
+#define LUAMOD_API  LUALIB_API
+
 /* option for multiple returns in 'lua_pcall' and 'lua_call' */
 #define LUA_MULTRET (-1)
 

@@ -24,6 +24,12 @@
 #include <stdlib.h>
 #include <locale.h>
 
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
 #include "cdlbridge.h"
 
 #define CDL_NKEEP 4  /* how many formatted results stay valid at once */
@@ -312,4 +318,45 @@ int cdl_lc_cat (int which) {
     case 5: return LC_TIME;
     default: return LC_ALL;
   }
+}
+
+/* ---- a file handle as C sees it: see cdlbridge.h ---- */
+
+/* One that never closes anything: it only has to be an address that is
+   not NULL, because nothing here ever calls it. */
+static int cdl_stream_closef (lua_State *L) { (void)L; return 0; }
+
+FILE *cdl_fdopen (int fd) {
+  /* The descriptor is duplicated: the FILE is closed here, and closing
+     it must not close the file underneath Go.  Two owners of one
+     descriptor would mean that whichever closed first closed the file
+     out from under the other, and that the number is free to be handed
+     out again before the second one is through with it. */
+  int fd2 = dup(fd);
+  FILE *f;
+  if (fd2 < 0) return NULL;
+  f = fdopen(fd2, "r+");
+  if (f == NULL) f = fdopen(fd2, "r");
+  if (f == NULL) f = fdopen(fd2, "w");
+  if (f == NULL) { close(fd2); return NULL; }
+  /* Unbuffered: Go does the buffering, and a second buffer on the same
+     descriptor would put the two of them out of step. */
+  setvbuf(f, NULL, _IONBF, 0);
+  return f;
+}
+
+void cdl_stream_set (void *block, FILE *f) {
+  void **p = (void **)block;
+  p[0] = (void *)f;
+  p[1] = (void *)&cdl_stream_closef;
+}
+
+void cdl_stream_clear (void *block) {
+  void **p = (void **)block;
+  p[0] = NULL;
+  p[1] = NULL;
+}
+
+void cdl_stream_close (FILE *f) {
+  if (f != NULL) fclose(f);
 }

@@ -295,7 +295,32 @@ quoted-printable — through `ltn12`. One loopback round trip of our own,
 in `testdata/luasocket/expected.txt`. MIT-licensed, redistributed under
 `testdata/luasocket/LICENSE`.
 
-### 5.5 Coverage inventory
+### 5.5 A fourth one: LuaFileSystem, which reaches into a file handle
+
+[LuaFileSystem](https://lunarmodules.github.io/luafilesystem/) is the
+fourth, and the first that reaches *into* something the interpreter made
+rather than something it made itself: `lfs.setmode` takes a file handle
+from `io.open`, casts the userdata to a `luaL_Stream` — a `FILE*` and a
+close function, in that order — and reads straight out of it. It found
+two things, and the first is not really about files:
+
+| What LuaFileSystem does | What was wrong |
+|---|---|
+| `luaL_testudata` on a file handle, then read `closef` out of the result | a userdata made in Go — which is what a file handle is — answered NULL, so C was handed nothing and read 8 bytes past it. It did not fail, it died. Every userdata now has a block to stand for it, made the first time C asks, because PUC-Lua answers with an address for any full userdata and never with NULL |
+| read the `FILE*` out of that block | the block was zeroed, so every handle looked closed to C. An `io` file is a Go `*os.File` and has no `FILE*`, so the block is now filled in the way `luaL_Stream` is laid out — a real `FILE*` on a *duplicate* of the descriptor, since two owners of one descriptor would have whichever closed first close the file out from under the other — and cleared when the file is closed, which is how C sees a closed handle in PUC-Lua too |
+
+It also could not be compiled: `include/lualib.h` did not exist, and an
+extension includes it as a matter of course. Nor did `lua.h` define
+`LUA_API`, `LUALIB_API` or `LUAMOD_API`, which PUC-Lua's `luaconf.h`
+does and an extension declaring its own `luaopen_` uses. Both are there
+now.
+
+Its suite makes files, links and directories, so it runs in a temporary
+directory of its own. Every line it prints is PUC-Lua 5.4.9's, kept in
+`testdata/luafilesystem/expected.txt`. MIT-licensed, redistributed under
+`testdata/luafilesystem/LICENSE`.
+
+### 5.6 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
 the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
@@ -334,7 +359,7 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
-### 5.6 Performance
+### 5.7 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end

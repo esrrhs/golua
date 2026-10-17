@@ -190,3 +190,18 @@ int lua_gc(lua_State *L, int what, ...);
 static inline lua_State *cdl_buf_L(luaL_Buffer *B) { return B->L; }
 
 #endif
+
+/* ---- a file handle as C sees it ----
+   PUC-Lua's file handle is a luaL_Stream: a FILE* and a close function,
+   in that order, and an extension -- LuaFileSystem's setmode is one --
+   casts the userdata it is handed to one and reads straight out of it.
+   The port's handles are Go's, so the block behind one is filled in as
+   if it were C's: a real FILE* on the same descriptor (which is what
+   makes fileno and friends work) and a close function that is nothing
+   but an address, since C never calls it here.  Both are cleared when
+   the file is closed, which is how an extension sees a closed handle
+   the way it sees one in PUC-Lua. */
+FILE *cdl_fdopen (int fd);
+void cdl_stream_set (void *block, FILE *f);
+void cdl_stream_clear (void *block);
+void cdl_stream_close (FILE *f);
