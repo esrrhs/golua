@@ -181,6 +181,22 @@
 所以这个测试既不需要参照解释器，也不需要联网。二者均为 MIT 许可，随
 `testdata/lpeg/LICENSE` 一并再分发。
 
+#### 为 PUC-Lua 编好的 .so 可以直接用
+
+LPeg、CJSON、LuaFileSystem 另外还**用参照解释器自己的头文件**（`-I /tmp/lua-5.4.9/src`，
+不是 `include/`）各编了一份，不重新编译直接加载，输出与 PUC-Lua 逐行一致。
+所以现成的 `.so`（比如 LuaRocks 装的模块）不用重编，但有三个条件，每条都实测过：
+
+| 条件 | 原因 | 怎么查 |
+|---|---|---|
+| 按 Lua **5.4** 编的 | 函数名就是 ABI：5.1–5.3 的产物会要 `lua_objlen`、`luaL_register`、`lua_setfenv`，这些这里没有，直接加载失败 | `nm -u x.so \| grep lua_` |
+| 编译时**没有链接 liblua** | 常规做法就是留空符号交给宿主填。若 `DT_NEEDED` 里有 `liblua`，它的 `lua_*` 会解析到真解释器，然后拿本实现的 `lua_State`（一个不透明句柄）当真的用——实测 `SIGSEGV` | `otool -L x.so` / `ldd x.so` |
+| 宿主二进制是**开 cgo** 编出来的 | `CGO_ENABLED=0` 一个 `lua_*` 都不导出，dyld 直接报 `symbol not found in flat namespace '_lua_pushlstring'` | `nm -gU luabin \| grep _lua` |
+
+导出集合是 `include/lua.h` 与 `include/lauxlib.h` 里除四个 `...` 之外的全部名字：
+177 个符号，LPeg 只用到 55 个。除此之外不需要别的一致——扩展当初用谁的头文件编的无所谓，
+要对齐的是 ABI 而不是文本。
+
 ### 5.3 第二个扩展：Lua CJSON，它找出了 locale
 
 [Lua CJSON](https://kyne.com.au/~mark/software/lua-cjson.php) 2.1.0.10 用同样的方式从

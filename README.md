@@ -243,6 +243,26 @@ Every line its suite prints is PUC-Lua 5.4.9's, kept in
 interpreter nor the network. Both are MIT-licensed and redistributed
 under `testdata/lpeg/LICENSE`.
 
+#### A shared object built for PUC-Lua loads as it is
+
+LPeg, CJSON and LuaFileSystem were also built **against the reference
+interpreter's own headers** (`-I /tmp/lua-5.4.9/src`, not `include/`) and
+loaded without being rebuilt: the output is PUC-Lua's line for line. So
+an existing `.so` — a LuaRocks module, say — does not need recompiling,
+on three conditions, each measured:
+
+| Condition | Why | How to check |
+|---|---|---|
+| built for Lua **5.4** | the names are the ABI: a 5.1–5.3 object asks for `lua_objlen`, `luaL_register`, `lua_setfenv`, which do not exist here, and fails to load | `nm -u x.so \| grep lua_` |
+| built **without linking liblua** | the usual way — symbols left for the host to fill. One that has `liblua` in its `DT_NEEDED` resolves `lua_*` to the real interpreter and then dereferences *this* port's `lua_State`, which is an opaque handle: measured `SIGSEGV` | `otool -L x.so` / `ldd x.so` |
+| the host binary was built **with cgo** | `CGO_ENABLED=0` exports no `lua_*` at all, and dyld answers `symbol not found in flat namespace '_lua_pushlstring'` | `nm -gU luabin \| grep _lua` |
+
+The exported set is every name in `include/lua.h` and `include/lauxlib.h`
+except the four that take `...`: 177 symbols, against the 55 LPeg asks
+for. Nothing else about the build has to agree — the headers an extension
+was compiled against can be PUC-Lua's own, because what has to match is
+the ABI, not the text.
+
 ### 5.3 A second one: Lua CJSON, which found the locale
 
 [Lua CJSON](https://kyne.com.au/~mark/software/lua-cjson.php) 2.1.0.10 is
