@@ -566,16 +566,14 @@ func luaV_execute(L *State, ci *CallInfo) {
 					luaH_resize(L, t, uint32(c), uint32(b))
 				}
 				/* PUC-Lua runs a collector step -- and with it any
-				   '__gc' metamethod -- right after an allocation; the
-				   finalizer queue is drained in the same place.  A
-				   metamethod can run arbitrary Lua code, so the frame,
-				   the stack and the instruction pointer are re-read:
-				   'continue' does that, as 'Protect' does in C. */
-				if gcHasPending() {
-					L.runFinalizers()
+				   '__gc' metamethod -- right after an allocation; see
+				   gcAfterAlloc.  A metamethod can run arbitrary Lua
+				   code, so the frame, the stack and the instruction
+				   pointer are re-read: 'continue' does that, as
+				   'Protect' does in C. */
+				if L.gcAfterAlloc() {
 					continue
 				}
-				L.gcStep()
 			case OP_SELF:
 				rb := &L.stack[base+i.B]
 				var rc *Value
@@ -796,11 +794,9 @@ func luaV_execute(L *State, ci *CallInfo) {
 				luaV_concat(L, n)
 				/* a concatenation allocates a string, and a program can
 				   wait for the collector on that alone */
-				if gcHasPending() {
-					L.runFinalizers()
+				if L.gcAfterAlloc() {
 					continue
 				}
-				L.gcStep()
 			case OP_CLOSE:
 				luaF_close(L, ra, LUA_OK, true)
 			case OP_TBC:

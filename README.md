@@ -216,6 +216,18 @@ an allocation drives, or `Close()` — which is what `closure`, `db`,
 how they are done, and §5.1 above for what making `collectgarbage` inert
 costs.
 
+A `__gc` also keeps PUC-Lua's ordering rules, and `main.lua` is what checks
+them. An allocation inside a finalizer cannot drive a cycle — C's `GCTM`
+sets `gcstp & GCSTPGC` for the duration — so one finalizer never starts in
+the middle of another, and `collectgarbage` answers `nil` there rather
+than `0`. Closing the state from inside a finalizer, which is what
+`os.exit(0, true)` does, runs the finalizers that are left *there and
+then*, before `exit`: `main.lua`'s "bug since 5.2" case creates an object
+inside a `__gc`, asks `collectgarbage`, closes the state, and expects the
+other object's metamethod after all of that — `creating 1 / creating 2 / 2
+/ creating 3 / nil / 1` — and the object created inside the finalizer is
+never finalized at all, the state being already on its way out.
+
 **The 33 official files are in the repository and are first-class `go
 test` cases.** `testdata/official/` holds all of `testes/` (redistributed
 under the same MIT licence as Lua itself) beside a
@@ -675,6 +687,8 @@ Continuations — `lua_callk`, `lua_pcallk` and `lua_yieldk` with a non-NULL `k`
 
 The C block behind a userdata is freed when the userdata is collected: `C.malloc` is not memory Go's collector knows about, so without a finalizer an extension making userdata in a loop would grow without bound. Anything written in Lua, or ported to Go, needs none of this: `L.RequireF(modname, openf, true)` adds one to `package.loaded` (the port's `luaL_requiref`), or set `package.preload[name]` to a Go function and let `require` find it the usual way.
 3. **`collectgarbage` is inert, and that is the whole of the GC difference** — `count` reports the Go heap rather than PUC-Lua's own allocator; every other option is accepted, answered with `0`, and does nothing, because there is no collector here to start, stop or tune. What a program could ask of a collection — a `__gc` running, an entry leaving a weak table — now happens only where this port runs a cycle: the step an allocation drives (see `gcStep`), or `Close()`. It is not lost, only not on demand: an object with a `__gc` is held between cycles so that Go cannot finalise it at a moment of its own choosing, the metamethod of every object that still has one runs when the state closes, reachable or not, and a sweep removes a weak entry once nothing but the table refers to it. What that costs is the scripts that check a weak table — or count finalizers — immediately after `collectgarbage()`: three tests of the official suite (`coroutine`, `gengc`, `locals`) do, and they are among the differences below. A C extension is not affected: `lua_gc` still runs a real cycle.
+
+Inside a `__gc` the collector counts as stopped, exactly as in C: `collectgarbage` answers `nil` for every option there (`lua_gc` returns -1, and `lbaselib.c`'s `checkvalres` turns that into a fail), and an allocation in a finalizer drives no cycle, so finalizers do not nest. A `__gc` that closes the state — `os.exit(0, true)` — has the rest of them run from that close, which is `main.lua`'s finalizer-order case and now matches PUC-Lua line for line.
 4. **A weak entry disappears in one cycle, not part way through allocating** — a Go
 `weak.Pointer` is cleared in the cycle *after* the one that frees its object, so
 one cycle here runs Go's collector twice: the first frees what only a weak table

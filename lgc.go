@@ -41,11 +41,27 @@ type gcFinalizer struct {
 	obj Value // the object; keeping it alive is what Lua calls resurrection
 }
 
+// The queue is per state, not global.
+//
+// It was global once, and that was a bug with a long reach.  A Go
+// finalizer runs on a goroutine of its own and only hands the
+// metamethod over; which state owns it is known, so it went into one
+// list and a counter said how long the list was.  But a state that
+// closes can still have finalizers arrive for it afterwards -- nothing
+// will ever call them -- and they stayed in the list forever, readable
+// as "a finalizer is waiting".  The VM asks exactly that before every
+// collector step (lvm.go, after OP_NEWTABLE and OP_CONCAT): if the
+// answer is yes it runs the finalizers and goes round again, and never
+// reaches the step.  So two undeliverable leftovers from a state that
+// had closed were enough to stop every cycle for every state that came
+// after -- no '__gc' ran, no weak entry was ever swept, and the only
+// symptom was a handful of tests failing on one platform.
+//
+// Per state, an item nobody can deliver sits in a queue nobody reads
+// and costs nothing.
 var (
-	gcMu      sync.Mutex
-	gcQueue   []gcFinalizer
-	gcWaiting atomic.Int32 // len(gcQueue), so that the hot path needs no lock
-	gcWatched atomic.Int32 // objects being watched for '__gc'
+	gcMu      sync.Mutex // guards every state's 'pendingRun'
+	gcWatched atomic.Int32
 )
 
 // gcStepDebt is how many table allocations PUC-Lua would have paid for
@@ -171,15 +187,14 @@ func gcDeadWatched() int {
 // there is something to wait for: the loop yields rather than sleeps
 // first, and gives up after a few hundred microseconds, which leaves the
 // behaviour as it was on a machine too busy to schedule the goroutine.
-func gcAwaitPending() {
-	due := gcDeadWatched()
-	if due == 0 { /* nothing was collected: nothing is on its way */
+func (L *State) gcAwaitPending() {
+	if gcDeadWatched() == 0 { /* nothing was collected: nothing is on its way */
 		return
 	}
-	for i := 0; i < 1000 && int(gcWaiting.Load()) < due; i++ {
+	for i := 0; i < 1000 && L.g.pendN.Load() == 0; i++ {
 		runtime.Gosched()
 	}
-	for i := 0; i < 6 && int(gcWaiting.Load()) < due; i++ {
+	for i := 0; i < 6 && L.g.pendN.Load() == 0; i++ {
 		time.Sleep(50 * time.Microsecond)
 	}
 }
@@ -191,12 +206,12 @@ func gcAwaitPending() {
 // It costs milliseconds, because it has to be sure: only the closing of a
 // state can afford it, and only because nothing will allocate again.  A
 // collector step uses the bounded 'gcAwaitPending' instead.
-func gcWaitFinalizers() {
-	for i := 0; i < 2 && !gcHasPending(); i++ {
+func (L *State) gcWaitFinalizers() {
+	for i := 0; i < 2 && !L.hasPending(); i++ {
 		runtime.GC()
 		runtime.Gosched()
 	}
-	for i := 0; i < 5 && !gcHasPending(); i++ {
+	for i := 0; i < 5 && !L.hasPending(); i++ {
 		time.Sleep(time.Millisecond)
 	}
 }
@@ -240,7 +255,7 @@ func (L *State) gcCycle() {
 	gcClearStacks() /* see gcClearStacks: stale slots keep objects alive */
 	L.gcSweepWeak()
 	runtime.GC() /* lets Go find the unreachable objects */
-	gcAwaitPending()
+	L.gcAwaitPending()
 	L.runFinalizers()
 	gcRehold()
 }
@@ -251,7 +266,17 @@ func (L *State) gcCycle() {
 // so is what queues the metamethods.  It is only ever run while some
 // object is being watched for '__gc', and at most once every
 // 'gcStepDebt' allocations.
+//
+// It is never run from inside a '__gc', nor while the state is closing,
+// which is C's 'gcstp & GCSTPGC': GCTM sets that bit, and 'luaC_step'
+// then does nothing but push the debt back down, so allocating inside a
+// finalizer cannot start a collection there -- and, what matters more,
+// cannot run *another* finalizer in the middle of the one that is
+// running.  See gcAfterAlloc, the only caller.
 func (L *State) gcStep() {
+	if L.g.gcInFinalizer || L.g.closing { /* 'g->gcstp & GCSTPGC' */
+		return
+	}
 	if gcWatched.Load() == 0 && gcWeakCount.Load() == 0 {
 		return
 	}
@@ -266,30 +291,73 @@ func (L *State) gcStep() {
 	L.gcCycle()
 }
 
+// gcAfterAlloc is PUC-Lua's 'luaC_checkGC' at the end of an allocation:
+// run whatever '__gc' is due, and a collector step.
+//
+// It answers true when a metamethod ran, because that is what the caller
+// needs to know: a '__gc' is arbitrary Lua code, so the frame, the stack
+// and the instruction pointer have to be re-read -- the caller does that
+// with 'continue', which is what C's 'Protect' re-entering the loop
+// does.
+//
+// An allocation inside a finalizer runs neither: see gcStep.
+func (L *State) gcAfterAlloc() bool {
+	if L.g.gcInFinalizer || L.g.closing {
+		return false
+	}
+	if L.hasPending() {
+		L.runFinalizers()
+		return true
+	}
+	L.gcStep()
+	return false
+}
+
 // gcQueueFinalizer is the Go finalizer: it runs on the finalizer
 // goroutine, so all it may do is hand the metamethod over to the state
 // that owns it.  Keeping 'obj' in the queue revives the object, which is
 // what makes it reachable from the metamethod.
 func gcQueueFinalizer(it gcFinalizer) {
+	g := it.L.g
 	gcMu.Lock()
-	gcQueue = append(gcQueue, it)
+	g.pendingRun = append(g.pendingRun, it)
 	gcMu.Unlock()
-	gcWaiting.Add(1)
+	g.pendN.Add(1)
 }
 
-// gcHasPending tells whether a finalizer is waiting.  It is read on the
-// allocation path, so it must stay cheap.
-func gcHasPending() bool { return gcWaiting.Load() > 0 }
+// hasPending tells whether a finalizer is waiting for this state.  It is
+// read on the allocation path, so it must stay cheap -- and it must ask
+// about *this* state, which is why the queue is per state: see the note
+// above the queue.
+func (L *State) hasPending() bool { return L.g.pendN.Load() > 0 }
 
-// gcTakePending moves the queue out.  Only the thread running Lua calls
-// it, so the items it returns can be called on safely.
-func gcTakePending() []gcFinalizer {
+// takeOnePending takes the next finalizer off this state's queue.
+//
+// Every access to the queue goes through 'gcMu', including this one,
+// because 'pendingRun' has two goroutines on it: this one, which is
+// running Lua, and Go's finalizer goroutine, which appends to it from
+// 'gcQueueFinalizer'.  Doing the pop in two steps -- read the slice,
+// store back a reslice of it -- is a race even when each step looks
+// harmless: the finalizer goroutine can read the slice header between
+// them, see the item that is being popped still at the front, and
+// 'append' a copy of the whole queue with it back in place.  The
+// metamethod then runs twice, which is what 'main.lua' caught -- one run
+// in a hundred, and only on a machine with more than one core.
+func (L *State) takeOnePending() (gcFinalizer, bool) {
 	gcMu.Lock()
-	items := gcQueue
-	gcQueue = nil
+	if len(L.g.pendingRun) == 0 {
+		gcMu.Unlock()
+		return gcFinalizer{}, false
+	}
+	it := L.g.pendingRun[0]
+	if len(L.g.pendingRun) == 1 {
+		L.g.pendingRun = nil /* let the backing array go */
+	} else {
+		L.g.pendingRun = L.g.pendingRun[1:]
+	}
 	gcMu.Unlock()
-	gcWaiting.Store(0)
-	return items
+	L.g.pendN.Add(-1)
+	return it, true
 }
 
 // fullCollect runs a complete collection, the way
@@ -314,9 +382,12 @@ func (L *State) closeFinalizers() {
 	if L.g.closing {
 		/* lua_close from inside a '__gc' -- which is what
 		   'os.exit(0, true)' does -- runs the finalizers that are left:
-		   C's close_state goes straight back to luaC_freeallobjects.
-		   The list is almost empty by now, so it cannot nest far. */
-		L.runFinalizers()
+		   C's close_state goes straight back to
+		   luaC_freeallobjects, and 'callallpendingfinalizers' picks up
+		   whatever the outer loop had not reached yet.  So does this:
+		   the objects still waiting are on the state, not in a local,
+		   precisely so that this call can finish them. */
+		L.drainCloseQueue()
 		return
 	}
 	L.g.closing = true
@@ -327,27 +398,63 @@ func (L *State) closeFinalizers() {
 	gcPruneWatch()
 	gcRelease() /* nothing is held any more: the state is going away */
 	gcClearStacks()
-	runtime.GC()       /* lets Go find the unreachable objects */
-	gcWaitFinalizers() /* nothing more will allocate: wait for the queue */
+	runtime.GC()         /* lets Go find the unreachable objects */
+	L.gcWaitFinalizers() /* nothing more will allocate: wait for the queue */
 	L.runFinalizers()
 	/* What is still reachable was never queued, so it is found the way
-	   C finds it: by walking the list of watched objects. */
+	   C finds it: by walking the list of watched objects.  C's
+	   'separatetobefnz(g, 1)' moves them all to 'tobefnz' first and
+	   'callallpendingfinalizers' then takes them off that list one at a
+	   time; 'closeQueue' is that list, and it lives on the state so
+	   that a nested lua_close can take from it too. */
 	gcWatchMu.Lock()
-	watch := gcWatch
+	L.g.closeQueue = append(L.g.closeQueue, gcWatch...)
 	gcWatch = nil
 	gcWatchMu.Unlock()
-	for _, w := range watch {
+	L.drainCloseQueue()
+}
+
+// drainCloseQueue is C's 'callallpendingfinalizers': while there is an
+// object left to finalize, take it off the list and run its '__gc'.
+//
+// It is re-entrant on purpose.  A '__gc' may call 'os.exit(0, true)',
+// which closes the state from inside the finalizer, and PUC-Lua answers
+// that with another 'luaC_freeallobjects': the rest of the list is
+// finalized there and then, before 'exit'.  Taking one object at a time
+// from a list on the state -- rather than holding the whole list in a
+// local -- is what lets the nested call see and finish what is left.
+func (L *State) drainCloseQueue() {
+	for {
+		v, ok := L.takeCloseObject()
+		if !ok {
+			break
+		}
+		L.callFinalizer(v)
+		L.runFinalizers() /* a '__gc' may have queued more */
+	}
+	L.runFinalizers()
+}
+
+// takeCloseObject takes the next object that still waits for its '__gc',
+// C's 'udata2finalize' off 'g->tobefnz'.
+func (L *State) takeCloseObject() (Value, bool) {
+	gcWatchMu.Lock()
+	for len(L.g.closeQueue) > 0 {
+		w := L.g.closeQueue[0]
+		L.g.closeQueue = L.g.closeQueue[1:]
 		if w.dead() { /* gone: Go has already queued its metamethod */
 			continue
 		}
 		v := w.value()
-		if !gcIsWatched(&v) { /* already finalised */
+		if !gcIsWatched(&v) { /* already finalised, or unmarked again */
 			continue
 		}
+		gcWatchMu.Unlock()
 		gcUnwatch(&v)
-		L.callFinalizer(v)
+		return v, true
 	}
-	L.runFinalizers() /* a '__gc' may have queued more */
+	gcWatchMu.Unlock()
+	return Value{}, false
 }
 
 // gcIsWatched says whether an object still waits for its '__gc'.
@@ -457,23 +564,17 @@ var freeUdataCBlock func(u *Udata)
 // inside a finalizer, and close_state then runs the finalizers that are
 // left -- which are the ones still in this very list.
 func (L *State) runFinalizers() {
-	if len(L.g.pendingRun) == 0 {
-		if !gcHasPending() {
+	for {
+		it, ok := L.takeOnePending()
+		if !ok {
 			return
 		}
-		L.g.pendingRun = gcTakePending()
-	}
-	for len(L.g.pendingRun) > 0 {
-		it := L.g.pendingRun[0]
-		L.g.pendingRun = L.g.pendingRun[1:]
-		if it.L.g != L.g { /* another state: leave it for its own thread */
-			gcQueueFinalizer(it)
-			continue
-		}
-		/* C takes the object out of the "to be finalized" list before it
-		   calls the metamethod ('udata2finalize' clears FINALIZEDBIT), so
-		   that '__gc' can put it back with 'setmetatable' -- which is how
-		   a module such as 'tracegc' keeps being told about collections:
+		/* Every item in the queue belongs to this state: see the note
+		   above the queue.  C takes the object out of the "to be
+		   finalized" list before it calls the metamethod
+		   ('udata2finalize' clears FINALIZEDBIT), so that '__gc' can
+		   put it back with 'setmetatable' -- which is how a module such
+		   as 'tracegc' keeps being told about collections:
 
 		       function mt.__gc (o)
 		         stderr:write'.'
@@ -510,10 +611,15 @@ func (L *State) callFinalizer(obj Value) {
 	oldah := L.allowhook
 	L.allowhook = 0
 	/* PUC-Lua stops the collector for the duration of a finalizer, and
-	   that is observable: 'collectgarbage' answers nil inside one. */
+	   that is observable: 'collectgarbage' answers nil inside one.
+	   GCTM saves the previous state and restores it
+	   ('oldgcstp = g->gcstp'), so a finalizer that runs inside another
+	   one -- which is what 'os.exit(0, true)' from a '__gc' does --
+	   does not turn the collector back on for the outer one. */
+	oldIn := L.g.gcInFinalizer
 	L.g.gcInFinalizer = true
 	status := L.PCall(1, 0, 0)
-	L.g.gcInFinalizer = false
+	L.g.gcInFinalizer = oldIn
 	L.allowhook = oldah
 	L.ci.callstatus &= ^uint16(CIST_FIN)
 	if status != LUA_OK {

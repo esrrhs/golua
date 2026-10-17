@@ -159,6 +159,15 @@
 `tracegc` 与 80 个 golden 用例走的都是这条路，做法见 §7；把 `collectgarbage`
 做成空壳的代价见上文 §5.1。
 
+`__gc` 还保留了 PUC-Lua 的**顺序**规则，而 `main.lua` 正是检查它的那个用例：
+终结器内部的分配不会驱动一个周期（C 的 `GCTM` 期间置了 `gcstp & GCSTPGC`），
+所以一个终结器绝不会在另一个跑到一半时插进来；那里的 `collectgarbage` 回答
+`nil` 而不是 `0`。在终结器里关闭状态——`os.exit(0, true)` 就是这么做的——会在
+`exit` **之前**、就地跑完剩下的终结器：`main.lua` 的 "bug since 5.2" 用例在
+`__gc` 里创建对象、问 `collectgarbage`、关状态，并要求另一个对象的元方法在
+这一切之后才跑（`creating 1 / creating 2 / 2 / creating 3 / nil / 1`），
+而且在终结器里创建的那个对象根本不会被终结——状态已经在退场了。
+
 `go test` 内也镜像了这套比对：`testdata/diff/*.lua`（80 个用例）与从 PUC-Lua 5.4.9
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
@@ -625,6 +634,8 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 `package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，
 让 `require` 照常找到它。
 3. **`collectgarbage` 是空壳，这就是 GC 差异的全部**：`count` 报的是 Go 堆而非 PUC-Lua 分配器的口径；其余选项一律接收、返回 `0`、什么都不做——这里没有收集器可启动、停止或调参。程序本来能向一次收集索取的东西（`__gc` 跑起来、弱表条目消失）现在只在本实现跑一轮的地方发生：**分配驱动的步进**（见 `gcStep`）或 `Close()`。不是没了，只是不再"随叫随到"：带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法；弱表条目在只有表引用它时就被清掉。代价是那些"调完 `collectgarbage()` 立刻查弱表/数终结器"的脚本：官方套件里 `coroutine`、`gengc`、`locals` 三个正是如此，它们属于下面的差异之一。C 扩展不受影响：`lua_gc` 仍然真的跑一整轮。
+
+在 `__gc` 内部，收集器按 C 的规则算作"已停止"：那里的 `collectgarbage` 对每个选项都回答 `nil`（`lua_gc` 返回 -1，`lbaselib.c` 的 `checkvalres` 把它变成 fail），终结器里的分配也不驱动任何周期，因此终结器不会嵌套。在终结器里关闭状态（`os.exit(0, true)`）会由那次关闭把剩下的终结器跑完——这正是 `main.lua` 的终结器顺序用例，现在与 PUC-Lua 逐行一致。
 4. **弱表条目在「一轮」里被清掉，而不是随着分配被逐步清掉**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，所以本实现的一次 Lua 周期内部跑**两遍** `runtime.GC()`——第一遍让只剩弱引用的对象真的死掉，第二遍让它的弱指针失效。结果在能测到的地方是一致的：不调 `collectgarbage` 而分配两百万个表之后条目就没了，与 PUC-Lua 相同。真正的区别在**粒度**：PUC-Lua 的收集器与分配交织，条目是在某一次分配中途消失的；本实现只在周期边界（`Close()`，或分配越过阈值时）清除，所以「第几次分配之后条目消失」这个问题没有答案。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
 5. **错误信息的文案与位置**：与 PUC-Lua 一致，由 `24_errmsg`、`36_errors`、`66_errmsg`、`67_meta` 四个 golden 共数百行钉住——算术/位运算/连接/取长/比较/索引/调用各自的措辞、`error` 的 level、`assert`/`pcall`/`xpcall`/`select`、以及 `ldebug` 推断出的变量名（local/upvalue/global/field/常量/调用结果）。唯一无法相同的是未捕获错误行首的 `prog:`——那是 argv[0]，两个程序路径不同，测试里已归一化。
 6. **`os.setlocale` 去问 C 库，所以需要 cgo**：小数点（decimal point）是 locale 里 Lua 唯一真正观察的部分，体现在三处——数字转字符串、`string.format` 的 `%f`/`%e`/`%g`（不含 `%a` 与 `%q`，这正是 `%q` 能往返的原因）、以及 `tonumber`（两种分隔符都收，而源码里的数字字面量始终用 `.`）。装了哪些 locale 由宿主机决定，与 PUC-Lua 完全一致，C 库不认的名字返回 `nil`。以 `CGO_ENABLED=0` 构建时没有 C 库可问，于是除 `"C"` 以外的名字一律返回 `nil`，小数点固定为 `.`。

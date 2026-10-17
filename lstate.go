@@ -112,10 +112,19 @@ type globalState struct {
 	gcDebt     int  // allocations since the last collector step
 	closing    bool // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
 
-	// pendingRun is the queue of finalizers being run right now --
-	// see runFinalizers, which a nested lua_close has to be able to
-	// finish.
+	// pendingRun is the queue of finalizers handed over by Go and not
+	// run yet -- see runFinalizers, which a nested lua_close has to be
+	// able to finish.  It is per state on purpose: see the note above
+	// the queue in lgc.go.
 	pendingRun []gcFinalizer
+	pendN      atomic.Int32 // len(pendingRun), so that the hot path needs no lock
+	// closeQueue is C's 'g->tobefnz' while the state is closing: the
+	// objects whose '__gc' has not run yet.  It is on the state, and
+	// not in a local of closeFinalizers, because a '__gc' may close the
+	// state again -- 'os.exit(0, true)' from a finalizer -- and that
+	// second close has to be able to finish what is left.  See
+	// drainCloseQueue.
+	closeQueue []weakRef
 	// The four fields below are the collector's knobs.  'collectgarbage'
 	// no longer touches them -- it has no collector to talk to -- so
 	// only the C API's 'lua_gc' (see cdl_gc_cb) reads or writes them

@@ -23,8 +23,8 @@ func gcDiag() string {
 	s := fmt.Sprintf("goroutines=%d gomaxprocs=%d numgc=%d heap=%d KB\n",
 		runtime.NumGoroutine(), runtime.GOMAXPROCS(0), m.NumGC, m.HeapAlloc/1024)
 	gcWatchMu.Lock()
-	s += fmt.Sprintf("watched=%d gcWatched=%d gcWeakCount=%d gcWaiting=%d gcHold=%d\n",
-		len(gcWatch), gcWatched.Load(), gcWeakCount.Load(), gcWaiting.Load(), len(gcHold))
+	s += fmt.Sprintf("watched=%d gcWatched=%d gcWeakCount=%d gcHold=%d\n",
+		len(gcWatch), gcWatched.Load(), gcWeakCount.Load(), len(gcHold))
 	gcWatchMu.Unlock()
 	gcThrMu.Lock()
 	s += fmt.Sprintf("threads tracked=%d\n", len(gcThrs))
@@ -197,6 +197,46 @@ func TestFinalizerRunsOnAllocation(t *testing.T) {
 	}
 }
 
+// A finalizer nobody can deliver must not stop anybody else's.
+//
+// A Go finalizer hands its metamethod over on a goroutine of its own, so
+// one can arrive for a state that has already closed -- and nothing will
+// ever call it.  That is not allowed to cost the next state anything,
+// and it once cost it everything: the queue was global, and the VM asks
+// "is a finalizer waiting?" before every collector step, so one
+// undeliverable leftover meant no state ever took a step again.  It is
+// what made six of these tests fail on ubuntu and none of them here.
+func TestFinalizersOfAClosedStateDoNotStopTheNextOne(t *testing.T) {
+	var gone *State
+	func() {
+		L := NewState()
+		L.OpenLibs()
+		gone = L
+		L.Close()
+	}()
+	/* Exactly what a Go finalizer that arrives after the state has gone
+	   does: hand a metamethod over to a state that will never ask for
+	   it.  Whether Go does so on this machine is a matter of timing --
+	   it did on ubuntu, which is how the bug was found -- so the
+	   handover is made here rather than waited for. */
+	gcQueueFinalizer(gcFinalizer{L: gone, obj: makeTableValue(&Table{})})
+	got := runChunk(t, `
+		local ran = false
+		do
+			local o = {}
+			setmetatable(o, {__gc = function () ran = true end})
+		end
+		for i = 1, 1000000 do
+			local a = {}
+			if ran then break end
+		end
+		return tostring(ran)
+	`)
+	if got != "true" {
+		t.Errorf("__gc never ran from a collector step: %s\n%s", got, gcDiag())
+	}
+}
+
 // A weak table has to be swept on allocation alone, for the same reason.
 func TestWeakSweptOnAllocation(t *testing.T) {
 	got := runChunk(t, `
@@ -238,5 +278,82 @@ func TestCollectGarbageInsideAFinalizerAnswersNil(t *testing.T) {
 	`)
 	if got != "nil,nil,nil / 0" {
 		t.Errorf("collectgarbage inside a finalizer: %s\n%s", got, gcDiag())
+	}
+}
+
+// TestFinalizersDoNotNest pins that an allocation inside a '__gc' cannot
+// run another '__gc' in the middle of it.
+//
+// PUC-Lua gets this from 'gcstp & GCSTPGC': GCTM sets the bit, and
+// 'luaC_step' then does nothing, so a finalizer that allocates -- which
+// is what every finalizer does -- never drives a collection, and never
+// reaches another finalizer, before it is finished.  Here it is the
+// 'gcInFinalizer' test in gcStep and gcAfterAlloc.
+//
+// Which of two objects is finalized first is not fixed -- it is the
+// order Go's collector queues them in -- but that they do not interleave
+// is: "a,a-end,b" and "b,a,a-end" are both right, "a,b,a-end" is not.
+func TestFinalizersDoNotNest(t *testing.T) {
+	got := runChunk(t, `
+		local order = {}
+		do
+			local a = setmetatable({}, {__gc = function ()
+				order[#order+1] = "a"
+				for i = 1, 300000 do local t = {} end   -- would drive a step
+				order[#order+1] = "a-end"
+			end})
+			local b = setmetatable({}, {__gc = function ()
+				order[#order+1] = "b"
+			end})
+		end
+		for i = 1, 5000000 do
+			local t = {}
+			if #order >= 3 then break end
+		end
+		return table.concat(order, ",")
+	`)
+	if got != "a,a-end,b" && got != "b,a,a-end" {
+		t.Errorf("finalizers interleaved: %q\n%s", got, gcDiag())
+	}
+}
+
+// TestFinalizerOrderAtExit is the case main.lua calls "bug since 5.2":
+// a '__gc' that creates an object and then closes the state from inside
+// itself with 'os.exit(0, true)'.  PUC-Lua prints
+//
+//	creating 1 / creating 2 / 2 / creating 3 / nil / 1
+//
+// and every line of that is a rule:
+//
+//   - the object created inside the finalizer is never finalized (no 3):
+//     the state is closing, so 'setmetatable' cannot register a '__gc';
+//   - 'collectgarbage' answers nil, the collector being stopped for the
+//     duration of the finalizer;
+//   - the other object's '__gc' runs from the 'lua_close' that
+//     'os.exit(0, true)' does -- after the finalizer that called it --
+//     and not from a collector step in the middle of it.
+//
+// It runs through the interpreter because 'os.exit' ends the process.
+func TestFinalizerOrderAtExit(t *testing.T) {
+	const src = `
+print("creating 1")
+setmetatable({}, {__gc = function () print(1) end})
+
+print("creating 2")
+setmetatable({}, {__gc = function ()
+  print("2")
+  print("creating 3")
+  setmetatable({}, {__gc = function () print(3) end})
+  print(collectgarbage())    -- cannot call collector here
+  os.exit(0, true)
+end})
+`
+	out, errb, code := cliRun(t, cliScript(t, src))
+	if code != 0 {
+		t.Fatalf("exited %d, stderr %q", code, errb)
+	}
+	want := "creating 1\ncreating 2\n2\ncreating 3\nnil\n1\n"
+	if out != want {
+		t.Errorf("finalizers ran in the wrong order:\n got  %q\nwant  %q\nstderr %q", out, want, errb)
 	}
 }
