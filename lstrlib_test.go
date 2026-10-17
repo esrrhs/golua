@@ -203,3 +203,65 @@ func TestFormatHexFloatTieRounding(t *testing.T) {
 			want[1], got[1])
 	}
 }
+
+// A subnormal is the other thing the C libraries spell differently, and
+// unlike the tie the standard lets them: of a normalised float the
+// leading hexadecimal digit is 1, and of one too small to have a 1 it is
+// unspecified. glibc keeps the exponent of the smallest normal float and
+// writes the raw 52-bit fraction after the point, so 5e-324 is
+// 0x0.0000000000001p-1022; Apple's library normalises it, and so does
+// this port, for which it is 0x1p-1074 -- what Go's own hexadecimal
+// conversion writes, and one number rather than two spellings of one.
+//
+// '%q' writes a float the same way, which is why it is asked here too:
+// it is the conversion a program uses to write a number back out.
+//
+// What is asserted is therefore the rule -- every answer this port gives
+// starts with "0x1" -- and the values are only compared when the
+// reference's library normalises as well.
+func TestFormatSubnormalIsNormalised(t *testing.T) {
+	ref := os.Getenv("LUA_REF")
+	if ref == "" {
+		t.Skip("no LUA_REF: point it at a reference interpreter to compare a subnormal")
+	}
+	const src = `local out = {}
+	-- the ends of the subnormal range, and the smallest normal float
+	for _, x in ipairs{5e-324, 1e-323, 1e-320, 1e-308,
+	                   2.2250738585072014e-308 / 2,
+	                   2.2250738585072014e-308} do
+	  out[#out + 1] = string.format("%a", x) .. " " .. string.format("%q", x)
+	end
+	print(table.concat(out, "\n"))
+	`
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sub.lua"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Split(strings.TrimSpace(fmtRunFile(t, ref, dir, "sub.lua")), "\n")
+	got := strings.Split(strings.TrimSpace(fmtRunFile(t, diffBuild(t), dir, "sub.lua")), "\n")
+	if len(want) != 6 || len(got) != 6 {
+		t.Fatalf("the subnormal chunk did not answer six times:\nPUC-Lua: %q\nthis:    %q",
+			want, got)
+	}
+	for i, line := range got {
+		for _, field := range strings.Fields(line) {
+			if !strings.HasPrefix(field, "0x1") {
+				t.Errorf("a subnormal is normalised here, so every hexadecimal "+
+					"answer starts with 0x1; this port answers %q on line %d", field, i+1)
+			}
+		}
+	}
+	if fmtRefNormalisesSubnormals(t, ref) {
+		for i := range want {
+			if want[i] != got[i] {
+				t.Errorf("subnormal %d: PUC-Lua answers %s, this answers %s",
+					i+1, want[i], got[i])
+			}
+		}
+		return
+	}
+	/* glibc: the second case in the library where a difference is the C
+	   library's and not this port's. */
+	t.Logf("PUC-Lua answers %q and this port %q: a subnormal, whose leading "+
+		"hexadecimal digit C leaves the library to choose", want[0], got[0])
+}

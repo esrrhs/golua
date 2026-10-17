@@ -1,7 +1,7 @@
 testing stand-alone interpreter
 progname: /tmp/refcap/lua
 Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio
-(temporary program file used in these tests: /tmp/lua_UmrUHI)
+(temporary program file used in these tests: /tmp/lua_F6a9qU)
 testing warnings
 /tmp/refcap/lua: main.lua:385: assertion failed!
 stack traceback:

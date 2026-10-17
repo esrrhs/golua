@@ -102,7 +102,21 @@ var numVals = []string{
 	"1e-100", "2^62", "0x7fffffffffffffff", "7", "-7", "1e-323",
 }
 
-const numChunk = fuzzQuote + `local function P(i, ok, ...)
+// numChunk is the harness, plus 'isSub' -- the same question the format
+// fuzz asks, for the same reason: '%q' writes a float in hexadecimal,
+// and of a subnormal float the leading digit is whichever the C library
+// picked, so on a reference that spells 5e-324 as 0x0.0000000000001p-1022
+// that one answer is a dash on both sides.  SKIPSUB has to come first:
+// a Lua local is only visible to functions written after it.
+const numChunk = fuzzQuote + `local SKIPSUB = %s
+local function isSub(v)
+  -- not math.abs, which of an integer answers the integer: abs of
+  -- math.mininteger is math.mininteger, negative, and would look
+  -- smaller than the smallest normal float
+  if type(v) ~= "number" then return false end
+  return v ~= 0 and v > -2.2250738585072014e-308 and v < 2.2250738585072014e-308
+end
+local function P(i, ok, ...)
   local n = select("#", ...)
   local t = {}
   for k = 1, n do t[k] = q((select(k, ...))) end
@@ -131,11 +145,21 @@ end)())` + "\n")
 
 // numValLine asks what each of the five ways of writing a number makes
 // of one value.
-func numValLine(i int, v string) string {
+//
+// '%q' is the one that can be left out: it writes a float in
+// hexadecimal, and of a subnormal float the leading digit is whichever
+// the C library picked (see fmtChunk in formatfuzz_test.go), so on a
+// reference that spells 5e-324 as 0x0.0000000000001p-1022 that one
+// answer is a dash on both sides and the other four are still asked.
+func numValLine(i int, v string, skipSub bool) string {
+	q := "string.format('%q', " + v + ")"
+	if skipSub {
+		q = "(SKIPSUB and isSub(" + v + ")) and '-' or " + q
+	}
 	return "P(" + strconv.Itoa(i) + ", pcall(function() return " +
 		strings.Join([]string{
 			"tostring(" + v + ")",
-			"string.format('%q', " + v + ")",
+			q,
 			"math.tointeger(" + v + ")",
 			"string.format('%g', " + v + ")",
 			"string.format('%e', " + v + ")",
@@ -151,9 +175,10 @@ func TestNumberFuzzDifferential(t *testing.T) {
 	vals := numVals
 	perStr := 1 + len(numBases) /* tonumber, with and without a base, plus the lexer */
 	total := len(strs)*perStr + len(vals)
+	skipSub := !fmtRefNormalisesSubnormals(t, ref)
 
 	var b strings.Builder
-	b.WriteString(numChunk)
+	b.WriteString(strings.Replace(numChunk, "%s", strconv.FormatBool(skipSub), 1))
 	n := 0
 	for _, s := range strs {
 		n += perStr
@@ -161,7 +186,7 @@ func TestNumberFuzzDifferential(t *testing.T) {
 	}
 	for _, v := range vals {
 		n++
-		b.WriteString(numValLine(n, v))
+		b.WriteString(numValLine(n, v, skipSub))
 	}
 	b.WriteString(`print("count", ` + strconv.Itoa(total) + ")\n")
 

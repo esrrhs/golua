@@ -59,6 +59,13 @@ var fmtConvs = []string{
 var fmtVals = []string{
 	"0", "1", "-1", "255", "-255", "math.maxinteger", "math.mininteger",
 	"0.0", "-0.0", "1.5", "-1.5", "0.1", "1/3", "1e300", "1e-300",
+	/* the two ends of the subnormal range: the smallest float there is,
+	   and one small enough to be subnormal without being a power of two
+	   -- 2.2250738585072014e-308 is the smallest normal one.  A
+	   subnormal is the only value whose '%a' the C libraries spell
+	   differently, so it has to be in the grid and not left out by
+	   accident. */
+	"5e-324", "1e-308",
 	"math.huge", "-math.huge", "(0/0)",
 	`""`, `"hello"`, "\"" + "a\\0b" + "\"", "true",
 }
@@ -79,31 +86,41 @@ func fmtStrings() []string {
 }
 
 // fmtChunk is what the generated cases sit in.  Besides 'q' and 'show'
-// it carries the one case the grid cannot ask, and says so:
+// it carries the two cases the grid cannot ask, and says so.  Both are
+// places where the C standard leaves the library a choice and the
+// libraries chose differently, so no port can answer both ways and the
+// reference is asked which one it is before anything is compared.
 //
 //	'tie' says of a %a precision and a value whether the conversion
 //	lands exactly on a tie -- the first digit dropped is 8 and nothing
-//	behind it is nonzero -- and how the reference's C library breaks
-//	that tie.  glibc hands the last digit kept to 'round_away', which
-//	rounds away from zero only when the digit is odd, so a tie always
-//	lands on an even one; Apple's library rounds a tie *down* whatever
-//	that digit is.  '%.0A' of 1.5 is 0X2P+0 under the first and
-//	0X1P+0 under the second, and no port can answer both.
+//	behind it is nonzero.  glibc hands the last digit kept to
+//	'round_away', which rounds away from zero only when the digit is
+//	odd, so a tie always lands on an even one; Apple's library rounds a
+//	tie *down* whatever that digit is.  '%.0A' of 1.5 is 0X2P+0 under
+//	the first and 0X1P+0 under the second.  This port answers 0X2P+0:
+//	what glibc answers, what the C library's own '%f' answers on every
+//	platform ('%.0f' of 1.5 is 2), and what makes '%a' agree with '%f'
+//	inside a single call.  Only a tie on an *odd* digit is undecided --
+//	an even digit kept is where both rules land anyway -- so only those
+//	are left out.
 //
-// This port answers 0X2P+0 -- the one glibc gives, the one the C
-// library's own '%f' gives on every platform ('%.0f' of 1.5 is 2), and
-// the one that makes '%a' agree with '%f' inside a single call.  So
-// on a reference whose library answers 0X1P+0 the cases that turn on
-// it are not asked on either side: SKIP is true, 'tie' counts them,
-// and both sides print a dash.  They are still printed, so the count
-// the comparison rests on is unchanged.
+//	'sub' says whether the value is subnormal -- smaller in magnitude
+//	than the smallest normal float.  Of a normalised float the leading
+//	hexadecimal digit is 1; of a subnormal one C leaves it unspecified,
+//	because there is no 1 to normalise to.  glibc answers 0x0.0000000000001p-1022
+//	for 5e-324, keeping the exponent of the smallest normal float and
+//	writing the raw 52-bit fraction after the point; Apple's library
+//	answers 0x1p-1074, and so does this port, which is what Go's own
+//	hexadecimal conversion writes and what makes the answer one number
+//	rather than two spellings of it.  '%q' of a float is a '%a', so it
+//	is affected too.
 //
-// Only a tie on an *odd* digit is undecided.  An even digit kept is
-// where both rules land anyway -- to even is to stay, and down is to
-// stay -- so those are compared like any other case.
+// Whatever is left out is left out on both sides: 'skip' counts it and
+// the line still prints, as a dash, so the count the comparison rests
+// on is unchanged.
 //
-// The chunk starts with SKIP because 'tie' has to see it, and a Lua
-// local is only visible to functions written after it.
+// The chunk starts with the two flags because 'skip' has to see them,
+// and a Lua local is only visible to functions written after it.
 const fmtChunk = fuzzQuote + `local NSKIP = 0
 local function isTie(prec, v)
   if prec < 0 or type(v) ~= "number" then return false end
@@ -114,8 +131,16 @@ local function isTie(prec, v)
   local last = (prec == 0) and "1" or frac:sub(prec, prec)
   return last:find("[13579bdf]") ~= nil
 end
-local function tie(prec, v)
-  if SKIP and isTie(prec, v) then NSKIP = NSKIP + 1; return true end
+local function isSub(v)
+  -- not math.abs, which of an integer answers the integer: abs of
+  -- math.mininteger is math.mininteger, negative, and would look
+  -- smaller than the smallest normal float
+  if type(v) ~= "number" then return false end
+  return v ~= 0 and v > -2.2250738585072014e-308 and v < 2.2250738585072014e-308
+end
+local function skip(prec, v)
+  if SKIPTIE and isTie(prec, v) then NSKIP = NSKIP + 1; return true end
+  if SKIPSUB and isSub(v) then NSKIP = NSKIP + 1; return true end
   return false
 end
 local function show(ok, ...)
@@ -155,24 +180,31 @@ func TestFormatFuzzDifferential(t *testing.T) {
 	   value at all. */
 	perForm := len(vals) + 1
 	total := len(forms) * perForm
-	skip := fmtRefTiesDown(t, ref)
+	tiesDown := fmtRefTiesDown(t, ref)
+	hasSub := !fmtRefNormalisesSubnormals(t, ref)
 
 	var b strings.Builder
-	b.WriteString("local SKIP = " + strconv.FormatBool(skip) + "\n")
+	b.WriteString("local SKIPTIE = " + strconv.FormatBool(tiesDown) + "\n")
+	b.WriteString("local SKIPSUB = " + strconv.FormatBool(hasSub) + "\n")
 	b.WriteString(fmtChunk)
 	n := 0
 	for _, f := range forms {
-		/* Only '%a' and '%A' round in hexadecimal, so only they can
-		   land on a tie. */
+		/* '%a' and '%A' write the value in hexadecimal, so they are the
+		   ones that can land on a tie or be asked about a subnormal,
+		   and '%q' writes a float the same way. */
 		prec := -1
-		if f[len(f)-1] == 'a' || f[len(f)-1] == 'A' {
-			prec = fmtPrecOf(f)
+		asked := false
+		switch f[len(f)-1] {
+		case 'a', 'A':
+			prec, asked = fmtPrecOf(f), true
+		case 'q':
+			asked = true
 		}
 		for _, v := range vals {
 			n++
 			guard := ""
-			if prec >= 0 {
-				guard = "tie(" + strconv.Itoa(prec) + ", " + v + ")"
+			if asked {
+				guard = "skip(" + strconv.Itoa(prec) + ", " + v + ")"
 			}
 			b.WriteString(fmtLine(n, f, v, guard))
 		}
@@ -265,13 +297,7 @@ func fmtRunFile(t *testing.T, bin, dir, name string) string {
 // rounds a tie down whatever the last digit is, and answers 0X1P+0.
 func fmtRefTiesDown(t *testing.T, ref string) bool {
 	t.Helper()
-	dir := t.TempDir()
-	const name = "tieprobe.lua"
-	const src = `print(string.format("%.0A", 1.5))` + "\n"
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	switch out := strings.TrimSpace(fmtRunFile(t, ref, dir, name)); out {
+	switch out := fmtProbe(t, ref, "tieprobe.lua", `string.format("%.0A", 1.5)`); out {
 	case "0X1P+0":
 		return true /* Apple's */
 	case "0X2P+0":
@@ -285,13 +311,49 @@ func fmtRefTiesDown(t *testing.T, ref string) bool {
 	}
 }
 
+// fmtProbe runs one expression under the reference and answers what it
+// printed.  Both questions the grid has to ask before it can be
+// compared are asked this way.
+func fmtProbe(t *testing.T, ref, name, expr string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte("print("+expr+")\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(fmtRunFile(t, ref, dir, name))
+}
+
+// fmtRefNormalisesSubnormals asks the reference what its C library
+// writes for a subnormal number, which the C standard leaves it to
+// choose: of a normalised float the leading hexadecimal digit is 1, and
+// of one too small to have a 1 -- below 2.2250738585072014e-308 -- it is
+// unspecified.  glibc answers 0x0.0000000000001p-1022 for 5e-324,
+// keeping the exponent of the smallest normal float and writing the raw
+// 52-bit fraction after the point; Apple's library answers 0x1p-1074,
+// and so does this port.
+func fmtRefNormalisesSubnormals(t *testing.T, ref string) bool {
+	t.Helper()
+	switch out := fmtProbe(t, ref, "subprobe.lua", `string.format("%a", 5e-324)`); out {
+	case "0x1p-1074":
+		return true /* Apple's, and this port's */
+	case "0x0.0000000000001p-1022":
+		return false /* glibc's */
+	default:
+		t.Fatalf("the reference answered %q to '%%a' of 5e-324, which is neither "+
+			"0x1p-1074 (a library that normalises a subnormal) nor "+
+			"0x0.0000000000001p-1022 (one that does not); which it is has to be "+
+			"known before the grid can be compared", out)
+		return false
+	}
+}
+
 // fmtSkipped reports how many of the grid's answers were not asked,
 // and why, for the log line.
 func fmtSkipped(out string) string {
 	for _, line := range strings.Split(out, "\n") {
 		if n, ok := strings.CutPrefix(line, "skipped\t"); ok && n != "0" {
-			return ", " + n + " of them not asked: a %a tie, which this " +
-				"port rounds to even and the reference's C library rounds down"
+			return ", " + n + " of them not asked: a %a tie or a subnormal, " +
+				"which the reference's C library spells differently"
 		}
 	}
 	return ""

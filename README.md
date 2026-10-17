@@ -721,7 +721,7 @@ in `lstrlib_test.go`:
   digit alone made `%.8a` of `1e-300` answer `0x1.56e1fc2fp-997` where C
   answers `0x1.56e1fc30p-997`: the digits are `56e1fc2f|8f359`.
 
-Two things the format half cannot ask, and says so rather than quietly
+Three things the format half cannot ask, and says so rather than quietly
 passing them:
 
 * `%s` of a value whose `print` is an address. Padding is decided from
@@ -732,6 +732,7 @@ passing them:
   libraries do differently: glibc hands the last digit kept to
   `round_away`, which leaves an even digit alone and steps an odd one,
   while Apple's library rounds a tie *down* whatever that digit is.
+  (§6.11)
   `%.0A` of `1.5` is `0X2P+0` under the first and `0X1P+0` under the
   second, and no port can answer both. This port answers `0X2P+0` — what
   glibc answers, what the C library's own `%f` answers on every platform
@@ -742,6 +743,12 @@ passing them:
   on an *even* digit is where both rules land anyway, so those are
   compared like any other case, and `TestFormatHexFloatTieRounding`
   pins both halves against the reference.
+* **A subnormal number**, whose leading digit C leaves the library to
+  choose: `5e-324` is `0x1p-1074` here and `0x0.0000000000001p-1022`
+  under glibc. (§6.12) The two are handled by the same question put to
+  the reference at the top of the run — one probe each, each with its
+  two possible answers written out, and a reference that answers
+  anything else fails the test rather than being compared anyway.
 
 The number half is the same comparison over the other way round a number
 becomes a string and back, and it is where a Go detail had been showing
@@ -818,7 +825,9 @@ booleans are never weakened, exactly as in PUC-Lua.
 
 11. **A `%a` tie on an odd digit rounds to even, which is what glibc does and what Apple's library does not** — PUC-Lua hands every conversion to the platform's `sprintf`, so what `string.format("%.0A", 1.5)` answers is what that library answers, and the libraries do not agree: `1.5` is `0x1.8p+0`, so a precision of zero drops exactly half of the last digit kept. glibc's `__printf_fp` hands the digit being kept to `round_away`, which leaves an even digit alone and steps an odd one, and answers `0X2P+0`; Apple's library rounds a tie *down* whatever that digit is, and answers `0X1P+0`. This port answers `0X2P+0`: it is what the C library's own `%f` answers on every platform (`%.0f` of `1.5` is `2`, in both libraries), and it is what makes `%a` agree with `%f` inside a single call. So on a host whose library is Apple's, `%.0a` of `1.5` is `0x2p+0` here and `0x1p+0` under PUC-Lua — the only case in the whole library where a difference is the C library's rather than this port's. A tie on an *even* digit is where both rules land anyway, so nothing differs there; the fuzz asks the reference which library it was built against and leaves the rest out (§5.12).
 
-12. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
+12. **A subnormal number is written normalised, which is what Apple's library does and what glibc does not** — of a normalised float the leading hexadecimal digit of `%a` is 1; of one too small to have a 1 — below 2.2250738585072014e-308 — C leaves it unspecified, because there is nothing to normalise to. glibc keeps the exponent of the smallest normal float and writes the raw 52-bit fraction after the point, so `string.format("%a", 5e-324)` is `0x0.0000000000001p-1022`; Apple's library normalises it, and so does this port, for which it is `0x1p-1074` — what Go's own hexadecimal conversion writes, and one number rather than two spellings of one. Unlike the tie above, this one the standard allows both ways, so neither is the more correct. It reaches further than `%a`: `%q` writes a float the same way, and that is the conversion a program uses to write a number back out. Both spellings are numerals Lua reads, so a value written by one side is read by the other either way. The fuzz asks the reference which library it was built against, and on a reference that answers `0x0.0000000000001p-1022` the grid cases that turn on it are not asked on either side.
+
+13. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
 
 ---
 
