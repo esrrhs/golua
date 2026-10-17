@@ -71,7 +71,19 @@ func mainpositionTV(L *State, t *Table, key *Value) int {
 	}
 }
 
-func keyisdead(n *node) bool { return n.key.tt == LUA_TDEADKEY || n.next == deadNext }
+// keyisdead is 'keyisdead(n)' of ltable.c: true when the node's key has
+// been turned into a dead key (lgc.c's 'clearkey', and 'removeentry' for
+// a weak table).
+//
+// It must look at the key's type and nothing else.  A node's 'next' is a
+// *chain offset*, and a negative one is ordinary: 'f - mp' is negative
+// whenever the free slot found for a colliding key sits below its main
+// position, which is the common case.  Testing 'next' for a sentinel
+// made any node whose offset happened to be -2 look dead, and 'equalkey'
+// then compared a key of one type against a node holding another -- a
+// closure against a long string, for one -- which is a Go panic inside
+// 'next'.
+func keyisdead(n *node) bool { return n.key.tt == LUA_TDEADKEY }
 
 // ptrEqual compares two pointer-like interface values by identity. The
 // collectable types are handled outright: 'reflect.ValueOf' is far too

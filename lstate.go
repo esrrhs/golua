@@ -892,10 +892,24 @@ func (L *State) rawRunProtected(f func()) (status int) {
 		case *closeSignal:
 			panic(x)
 		default:
-			// a Go panic becomes a Lua error
+			/* A Go panic -- an index out of range, a failed type
+			   assertion -- is a bug in this port, not something a Lua
+			   program can cause, but it still has to come out as a Lua
+			   error, and one that says what happened: an empty message
+			   hides the only clue there is.
+
+			   The message goes on the stack as well as into the panic,
+			   because that is where the next 'luaD_seterrorobj' looks
+			   for it: C's 'luaG_runerror' pushes before it throws, and
+			   nothing else here does. */
+			if L.top >= len(L.stack) {
+				L.reallocStack(len(L.stack) + EXTRA_STACK)
+			}
 			var v Value
 			setsvalue(&v, luaS_newlstr(L, fmt.Sprintf("%v", r)))
-			panic(&luaError{status: LUA_ERRRUN, value: v})
+			L.stack[L.top] = v
+			L.top++
+			status = LUA_ERRRUN
 		}
 	}()
 	f()

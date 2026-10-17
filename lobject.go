@@ -271,17 +271,13 @@ func getstr(ts *TString) string   { return ts.val }
 const BITRAS = 1 << 7
 
 // node is a hash-table entry: a key/value pair plus a chain offset.
-// next == -1 means "no next"; next == -2 marks a dead key.
+// next == 0 ends the chain; a negative offset points backwards, which is
+// the usual case for a key that had to be placed below its main position.
 type node struct {
 	key  Value
 	val  Value
 	next int
 }
-
-const (
-	noNext   = -1
-	deadNext = -2
-)
 
 // Table is a Lua table: an array part plus an open-addressing hash part.
 type Table struct {
