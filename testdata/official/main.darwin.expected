@@ -1,9 +1,9 @@
 testing stand-alone interpreter
-progname: /tmp/lua-noreadline/lua
+progname: /tmp/refcap/lua
 Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio
-(temporary program file used in these tests: /tmp/lua_eTeUUA)
+(temporary program file used in these tests: /tmp/lua_7P2wgt)
 testing warnings
-/tmp/lua-noreadline/lua: main.lua:385: assertion failed!
+/tmp/refcap/lua: main.lua:385: assertion failed!
 stack traceback:
 	[C]: in function 'assert'
 	main.lua:385: in main chunk

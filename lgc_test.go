@@ -77,10 +77,11 @@ func runChunk(t *testing.T, src string) string {
 }
 
 // The two things a Lua program can see the collector do, which this port
-// has to supply on top of Go's (see lgc.go and lgc_weak.go).  Since
-// 'collectgarbage' is inert -- see TestCollectGarbageIsInert -- both are
-// driven by allocating until the step fires; the loops are bounded so
-// that a regression fails instead of hanging.
+// has to supply on top of Go's (see lgc.go and lgc_weak.go).  Both are
+// driven here by allocating until the step fires -- that is the harder
+// case, the one no script asked for -- and 'collectgarbage' asking for
+// one directly is TestCollectGarbageDrivesACycle.  The loops are bounded
+// so that a regression fails instead of hanging.
 
 func TestFinalizerRuns(t *testing.T) {
 	got := runChunk(t, `
@@ -102,11 +103,20 @@ func TestFinalizerRuns(t *testing.T) {
 	}
 }
 
-// 'collectgarbage' answers with 0 and brings nothing forward: the
-// objects are Go's, and Go decides when to reclaim them.  What still
-// runs a '__gc' is the step an allocation drives, and the closing of
-// the state.
-func TestCollectGarbageIsInert(t *testing.T) {
+// 'collectgarbage("collect")' drives a cycle: the '__gc' of what has
+// become unreachable runs, and it runs there and then rather than at
+// the next step an allocation happens to drive.  It answers 0, as in C,
+// and 'step' answers false -- a basic step never reports the end of a
+// cycle.
+//
+// The three answers are PUC-Lua's own for this chunk.  What they used
+// to be here was "0,0,0": the function was inert, and the '__gc' ran
+// only from the step an allocation drives or from the closing of the
+// state.  That made a program reaching the collector from Lua get a
+// different collector from the one it gets from C, since 'lua_gc' has
+// always run a cycle -- and it is what coroutine.lua, gengc.lua and
+// locals.lua of PUC-Lua's suite assert against.
+func TestCollectGarbageDrivesACycle(t *testing.T) {
 	got := runChunk(t, `
 		local n = 0
 		do
@@ -117,8 +127,8 @@ func TestCollectGarbageIsInert(t *testing.T) {
 		local s = collectgarbage("step")
 		return tostring(c) .. "," .. tostring(s) .. "," .. tostring(n)
 	`)
-	if got != "0,0,0" {
-		t.Errorf("collectgarbage drove a cycle: %s", got)
+	if got != "0,false,1" {
+		t.Errorf("collectgarbage did not drive a cycle: %s", got)
 	}
 }
 

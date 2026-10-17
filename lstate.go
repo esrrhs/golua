@@ -125,10 +125,10 @@ type globalState struct {
 	// second close has to be able to finish what is left.  See
 	// drainCloseQueue.
 	closeQueue []weakRef
-	// The four fields below are the collector's knobs.  'collectgarbage'
-	// no longer touches them -- it has no collector to talk to -- so
-	// only the C API's 'lua_gc' (see cdl_gc_cb) reads or writes them
-	// now, and only 'gcStopped' has an effect of its own: it gates the
+	// The four fields below are the collector's knobs.  They are what
+	// 'collectgarbage' and the C API's 'lua_gc' (see cdl_gc_cb) read and
+	// write, and Go's collector pays no attention to any of them --
+	// except 'gcStopped', which has an effect of its own: it gates the
 	// step an allocation drives.
 	gcMode    string // "incremental" or "generational"
 	gcStopped bool   // 'gcstp & GCSTPUSR': the program stopped the collector

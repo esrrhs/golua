@@ -93,14 +93,19 @@
 | 对象生命周期 | 引用计数无关的三色增量 GC | Go 并发三色 GC，循环引用天然回收 |
 | `luaC_barrier*` 写屏障 | 手工维护 | 删除（Go GC 自带混合写屏障） |
 | `collectgarbage("count")` | Lua 分配器发出的 Kbytes | Go 堆的 Kbytes（`runtime.ReadMemStats`） |
-| `collectgarbage` 的**其余**所有选项 | 启动/停止/调参收集器 | **一律接收并返回 `0`**：这里没有收集器可启动、停止或调参，对象归 Go 管 |
-| `lua_gc`（C API，见 `cdl_gc_cb`） | 同上，来自 C | 仍然真做一整个周期，C 扩展要收集就给它收集 |
-| `__gc` 元方法 | GC 触发终结 | `runtime.SetFinalizer` 发现不可达并入队，VM 在周期边界取出执行：分配驱动的步进（与 PUC-Lua 跑收集步进的位置相同），或 `Close()` |
+| `collectgarbage("collect"/"step")` | 启动一次收集 | 跑一轮 Go 自己的收集：不可达者被终结，弱表条目被清扫 |
+| `collectgarbage("step")` 的回答 | 这一步是否跑完了一整轮——基本步进为 `false` | 基本步进（不带参数）回答 `false`，与 C 一致；给了工作量的回答 `true`，因为这里任何一步都是一整轮。不能两个都答 `false`：`repeat until collectgarbage("step", siz)` 这个 `gc.lua` 用来强制收集的写法会永远出不来 |
+| `collectgarbage("stop"/"restart"/"isrunning")` | 停止/重启/报告收集器 | 状态上记下并如实回答，`stop` 真的会停掉分配驱动的那次步进 |
+| `collectgarbage("setpause"/"setstepmul")` | 调参，并返回被替换的旧值 | 记住并回答（与 C 相同的 200 与 100）；Go 的收集器不理会它们 |
+| `collectgarbage("generational"/"incremental")` | 切换模式，并返回被替换的旧模式 | 记住并回答；新开的 state 回答 `generational`，与 5.4 一致 |
+| `lua_gc`（C API，见 `cdl_gc_cb`） | 同上，来自 C | 同一轮周期，Lua 侧与 C 侧走到的是同一个收集器 |
+| `__gc` 元方法 | GC 触发终结 | `runtime.SetFinalizer` 发现不可达并入队，VM 在周期边界取出执行：分配驱动的步进（与 PUC-Lua 跑收集步进的位置相同）、`collectgarbage`，或 `Close()` |
 | 弱表 `__mode = "k"/"v"/"kv"` | GC 清除 | 清扫时把弱引用换成 `weak.Pointer`（Go 1.24+）并清空槽位，让 Go 判断谁真的不可达；table/userdata/function/thread 生效，字符串/数字/布尔同 PUC-Lua 一样不参与弱化 |
 | `lua_newstate(alloc, ud)` | 自定义分配器 | `NewState()` |
 
-> 影响面可控：GC 只影响"什么时候回收"。`collectgarbage` 除 `count` 外全部返回 `0` 且不做任何事，
-> 所以 `__gc` 与弱表只在**分配驱动的步进**或 `Close()` 时生效，而不是随 `collectgarbage` 立即生效。
+> 影响面可控：GC 只影响"什么时候回收"，以及"回收了多少"这两个数字。
+> `collectgarbage` 现在与 C 一样真的跑一轮（`collect`/`step`），所以 `__gc` 与弱表随叫随到；
+> 只有 `count` 的口径（整个 Go 堆，而非本 state）和"释放了多少内存"这类对分配器本身的度量对不上。
 
 ---
 
@@ -144,20 +149,23 @@
 归一化掉程序路径、`0x…` 地址、耗时、`os.tmpname` 结果、随机数种子后逐字节比对
 （`all.lua` 需要预编译 C 扩展，改为按文件驱动；`main.lua` 会派生子进程，也包含在内）。
 
-**33 个用例中 27 个输出完全一致**。其余 6 个的差异全部来自设计取舍
+**33 个用例中 30 个输出完全一致**。其余 3 个的差异全部来自设计取舍
 （没有自己的收集器）或测试环境：
 
 | 用例 | 差异原因 |
 |---|---|
 | `gc` | 这个文件测的**就是**收集器，而这里没有。它的断言量的是增量式收集器：step 之后 `gcinfo()` 会下降、步长越大所需步数越少、一次超大的 step 能跑完一整轮、弱表会被清扫——第一条需要"真的收过一次"的断言就挂。之后该文件靠「一直分配表直到 `gcinfo()` 翻三倍」来量收集器的**速度**——没有回收器时这个循环不终止 |
-| `coroutine`、`gengc`、`locals` | 三者都是在 `collectgarbage` 之后立刻查一次收集的结果：该消失的弱表条目（`C[1] == undef`、`t[1] == nil`），或该跑过的终结器（`locals` 用 `require"tracegc"` 数次数）。而 `collectgarbage` 现在不启动收集。除此之外三个文件完全一致；同样的弱表与 `__gc` 在 `closure`、`db`、`cstack`、`events`、`tracegc` 里照常通过——那里是分配在驱动步进 |
 | `all` | 环境差异，集中在四行：第二个随机数种子（PUC-Lua 截成 32 位，这里是 64 位地址）、`total memory: 44.6K` 对 `619.2K`（同一处口径）、耗时、以及解释器自身路径。套件其余部分全部吻合——包括 `attrib`、`files`、`gengc`、`locals` 加载的 C 扩展库 |
 | `heavy` | 两边都超时（每轮要构造 2 MB 的表，总量 2 GB）；在超时截断之前两边一致 |
 
 弱表与 `__gc` 均已实现：条目在只有表引用它时被清掉，`__gc` 会跑，两者都发生在
-周期边界——分配驱动的步进，或 `Close()`。`closure`、`db`、`cstack`、`events`、
-`tracegc` 与 80 个 golden 用例走的都是这条路，做法见 §7；把 `collectgarbage`
-做成空壳的代价见上文 §5.1。
+周期边界——分配驱动的步进、`collectgarbage`，或 `Close()`。`closure`、`db`、
+`cstack`、`events`、`tracegc` 与 80 个 golden 用例走的都是这条路，做法见 §7。
+
+`coroutine`、`gengc`、`locals` 三个用例断言的正是"`collectgarbage` 之后立刻查
+一次收集结果"——该消失的弱表条目（`C[1] == undef`、`t[1] == nil`），或该跑过的
+终结器（`locals` 用 `require"tracegc"` 数次数）。`collectgarbage` 现在真的跑一轮，
+三者均已逐字节一致。
 
 `__gc` 还保留了 PUC-Lua 的**顺序**规则，而 `main.lua` 正是检查它的那个用例：
 终结器内部的分配不会驱动一个周期（C 的 `GCTM` 期间置了 `gcstp & GCSTPGC`），
@@ -176,7 +184,7 @@
 存着 `testes/` 的全部 33 个 `.lua`（同 MIT 许可一起再分发），旁边是
 `<name>.<goos>.expected`——参考解释器源码编译出来后对该文件打印的内容。
 `official_test.go` 一边跑参考、一边跑本实现，归一化后逐字节比对，于是
-`go test ./...` 里就带上了 27 个全等 / 5 个已知差异 / 1 个不跑。它有几个刻意的安排：
+`go test ./...` 里就带上了 30 个全等 / 2 个已知差异 / 1 个不跑。它有几个刻意的安排：
 
 - **`testdata/official/libs/*.c`（Lua 自带 makefile 里那五个 C 库）会在副本里
   现编出来**，于是 `attrib.lua` 与 `main.lua` 真的跑了套件的 C 那一半：带版本号的
@@ -635,7 +643,9 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 用 Lua 写的、或已改成 Go 的模块完全不需要这些：`L.RequireF(modname, openf, true)` 把模块放进
 `package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，
 让 `require` 照常找到它。
-3. **`collectgarbage` 是空壳，这就是 GC 差异的全部**：`count` 报的是 Go 堆而非 PUC-Lua 分配器的口径；其余选项一律接收、返回 `0`、什么都不做——这里没有收集器可启动、停止或调参。程序本来能向一次收集索取的东西（`__gc` 跑起来、弱表条目消失）现在只在本实现跑一轮的地方发生：**分配驱动的步进**（见 `gcStep`）或 `Close()`。不是没了，只是不再"随叫随到"：带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法；弱表条目在只有表引用它时就被清掉。代价是那些"调完 `collectgarbage()` 立刻查弱表/数终结器"的脚本：官方套件里 `coroutine`、`gengc`、`locals` 三个正是如此，它们属于下面的差异之一。C 扩展不受影响：`lua_gc` 仍然真的跑一整轮。
+3. **`collectgarbage` 委托给 Go 的收集器，GC 差异只剩两个数字**：它照 C 的样子写成 `luaB_collectgarbage` 套 `lua_gc`——`collect` 与 `step` 真跑一轮 Go 的收集，`__gc` 会执行、弱表条目会消失；`stop`/`restart` 置一个"分配驱动的步进"会遵守的标志，`isrunning` 如实回答它；`setpause`、`setstepmul` 与两个模式记住收到的值、回答被替换掉的值，尽管 Go 的收集器并不理会它们。官方套件里 `coroutine`、`gengc`、`locals` 三个断言的正是"`collectgarbage` 之后立刻收过一次"，三者现在都逐字节一致。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法。
+
+   这里一轮收集答不上来的，只有那些在度量一个并不存在的分配器的东西：`count` 报的是**整个 Go 堆**的 Kbytes 而非本 state 的，因为 Go 的堆不按 state 记账；`gc.lua`——官方套件里唯一一个测**收集器本身**的文件——问的是一次收集释放了多少内存、以及一长串对象的终结器按什么顺序跑，那是 PUC-Lua 三色标记的问题，不是 Go 的。
 
 在 `__gc` 内部，收集器按 C 的规则算作"已停止"：那里的 `collectgarbage` 对每个选项都回答 `nil`（`lua_gc` 返回 -1，`lbaselib.c` 的 `checkvalres` 把它变成 fail），终结器里的分配也不驱动任何周期，因此终结器不会嵌套。在终结器里关闭状态（`os.exit(0, true)`）会由那次关闭把剩下的终结器跑完——这正是 `main.lua` 的终结器顺序用例，现在与 PUC-Lua 逐行一致。
 4. **弱表条目在「一轮」里被清掉，而不是随着分配被逐步清掉**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，所以本实现的一次 Lua 周期内部跑**两遍** `runtime.GC()`——第一遍让只剩弱引用的对象真的死掉，第二遍让它的弱指针失效。结果在能测到的地方是一致的：不调 `collectgarbage` 而分配两百万个表之后条目就没了，与 PUC-Lua 相同。真正的区别在**粒度**：PUC-Lua 的收集器与分配交织，条目是在某一次分配中途消失的；本实现只在周期边界（`Close()`，或分配越过阈值时）清除，所以「第几次分配之后条目消失」这个问题没有答案。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。

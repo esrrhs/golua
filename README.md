@@ -85,9 +85,13 @@ loading C dynamic libraries (replaced by Go-side module registration).
 | Object lifetime | tri-color incremental GC | Go's concurrent tri-color GC; cycles collected naturally |
 | `luaC_barrier*` write barriers | manual | removed (Go has a hybrid write barrier) |
 | `collectgarbage("count")` | Kbytes handed out by Lua's allocator | Kbytes of the Go heap (`runtime.ReadMemStats`) |
-| every other `collectgarbage` option | starts, stops or tunes the collector | **accepted and answered with 0**: there is no collector here to start, stop or tune, the objects being Go's |
-| `lua_gc` (the C API, `cdl_gc_cb`) | the same options from C | still does the work: a whole cycle, so an extension that asks for one gets one |
-| `__gc` | GC-driven finalization | `runtime.SetFinalizer` finds the object unreachable and queues the metamethod; the VM runs the queue at a cycle boundary — the step an allocation drives, or `Close()` |
+| `collectgarbage("collect" / "step")` | starts a collection | a cycle of Go's own: what has become unreachable is finalized, and the weak entries are swept |
+| `collectgarbage("step")` answers | whether the step ended a cycle — `false` for a basic step | `false` for a basic step, as in C, and `true` for one given work to do, because here any step is a whole cycle. It cannot answer `false` to both: `repeat until collectgarbage("step", siz)` — the shape `gc.lua` forces a collection with — would never end |
+| `collectgarbage("stop" / "restart" / "isrunning")` | stops, restarts, reports the collector | kept on the state and answered, so `stop` really does stop the cycle an allocation would drive |
+| `collectgarbage("setpause" / "setstepmul")` | tunes it, answering the value replaced | remembered and answered (200 and 100, as in C); Go's collector pays no attention to them |
+| `collectgarbage("generational" / "incremental")` | switches mode, answering the one replaced | remembered and answered; a fresh state answers `generational`, as 5.4's does |
+| `lua_gc` (the C API, `cdl_gc_cb`) | the same options from C | the same cycle, so Lua and C reach the same collector |
+| `__gc` | GC-driven finalization | `runtime.SetFinalizer` finds the object unreachable and queues the metamethod; the VM runs the queue at a cycle boundary — the step an allocation drives, `collectgarbage`, or `Close()` |
 | Weak tables (`__mode`) | GC clearing | `weak.Pointer` for table/userdata/function; **string keys are never weakened** |
 | `lua_newstate(alloc, ud)` | custom allocator | `NewState()` |
 
@@ -198,23 +202,22 @@ and compared. **`all.lua` is driven file by file**, because it needs the C
 extension libraries pre-compiled; `main.lua` spawns the interpreter as a
 subprocess and is therefore included.
 
-**27 of the 33 files produce byte-identical output.** The remaining 6
+**30 of the 33 files produce byte-identical output.** The remaining 3
 differ only for reasons that follow from the design — there is no
 collector of our own — or from the test environment:
 
 | File | Why it differs |
 |---|---|
 | `gc` | the file is a test *of* the collector, and there is none here. Its assertions measure an incremental one: that `gcinfo()` falls after a step, that a bigger step size needs fewer steps, that one huge step finishes a cycle, that a weak table is swept. They fail on the first one that needs a collection to have happened. After them the file measures the collector's *pace* by allocating tables until `gcinfo()` has tripled — a loop that does not terminate when nothing is ever reclaimed |
-| `coroutine`, `gengc`, `locals` | each checks the result of a collection right after a `collectgarbage` — a weak entry that must be gone (`C[1] == undef`, `t[1] == nil`) or a finalizer that must have run (`locals` counts them with `require"tracegc"`) — and `collectgarbage` no longer starts one. All three are otherwise identical, and the same weak tables and `__gc` pass in `closure`, `db`, `cstack`, `events` and `tracegc`, where allocation drives the step |
 | `all` | the environment, in four lines: the second PRNG seed (PUC-Lua's is truncated to 32 bits, this one is a 64-bit address), `total memory: 44.6K` against `619.2K` (the same accounting), the elapsed time, and the interpreter's own path. Everything else — including the C extension libraries `attrib`, `files`, `gengc` and `locals` load — matches |
 | `heavy` | times out on both sides (it builds 2 MB of tables per iteration, and 2 GB overall); the two agree as far as the timeout lets them |
 
 Weak tables and `__gc` are supported: an entry goes when nothing but the
 table refers to it, and a `__gc` runs, both at a cycle boundary — the step
-an allocation drives, or `Close()` — which is what `closure`, `db`,
-`cstack`, `events`, `tracegc` and the 80 golden cases exercise. See §6 for
-how they are done, and §5.1 above for what making `collectgarbage` inert
-costs.
+an allocation drives, `collectgarbage`, or `Close()` — which is what
+`closure`, `db`, `cstack`, `events`, `tracegc` and the 80 golden cases
+exercise. See §6 for how they are done, and §5.1 above for what a cycle
+here cannot answer.
 
 A `__gc` also keeps PUC-Lua's ordering rules, and `main.lua` is what checks
 them. An allocation inside a finalizer cannot drive a cycle — C's `GCTM`
@@ -233,8 +236,8 @@ test` cases.** `testdata/official/` holds all of `testes/` (redistributed
 under the same MIT licence as Lua itself) beside a
 `<name>.<goos>.expected`: what the reference interpreter, built from
 source, printed for that file. `official_test.go` runs one side and then
-the other, normalises, and compares — so `go test ./...` now carries 27
-identical / 5 known differences / 1 not run. A few things about it are
+the other, normalises, and compares — so `go test ./...` now carries 30
+identical / 2 known differences / 1 not run. A few things about it are
 deliberate:
 
 - `testdata/official/libs/*.c` — the five C libraries Lua's own makefile
@@ -686,7 +689,9 @@ Continuations — `lua_callk`, `lua_pcallk` and `lua_yieldk` with a non-NULL `k`
 `lua_error` is worth a note, because "it raises instead of longjmping" reads like a gap and is not one. A Go panic crosses a cgo frame: the runtime unwinds to the `recover` of the call that was protecting the call, and the extension's frame is left behind exactly as `longjmp` would leave it. Three levels deep — Lua → C → Lua → C → raise — the answer is PUC-Lua's, line for line, and that is what `TestCModuleErrors` pins. `longjmp` across the boundary is the thing that would be unsafe, since it would skip the runtime's own bookkeeping for the cgo call, so there is no `setjmp` here on purpose. What is lost is what `longjmp` loses too: a C frame holding something that needs cleanup does not get to clean it up. `TestCModuleErrorStress` is the other half of the evidence: 30 000 raises across C frames, and one from the bottom of a 50-level nest of them, none of which run the C stack out — which is the only way abandoning those frames could actually be seen to go wrong.
 
 The C block behind a userdata is freed when the userdata is collected: `C.malloc` is not memory Go's collector knows about, so without a finalizer an extension making userdata in a loop would grow without bound. Anything written in Lua, or ported to Go, needs none of this: `L.RequireF(modname, openf, true)` adds one to `package.loaded` (the port's `luaL_requiref`), or set `package.preload[name]` to a Go function and let `require` find it the usual way.
-3. **`collectgarbage` is inert, and that is the whole of the GC difference** — `count` reports the Go heap rather than PUC-Lua's own allocator; every other option is accepted, answered with `0`, and does nothing, because there is no collector here to start, stop or tune. What a program could ask of a collection — a `__gc` running, an entry leaving a weak table — now happens only where this port runs a cycle: the step an allocation drives (see `gcStep`), or `Close()`. It is not lost, only not on demand: an object with a `__gc` is held between cycles so that Go cannot finalise it at a moment of its own choosing, the metamethod of every object that still has one runs when the state closes, reachable or not, and a sweep removes a weak entry once nothing but the table refers to it. What that costs is the scripts that check a weak table — or count finalizers — immediately after `collectgarbage()`: three tests of the official suite (`coroutine`, `gengc`, `locals`) do, and they are among the differences below. A C extension is not affected: `lua_gc` still runs a real cycle.
+3. **`collectgarbage` delegates to Go's collector, and what is left of the GC difference is two numbers** — it is `luaB_collectgarbage` over `lua_gc` exactly as in C: `collect` and `step` run a cycle of Go's own, so a `__gc` runs and the weak entries go; `stop` and `restart` set a flag the step an allocation drives obeys, and `isrunning` answers it; `setpause`, `setstepmul` and the two modes remember what they were given and answer what they replaced, though Go's collector pays no attention to any of it. Three tests of the official suite — `coroutine`, `gengc`, `locals` — assert precisely that a collection happened right after a `collectgarbage`, and all three are byte-identical. An object with a `__gc` is held between cycles so that Go cannot finalise it at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not.
+
+   What a cycle here cannot answer is only what measures an allocator that is not there. `count` is Kbytes of the whole Go heap rather than of this state, because the heap is not accounted per state; and `gc.lua` — the one file of the official suite that is a test *of* a collector — asks how much memory a collection freed and in what order it ran the finalizers of a long list, which is a question about PUC-Lua's own tri-color marking and not about Go's.
 
 Inside a `__gc` the collector counts as stopped, exactly as in C: `collectgarbage` answers `nil` for every option there (`lua_gc` returns -1, and `lbaselib.c`'s `checkvalres` turns that into a fail), and an allocation in a finalizer drives no cycle, so finalizers do not nest. A `__gc` that closes the state — `os.exit(0, true)` — has the rest of them run from that close, which is `main.lua`'s finalizer-order case and now matches PUC-Lua line for line.
 4. **A weak entry disappears in one cycle, not part way through allocating** — a Go

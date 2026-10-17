@@ -284,21 +284,26 @@ func gcCount() float64 {
 
 // baseCollectGarbage is 'collectgarbage'.
 //
-// 'count' answers with the number of Kbytes the Go heap is holding.
-// PUC-Lua answers with what its own allocator has handed out, so the
-// numbers are not the same -- there is no per-state accounting here --
-// but a script that prints or watches the figure still sees a real
-// number that grows and shrinks with the data, which a constant would
-// not give it.
+// It is lbaselib.c's 'luaB_collectgarbage' over 'lua_gc', and it answers
+// what that answers: 'count' a number, 'step' and 'isrunning' a boolean,
+// 'setpause' and 'setstepmul' the value they replaced, 'generational'
+// and 'incremental' the name of the mode they replaced, and the rest 0.
 //
-// Every other option is answered with 0 and does nothing, because there
-// is nothing it could do: the objects are Go's, and Go decides when to
-// reclaim them.  What that costs is the two things a program can see a
-// collection do -- a '__gc' running, and an entry leaving a weak table
-// -- at the moment 'collectgarbage' is called.  Neither is lost: a
-// '__gc' runs from a collector step (see gcStep, which an allocation
-// drives) and when the state closes, and weak entries go with it.  Only
-// the "do it now" of 'collectgarbage' is gone.
+// It used to answer 0 to everything but 'count', on the grounds that
+// there is no collector here to drive.  That was a translation left
+// half finished rather than a decision: the C API's 'lua_gc' --
+// cdl_gc_cb -- has always driven one, and the knobs it reads are the
+// right ones already (pause 200, stepmul 100, generational, which is
+// what a fresh state answers).  Only this function was throwing them
+// away, so a program that reaches the collector from Lua and one that
+// reaches it from C got two different collectors.
+//
+// Two answers cannot be the ones C computes, and both are said so where
+// they are given: 'collect' sweeps the weak tables and runs the '__gc'
+// of what has become unreachable, but the number it reports is not the
+// memory C freed, because nothing was freed by an allocator of ours --
+// and 'count' is the Kbytes of the whole Go heap, not of this state,
+// because the heap is not accounted per state.
 func baseCollectGarbage(L *State) int {
 	/* From inside a '__gc' PUC-Lua answers nil for every option, and not
 	   0: it has stopped the collector for the duration of the finalizer,
@@ -310,12 +315,78 @@ func baseCollectGarbage(L *State) int {
 		L.PushNil()
 		return 1
 	}
-	if L.CheckOption(1, "collect", baseGCOpts) == baseGCCount {
+	switch L.CheckOption(1, "collect", baseGCOpts) {
+	case baseGCStop:
+		L.g.gcStopped = true
+	case baseGCRestart:
+		L.g.gcStopped = false
+	case baseGCCollect:
+		L.fullCollect()
+	case baseGCCount:
 		L.PushNumber(gcCount())
+		return 1
+	case baseGCStep:
+		/* C reads the second argument even though a step here ignores
+		   what it says, so does this: 'collectgarbage("step", "x")'
+		   is an error in C and has to be one here. */
+		n := L.OptInteger(2, 0)
+		L.gcCycle()
+		/* C answers whether the step ended a cycle, and it splits on
+		   the argument to decide: with no data it does a *basic*
+		   step, which never ends one -- 'luaC_step' leaves the
+		   collector in GCSpropagate, so 'g->gcstate == GCSpause' is
+		   false and 'res' stays 0 -- while a step given 'data'
+		   Kbytes of debt does enough work to finish.
+		   Here a step is always a whole cycle, so the answer is the
+		   one for work that was asked for, and 'false' for the basic
+		   step whose answer PUC-Lua publishes.
+		   It cannot answer false to both.  'repeat until
+		   collectgarbage("step", siz)' -- the shape gc.lua uses to
+		   force a collection -- would never end, and a script that
+		   hangs is a worse answer than one that differs by a bit. */
+		L.PushBoolean(n != 0)
+		return 1
+	case baseGCSetPause:
+		L.PushInteger(int64(gcSetParam(&L.g.gcPause, L.OptInteger(2, 0))))
+		return 1
+	case baseGCSetStepMul:
+		L.PushInteger(int64(gcSetParam(&L.g.gcStepMul, L.OptInteger(2, 0))))
+		return 1
+	case baseGCIsRunning:
+		L.PushBoolean(!L.g.gcStopped)
+		return 1
+	case baseGCGenerational:
+		_ = L.OptInteger(2, 0) /* minormul */
+		_ = L.OptInteger(3, 0) /* majormul */
+		L.PushString(gcSetMode(L, gcModeGen))
+		return 1
+	case baseGCIncremental:
+		_ = L.OptInteger(2, 0) /* pause */
+		_ = L.OptInteger(3, 0) /* stepmul */
+		_ = L.OptInteger(4, 0) /* stepsize */
+		L.PushString(gcSetMode(L, gcModeInc))
 		return 1
 	}
 	L.PushInteger(0)
 	return 1
+}
+
+// gcSetParam is 'setgcparam' inside 'lua_gc': the value it is handed
+// replaces the knob -- a 0 is a value like any other, and 'setpause'
+// with no argument really does set the pause to 0 -- and the value the
+// knob had is what is answered.
+func gcSetParam(p *int, v int64) int {
+	prev := *p
+	*p = int(v)
+	return prev
+}
+
+// gcSetMode is 'lua_gc' for LUA_GCGEN and LUA_GCINC: the mode the state
+// was in is answered, and the new one is what is left in it.
+func gcSetMode(L *State, mode string) string {
+	prev := L.g.gcMode
+	L.g.gcMode = mode
+	return prev
 }
 
 // ---------------------------------------------------------------------

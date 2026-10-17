@@ -440,24 +440,64 @@ func TestBaseCollectGarbage(t *testing.T) {
 	   not 0, so that scripts that watch memory see something move. */
 	baseCheck(t, L, `r = type(collectgarbage("count"))`, "r", "number")
 	baseCheck(t, L, `r = tostring(collectgarbage("count") > 0)`, "r", "true")
-	/* every other option is accepted and answered with 0: there is no
-	   collector here to start, stop or tune. */
-	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("step"))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("step", 20000))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 50))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("generational"))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("incremental"))`, "r", "0")
+	/* And the rest is what lbaselib.c's 'luaB_collectgarbage' answers,
+	   checked against PUC-Lua: 'step' and 'isrunning' are booleans,
+	   'setpause' and 'setstepmul' answer the value they replaced
+	   (200 and 100, LUAI_GCPAUSE and LUAI_GCMUL), and the two modes
+	   answer the name of the mode they replaced -- which for a fresh
+	   state is "generational", because that is what 5.4 opens in. */
+	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "true")
+	/* A basic step -- the one with no size -- answers false in C and
+	   answers false here.  A step that was given work to do answers
+	   true, because here any step is a whole cycle; see the comment
+	   in baseCollectGarbage for why it cannot be false to both. */
+	baseCheck(t, L, `r = tostring(collectgarbage("step"))`, "r", "false")
+	baseCheck(t, L, `r = tostring(collectgarbage("step", 20000))`, "r", "true")
+	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "200")
+	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 50))`, "r", "100")
+	baseCheck(t, L, `r = collectgarbage("generational")`, "r", "generational")
+	baseCheck(t, L, `r = collectgarbage("incremental")`, "r", "generational")
+	baseCheck(t, L, `r = collectgarbage("generational")`, "r", "incremental")
+	/* A 0 is a value like any other: 'setpause' with no argument sets
+	   the pause to 0, which the next call answers. */
+	baseCheck(t, L, `r = tostring(collectgarbage("setpause"))`, "r", "100")
+	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 200))`, "r", "0")
 	baseCheck(t, L, `r = tostring(collectgarbage("collect"))`, "r", "0")
 	baseCheck(t, L, `r = tostring(collectgarbage("stop"))`, "r", "0")
+	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "false")
 	baseCheck(t, L, `r = tostring(collectgarbage("restart"))`, "r", "0")
-	/* a second argument that PUC-Lua would reject is now simply ignored,
-	   since nothing reads it */
-	baseCheck(t, L, `r = tostring(collectgarbage("step", "x"))`, "r", "0")
+	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "true")
+	/* A second argument that is not a number is an error, because C
+	   reads it: 'luaL_optinteger' rejects it. */
+	if msg := baseRunErr(t, `collectgarbage("step", "x")`); !strings.Contains(msg, "number expected") {
+		t.Errorf(`collectgarbage("step", "x") = %q`, msg)
+	}
 	if msg := baseRunErr(t, `collectgarbage("foo")`); !strings.Contains(msg, "invalid option") {
 		t.Errorf("collectgarbage('foo') = %q", msg)
 	}
+}
+
+// TestBaseCollectGarbageCollects is what 'collectgarbage("collect")' is
+// for: after it, an entry whose key nothing refers to any more has
+// left the weak table, and the '__gc' of what has become unreachable
+// has run.  coroutine.lua, gengc.lua and locals.lua of PUC-Lua's own
+// suite are what assert it; this is the same assertion in three lines.
+func TestBaseCollectGarbageCollects(t *testing.T) {
+	L := baseNew(t)
+	baseCheck(t, L, `
+		local t = setmetatable({}, {__mode = "k"})
+		do local k = {} t[k] = 1 end
+		r = tostring(next(t) ~= nil)
+		collectgarbage()
+		r = r .. " " .. tostring(next(t) == nil)`, "r", "true true")
+	baseCheck(t, L, `
+		local ran = false
+		do
+			local t = setmetatable({}, {__gc = function() ran = true end})
+		end
+		r = tostring(ran)
+		collectgarbage()
+		r = r .. " " .. tostring(ran)`, "r", "false true")
 }
 
 func TestBaseGlobals(t *testing.T) {

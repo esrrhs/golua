@@ -51,15 +51,20 @@ import (
 
 const officialDir = "testdata/official"
 
-// officialKnownDiff are the files that cannot match, and why.  Every
-// one of them is a consequence of there being no collector of our own;
-// see README §5.1 and §3.
+// officialKnownDiff are the files that cannot match, and why.  Both are
+// a consequence of there being no collector of our own; see README §5.1
+// and §3.
+//
+// coroutine.lua, gengc.lua and locals.lua used to be here too, and all
+// three for the same reason: they assert that a weak entry is gone, or
+// that a finalizer has run, immediately after a 'collectgarbage'.  They
+// are identical now, because 'collectgarbage' sweeps -- see
+// baseCollectGarbage.  What a collection cannot be made to answer is
+// only what gc.lua asks of it: how much memory it freed, and in what
+// order it ran the finalizers of a long list.
 var officialKnownDiff = map[string]string{
-	"all":       "the environment, in four lines: the second PRNG seed, 'total memory' (PUC-Lua's allocator against the Go heap), the elapsed time, and the interpreter's own path",
-	"coroutine": "asserts a weak entry is gone right after a collectgarbage (C[1] == undef), and collectgarbage no longer starts a collection",
-	"gengc":     "asserts a weak entry is gone right after collectgarbage('step', 0) (t[1] == nil), for the same reason",
-	"gc":        "the file is a test of the collector itself, and there is none here",
-	"locals":    "counts finalizers with require\"tracegc\" right after a collectgarbage, and gets one fewer",
+	"all": "the environment, in four lines: the second PRNG seed, 'total memory' (PUC-Lua's allocator against the Go heap), the elapsed time, and the interpreter's own path",
+	"gc":  "the file is a test of the collector itself, and there is none here",
 }
 
 // officialKnownDiffBuild are differences that depend on what the binary

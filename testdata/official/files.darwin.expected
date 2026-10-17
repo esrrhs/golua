@@ -1,5 +1,5 @@
 testing i/o
-/tmp/lua-noreadline/lua: files.lua:84: assertion failed!
+/tmp/refcap/lua: files.lua:84: assertion failed!
 stack traceback:
 	[C]: in function 'assert'
 	files.lua:84: in main chunk

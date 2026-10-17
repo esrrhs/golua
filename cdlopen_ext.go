@@ -772,18 +772,17 @@ func cdl_gc_cb(p *C.lua_State, what, a1, a2, a3 C.int) C.int {
 		return C.int(uint64(gcCount()*1024) % 1024)
 	case luaGCStep:
 		L.gcCycle()
-		return 1 /* a step here is a whole cycle, so it finished */
+		/* Whether the step ended a cycle, which here it always does:
+		   see baseCollectGarbage for the split -- a basic step, the
+		   one with no data, answers 0 in C and answers 0 here. */
+		return cBool(a1 != 0)
 	case luaGCSetPause:
 		prev := L.g.gcPause
-		if a1 != 0 {
-			L.g.gcPause = int(a1)
-		}
+		L.g.gcPause = int(a1) /* a 0 is a value, as in C */
 		return C.int(prev)
 	case luaGCSetStepMul:
 		prev := L.g.gcStepMul
-		if a1 != 0 {
-			L.g.gcStepMul = int(a1)
-		}
+		L.g.gcStepMul = int(a1)
 		return C.int(prev)
 	case luaGCIsRunning:
 		return cBool(!L.g.gcStopped)
