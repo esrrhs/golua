@@ -97,8 +97,8 @@ func TestDeadKeyDoesNotBreakTraversal(t *testing.T) {
 	return before .. " " .. count(t)
 	`)
 	if got != "200 0" {
-		t.Fatalf("weak table went from %d to %d entries; want 200 0",
-			parseCount(got, 0), parseCount(got, 1))
+		t.Fatalf("weak table went from %d to %d entries; want 200 0\n%s",
+			parseCount(got, 0), parseCount(got, 1), gcDiag())
 	}
 }
 

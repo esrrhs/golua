@@ -1,6 +1,63 @@
 package lua
 
-import "testing"
+import (
+	"fmt"
+	"runtime"
+	"testing"
+	"time"
+	"weak"
+)
+
+// gcDiag describes the state of the GC-delegation mechanism, and asks
+// Go's own collector the two questions the whole design rests on.
+//
+// It is only ever printed when one of these tests fails, which is the
+// point of it: every one of them fails the same way -- "the cycle did
+// not do anything" -- and that can mean the object is still reachable,
+// that no cycle ran, or that Go's finalizers and weak pointers do not
+// behave here as they do everywhere else.  Without this the only thing
+// a red CI can say is "did not run".
+func gcDiag() string {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	s := fmt.Sprintf("goroutines=%d gomaxprocs=%d numgc=%d heap=%d KB\n",
+		runtime.NumGoroutine(), runtime.GOMAXPROCS(0), m.NumGC, m.HeapAlloc/1024)
+	gcWatchMu.Lock()
+	s += fmt.Sprintf("watched=%d gcWatched=%d gcWeakCount=%d gcWaiting=%d gcHold=%d\n",
+		len(gcWatch), gcWatched.Load(), gcWeakCount.Load(), gcWaiting.Load(), len(gcHold))
+	gcWatchMu.Unlock()
+	gcThrMu.Lock()
+	s += fmt.Sprintf("threads tracked=%d\n", len(gcThrs))
+	gcThrMu.Unlock()
+
+	/* Does Go's own machinery work in this process at all? */
+	type box struct{ pad [64]byte }
+	var wp weak.Pointer[box]
+	func() {
+		b := new(box)
+		wp = weak.Make(b)
+	}()
+	runtime.GC()
+	runtime.GC()
+	s += fmt.Sprintf("a bare weak pointer clears here: %v\n", wp.Value() == nil)
+
+	done := make(chan struct{}, 1)
+	func() {
+		b := new(box)
+		runtime.SetFinalizer(b, func(*box) { done <- struct{}{} })
+	}()
+	for i := 0; i < 3; i++ {
+		runtime.GC()
+		runtime.Gosched()
+	}
+	select {
+	case <-done:
+		s += "a bare finalizer runs here: true\n"
+	case <-time.After(200 * time.Millisecond):
+		s += "a bare finalizer runs here: false\n"
+	}
+	return s
+}
 
 // runChunk runs a chunk and returns its single result as a string.
 func runChunk(t *testing.T, src string) string {
@@ -41,7 +98,7 @@ func TestFinalizerRuns(t *testing.T) {
 		return ran
 	`)
 	if got != "__gc" {
-		t.Errorf("__gc did not run (or reported itself as %q)", got)
+		t.Errorf("__gc did not run (or reported itself as %q)\n%s", got, gcDiag())
 	}
 }
 
@@ -81,7 +138,7 @@ func TestWeakKeys(t *testing.T) {
 		return tostring(n)
 	`)
 	if got != "0" {
-		t.Errorf("weak key was not cleared: %s entries left", got)
+		t.Errorf("weak key was not cleared: %s entries left\n%s", got, gcDiag())
 	}
 }
 
@@ -136,7 +193,7 @@ func TestFinalizerRunsOnAllocation(t *testing.T) {
 		return tostring(ran)
 	`)
 	if got != "true" {
-		t.Errorf("__gc never ran from a collector step: %s", got)
+		t.Errorf("__gc never ran from a collector step: %s\n%s", got, gcDiag())
 	}
 }
 
@@ -155,7 +212,7 @@ func TestWeakSweptOnAllocation(t *testing.T) {
 		return "kept"
 	`)
 	if got != "cleared" {
-		t.Errorf("weak value was not cleared by a collector step")
+		t.Errorf("weak value was not cleared by a collector step\n%s", gcDiag())
 	}
 }
 
@@ -180,6 +237,6 @@ func TestCollectGarbageInsideAFinalizerAnswersNil(t *testing.T) {
 		return seen .. " / " .. tostring(collectgarbage())
 	`)
 	if got != "nil,nil,nil / 0" {
-		t.Errorf("collectgarbage inside a finalizer: %s", got)
+		t.Errorf("collectgarbage inside a finalizer: %s\n%s", got, gcDiag())
 	}
 }
