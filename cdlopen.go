@@ -590,9 +590,31 @@ func lua_pcall(p *C.lua_State, nargs, nresults, msgh C.int) C.int {
 	return C.int(stateOf(p).PCall(int(nargs), int(nresults), int(msgh)))
 }
 
+// C's never returns: it calls the message handler, then longjmps to the
+// innermost *protected* setjmp -- not the innermost C frame -- and the
+// extension's own frames are abandoned without running.  What that
+// means for an extension, and all it means, is that no C code of its
+// runs on the way out.
+//
+// This raises instead, and the raise is what the innermost PCall
+// recovers.  The extension's frames are abandoned here too: Go's
+// runtime does not try to unwind them, it unwinds the g0 stack the
+// callback was running on -- which is where those frames live -- and
+// gives the stack pointer back (runtime.unwindm).  So an extension
+// cannot tell the two apart: the same frames are left, the same C code
+// is skipped, and the stack comes back either way.
+//
+// A longjmp would buy nothing observable and would cost a setjmp in
+// every call to C, a chain of jump buffers per thread, and a rule for
+// which frames to cross -- one that has to know where Go's protection
+// boundaries are, because the target is the innermost pcall and not the
+// innermost C frame, and the two are not the same whenever an extension
+// calls lua_pcall itself.  TestCModuleErrorStress is what keeps the one
+// failure mode that matters honest: if abandoning those frames ever
+// stopped giving the C stack back, 30 000 raises would run out of it.
+//
 //export lua_error
 func lua_error(p *C.lua_State) C.int {
-	// TODO: must longjmp, not unwind through the extension's frames.
 	stateOf(p).Error()
 	return 0
 }

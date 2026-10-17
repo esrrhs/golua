@@ -627,6 +627,8 @@ Go 的 panic **能穿过 cgo 帧**：runtime 展开到「保护该次调用的�
 输出与 PUC-Lua 逐行相同，`TestCModuleErrors` 钉住了这一点。反过来，
 **跨边界 longjmp 才是不安全的**（会跳过 runtime 为这次 cgo 调用维护的状态），
 所以这里刻意没有 setjmp。真正丢掉的东西 longjmp 也一样丢：持锁或需要析构的 C 帧不会被清理。
+另一半证据是 `TestCModuleErrorStress`：跨 C 帧抛错 30000 次，再从 50 层嵌套的底部抛一次，
+都没有把 C 栈耗尽——那是「丢下这些帧」唯一可能真的出错的方式。
 
 userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不受 Go 收集器管辖，
 没有 finalizer 的话，一个在循环里造 userdata 的扩展会无上限地涨。
