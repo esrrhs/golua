@@ -320,7 +320,37 @@ directory of its own. Every line it prints is PUC-Lua 5.4.9's, kept in
 `testdata/luafilesystem/expected.txt`. MIT-licensed, redistributed under
 `testdata/luafilesystem/LICENSE`.
 
-### 5.6 Coverage inventory
+### 5.6 Continuations: the last part of the C API
+
+`lua_callk`, `lua_pcallk` and `lua_yieldk` take a `lua_KFunction`, which
+C calls when the coroutine is resumed *instead of* returning into the
+frame that suspended — because in PUC-Lua that frame is gone: the yield
+long-jumps out of it and its C stack is thrown away.
+
+This port cannot throw a C frame away, and does not need to. A yield
+parks the coroutine's goroutine exactly where it stands (§6, item 10),
+so the C frame that asked for a continuation is still there when the
+resume comes and simply goes on — which is what makes the continuation
+reachable at all. `CallInfo` carries `k` and its context, `(*State).Yield`
+calls the continuation on resume and answers how many values it pushed,
+and `lua_pcallk` recovers an error raised below it the way `ldo.c`'s
+`findpcall` + `finishpcallk` do.
+
+`testdata/continuation/k.c` is a C extension built to exercise every
+path — a `lua_yieldk` with and without a continuation, a `lua_callk`
+whose callee yields, a `lua_callk` with no continuation (which must
+*not* be yieldable), a `lua_pcallk` that yields, one that raises, one
+with a message handler, a continuation that counts the results with
+`lua_gettop` the way PUC-Lua's own `dofilecont` does (for both
+`lua_pcallk` and `lua_yieldk`, which leave different stacks), one C
+function that suspends three times in a row through a single
+continuation, a yield of no values, and `coroutine.close` on a coroutine
+parked inside a C yield. All 31 lines it prints are PUC-Lua 5.4.9's,
+kept in `testdata/continuation/expected.txt`, and `TestContinuation`
+compares them. Written for this port; MIT, like the rest of the
+testdata.
+
+### 5.7 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
 the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
@@ -359,7 +389,7 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
-### 5.7 Performance
+### 5.8 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end
@@ -394,7 +424,7 @@ The four functions that take `...` — `lua_pushfstring`, `lua_pushvfstring`, `l
 
 With `CGO_ENABLED=0` the backend is absent, `package.loadlib` answers `nil, "dynamic libraries not enabled", "absent"` — word for word what PUC-Lua answers when built without `LUA_USE_DLOPEN` — and a C module found in `package.cpath` is the error PUC-Lua gives there.
 
-One thing the bridge does not do (noted in `cdlopen.go`): a continuation (`lua_callk`, `lua_pcallk`, `lua_yieldk` with a non-NULL `k`) is dropped, because there is no C frame to return into after a yield.
+Continuations — `lua_callk`, `lua_pcallk` and `lua_yieldk` with a non-NULL `k` — are implemented: see §5.6. The one thing about them that is *not* PUC-Lua's is the status a `lua_callk` continuation is told: C always passes `LUA_YIELD` there, and here the C function calls the continuation itself, having watched the call return normally. Nothing observable depends on it, because for `lua_callk` that status is a constant.
 
 `lua_error` is worth a note, because "it raises instead of longjmping" reads like a gap and is not one. A Go panic crosses a cgo frame: the runtime unwinds to the `recover` of the call that was protecting the call, and the extension's frame is left behind exactly as `longjmp` would leave it. Three levels deep — Lua → C → Lua → C → raise — the answer is PUC-Lua's, line for line, and that is what `TestCModuleErrors` pins. `longjmp` across the boundary is the thing that would be unsafe, since it would skip the runtime's own bookkeeping for the cgo call, so there is no `setjmp` here on purpose. What is lost is what `longjmp` loses too: a C frame holding something that needs cleanup does not get to clean it up.
 
@@ -405,7 +435,8 @@ The C block behind a userdata is freed when the userdata is collected: `C.malloc
 6. **`os.date` refuses a slightly different range of times, `os.time` accepts dates the host's `mktime` refuses, and `os.date("!%z")` answers the UTC offset rather than the local one** — `struct tm` keeps the year in an `int`, and the host's `gmtime`/`localtime` answer NULL once it no longer fits, which is where PUC-Lua's "date result cannot be represented in this installation" comes from. This port asks the same question against `tm_year` and reproduces the top of the range exactly — 67768036191676799 is the last representable second (year 2147485547, `tm_year` `INT_MAX`) and one more is refused — but the bottom of the host's range stops a little short of `INT_MIN`, so a window of some 2×10¹⁴ seconds at the far negative end is answered here and refused there; no second beyond that is answered by either. For `os.time`, PUC-Lua builds a time with the C library's `mktime` and reports "time result cannot be represented in this installation" when it answers -1; which dates those are is up to the C library (on macOS, anything that normalises to a year before 1900; glibc accepts those). Go's `time.Date` has no such limit, so this port answers a number. The opposite happens for `%z` under `!`: the time is UTC, but the host's `gmtime` leaves its offset at the local value, so PUC-Lua prints the local offset where this port prints `+0000`. Everything PUC-Lua itself decides is reproduced — the bounds each field must satisfy before it reaches `struct tm` ("field 'year' is out-of-bound"), the missing and non-integer fields, a result of exactly -1, and every other specifier of `os.date`.
 7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh`, `tanh`, `frexp` and `ldexp` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. The one place the port deliberately steps outside Go's implementations is the band in which `exp(|x|)` overflows while `sinh(x)` and `cosh(x)` do not (709.78 < |x| < 710.48): Go's `math.Sinh` answers `inf` for `math.sinh(710)`, whose true value is `exp(710) / 2` = 1.1e308 and representable, so the halving is folded into the argument there instead.
 8. **`math.randomseed()` with no arguments returns a different second seed** — PUC-Lua returns the current time and the *address of the `lua_State`* as its two seeds (lmathlib.c: `randseed`), and this port returns the same two quantities, so the first seed — the time — matches and the second is a Go heap address rather than a C one; the numbers are both host addresses and are not reproducible in either implementation. `math.randomseed(n)` and `math.randomseed(n, m)` return their arguments unchanged, and the generator itself is the same xoshiro256**-based one: for a given seed it produces the identical sequence, integer or float, which the suite pins across 20 draws of `math.random()`, `math.random(6)` and `math.random(10, 20)`.
-9. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
+9. **A coroutine suspends by parking its goroutine, and a C frame that suspended is still there when it wakes** — C's `lua_yield` long-jumps to the `lua_resume` that will pick the thread up again, and everything between is discarded; this port instead hands the yielded values to the resumer through a channel and then blocks on the next resume request, so the Lua stack, the saved program counter and — for a C caller — the C stack itself all survive at the yield point. That is what lets a metamethod or a Go function yield from the middle of a call, and it is what makes continuations work (§5.6). Two consequences follow. The C-call depth a thread inherits from its resumer is refreshed at every yield rather than only at the first resume, which is what C does too, since `lua_resume` runs on every resume. And a C function that yielded does not get to notice: `lua_callk` returns to it as if the call had simply finished, so the status a `lua_callk` continuation hears is `LUA_OK` where PUC-Lua's is always `LUA_YIELD` — a constant, so nothing can depend on the difference. `lua_pcallk`'s status does vary, and that one *is* PUC-Lua's: the port counts the yields the thread has made and reports `LUA_YIELD` when the call was interrupted by one.
+10. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
 
 ---
 

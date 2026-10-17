@@ -1,0 +1,31 @@
+y1	true	42
+y2	true	107	1
+y3	false	cannot resume dead coroutine
+p1	true	5
+p2	true	x	y
+p3	false	cannot resume dead coroutine
+c1	true	9
+c2	true	done
+c3	false	cannot resume dead coroutine
+n1	false	attempt to yield across a C-call boundary
+a1	true	11
+a2	true	103	1
+e1	true	104	2
+m1	true	106	2	H:test.lua:48: oops
+t1	true	1
+t2	true	2
+t3	true	3
+t4	true	done
+t5	false	cannot resume dead coroutine
+z1	true
+z2	true	1	2	3
+s1	true	42
+s2	true
+s3	false	cannot resume dead coroutine
+s4	dead
+w1	true	skip
+w2	true	3
+v1	true	8	9
+v2	true	1
+q1	true	true
+q2	false

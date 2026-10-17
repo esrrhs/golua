@@ -240,7 +240,26 @@ userdata 强转成 `luaL_Stream`（一个 `FILE*` 加一个关闭函数，就这
 PUC-Lua 5.4.9 的实跑结果，存在 `testdata/luafilesystem/expected.txt`。MIT 许可，随
 `testdata/luafilesystem/LICENSE` 一并再分发。
 
-### 5.6 覆盖盘点
+### 5.6 延续：C API 的最后一块
+
+`lua_callk`、`lua_pcallk`、`lua_yieldk` 都收一个 `lua_KFunction`：协程恢复时，C 调它，
+**而不是**返回到挂起的那一帧——因为在 PUC-Lua 里那一帧已经没了：yield 从里面
+longjmp 出去，它的 C 栈被整个丢掉。
+
+本实现丢不掉 C 帧，也不需要丢。yield 是把协程所在的 goroutine **就地停住**（见第 7 节第 10 条），
+所以要延续的那一帧在恢复时还在，接着往下走就是了——这正是延续可达的前提。
+`CallInfo` 带上 `k` 与它的上下文，`(*State).Yield` 在恢复时调延续并回答它压了几个值，
+`lua_pcallk` 则按 `ldo.c` 的 `findpcall` + `finishpcallk` 那样回收下面抛出的错误。
+
+`testdata/continuation/k.c` 是专为这件事写的 C 扩展，覆盖每一条路径：带延续与不带延续的
+`lua_yieldk`、被调方 yield 的 `lua_callk`、没有延续的 `lua_callk`（必须**不可**yield）、
+yield 的 `lua_pcallk`、抛错的 `lua_pcallk`、带 message handler 的、用 `lua_gettop` 数结果的
+延续（PUC-Lua 自己的 `dofilecont` 就是这么写的，`lua_pcallk` 与 `lua_yieldk` 留下的栈还不一样）、
+一个 C 函数靠同一个延续连挂三次、零值 yield、以及对停在 C yield 里的协程调 `coroutine.close`。
+它打印的 31 行全部取自 PUC-Lua 5.4.9，存在 `testdata/continuation/expected.txt`，
+由 `TestContinuation` 逐行比对。为本仓库所写，MIT 许可，与其他 testdata 一致。
+
+### 5.7 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
 `testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
@@ -271,7 +290,7 @@ PUC-Lua 5.4.9 的实跑结果，存在 `testdata/luafilesystem/expected.txt`。M
 `<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
 `require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
 
-### 5.7 性能
+### 5.8 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时
@@ -401,8 +420,10 @@ cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
 正是 PUC-Lua 在没有 `LUA_USE_DLOPEN` 时的逐字回答——而 `package.cpath` 里找到的 C 模块
 会给出 PUC-Lua 在那里的报错。
 
-桥接还有一件做不到的事（写在 `cdlopen.go` 的注释里）：延续（`lua_callk`、`lua_pcallk`、
-带非 NULL `k` 的 `lua_yieldk`）会被丢弃，因为 yield 之后没有可返回的 C 帧。
+延续——`lua_callk`、`lua_pcallk`、带非 NULL `k` 的 `lua_yieldk`——已经实现，见 §5.6。
+唯一与 PUC-Lua 不同的是 `lua_callk` 的延续被告知的 status：C 那里恒为 `LUA_YIELD`，
+而本实现里是 C 函数自己调延续，它看着调用「正常返回」了，于是传 `LUA_OK`。
+没有可观测的东西依赖它，因为对 `lua_callk` 而言那个 status 本就是个常量。
 
 `lua_error` 值得单独说一句：「用 panic 而不是 longjmp」看着像缺口，其实不是。
 Go 的 panic **能穿过 cgo 帧**：runtime 展开到「保护该次调用的那层」的 recover，
@@ -423,7 +444,8 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 7. **`os.date` 拒绝的时间范围略有出入，`os.time` 接受宿主 `mktime` 拒绝的日期，`os.date("!%z")` 给出 UTC 偏移而非本地偏移**：`struct tm` 的年份字段是 `int`，宿主 `gmtime`/`localtime` 一旦放不下就返回 NULL，PUC-Lua 的 “date result cannot be represented in this installation” 正来源于此。本移植按 `tm_year` 判同一条件，上界**完全吻合**——67768036191676799 是最后一个可表示的秒（2147485547 年，`tm_year` 恰为 `INT_MAX`），再加一秒即被拒；宿主的下界离 `INT_MIN` 还差一点，所以最负端约 2×10¹⁴ 秒的窗口内本移植给出答案而参考实现拒绝，再往外两边都不给。至于 `os.time`：PUC-Lua 用 C 库的 `mktime` 构造时间，返回 -1 时报 “time result cannot be represented in this installation”。哪些日期会被拒绝由 C 库决定：macOS 上所有归一化后落在 1900 年之前的都被拒，glibc 则接受。Go 的 `time.Date` 没有这个上限，所以本移植返回一个数值。PUC-Lua 自己判定的部分全部复现——字段进入 `struct tm` 前必须满足的边界（"field 'year' is out-of-bound"）、缺失字段与非整数字段，以及结果恰好为 -1 的情形。`%z` 则相反：加了 `!` 之后时间是 UTC，但宿主的 `gmtime` 把偏移量留在本地值上，于是 PUC-Lua 打印本地偏移，而本移植打印 `+0000`。
 8. **数学库是 Go 的，不是平台 libm**：`math.sin`、`cos`、`tan`、`exp`、`log`、`log10`、`sqrt`、`asin`、`acos`、`atan`、`atan2`、`pow`、`sinh`、`cosh`、`tanh`、`frexp`、`ldexp` 用的是 Go 的实现，与 libc 链接的那份不同。15 位有效数字一致，最后一位或两位在一部分入参上不同：在横跨 15 个数量级的 120 个入参上实测，`sqrt` 从不出现差异，`exp`、`log` 只有个位数（小于 1 ulp），`log10`、`tanh`、`asin`、`acos`、`atan` 有几十个（约 1 ulp），`sin`、`cos`、`tan` 占四分之一到一半。超过 2^53 之后需要先做参数归约，差距会拉大——`tan` 偏 6 ulp、`sin` 偏 7 ulp——因为两边都不是正确舍入，归约方式也不同。所有算术运算、`sqrt` 与两种整数转换都是精确的。NaN 按平台 C 库的写法拼写（macOS 恒为 `"nan"`，glibc 符号位为 1 时是 `"-nan"`），因为 C 的 `printf` 就是这么做的。唯一刻意绕开 Go 实现的地方是 `exp(|x|)` 溢出而 `sinh(x)`、`cosh(x)` 尚未溢出的那条带（709.78 < |x| < 710.48）：Go 的 `math.Sinh` 对 `math.sinh(710)` 返回 `inf`，而其真值是 `exp(710)/2` = 1.1e308、完全可表示，所以那里把「减半」折进了参数里。
 9. **`math.randomseed()` 不带参数时第二个种子不同**：PUC-Lua 返回的两个种子是「当前时间」与「`lua_State` 的地址」（lmathlib.c 的 `randseed`），本移植返回的也是这两个量，所以第一个种子（时间）一致，第二个是 Go 堆地址而非 C 堆地址——两者都是宿主地址，在任一实现里都不可复现。`math.randomseed(n)` 与 `math.randomseed(n, m)` 原样返回入参；生成器本身仍是同一个基于 xoshiro256** 的实现：同一种子下产出的序列完全相同，整数与浮点都是，用例已钉住 `math.random()`、`math.random(6)`、`math.random(10, 20)` 各 20 次取值。
-10. **性能**：`Instruction` 使用结构体而非位压缩 uint32，分派有额外开销；P7 阶段做基准后再决定是否改回位编码。
+10. **协程是「停住 goroutine」而不是 longjmp，挂起的 C 帧醒来时还在**：C 的 `lua_yield` 是 longjmp 到「将来会把它接起来的那个 `lua_resume`」，中间的一切都被丢弃；本实现则把 yield 的值经 channel 交给恢复者，然后阻塞在下一个 resume 请求上，于是 Lua 栈、保存的程序计数器、乃至 C 调用者自己的栈，全都活在 yield 的那个点上。这正是元方法与 Go 函数能从调用中途 yield 的原因，也是延续能成立的原因（§5.6）。随之而来两点：协程从恢复者继承的 C 调用深度是**每次 yield 都刷新**，而非只在第一次 resume 时刷新——这与 C 一致，因为 `lua_resume` 每次 resume 都跑一遍。另外 yield 过的 C 函数察觉不到这件事：`lua_callk` 会像调用正常结束那样返回它，所以 `lua_callk` 的延续听到的 status 是 `LUA_OK`，而 PUC-Lua 那里恒为 `LUA_YIELD`——是个常量，没有东西能依赖这个差别。`lua_pcallk` 的 status 是会变的，那个**与 PUC-Lua 一致**：本实现数着该线程 yield 了几次，被 yield 打断时报告 `LUA_YIELD`。
+11. **性能**：`Instruction` 使用结构体而非位压缩 uint32，分派有额外开销；P7 阶段做基准后再决定是否改回位编码。
 
 ---
 

@@ -175,29 +175,121 @@ func ptrKey(k unsafe.Pointer) any {
 
 //export lua_callk
 func lua_callk(p *C.lua_State, nargs, nresults C.int, ctx C.lua_KContext, k C.lua_KFunction) {
-	/* a continuation would have to run after the call yields, which is
-	   a C frame this port cannot return into; there is nothing to
-	   continue, so the call is made without one */
-	stateOf(p).Call(int(nargs), int(nresults))
+	L := stateOf(p)
+	/* C's lua_callk: a continuation is only possible in a thread that
+	   can yield, and asking for one is what makes the call yieldable.
+	   It is saved on the caller's own frame, because that is the frame
+	   the continuation belongs to. */
+	if k != nil && L.IsYieldable() {
+		ci := L.ci
+		ci.cK = unsafe.Pointer(k)
+		ci.cCtx = int64(ctx)
+		L.CallK(int(nargs), int(nresults))
+		/* The call returned, so it did not yield: the C function goes
+		   on from here itself, and no continuation is due.  (C leaves
+		   'ci->u.c.k' set; this port must not, because the frame stays
+		   alive and a later yield would find a stale one.) */
+		ci.cK = nil
+		return
+	}
+	L.Call(int(nargs), int(nresults))
 }
 
 //export lua_pcallk
 func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 	k C.lua_KFunction) C.int {
-	return C.int(stateOf(p).PCall(int(nargs), int(nresults), int(msgh)))
+	L := stateOf(p)
+	if k != nil && L.IsYieldable() {
+		/* C's lua_pcallk with a continuation: the call is already
+		   protected by 'resume', so it is made yieldable and left
+		   unprotected -- an error is recovered right here, which is
+		   what ldo.c's 'findpcall' + 'finishpcallk' do for the same
+		   case.  C never comes back from the yield; here it does, and
+		   the C function calls the continuation itself with the status
+		   this returns. */
+		ci := L.ci
+		funcIdx := L.top - (int(nargs) + 1)
+		var ef int
+		if msgh != 0 {
+			ef = L.indexToAbs(int(msgh))
+		}
+		ci.cK = unsafe.Pointer(k)
+		ci.cCtx = int64(ctx)
+		ci.oldErrFunc = L.errfunc
+		L.errfunc = ef
+		ci.ypcall = true
+		status := LUA_OK
+		n0 := L.nYields
+		func() {
+			defer func() {
+				r := recover()
+				if r == nil {
+					return
+				}
+				e, ok := r.(*luaError)
+				if !ok {
+					panic(r) /* not a Lua error: let it out */
+				}
+				status = e.status
+			}()
+			luaD_call(L, funcIdx, int(nresults))
+		}()
+		ci.ypcall = false
+		L.errfunc = ci.oldErrFunc
+		if status == LUA_OK && L.nYields != n0 {
+			/* C's finishpcallk: the call was interrupted by a yield,
+			   and that is the status the continuation hears about --
+			   even though the callee then went on to finish normally. */
+			status = LUA_YIELD
+		}
+		if status != LUA_OK && status != LUA_YIELD {
+			/* ldo.c's finishpcallk: unwind to this frame, close the
+			   to-be-closed variables the call opened, and leave the
+			   error object where the callee's results would have been,
+			   so that the continuation sees it. */
+			L.ci = ci
+			status = luaD_closeprotected(L, funcIdx, status)
+			luaD_seterrorobj(L, status, funcIdx)
+			L.shrinkStack()
+		} else {
+			ci.cK = nil /* the call did not yield */
+		}
+		return C.int(status)
+	}
+	return C.int(L.PCall(int(nargs), int(nresults), int(msgh)))
 }
 
 //export lua_yieldk
 func lua_yieldk(p *C.lua_State, nresults C.int, ctx C.lua_KContext, k C.lua_KFunction) C.int {
-	stateOf(p).Yield(int(nresults))
-	/* not reached: Yield does not return to its caller */
-	return 0
+	L := stateOf(p)
+	/* C's lua_yieldk: 'k' is saved on the frame that is yielding, so
+	   that the resume calls it instead of handing the resume arguments
+	   back to the C function. */
+	if k != nil {
+		L.ci.cK = unsafe.Pointer(k)
+		L.ci.cCtx = int64(ctx)
+	} else {
+		L.ci.cK = nil
+	}
+	/* When there is no continuation, this is the number of values the
+	   resumer passed to 'coroutine.resume' and they are already on the
+	   stack: the results of the yield.  With one, it is what the
+	   continuation left there. */
+	return C.int(L.Yield(int(nresults)))
 }
 
 //export lua_yield
 func lua_yield(p *C.lua_State, nresults C.int) C.int {
-	stateOf(p).Yield(int(nresults))
-	return 0
+	return C.int(stateOf(p).Yield(int(nresults)))
+}
+
+func init() {
+	/* The only place a C function pointer can be called from. */
+	callContinuation = func(L *State, ci *CallInfo, status int) int {
+		k := C.lua_KFunction(ci.cK)
+		return int(C.cdl_call_kfunction(k, L.statePtr(), C.int(status),
+			C.lua_KContext(ci.cCtx)))
+	}
 }
 
 //export lua_resume

@@ -76,6 +76,19 @@ type CallInfo struct {
 	// number of values being transferred, for the return/call hook.
 	ftransfer int
 	ntransfer int
+
+	// cK and cCtx are ci->u.c.k and ci->u.c.ctx: the continuation a C
+	// function handed to 'lua_callk', 'lua_pcallk' or 'lua_yieldk', and
+	// the context to pass back to it (ldo.c finishCcall).  cK is nil
+	// when the frame has none.  It is a C function pointer, which is
+	// why it is an 'unsafe.Pointer' rather than a Go func: only
+	// cdlopen.go can call it.
+	cK   unsafe.Pointer
+	cCtx int64
+	// ypcall is CIST_YPCALL: this frame is an interrupted 'lua_pcallk'
+	// with a continuation, so an error raised below it is recovered
+	// here instead of killing the coroutine (ldo.c findpcall).
+	ypcall bool
 }
 
 // globalState is the state shared by all threads (lstate.h).
@@ -105,6 +118,14 @@ type State struct {
 
 	status    byte
 	allowhook byte
+
+	// nYields counts the yields this thread has made.  C can tell from
+	// the stack that a call was interrupted by one (the CallInfo it
+	// left behind is 'CIST_YPCALL'); here the call simply returns, so
+	// 'lua_pcallk' compares the count before and after to know whether
+	// to report LUA_OK or LUA_YIELD to the continuation (ldo.c
+	// finishpcallk).
+	nYields int
 
 	// hook machinery (lstate.h). 'hook' is always a Go function: the
 	// debug library installs 'dbHookFunc', which then calls the Lua
@@ -184,12 +205,6 @@ const (
 	reqResume = 0
 	reqClose  = 1
 )
-
-// yieldSignal is what lua_yield throws; it is not a Lua error but a
-// non-local exit to the resume point.
-type yieldSignal struct {
-	vals []Value
-}
 
 // closeSignal unwinds a coroutine being closed by coroutine.close.
 type closeSignal struct{}
@@ -490,12 +505,11 @@ func (L *State) coMain() {
 			L.co.resp <- &resumeResp{status: LUA_OK}
 			return
 		}
+		/* 'coRun' returns only when the coroutine is through: a yield
+		   parks the goroutine inside (*State).Yield, which sends the
+		   resume response itself and waits there for the next resume
+		   request. */
 		status, vals, closed := L.coRun(req.args, req.ccalls)
-		if status == LUA_YIELD {
-			L.status = LUA_YIELD
-			L.co.resp <- &resumeResp{status: LUA_YIELD, vals: vals}
-			continue
-		}
 		L.dead = true
 		if closed {
 			/* luaE_resetthread leaves the thread with status LUA_OK,
@@ -523,10 +537,6 @@ func (L *State) coRun(args []Value, ccalls int) (status int, vals []Value, close
 	defer func() {
 		if r := recover(); r != nil {
 			switch x := r.(type) {
-			case *yieldSignal:
-				status = LUA_YIELD
-				vals = x.vals
-				return
 			case *closeSignal:
 				/* C's lua_closethread -> luaE_resetthread: unwind the
 				   CallInfo list and close every to-be-closed variable
@@ -715,14 +725,75 @@ func resumeError(L *State, msg string) int {
 	return LUA_ERRRUN
 }
 
-// Yield yields nresults values (lua_yieldk / lua_yield).
-func (L *State) Yield(nresults int) {
+// Yield yields nresults values (lua_yieldk / lua_yield / luaB_yield), and
+// answers how many values the yield returns: what the resumer passed to
+// 'coroutine.resume' when the frame has no continuation, and what the
+// continuation pushed when it has one.
+//
+// C's 'lua_yieldk' throws, and 'lua_resume' picks the coroutine up again
+// where it stopped.  This port instead parks the coroutine's goroutine
+// right here: the yielded values go to the resumer through 'co.resp', and
+// the goroutine then waits for the next resume request.  Parking keeps
+// the Lua stack, the saved program counter and -- for a C caller -- the C
+// stack itself alive at the yield point, so on resume execution simply
+// goes on where it left off.  That is also what makes a continuation
+// possible: the C frame that asked for one is still there to receive the
+// values the continuation leaves for it.
+func (L *State) Yield(nresults int) int {
 	if L.isMain || L.co == nil {
-		panic(&luaError{status: LUA_ERRRUN, value: strValue(L, "attempt to yield from outside a coroutine")})
+		/* C's lua_yieldk: 'luaG_runerror', so no source:line prefix */
+		luaG_runerror(L, "attempt to yield from outside a coroutine")
+		return 0 /* not reached */
 	}
+	if !yieldable(L) {
+		luaG_runerror(L, "attempt to yield across a C-call boundary")
+		return 0 /* not reached */
+	}
+	ci := L.ci
+	L.nYields++
 	vals := make([]Value, nresults)
 	copy(vals, L.stack[L.top-nresults:L.top])
-	panic(&yieldSignal{vals: vals})
+	/* The yielded values leave the stack, because that is what C does:
+	   'auxresume' hands them to the resumer with 'lua_xmove', which
+	   takes them off this thread's stack.  A continuation that counts
+	   with 'lua_gettop' -- PUC-Lua's own 'dofilecont' does -- must see
+	   the same stack here as there (test 'v2' below pins it). */
+	L.top -= nresults
+	L.co.resp <- &resumeResp{status: LUA_YIELD, vals: vals}
+	req := <-L.co.req /* wait for the next resume (or a close) */
+	if req.kind == reqClose {
+		panic(&closeSignal{}) /* unwind: the coroutine is being closed */
+	}
+	/* C's lua_resume runs on every resume, so the thread takes the C-call
+	   depth of whoever resumed it *now*: the resumer may be deeper in the
+	   stack than it was when this coroutine started.  'coRun' only runs
+	   once, so the depth is refreshed here. */
+	L.nCcalls = req.ccalls + 1
+	narg := len(req.args)
+	L.checkStack(narg)
+	copy(L.stack[L.top:], req.args)
+	L.top += narg
+	if ci.cK != nil {
+		/* C's lua_resume: the continuation takes over from the yield,
+		   and what it returns are the results of the function that
+		   yielded. */
+		return L.runContinuation(ci, LUA_YIELD)
+	}
+	return narg /* the resume arguments are the results of the yield */
+}
+
+// callContinuation calls the C continuation the frame saved, the way
+// ldo.c's 'finishCcall' does, and answers how many values it pushed.
+// Only cdlopen.go -- the cgo half -- can call a C function pointer, so
+// that is where the real one is installed; no other build can ever see a
+// frame with a continuation.
+var callContinuation func(L *State, ci *CallInfo, status int) int
+
+func (L *State) runContinuation(ci *CallInfo, status int) int {
+	if callContinuation == nil {
+		panic("lua: a continuation was saved without the C API")
+	}
+	return callContinuation(L, ci, status)
 }
 
 func strValue(L *State, s string) Value {
@@ -758,8 +829,6 @@ func (L *State) rawRunProtected(f func()) (status int) {
 		switch x := r.(type) {
 		case *luaError:
 			status = x.status
-		case *yieldSignal:
-			panic(x) // yields escape protected calls
 		case *closeSignal:
 			panic(x)
 		default:

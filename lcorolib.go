@@ -5,15 +5,16 @@
 // goroutine):
 //
 //  1. 'lua_yield' is a blocking channel handshake instead of a longjmp.
-//     The port's (*State).Yield throws a panic that unwinds the
-//     coroutine's goroutine, so the next resume would run the body again
-//     from the beginning.  coYield instead hands the yielded values to
-//     the resumer and then waits for the next resume request, which
-//     keeps the goroutine (and therefore the Lua stack and the saved
-//     program counter) alive at the yield point -- exactly the "a
-//     metamethod that yields simply blocks the coroutine's goroutine"
-//     behaviour described at the top of lvm.go.  The same code belongs
-//     in (*State).Yield; it is here only to avoid touching lstate.go.
+//     C throws out of the coroutine and 'lua_resume' picks it up again
+//     later; ported straight, that would unwind the goroutine and the
+//     next resume would run the body again from the beginning.  (*State).
+//     Yield instead hands the yielded values to the resumer and then
+//     waits for the next resume request, which keeps the goroutine (and
+//     therefore the Lua stack and the saved program counter) alive at
+//     the yield point -- exactly the "a metamethod that yields simply
+//     blocks the coroutine's goroutine" behaviour described at the top
+//     of lvm.go.  It is also what makes a C continuation possible: the
+//     C frame that asked for one is still there when the resume comes.
 //
 //  2. There is no lua_closethread; coClose asks the coroutine goroutine
 //     to unwind itself through the same request channel.
@@ -160,35 +161,9 @@ func coWrap(L *State) int {
 ** results of the yield.
  */
 func coYield(L *State) int {
-	n := L.GetTop()
-	if !yieldable(L) {
-		/* C uses luaG_runerror here: as 'yield' is a C function, the
-		   message gets no source:line prefix. */
-		if L.isMain {
-			luaG_runerror(L, "attempt to yield from outside a coroutine")
-		} else {
-			luaG_runerror(L, "attempt to yield across a C-call boundary")
-		}
-		return 0 /* not reached */
-	}
-	vals := make([]Value, n)
-	copy(vals, L.stack[L.top-n:L.top])
-	L.top -= n /* the yielded values leave the stack */
-	L.co.resp <- &resumeResp{status: LUA_YIELD, vals: vals}
-	req := <-L.co.req /* wait for the next resume (or a close) */
-	if req.kind == reqClose {
-		panic(&closeSignal{}) /* unwind: the coroutine is being closed */
-	}
-	/* C's lua_resume runs on every resume, so the thread takes the
-	   C-call depth of whoever resumed it *now* -- the resumer may be
-	   deeper in the stack than it was when this coroutine started.
-	   'coRun' only runs once, so the depth is refreshed here. */
-	L.nCcalls = req.ccalls + 1
-	narg := len(req.args)
-	L.checkStack(narg)
-	copy(L.stack[L.top:], req.args)
-	L.top += narg
-	return narg /* the resume arguments are the results of 'yield' */
+	/* the whole of it is now (*State).Yield: the park-and-wait
+	   handshake, the continuation, and the two error messages */
+	return L.Yield(L.GetTop())
 }
 
 // status names (lcorolib.c COS_RUN, COS_DEAD, COS_YIELD, COS_NORM)
