@@ -92,15 +92,16 @@
 |---|---|---|
 | 对象生命周期 | 引用计数无关的三色增量 GC | Go 并发三色 GC，循环引用天然回收 |
 | `luaC_barrier*` 写屏障 | 手工维护 | 删除（Go GC 自带混合写屏障） |
-| `collectgarbage("collect")` | 完整 GC | `runtime.GC()` |
-| `collectgarbage("count")` | 内存统计 | `runtime.ReadMemStats()` |
-| `collectgarbage("step"/"setpause"/"setstepmul"/"incremental"/"generational")` | GC 调参 | 语义兼容的空实现（返回合理值，不报错） |
-| `collectgarbage("collect")` | 强制回收 | 真的做一次完整收集：清栈上残留槽、清扫弱表、执行待跑的 `__gc` |
+| `collectgarbage("collect")` | 完整 GC | 一整个周期：放开被 hold 的对象 → 清空栈顶以上的残留槽 → 清扫弱表 → `runtime.GC()` → 执行不可达对象的 `__gc` |
+| `collectgarbage("count")` | Lua 分配器发出的 Kbytes | Go 堆的 Kbytes（`runtime.ReadMemStats`） |
+| `collectgarbage("step")` | 有界步进，回答"这一轮是否结束" | 一整个周期，所以恒为 `true`（PUC-Lua 连续几百次都回答 `false`） |
+| `collectgarbage("stop"/"restart"/"isrunning")` | 停/开收集器 | 只关掉自动步进；显式 `collect` 照常收集，与 C 一致 |
+| `collectgarbage("setpause"/"setstepmul"/"incremental"/"generational")` | GC 调参与模式切换 | 接收并存下参数，回答旧值；没有代码读它们 |
 | `__gc` 元方法 | GC 触发终结 | `runtime.SetFinalizer` 发现不可达并入队，VM 在分配点（与 PUC-Lua 跑收集步进的位置相同）取出执行 |
 | 弱表 `__mode = "k"/"v"/"kv"` | GC 清除 | 清扫时把弱引用换成 `weak.Pointer`（Go 1.24+）并清空槽位，让 Go 判断谁真的不可达；table/userdata/function/thread 生效，字符串/数字/布尔同 PUC-Lua 一样不参与弱化 |
 | `lua_newstate(alloc, ud)` | 自定义分配器 | `NewState()` |
 
-> 影响面可控：GC 只影响"什么时候回收"，不影响 Lua 的可观测语义（除了 `__gc` 时机、`collectgarbage("count")` 口径与弱表多存活一轮）。
+> 影响面可控：GC 只影响"什么时候回收"，不影响 Lua 的可观测语义（除了 `__gc` 时机与 `collectgarbage("count")` 的统计口径）。
 
 ---
 

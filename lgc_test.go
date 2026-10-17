@@ -145,6 +145,32 @@ func TestFinalizerRunsOnAllocation(t *testing.T) {
 	}
 }
 
+// 'collectgarbage("collect")' has to run the '__gc' of everything it
+// finds in that very cycle, not in the next one.
+//
+// Go hands a finalizer over on another goroutine and 'runtime.GC' returns
+// before it does, so a cycle that does not wait for the handover leaves
+// the metamethod for the next cycle to run -- which shows up as the count
+// being one short, and only sometimes, because it is a race.  The loop is
+// what makes the test see the race rather than luck.
+func TestFinalizerRunsInTheSameCycle(t *testing.T) {
+	got := runChunk(t, `
+		local bad = 0
+		for round = 1, 20 do
+			local n = 0
+			for i = 1, 3 do
+				setmetatable({}, {__gc = function () n = n + 1 end})
+			end
+			collectgarbage("collect")   -- must run all three now
+			if n ~= 3 then bad = bad + 1 end
+		end
+		return tostring(bad)
+	`)
+	if got != "0" {
+		t.Errorf("%s of 20 collections left a __gc for the next cycle", got)
+	}
+}
+
 // A weak table has to be swept on allocation alone, for the same reason.
 func TestWeakSweptOnAllocation(t *testing.T) {
 	got := runChunk(t, `

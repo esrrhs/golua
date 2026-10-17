@@ -141,16 +141,56 @@ func gcWatchEmpty() bool {
 	return n == 0
 }
 
+// gcDeadWatched counts the watched objects Go has collected but whose
+// '__gc' has not been handed over yet (see gcAwaitPending).  It is zero
+// for as long as every watched object is still alive, so it is what lets
+// the wait below cost nothing when there is nothing to wait for.
+func gcDeadWatched() int {
+	gcWatchMu.Lock()
+	n := 0
+	for _, w := range gcWatch {
+		if w.dead() { /* collected: its finalizer is on its way */
+			n++
+		}
+	}
+	gcWatchMu.Unlock()
+	return n
+}
+
+// gcAwaitPending gives the Go finalizer goroutine the moment it needs to
+// hand over the metamethods of what this cycle has collected.
+//
+// 'runtime.GC' returns as soon as the sweep is over, which can be before
+// the queue is filled: the handover happens on another goroutine.  A
+// cycle that does not wait therefore leaves a '__gc' that is due now to
+// be run by the next one, which is one cycle later than PUC-Lua runs it
+// -- visible as 'collectgarbage("collect")' sometimes not running the
+// metamethod the script asked it to run.
+//
+// Waiting is not free, so it is bounded and it is only entered when
+// there is something to wait for: the loop yields rather than sleeps
+// first, and gives up after a few hundred microseconds, which leaves the
+// behaviour as it was on a machine too busy to schedule the goroutine.
+func gcAwaitPending() {
+	due := gcDeadWatched()
+	if due == 0 { /* nothing was collected: nothing is on its way */
+		return
+	}
+	for i := 0; i < 1000 && int(gcWaiting.Load()) < due; i++ {
+		runtime.Gosched()
+	}
+	for i := 0; i < 6 && int(gcWaiting.Load()) < due; i++ {
+		time.Sleep(50 * time.Microsecond)
+	}
+}
+
 // gcWaitFinalizers waits for the Go finalizer goroutine to hand over what
 // it has found.  'runtime.GC' returns as soon as the sweep is over, which
 // can be before the queue is filled.
 //
-// Only 'closeFinalizers' can afford to wait.  A collector step must not:
-// a script that calls 'collectgarbage()' in a loop -- 'calls.lua' does,
-// hundreds of times, from a reader function -- would pay milliseconds
-// every time for a queue that is empty simply because there was nothing
-// to finalise.  What turns up after the step is picked up at the next
-// allocation anyway (see the drain in lvm.go).
+// It costs milliseconds, because it has to be sure: only the closing of a
+// state can afford it, and only because nothing will allocate again.  A
+// collector step uses the bounded 'gcAwaitPending' instead.
 func gcWaitFinalizers() {
 	for i := 0; i < 2 && !gcHasPending(); i++ {
 		runtime.GC()
@@ -200,6 +240,7 @@ func (L *State) gcCycle() {
 	gcClearStacks() /* see gcClearStacks: stale slots keep objects alive */
 	L.gcSweepWeak()
 	runtime.GC() /* lets Go find the unreachable objects */
+	gcAwaitPending()
 	L.runFinalizers()
 	gcRehold()
 }

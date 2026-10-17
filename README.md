@@ -84,10 +84,12 @@ loading C dynamic libraries (replaced by Go-side module registration).
 |---|---|---|
 | Object lifetime | tri-color incremental GC | Go's concurrent tri-color GC; cycles collected naturally |
 | `luaC_barrier*` write barriers | manual | removed (Go has a hybrid write barrier) |
-| `collectgarbage("collect")` | full GC | `runtime.GC()` |
-| `collectgarbage("count")` | memory stats | `runtime.ReadMemStats()` |
-| `collectgarbage("step"/"setpause"/"setstepmul"/…)` | tuning | compatible no-ops returning sane values |
-| `__gc` | GC-driven finalization | `runtime.SetFinalizer` (timing not deterministic) |
+| `collectgarbage("collect")` | full GC | a whole cycle: let the held objects go, clear the stack slots above the top, sweep the weak tables, `runtime.GC()`, run the `__gc` of what has become unreachable |
+| `collectgarbage("count")` | Kbytes handed out by Lua's allocator | Kbytes of the Go heap (`runtime.ReadMemStats`) |
+| `collectgarbage("step")` | a bounded step; answers whether a cycle finished | a whole cycle, so it always answers true (PUC-Lua answers false for hundreds of calls in a row) |
+| `collectgarbage("stop"/"restart"/"isrunning")` | stops and starts the collector | gates the automatic step only: an explicit `collect` still collects, which is what C does too |
+| `collectgarbage("setpause"/"setstepmul"/"incremental"/"generational")` | tuning knobs and modes | accepted, stored, and answered with the previous value; nothing reads them |
+| `__gc` | GC-driven finalization | `runtime.SetFinalizer` finds the object unreachable and queues the metamethod; the VM runs the queue at a cycle boundary — a step, `collectgarbage`, or `Close()` |
 | Weak tables (`__mode`) | GC clearing | `weak.Pointer` for table/userdata/function; **string keys are never weakened** |
 | `lua_newstate(alloc, ud)` | custom allocator | `NewState()` |
 
