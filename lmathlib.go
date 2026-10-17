@@ -173,7 +173,7 @@ func mathLog(L *State) int {
 	} else {
 		base := L.CheckNumber(2)
 		if base == 2.0 {
-			res = math.Log2(x)
+			res = mathLog2Scaled(x)
 		} else if base == 10.0 {
 			res = mathLog10Scaled(x)
 		} else {
@@ -494,6 +494,39 @@ func mathLogScaled(x float64) float64 {
 // applied afterwards.
 func mathLog10Scaled(x float64) float64 {
 	return mathLogScaled(x) * (1 / math.Ln10)
+}
+
+// mathLog2Scaled is C's 'log2', which is what math.log(x, 2) asks for --
+// not math.log(x)/math.log(2), which is what every other base gets.
+//
+// It cannot simply ask math.Log2.  Go's Log2 splits the argument with
+// Frexp and adds the exponent back afterwards:
+//
+//	Log(frac) * (1/Ln2) + exp
+//
+// and both of those round.  When x is near 1 the product is near -1 and
+// the exponent is 1, so the answer is the difference of two numbers a
+// million times bigger than it is, and what survives of it is the
+// rounding: math.log(1.0000000000000002, 2) is 3.203426503810071e-16 to
+// C's log2 and 3.681659806145121e-16 to math.Log2, fifteen per cent
+// away -- and every other argument in this port is within an ulp or two.
+//
+// In the band [sqrt(2)/2, sqrt(2)) -- the band in which Frexp's exponent
+// is the 0 that math.Log would have to add back -- math.Log needs no
+// such subtraction, so it keeps the low bits of an answer near zero, and
+// log(x)/ln(2) is accurate there.  Outside it the answer is at least 0.5
+// in magnitude, where the rounding above is worth less than an ulp and
+// math.Log2 is the better of the two anyway: it is exact for a power of
+// two, and its error does not grow with the exponent the way a
+// quotient's does.
+func mathLog2Scaled(x float64) float64 {
+	if x > 0 && x < mathSmallestNormal {
+		return mathLogScaled(x) * (1 / math.Ln2)
+	}
+	if x >= math.Sqrt2/2 && x < math.Sqrt2 {
+		return math.Log(x) * (1 / math.Ln2)
+	}
+	return math.Log2(x)
 }
 
 func mathSinh(L *State) int {

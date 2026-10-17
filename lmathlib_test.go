@@ -100,6 +100,67 @@ func TestLogOfASubnormal(t *testing.T) {
 	}
 }
 
+// TestLog2NearOne pins math.log(x, 2) where x is close to 1.
+//
+// The values are PUC-Lua's.  They are here because Go's math.Log2 is not
+// C's log2: it splits the argument with Frexp and adds the exponent back
+// afterwards, and both of those round, so an answer that is near zero --
+// which is what log2 of a number near 1 is -- comes out of the rounding
+// of two numbers a million times bigger than it is: math.Log2 answers
+// 3.6816598061451e-16 for log(1.0000000000000002, 2), fifteen per cent
+// away from the 3.2034265038149e-16 that C's log2 answers.  Outside this
+// band the two agree to an ulp.  mathLog2Scaled is what keeps those
+// bits, and this is the only thing here that would catch the port asking
+// math.Log2 about an argument that near 1.
+//
+// The fourteen digits are deliberate.  Every answer here is within an
+// ulp or two of the reference on any platform, and %.14g is what keeps
+// that from being a failure on a machine whose libm rounds the other
+// way; it still shows a fifteen per cent error as plainly as %.17g does.
+func TestLog2NearOne(t *testing.T) {
+	got := runChunk(t, `
+	local out = {}
+	for _, x in ipairs{
+		1 + 2^-52, 1 - 2^-53, 1 + 1e-15, 1 - 1e-15, 1 + 1e-10, 1 - 1e-10,
+		1 + 0.1, 1 - 0.1, 1 + 0.41421356237309503, 0.7071067811865476,
+		1.4142135623730951, 2, 4, 8, 1024, 0.5, 2^40, 2^-30,
+		3, 10, 100, 1e10, 1e100, 1e-10, 5e-324, 1e-320,
+	} do
+		out[#out + 1] = string.format("%.14g", math.log(x, 2))
+	end
+	return table.concat(out, "\n")
+	`)
+	want := `3.2034265038149e-16
+-1.6017132519075e-16
+1.6017132519075e-15
+-1.4415419267167e-15
+1.442695160186e-10
+-1.4426951603302e-10
+0.13750352374994
+-0.15200309344505
+0.5
+-0.5
+0.5
+1
+2
+3
+10
+-1
+40
+-30
+1.5849625007212
+3.3219280948874
+6.6438561897747
+33.219280948874
+332.19280948874
+-33.219280948874
+-1074
+-1063.0170064253`
+	if got != want {
+		t.Errorf("math.log(x, 2) near x == 1:\n%s", sideBySide(want, got))
+	}
+}
+
 // sideBySide shows which lines of a multi-line answer disagree.
 func sideBySide(want, got string) string {
 	w, g := strings.Split(want, "\n"), strings.Split(got, "\n")
