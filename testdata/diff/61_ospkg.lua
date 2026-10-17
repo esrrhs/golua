@@ -145,7 +145,10 @@ print(rec(package.searchpath, "a", "", ""))
 print(rec(package.searchpath, "a", "?"))
 print(rec(package.searchpath, "a", 5))
 print(rec(package.searchpath, "a"))
-print(rec(package.searchpath))
+-- Not 'package.searchpath()' with nothing at all: which argument the
+-- error then names is whichever of the two 'luaL_checkstring' calls the
+-- C compiler evaluated first, and that is unspecified -- gcc says "#2",
+-- clang says "#1".  See 40_modules.lua.
 print(rec(package.searchpath, 5, "?"))
 
 print("== require ==")

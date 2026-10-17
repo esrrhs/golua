@@ -67,6 +67,39 @@ cosh(-800) = inf`
 	}
 }
 
+// TestLogOfASubnormal pins the answers at the bottom of the range,
+// where a float64 has stopped carrying a full significand.
+//
+// The values are PUC-Lua's, and they are here for the same reason the
+// exp ones are: Go's math.Log is an assembly routine on amd64 and s390x,
+// and it loses several digits on a subnormal argument -- 1e-308 is one,
+// the smallest normal float64 being 2.2250738585072014e-308 -- answering
+// -708.71839997088 where log(1e-308) is -709.19620864217.  On arm64 this
+// test passes either way; on amd64 it is the only thing here that would
+// catch the port answering that.
+func TestLogOfASubnormal(t *testing.T) {
+	got := runChunk(t, `
+	local out = {}
+	for _, x in ipairs{1e-308, 1e-320, 5e-324, 2.2250738585072014e-308} do
+		out[#out + 1] = string.format("%.14g\t%.14g", math.log(x), math.log10(x))
+	end
+	for _, x in ipairs{1e-308, 5e-324} do
+		out[#out + 1] = string.format("%.14g\t%.14g\t%.14g",
+			math.log(x, 2), math.log(x, 10), math.log(x, 3))
+	end
+	return table.concat(out, "\n")
+	`)
+	want := `-709.19620864217	-308
+-736.82724089097	-320.00000483495
+-744.44007192138	-323.30621534312
+-708.39641853226	-307.65265556859
+-1023.1538532253	-308	-645.53820848113
+-1074	-323.30621534312	-677.61855533575`
+	if got != want {
+		t.Errorf("math.log/math.log10 of a subnormal:\n%s", sideBySide(want, got))
+	}
+}
+
 // sideBySide shows which lines of a multi-line answer disagree.
 func sideBySide(want, got string) string {
 	w, g := strings.Split(want, "\n"), strings.Split(got, "\n")

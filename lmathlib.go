@@ -169,15 +169,15 @@ func mathLog(L *State) int {
 	x := L.CheckNumber(1)
 	var res float64
 	if L.IsNoneOrNil(2) {
-		res = math.Log(x)
+		res = mathLogScaled(x)
 	} else {
 		base := L.CheckNumber(2)
 		if base == 2.0 {
 			res = math.Log2(x)
 		} else if base == 10.0 {
-			res = math.Log10(x)
+			res = mathLog10Scaled(x)
 		} else {
-			res = math.Log(x) / math.Log(base)
+			res = mathLogScaled(x) / mathLogScaled(base)
 		}
 	}
 	L.PushNumber(res)
@@ -462,6 +462,40 @@ func mathExpScaled(x float64, shift int) float64 {
 // scaling by 2^-1 overflows and the answer is +Inf, which is right.
 func mathHalfExp(x float64) float64 { return mathExpScaled(x, -1) }
 
+// mathLogScaled is C's 'log'.  It cannot simply ask math.Log, for the
+// same reason mathExpScaled cannot ask math.Exp: Go's math.Log is an
+// assembly routine on amd64 and s390x, and that routine loses several
+// digits on a subnormal argument.  1e-308 is one -- the smallest normal
+// float64 is 2.2250738585072014e-308 -- and log(1e-308) is
+// -709.19620864217, which the routine answers as -708.71839997088.
+// The pure Go version, the one arm64 gets, is right.
+//
+// So a subnormal is scaled up into the normal range first, by a power of
+// two, which is exact, and the exponent is taken back off afterwards.
+// The answer is never small enough for that to cost anything worth
+// having: a subnormal's log is below -708, where the fourteenth
+// significant digit -- one more than Lua prints -- is worth 1e-11, and
+// this subtraction is worth about 1e-13.
+const (
+	mathSmallestNormal = 1 << 52 * math.SmallestNonzeroFloat64
+	mathLogScale       = 1 << 54
+	mathLogScaleLn     = 54 * math.Ln2
+)
+
+func mathLogScaled(x float64) float64 {
+	if x > 0 && x < mathSmallestNormal {
+		return math.Log(x*mathLogScale) - mathLogScaleLn
+	}
+	return math.Log(x)
+}
+
+// mathLog10Scaled is C's 'log10'.  Go's own is 'math.Log(x) * (1/ln 10)'
+// -- see log10.go -- so it is the same correction with the factor
+// applied afterwards.
+func mathLog10Scaled(x float64) float64 {
+	return mathLogScaled(x) * (1 / math.Ln10)
+}
+
 func mathSinh(L *State) int {
 	x := L.CheckNumber(1)
 	s := math.Sinh(x)
@@ -525,7 +559,7 @@ func mathLdexp(L *State) int {
 }
 
 func mathLog10(L *State) int {
-	L.PushNumber(math.Log10(L.CheckNumber(1)))
+	L.PushNumber(mathLog10Scaled(L.CheckNumber(1)))
 	return 1
 }
 
