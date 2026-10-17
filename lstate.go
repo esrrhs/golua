@@ -152,6 +152,11 @@ type State struct {
 	// runtime/cgo.Handle naming the state.  It is nil until then, and
 	// nil for good in a build without cgo.
 	cstate unsafe.Pointer
+
+	// The allocator lua_setallocf has set, for lua_getallocf to hand
+	// back. Both are C-side only: an extension calls what it is given.
+	callocF  unsafe.Pointer
+	callocUD unsafe.Pointer
 }
 
 // coRuntime is the channel pair that drives a coroutine goroutine.

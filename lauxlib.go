@@ -4,6 +4,7 @@ package lua
 import (
 	"fmt"
 	"strings"
+	"unsafe"
 )
 
 // Reg is the Go counterpart of luaL_Reg.
@@ -343,16 +344,27 @@ func (L *State) NewLib(l []Reg) {
 // Buffer is the Go counterpart of luaL_Buffer.
 type Buffer struct {
 	L      *State
-	boxIdx int // index of the "box" (a userdata holding the Go builder)
+	boxIdx int    // index of the "box" (a userdata holding the Go builder)
+	box    *Udata // the box itself, so luaL_pushresult can be sure
 	sb     strings.Builder
+
+	// scratch is the block an extension writes through: luaL_prepbuffsize
+	// hands out its address and the extension copies into it directly, so
+	// it has to be memory C can hold -- not Go memory, which cgo forbids
+	// and the collector might move. It is freed with the buffer.
+	scratch unsafe.Pointer
+	slen    int
 }
 
 // NewBuffer creates a new string buffer (luaL_buffinit).
 func (L *State) NewBuffer() *Buffer {
 	b := &Buffer{L: L}
 	L.checkStack(2)
-	L.NewUserData(nil, 0)
+	u := luaS_newudata(L, 0, nil)
+	setuvalue(&L.stack[L.top], u)
+	L.top++
 	b.boxIdx = L.AbsIndex(-1)
+	b.box = u
 	return b
 }
 

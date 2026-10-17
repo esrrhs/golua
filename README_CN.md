@@ -160,7 +160,25 @@
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
 
-### 5.2 覆盖盘点
+### 5.2 一个真实的 C 扩展：LPeg
+
+`go test` 还会用 `testdata/lpeg/` 里的源码编译 [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/)
+1.1.0（六个编译单元，是发布在外、被广泛使用的第三方扩展），并跑 LPeg 自带的测试套件到
+最后一行。这比「再写一个为测试而生的扩展」有价值得多，因为 LPeg 会去碰小扩展永远
+碰不到的那部分 C API，也因此找出了四个别的测试都没发现的真 bug：
+
+| LPeg 做的事 | 错在哪 |
+|---|---|
+| 对 userdata 调 `lua_rawlen`，读回它拿到的块有多大 | 大小从来没记录；userdata 回答的是「用户值个数」，于是 LPeg 推出负长度、分配 0 字节、越界拷贝 |
+| 调 `lua_getallocf`，然后**直接调用**拿到的函数指针 | 无分配器可交出，LPeg 跳到了 0 地址 |
+| 用 `luaL_Buffer`：既走 `luaL_addchar`，也往 `luaL_prepbuffsize` 返回的地址里写 | 那个地址是 NULL，且结果把占位符留在了栈上——栈被顶偏，随后的 `lua_call` 调错了东西 |
+| 用 `lua_tostring` 区分「用字符串命名的规则」和「用表命名的规则」 | PUC-Lua 回答 NULL 的地方我们回答了空串，LPeg 因此走了错分支 |
+
+它打印的每一行都取自 PUC-Lua 5.4.9 的实跑结果，存在 `testdata/lpeg/expected.txt`，
+所以这个测试既不需要参照解释器，也不需要联网。二者均为 MIT 许可，随
+`testdata/lpeg/LICENSE` 一并再分发。
+
+### 5.3 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
 `testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
@@ -191,7 +209,7 @@
 `<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
 `require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
 
-### 5.3 性能
+### 5.4 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时

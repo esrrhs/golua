@@ -359,15 +359,49 @@ func luaC_checkFinalizer(L *State, v *Value, mt *Table) {
 		}
 		u.finalized = true
 		gcWatched.Add(1)
-		runtime.SetFinalizer(u, func(o *Udata) {
-			gcQueueFinalizer(gcFinalizer{L: L, obj: makeUdataValue(o)})
-		})
+		setUdataFinalizer(L, u)
 		gcWatchMu.Lock()
 		gcWatch = append(gcWatch, weakUdataRef{weak.Make(u)})
 		gcWatchMu.Unlock()
 		gcHold = append(gcHold, *v) /* see gcHold */
 	}
 }
+
+// setUdataFinalizer sets the Go finalizer of a userdata, at most once.
+//
+// Go allows one finalizer per object, and a userdata can need one for two
+// unrelated reasons: a '__gc' metamethod, and a C block behind it (see
+// cgoNewUserBlock, which is how lua_newuserdata is served across cgo).
+// Both go through here so that whichever comes second does not find the
+// slot taken -- 'runtime.SetFinalizer' throws if it does -- and the one
+// finalizer does whichever of the two applies when it runs.
+func setUdataFinalizer(L *State, u *Udata) {
+	if u.finSet {
+		return
+	}
+	u.finSet = true
+	u.finL = L
+	runtime.SetFinalizer(u, func(o *Udata) {
+		/* Nothing is captured here on purpose. A finalizer that
+		   captured L -- which is what this started as -- keeps the
+		   state reachable, and with it every object on its stack,
+		   including this one: the collector would never see the
+		   userdata as garbage and this would never run, so the C
+		   block behind it would never be freed. */
+		if o.finalized { /* a '__gc' is waiting: it must see its memory */
+			if L := o.finL; L != nil {
+				gcQueueFinalizer(gcFinalizer{L: L, obj: makeUdataValue(o)})
+			}
+			return /* the block is freed once the metamethod has run */
+		}
+		freeUdataCBlock(o)
+	})
+}
+
+// freeUdataCBlock releases the C block behind a userdata. Only the cgo
+// bridge ever allocates one, so without cgo this is nil and a userdata
+// has nothing to release.
+var freeUdataCBlock func(u *Udata)
 
 // runFinalizers drains the queue, calling each metamethod with its
 // object.  It is called where PUC-Lua runs a collector step.
@@ -394,6 +428,9 @@ func (L *State) runFinalizers() {
 		*/
 		gcUnwatch(&it.obj)
 		L.callFinalizer(it.obj)
+		if freeUdataCBlock != nil && ttypetag(&it.obj) == LUA_VUSERDATA {
+			freeUdataCBlock(uvalue(&it.obj)) /* after '__gc': see setUdataFinalizer */
+		}
 	}
 }
 

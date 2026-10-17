@@ -219,7 +219,28 @@ PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
 interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the
 script varargs, the usage messages and the exit status.
 
-### 5.2 Coverage inventory
+### 5.2 A real C extension: LPeg
+
+`go test` also builds [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/) 1.1.0
+— six translation units, published and used far away from here — from its
+own sources in `testdata/lpeg/`, and runs LPeg's own test suite to
+completion. That is worth more than another extension written for the
+test, because LPeg reaches for the parts of the C API a small extension
+never touches, and found four real bugs that nothing else had:
+
+| What LPeg does | What was wrong |
+|---|---|
+| `lua_rawlen` on a userdata, to read back how big the block it was given is | the size was never recorded; a userdata answered with its number of user values, so LPeg derived a negative size, allocated nothing, and copied past the end |
+| `lua_getallocf`, and then a call through the pointer it gets | there was no allocator to hand out, so LPeg called address zero |
+| `luaL_Buffer`, written through `luaL_addchar` and through the address `luaL_prepbuffsize` returns | the address was NULL, and the result left its placeholder on the stack — which shifted the stack under the `lua_call` that followed |
+| `lua_tostring`, to tell a rule named by a string from one named by a table | an empty string where PUC-Lua answers NULL, so LPeg took the wrong branch |
+
+Every line its suite prints is PUC-Lua 5.4.9's, kept in
+`testdata/lpeg/expected.txt`, so the test needs neither the reference
+interpreter nor the network. Both are MIT-licensed and redistributed
+under `testdata/lpeg/LICENSE`.
+
+### 5.3 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
 the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
@@ -258,7 +279,7 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
-### 5.3 Performance
+### 5.4 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end

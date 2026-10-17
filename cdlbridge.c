@@ -21,6 +21,8 @@
 ** and print %d as C's int rather than Lua's, so it cannot be used.
 */
 
+#include <stdlib.h>
+
 #include "cdlbridge.h"
 
 #define CDL_NKEEP 4  /* how many formatted results stay valid at once */
@@ -268,4 +270,22 @@ int lua_gc(lua_State *L, int what, ...) {
   }
   va_end(ap);
   return cdl_gc_cb(L, what, a1, a2, a3);
+}
+
+/* The allocator an extension gets from lua_getallocf: PUC-Lua's own
+   'l_alloc' (lauxlib.c). It has to be C, because the extension calls
+   the pointer it is given -- lpeg compiles a pattern through it, and
+   would otherwise jump to nothing at all. */
+void *cdl_alloc (void *ud, void *ptr, size_t osize, size_t nsize) {
+  (void)ud; (void)osize;  /* not used */
+  if (nsize == 0) {
+    free(ptr);
+    return NULL;
+  }
+  else
+    return realloc(ptr, nsize);
+}
+
+void *cdl_allocfn (void) {
+  return (void *)cdl_alloc;
 }

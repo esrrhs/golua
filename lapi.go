@@ -314,7 +314,11 @@ func (L *State) RawLen(idx int) uint64 {
 	case LUA_VSHRSTR, LUA_VLNGSTR:
 		return uint64(len(tsvalue(v).val))
 	case LUA_VUSERDATA:
-		return uint64(len(uvalue(v).uv))
+		/* the size in bytes of the block, which is what 'lua_rawlen'
+		   answers for a userdata -- not the number of user values. An
+		   extension reads it back to know how much it was given: lpeg
+		   derives the size of a pattern from it. */
+		return uint64(uvalue(v).len)
 	}
 	return 0
 }
@@ -1016,16 +1020,22 @@ func (L *State) DoString(s string) error {
 
 // DoFile loads and runs a Lua file (luaL_dofile).
 func (L *State) DoFile(path string) error {
-	f, err := os.Open(path)
-	if err != nil {
+	/* luaL_dofile is luaL_loadfile and then a call, and loading a file
+	   is not the same as loading its text: a file may start with a
+	   "#!" line, which 'load' would call a syntax error and a file
+	   reader skips. Reading the bytes here and handing them to
+	   DoString would take the second view -- lpeg's own test suite,
+	   like most Lua scripts, starts with "#!/usr/bin/env lua". */
+	if err := L.LoadFile(path); err != nil {
 		return err
 	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
+	if status := L.PCall(0, LUA_MULTRET, 0); status != LUA_OK {
+		v := &L.stack[L.top-1]
+		err := &LuaError{Status: status, Message: valueToStr(v)}
+		L.Pop(1)
 		return err
 	}
-	return L.DoString(string(data))
+	return nil
 }
 
 // LuaError is the error returned by the Go-facing helpers.

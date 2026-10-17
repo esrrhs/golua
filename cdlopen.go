@@ -68,6 +68,7 @@ static const char *cdl_error(void) { return dlerror(); }
 import "C"
 
 import (
+	"runtime"
 	"runtime/cgo"
 	"sync"
 	"unsafe"
@@ -273,12 +274,50 @@ func lua_toboolean(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).To
 
 //export lua_tolstring
 func lua_tolstring(p *C.lua_State, idx C.int, l *C.size_t) *C.char {
-	s, _ := stateOf(p).ToString(idxInt(idx))
-	if l != nil {
-		*l = C.size_t(len(s))
+	L := stateOf(p)
+	v := index2value(L, idxInt(idx))
+	if !ttisstring(v) {
+		/* PUC-Lua answers NULL for anything it cannot convert, and an
+		   extension tests for it: lpeg's 'val2str' uses NULL to tell a
+		   rule named by a string from one named by a table. */
+		if !cvt2str(v) {
+			if l != nil {
+				*l = 0
+			}
+			return nil
+		}
+		luaO_tostring(L, v) /* as PUC-Lua does: the slot becomes a string */
 	}
-	return C.CString(s)
+	ts := tsvalue(v)
+	if l != nil {
+		*l = C.size_t(len(ts.val))
+	}
+	return (*C.char)(tsCStr(ts))
 }
+
+// tsCStr answers a NUL-terminated copy of a Lua string, which is what C
+// needs: a Go string carries no terminator, and C reads until it finds
+// one. The copy is made once and kept with the string, because C holds on
+// to the pointer -- lpeg keeps the name of a rule around while it builds
+// the message it goes into -- and it is freed when the string itself is.
+func tsCStr(ts *TString) unsafe.Pointer {
+	cstrMu.Lock()
+	defer cstrMu.Unlock()
+	if ts.cstr == nil {
+		ts.cstr = unsafe.Pointer(C.CString(ts.val))
+		runtime.SetFinalizer(ts, func(t *TString) {
+			cstrMu.Lock()
+			if t.cstr != nil {
+				C.free(t.cstr)
+				t.cstr = nil
+			}
+			cstrMu.Unlock()
+		})
+	}
+	return ts.cstr
+}
+
+var cstrMu sync.Mutex
 
 //export lua_tostring
 func lua_tostring(p *C.lua_State, idx C.int) *C.char { return lua_tolstring(p, idx, nil) }
@@ -732,6 +771,20 @@ func luaL_buffinit(p *C.lua_State, b *C.luaL_Buffer) {
 	}
 	L := stateOf(p)
 	buf := L.NewBuffer()
+	if buf.scratch == nil {
+		/* The block behind the buffer: luaL_prepbuffsize hands out its
+		   address and the extension copies into it directly, so it has
+		   to be C memory -- a pointer into Go memory is both against
+		   the cgo rules and into memory the collector may move. */
+		buf.scratch = C.malloc(C.size_t(C.CDL_BUFFERSIZE))
+		buf.slen = int(C.CDL_BUFFERSIZE)
+		runtime.SetFinalizer(buf, func(x *Buffer) {
+			if x.scratch != nil {
+				C.free(x.scratch)
+				x.scratch = nil
+			}
+		})
+	}
 	cgoBufMu.Lock()
 	cgoBufNext++
 	id := cgoBufNext
@@ -740,8 +793,47 @@ func luaL_buffinit(p *C.lua_State, b *C.luaL_Buffer) {
 	/* the visible fields are the extension's to read, and 'ref' lives at
 	   the end of the struct that extension declared, so both are written
 	   through C rather than by a Go field access */
-	C.cdl_buf_init(b, p)
+	C.cdl_buf_init(b, p, (*C.char)(buf.scratch), C.size_t(buf.slen))
 	*C.cdl_buf_refp(b) = C.int(id)
+}
+
+// bufFlush takes what an extension has written straight into the block
+// luaL_prepbuffsize gave it -- luaL_addchar does exactly that, and never
+// calls anything -- and adds it to the buffer in the order it was
+// written. It runs before anything else touches the buffer, so that
+// writes through the pointer and writes through luaL_addlstring come out
+// in the order the extension made them.
+func bufFlush(b *C.luaL_Buffer, buf *Buffer) {
+	if b == nil || buf.scratch == nil {
+		return
+	}
+	if n := int(b.n); n > 0 {
+		buf.AddBytes(unsafe.Slice((*byte)(buf.scratch), n))
+	}
+	b.n = 0
+}
+
+//export luaL_prepbuffsize
+func luaL_prepbuffsize(b *C.luaL_Buffer, sz C.size_t) *C.char {
+	buf := bufOf(b)
+	if buf == nil || buf.scratch == nil {
+		return nil
+	}
+	if int(b.n)+int(sz) > int(b.size) {
+		bufFlush(b, buf) /* start the block over */
+	}
+	if int(sz) > buf.slen {
+		n := int(sz) * 2
+		p := C.realloc(buf.scratch, C.size_t(n))
+		if p == nil {
+			return nil
+		}
+		buf.scratch = p
+		buf.slen = n
+		b.b = (*C.char)(p)
+		b.size = C.size_t(n)
+	}
+	return (*C.char)(unsafe.Add(buf.scratch, uintptr(b.n)))
 }
 
 func bufOf(b *C.luaL_Buffer) *Buffer {
@@ -764,6 +856,7 @@ func luaL_addchar_(b *C.luaL_Buffer, c C.char) {
 //export luaL_addlstring
 func luaL_addlstring(b *C.luaL_Buffer, s *C.char, l C.size_t) {
 	if buf := bufOf(b); buf != nil {
+		bufFlush(b, buf)
 		buf.AddBytes([]byte(C.GoStringN(s, C.int(l))))
 	}
 }
@@ -771,6 +864,7 @@ func luaL_addlstring(b *C.luaL_Buffer, s *C.char, l C.size_t) {
 //export luaL_addstring
 func luaL_addstring(b *C.luaL_Buffer, s *C.char) {
 	if buf := bufOf(b); buf != nil && s != nil {
+		bufFlush(b, buf)
 		buf.AddString(C.GoString(s))
 	}
 }
@@ -778,22 +872,42 @@ func luaL_addstring(b *C.luaL_Buffer, s *C.char) {
 //export luaL_addvalue
 func luaL_addvalue(b *C.luaL_Buffer) {
 	if buf := bufOf(b); buf != nil {
+		bufFlush(b, buf)
 		buf.AddValue()
 	}
 }
 
 //export luaL_pushresult
 func luaL_pushresult(b *C.luaL_Buffer) {
-	if buf := bufOf(b); buf != nil {
-		buf.PushResult()
+	buf := bufOf(b)
+	if buf == nil {
+		return
+	}
+	L := buf.L
+	/* PUC-Lua's luaL_buffinit leaves a placeholder on the stack, and
+	   luaL_pushresult replaces it: push the string, then remove what is
+	   now underneath it. One value appears, which is what an extension
+	   counts -- lpeg answers "1" for a substitution capture and pushes
+	   exactly one value, so anything left behind shifts the stack under
+	   the lua_call that follows. */
+	bufFlush(b, buf)
+	buf.PushResult()
+	/* PUC-Lua keeps the placeholder directly under the top and removes
+	   it from there. Not from a remembered index: an extension may
+	   lua_remove something below it -- lpeg does, discarding old
+	   dynamic captures -- and an absolute index would then be off by
+	   one, leaving the placeholder behind and the stack one deep for
+	   the lua_call that follows. Remove it only if it is still there,
+	   so that a buffer used some other way cannot lose a value. */
+	if buf.box != nil && L.top >= 2 {
+		if v := &L.stack[L.top-2]; ttisfulluserdata(v) && uvalue(v) == buf.box {
+			L.Remove(-2)
+		}
 	}
 }
 
 //export luaL_pushresultsize
 func luaL_pushresultsize(b *C.luaL_Buffer, sz C.size_t) { luaL_pushresult(b) }
-
-//export luaL_prepbuffsize
-func luaL_prepbuffsize(b *C.luaL_Buffer, sz C.size_t) *C.char { return nil }
 
 // ---------------------------------------------------------------------
 // lsys_load / lsys_sym: what loadlib.go calls

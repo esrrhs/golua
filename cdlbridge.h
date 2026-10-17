@@ -52,8 +52,20 @@ typedef void *(*lua_Alloc)(void *ud, void *ptr, size_t osize, size_t nsize);
 typedef void (*lua_WarnFunction)(void *ud, const char *msg, int tocont);
 typedef void (*lua_Hook)(lua_State *L, struct lua_Debug *ar);
 
+/* The allocator lua_getallocf hands out. An extension that asks for the
+   allocator calls it directly -- lpeg compiles a pattern through it --
+   so it has to be a real C function, not something in Go. */
+void *cdl_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
+void *cdl_allocfn(void); /* the address of cdl_alloc, as a void * */
+
+#include <stdlib.h>
+
 /* LUA_IDSIZE is 60 in PUC-Lua; short_src below must be the same size */
 #define CDL_IDSIZE 60
+
+/* The initial size of the block behind a luaL_Buffer: LUAL_BUFFERSIZE in
+   include/lauxlib.h, and the two have to agree. */
+#define CDL_BUFFERSIZE 8192
 
 struct lua_Debug {
   int event;
@@ -95,9 +107,10 @@ typedef struct luaL_Buffer {
 } luaL_Buffer;
 
 static inline int *cdl_buf_refp(luaL_Buffer *B) { return &B->ref; }
-static inline void cdl_buf_init(luaL_Buffer *B, lua_State *L) {
-  B->b = NULL;
-  B->size = 0;
+static inline void cdl_buf_init(luaL_Buffer *B, lua_State *L, char *b,
+                                size_t size) {
+  B->b = b;
+  B->size = size;
   B->n = 0;
   B->L = L;
   B->ref = 0;

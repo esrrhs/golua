@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+	"unsafe"
 )
 
 // Basic type tags (lua.h).
@@ -251,6 +252,7 @@ type TString struct {
 	extra byte
 	hash  uint32
 	val   string
+	cstr  unsafe.Pointer // a NUL-terminated copy, for lua_tolstring
 }
 
 func (ts *TString) isShort() bool { return ts.tt == LUA_VSHRSTR }
@@ -303,9 +305,13 @@ func twoto(x byte) int          { return 1 << x }
 type Udata struct {
 	nuvalue   uint16
 	metatable *Table
-	uv        []Value // user values
-	val       any     // the Go value carried by this userdata
-	finalized bool    // a Go finalizer has been set to run its '__gc'
+	uv        []Value        // user values
+	val       any            // the Go value carried by this userdata
+	finalized bool           // being watched: its '__gc' is to run
+	finSet    bool           // the Go finalizer has been set, which happens once
+	cblock    unsafe.Pointer // the C block behind it, if it has one
+	len       int            // its size in bytes: what lua_rawlen answers
+	finL      *State         // its state, which the finalizer needs
 }
 
 // ---------------------------------------------------------------------

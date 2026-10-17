@@ -1,0 +1,12 @@
+General tests for LPeg library
+LPeg 1.1.0
++
+testing large dynamic Cc
++
++
++
+testing back references
+testing large grammars
+testing UTF-8 ranges
+testing 're' module
+OK

@@ -11,7 +11,6 @@ package lua
 import "C"
 
 import (
-	"runtime"
 	"sync/atomic"
 	"unsafe"
 )
@@ -27,10 +26,13 @@ import (
 //
 // The block is freed when the userdata is: C.malloc is not memory the Go
 // collector knows about, so without this an extension that makes
-// userdata in a loop grows without bound. The finalizer is on the
-// Udata, which is a Go object, so it runs on the collector's own
-// schedule -- a type with a '__gc' still gets that first, because the
-// port holds those until it runs a cycle.
+// userdata in a loop grows without bound.
+//
+// The freeing goes through setUdataFinalizer rather than being a
+// finalizer of its own, because Go allows one finalizer per object and a
+// userdata can also have a '__gc' -- lpeg's patterns do. One finalizer
+// serves both, and when a '__gc' is waiting the block is freed after the
+// metamethod has run, so that a C '__gc' still sees its own memory.
 func cgoNewUserBlock(L *State, sz, uv int) unsafe.Pointer {
 	block := C.malloc(C.size_t(sz))
 	if block == nil {
@@ -38,19 +40,29 @@ func cgoNewUserBlock(L *State, sz, uv int) unsafe.Pointer {
 	}
 	C.memset(block, 0, C.size_t(sz))
 	u := luaS_newudata(L, uv, unsafe.Pointer(block))
+	u.cblock = block
+	u.len = sz /* lua_rawlen: the extension reads its size back */
 	L.checkStack(1)
 	setuvalue(&L.stack[L.top], u)
 	L.top++
-	runtime.SetFinalizer(u, func(*Udata) {
-		C.free(block)
-		cdlUserFrees.Add(1)
-	})
+	setUdataFinalizer(L, u)
 	return block
 }
 
 // cdlUserFrees counts the userdata blocks that have been freed. It is
 // here so the test can see that the finalizer runs at all.
 var cdlUserFrees atomic.Uint64
+
+func init() {
+	freeUdataCBlock = func(u *Udata) {
+		if u.cblock == nil {
+			return
+		}
+		C.free(u.cblock)
+		u.cblock = nil
+		cdlUserFrees.Add(1)
+	}
+}
 
 // ---------------------------------------------------------------------
 // lua_arith

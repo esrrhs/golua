@@ -634,14 +634,26 @@ func cdl_gc_cb(p *C.lua_State, what, a1, a2, a3 C.int) C.int {
 
 //export lua_getallocf
 func lua_getallocf(p *C.lua_State, ud *unsafe.Pointer) C.lua_Alloc {
+	L := stateOf(p)
 	if ud != nil {
-		*ud = nil
+		*ud = L.callocUD
 	}
-	return nil /* there is no allocator to hand out: the Go heap is it */
+	if L.callocF != nil { /* one set by lua_setallocf */
+		return C.lua_Alloc(L.callocF)
+	}
+	/* The state itself has no allocator -- the Go heap is it -- but one
+	   has to be handed out all the same, because an extension calls the
+	   pointer it gets: lpeg compiles a pattern through it. cdl_alloc is
+	   PUC-Lua's own l_alloc, written in C so that it can be called. */
+	return C.lua_Alloc(C.cdl_allocfn())
 }
 
 //export lua_setallocf
-func lua_setallocf(p *C.lua_State, f C.lua_Alloc, ud unsafe.Pointer) {}
+func lua_setallocf(p *C.lua_State, f C.lua_Alloc, ud unsafe.Pointer) {
+	L := stateOf(p)
+	L.callocF = unsafe.Pointer(f)
+	L.callocUD = ud
+}
 
 //export lua_setcstacklimit
 func lua_setcstacklimit(p *C.lua_State, limit C.uint) C.int {
@@ -698,8 +710,8 @@ func luaL_addgsub(b *C.luaL_Buffer, s, patt, repl *C.char) {
 //export luaL_buffinitsize
 func luaL_buffinitsize(p *C.lua_State, b *C.luaL_Buffer, sz C.size_t) *C.char {
 	luaL_buffinit(p, b)
-	/* there is no C address behind the buffer: everything written to it
-	   goes through luaL_addstring / luaL_addchar instead, so there is
-	   nothing to hand back to memcpy into */
-	return nil
+	if b == nil {
+		return nil
+	}
+	return luaL_prepbuffsize(b, sz) /* the block to copy into */
 }
