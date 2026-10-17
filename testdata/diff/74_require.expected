@@ -1,0 +1,107 @@
+== package.searchpath ==
+true|"./req/m1.lua"
+true|"./req/m1.lua"
+true|"./req/m1.lua"
+true|"./req/sub/m2.lua"
+true|"./req/sub/m2.lua"
+true|nil|"no file './req/sub.m2.lua'"
+true|"./req/sub/deep/m3.lua"
+true|"./req/sub/deep/m3.lua"
+true|nil|"no file './req/nope.lua'"
+true|nil|"no file './req/.lua'"
+true|nil|"no file './req//.lua'"
+true|nil|"no file './req///.lua'"
+true|nil|"no file ''"
+true|nil|"no file ''\
+\9no file ''"
+true|"./req/m1.lua"
+true|"./req/sub/m2.lua"
+true|nil|"no file './req/m1'"
+true|"./req/noext"
+true|"./req/m1.lua"
+false|"bad argument #1 to 'package.searchpath' (string expected, got no value)"
+false|"bad argument #2 to 'package.searchpath' (string expected, got no value)"
+true|nil|"no file 'x'"
+true|nil|"no file '1'"
+true|nil|"no file 'x'"
+true|nil|"no file 'x'"
+true|nil|"no file 'x'"
+== require: through package.path ==
+true|1|"./req/m1.lua"
+true|2|"./req/sub/m2.lua"
+true|2
+false|"module 'nope' not found:\
+\9no field package.preload['nope']\
+\9no file './req/nope.lua'\
+\9no file './req/sub/nope.lua'\
+\9no file '/usr/local/lib/lua/5.4/nope.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './nope.so'"
+false|"module 'nope.deeper' not found:\
+\9no field package.preload['nope.deeper']\
+\9no file './req/nope/deeper.lua'\
+\9no file './req/sub/nope/deeper.lua'\
+\9no file '/usr/local/lib/lua/5.4/nope/deeper.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './nope/deeper.so'\
+\9no file '/usr/local/lib/lua/5.4/nope.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './nope.so'"
+false|"module '' not found:\
+\9no field package.preload['']\
+\9no file './req/.lua'\
+\9no file './req/sub/.lua'\
+\9no file '/usr/local/lib/lua/5.4/.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './.so'"
+false|"module '.' not found:\
+\9no field package.preload['.']\
+\9no file './req//.lua'\
+\9no file './req/sub//.lua'\
+\9no file '/usr/local/lib/lua/5.4//.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './/.so'\
+\9no file '/usr/local/lib/lua/5.4/.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './.so'"
+rv	true|7|"./req/rv.lua"
+loaded	7
+false1	false	./req/rf.lua
+false2	false	./req/rf.lua
+none	true	./req/rn.lua
+none2	true
+raise1	false|"./req/re.lua:1: in module"
+after err	nil
+raise2	false|"./req/re.lua:1: in module"
+yield	false|"attempt to yield from outside a coroutine"
+== require: preload and loaded ==
+preload	from preload:pp	from preload:pp
+preload nil	true	:preload:
+loaded after	true
+preload not fn	false|"module 'pq' not found:\
+\00942\
+\9no file '/usr/local/share/lua/5.4/pq.lua'\
+\9no file '/usr/local/share/lua/5.4/pq/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/pq.lua'\
+\9no file '/usr/local/lib/lua/5.4/pq/init.lua'\
+\9no file './pq.lua'\
+\9no file './pq/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/pq.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './pq.so'"
+loaded wins	canned
+lua: 74_require.lua:100: module 'pl' not found:
+	no field package.preload['pl']
+	no file '/usr/local/share/lua/5.4/pl.lua'
+	no file '/usr/local/share/lua/5.4/pl/init.lua'
+	no file '/usr/local/lib/lua/5.4/pl.lua'
+	no file '/usr/local/lib/lua/5.4/pl/init.lua'
+	no file './pl.lua'
+	no file './pl/init.lua'
+	no file '/usr/local/lib/lua/5.4/pl.so'
+	no file '/usr/local/lib/lua/5.4/loadall.so'
+	no file './pl.so'
+stack traceback:
+	[C]: in function 'require'
+	74_require.lua:100: in main chunk
+	[C]: in ?

@@ -1,0 +1,167 @@
+== escapes ==
+a	ok: "\7"
+b	ok: "\8"
+f	ok: "\12"
+n	ok: "\
+"
+r	ok: "\13"
+t	ok: "\9"
+v	ok: "\11"
+bs	ok: "\\"
+quote	ok: "\""
+apos	ok: "'"
+nl	ok: "\
+"
+cr	ok: "\
+"
+z	ok: "ab"
+z tab	ok: "b"
+z end	ok: "a"
+x41	ok: "A"
+x4	refuse: c:1: hexadecimal digit expected near '"\x4"'
+x	refuse: c:1: hexadecimal digit expected near '"\x"'
+xFF	ok: "ˇ"
+x00	ok: "\0"
+xa	refuse: c:1: hexadecimal digit expected near '"\xa"'
+xag	refuse: c:1: hexadecimal digit expected near '"\xag'
+u41	ok: "A"
+u0	ok: "\0"
+u10FFFF	ok: "Ùèøø"
+u110000	ok: "ÙêÄÄ"
+u no brace	refuse: c:1: missing '{' near '"\u4'
+u empty	refuse: c:1: hexadecimal digit expected near '"\u{}'
+u neg	refuse: c:1: hexadecimal digit expected near '"\u{-'
+u spaces	refuse: c:1: hexadecimal digit expected near '"\u{ '
+u big	ok: "˝øøøøø"
+d65	ok: "A"
+d0	ok: "\0"
+d255	ok: "ˇ"
+d256	refuse: c:1: decimal escape too large near '"\256"'
+d12	ok: "\12"
+d1234	ok: "{4"
+unknown	refuse: c:1: invalid escape sequence near '"\q'
+unknown2	refuse: c:1: invalid escape sequence near '"\A'
+trailing	refuse: c:1: unfinished string near <eof>
+eol	refuse: c:1: unfinished string near '"a'
+raw nl	refuse: c:1: unfinished string near ''a'
+hex bytes	ok: 3
+== long strings and comments ==
+ls0	ok: "abc"
+ls1	ok: "abc"
+ls4	ok: "a]]b"
+ls nl	ok: "a\
+b"
+ls lead nl	ok: "abc"
+ls cr lead	ok: "abc"
+ls unterminated	refuse: c:1: unfinished long string (starting at line 1) near <eof>
+ls bad close	refuse: c:1: unfinished long string (starting at line 1) near <eof>
+ls nested	ok: "a[[b]]c"
+ls empty	ok: ""
+lc	ok: 3
+lc long	ok: 3
+lc unterminated	refuse: c:2: unfinished long comment (starting at line 1) near <eof>
+lc short	ok: 4
+lc short eof	ok: 
+lc after code	ok: 5
+shebang	refuse: c:1: unexpected symbol near '#'
+shebang mid	refuse: c:2: <eof> expected near '#'
+ls in call	ok: "X"
+ls as arg	ok: 2
+== string literals: quotes ==
+dq	ok: "a\"b"
+sq	ok: "a'b"
+mixed	ok: "a'b"
+dq sq	ok: "a\"b"
+unterminated dq	refuse: c:1: unfinished string near <eof>
+unterminated sq	refuse: c:1: unfinished string near <eof>
+multiline dq	refuse: c:1: unfinished string near '"a'
+empty	ok: ""
+concat	ok: "ab"
+adjacent	refuse: c:1: <eof> expected near '"b"'
+== numbers ==
+int	ok: 1
+float	ok: 1.0,"float"
+exp	ok: 100.0,"float"
+exp neg	ok: 0.01
+exp plus	ok: 100.0
+no int part	ok: 0.5
+no frac	ok: 5.0
+hex	ok: 16,"integer"
+hex frac	ok: 16.5
+hex p	ok: 16.0,"float"
+hex p neg	ok: 0.0625
+hex dot p	ok: 8.0
+hex upper	ok: 16.0
+hex bad	refuse: c:1: malformed number near '0x'
+hex bad2	refuse: c:1: malformed number near '0xg'
+exp bad	refuse: c:1: malformed number near '1e'
+exp bad2	refuse: c:1: malformed number near '1e+'
+dot dot	refuse: c:1: malformed number near '1..2'
+two dots	ok: 1.0
+maxint	ok: 9223372036854775807,"integer"
+minint	ok: -9.2233720368548e+18,"float"
+overflow	ok: 9.2233720368548e+18,"float"
+hex max	ok: 9223372036854775807,"integer"
+hex min	ok: -9223372036854775808,"integer"
+hex all f	ok: -1,"integer"
+huge	ok: inf
+neg huge	ok: -inf
+tiny	ok: 0.0
+precision	ok: false
+17 digits	ok: "0.33333333333333331"
+sep	refuse: c:1: malformed number near '1_'
+lead zero	ok: 1
+num then name	refuse: c:1: malformed number near '1abc'
+num then dot name	refuse: c:1: malformed number near '1.abc'
+dot name	ok: 1
+num method	raise: c:1: attempt to index a number value
+num method2	raise: c:1: attempt to index a number value (local 'x')
+== names and keywords ==
+and	refuse: c:1: <name> expected near 'and'
+break	refuse: c:1: <name> expected near 'break'
+do	refuse: c:1: <name> expected near 'do'
+else	refuse: c:1: <name> expected near 'else'
+elseif	refuse: c:1: <name> expected near 'elseif'
+end	refuse: c:1: <name> expected near 'end'
+false	refuse: c:1: <name> expected near 'false'
+for	refuse: c:1: <name> expected near 'for'
+function	refuse: c:1: <name> expected near '='
+goto	refuse: c:1: <name> expected near 'goto'
+if	refuse: c:1: <name> expected near 'if'
+in	refuse: c:1: <name> expected near 'in'
+local	refuse: c:1: <name> expected near 'local'
+nil	refuse: c:1: <name> expected near 'nil'
+not	refuse: c:1: <name> expected near 'not'
+or	refuse: c:1: <name> expected near 'or'
+repeat	refuse: c:1: <name> expected near 'repeat'
+return	refuse: c:1: <name> expected near 'return'
+then	refuse: c:1: <name> expected near 'then'
+true	refuse: c:1: <name> expected near 'true'
+until	refuse: c:1: <name> expected near 'until'
+while	refuse: c:1: <name> expected near 'while'
+underscore	ok: 1
+double underscore	ok: 1
+digit start	refuse: c:1: malformed number near '1x'
+utf8 name	refuse: c:1: <name> expected near '<\195>'
+ENV	ok: true
+ENV set	ok: 1
+== operators and precedence ==
+pow right	ok: 512.0
+unary pow	ok: -4.0
+concat right	ok: "abc"
+concat num	ok: "123"
+shift prec	ok: 8
+band prec	ok: 3
+not not	ok: false
+neg neg	ok: 1
+len prec	ok: 3
+cmp chain	ok: true
+and or	ok: 2
+or and	ok: 1
+eq tables	ok: false
+lt mixed	raise: c:1: attempt to compare number with string
+concat prec pow	ok: "a8.0"
+idiv	ok: 3,-4,-4
+mod	ok: 1,-1,1
+mod f	ok: 1.5,"float"
+idiv f	ok: 3.0,"float"

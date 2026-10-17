@@ -1,0 +1,98 @@
+== getinfo: every field ==
+n	table	probe	local
+S	@75_dbgdeep.lua	75_dbgdeep.lua	Lua	45	45
+l	number	true
+u	1	1	false
+f	function
+t	false	nil	nil
+L	table
+empty	table	true
+unknown	false|"bad argument #2 to 'debug.getinfo' (invalid option)"
+unknown2	false|"bad argument #2 to 'debug.getinfo' (invalid option)"
+C fn	=[C]	[C]	C	-1	-1	nil		nil
+C fn u	0	true
+main	main	0	0
+names	f1	nil
+level0	true|table: 0x74ac800a00
+level99	true|nil
+level-1	true|nil
+level1.0	true|table: 0x74ac800b40
+level1.5	false|"bad argument #1 to 'debug.getinfo' (number has no integer representation)"
+level'1'	true|table: 0x74ac800c40
+no what	true|table: 0x74ac800d00
+no args	false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
+bad arg	false|"bad argument #1 to 'debug.getinfo' (number expected, got table)"
+bad what	false|"bad argument #2 to 'debug.getinfo' (invalid option)"
+named	=mychunk	mychunk	main
+plain	mychunk	[string "mychunk"]	main
+noname	return 1	[string "return 1"]	main
+long	=long	long
+== getlocal / setlocal ==
+locals	a=9,x=1,y=2,out=table: 0x74ac801140,i=5	an upvalue
+setlocal	99
+setlocal oob	true|nil
+setlocal neg	true|nil
+setlocal 0	true|nil
+setlocal Lua	sacrificial	99
+C frame read	true|"(C temporary)"|true
+C frame write	1|"(C temporary)"
+fn local	true|"a"
+fn not yet	a
+fn set	false|"bad argument #1 to 'debug.setlocal' (number expected, got function)"
+false|"bad argument #2 to 'debug.getlocal' (number expected, got no value)"
+false|"bad argument #2 to 'debug.getlocal' (number expected, got no value)"
+false|"bad argument #3 to 'debug.setlocal' (value expected)"
+== upvalues ==
+getup	a	1
+getup2	b	2
+getup3
+getup0
+getup-1
+setup	a
+after	12
+setup oob
+id	true
+id diff	true
+id shared	true
+join	true
+after join	12
+join oob	false|"bad argument #4 to 'debug.upvaluejoin' (invalid upvalue index)"
+join nonfn	false|"bad argument #1 to 'debug.upvaluejoin' (function expected, got number)"
+getup C	true
+getup nonfn	false|"bad argument #1 to 'debug.getupvalue' (function expected, got number)"
+getup 1.5	false|"bad argument #2 to 'debug.getupvalue' (number has no integer representation)"
+nups	2	0
+== traceback ==
+plain	stack traceback: / 	75_dbgdeep.lua:187: in main chunk / 	[C]: in ?	2
+msg	hello / stack traceback: / 	75_dbgdeep.lua:188: in main chunk / 	[C]: in ?	3
+level1	m / stack traceback: / 	75_dbgdeep.lua:189: in main chunk / 	[C]: in ?	3
+level2	m / stack traceback: / 	[C]: in ?	2
+level0	m / stack traceback: / 	[C]: in function 'debug.traceback' / 	75_dbgdeep.lua:191: in main chunk / 	[C]: in ?	4
+level99	m / stack traceback:	1
+level1.5	false|"bad argument #2 to 'debug.traceback' (number has no integer representation)"
+msg num	42 / stack traceback: / 	75_dbgdeep.lua:194: in main chunk / 	[C]: in ?	3
+msg table	true|table: 0x74ac801940
+thread	stack traceback:	0
+thread msg	m / stack traceback:	1
+bad thread	false|"bad argument #2 to 'debug.traceback' (number expected, got string)"
+in coro	true	inner / stack traceback: / 	75_dbgdeep.lua:202: in function <75_dbgdeep.lua:201>	2
+== the rest ==
+registry	table
+reg main	true
+getmetatable	nil	table: 0x1032365d0	nil
+setmetatable	true	true
+clear	nil
+setmt bad	true|1
+getmt none	false|"bad argument #1 to 'debug.getmetatable' (value expected)"
+iuservalue	false|"attempt to call a nil value"
+setiuservalue	false|"attempt to call a nil value"
+setiuservalue ok	false|"attempt to call a nil value"
+mask bogus	true
+mask empty	true
+mask 0	true
+mask neg	true
+mask 1.5	false|"bad argument #3 to 'debug.sethook' (number has no integer representation)"
+no fn	true
+off
+gethook	nil
+tailcall	false	nil	
