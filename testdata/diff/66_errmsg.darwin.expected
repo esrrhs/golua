@@ -1,0 +1,150 @@
+== arithmetic: hint by kind of value ==
+err|attempt to perform arithmetic on a nil value (upvalue 'lv')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform arithmetic on a nil value (local 'z')
+err|attempt to perform bitwise operation on a nil value (local 'z')
+err|attempt to perform bitwise operation on a nil value (local 'z')
+err|attempt to perform bitwise operation on a nil value (local 'z')
+err|attempt to perform bitwise operation on a nil value (local 'z')
+err|attempt to perform bitwise operation on a nil value (local 'z')
+err|attempt to perform bitwise operation on a nil value (local 'z')
+== arithmetic on other kinds of operand ==
+err|attempt to perform arithmetic on a nil value (global 'NO_SUCH_GLOBAL')
+err|attempt to perform arithmetic on a nil value (global 'NO_SUCH_GLOBAL')
+err|attempt to perform arithmetic on a nil value (field 'k')
+err|attempt to call a number value
+err|attempt to index a number value
+err|attempt to perform arithmetic on a boolean value
+err|attempt to perform arithmetic on a boolean value
+err|attempt to add a 'string' with a 'number'
+err|attempt to add a 'number' with a 'string'
+err|attempt to perform arithmetic on a table value
+err|attempt to perform arithmetic on a table value
+err|attempt to perform arithmetic on a function value (global 'print')
+err|attempt to perform arithmetic on a function value (global 'print')
+err|attempt to perform arithmetic on a nil value
+err|attempt to perform arithmetic on a nil value
+err|attempt to divide by zero
+err|attempt to perform 'n%0'
+ok|
+ok|
+ok|
+ok|
+ok|
+ok|
+ok|
+ok|
+ok|
+err|number has no integer representation
+err|number has no integer representation
+== concat, length, comparison, index, call ==
+err|attempt to concatenate a nil value (local 'z')
+err|attempt to concatenate a nil value (local 'z')
+err|attempt to concatenate a boolean value (local 'z')
+err|attempt to concatenate a table value
+err|attempt to get length of a nil value (local 'z')
+err|attempt to get length of a number value (local 'z')
+err|attempt to get length of a boolean value (local 'z')
+err|attempt to compare nil with number
+err|attempt to compare number with nil
+err|attempt to compare nil with number
+err|attempt to compare number with string
+err|attempt to compare string with number
+err|attempt to compare two table values
+err|attempt to compare table with number
+err|attempt to compare number with boolean
+err|attempt to compare two nil values
+err|attempt to index a nil value (local 'z')
+err|attempt to index a nil value (local 'z')
+err|attempt to index a number value (local 'z')
+err|attempt to index a number value (local 'z')
+err|attempt to index a nil value (local 'z')
+err|attempt to index a nil value (local 'z')
+err|attempt to index a number value (local 'z')
+err|attempt to call a nil value (local 'z')
+err|attempt to call a number value (local 'z')
+err|attempt to call a string value (local 'z')
+err|attempt to call a nil value (global 'NO_SUCH_GLOBAL')
+err|attempt to index a nil value (global 'NO_SUCH_GLOBAL')
+err|attempt to index a nil value (field 'a')
+err|attempt to index a nil value (field 'a')
+err|attempt to perform arithmetic on a nil value
+err|attempt to perform arithmetic on a nil value (local 'a')
+== 'for' and the generic 'for' ==
+err|bad 'for' initial value (number expected, got string)
+err|bad 'for' limit (number expected, got string)
+err|bad 'for' step (number expected, got string)
+err|'for' step is zero
+err|bad 'for' limit (number expected, got nil)
+err|bad 'for' initial value (number expected, got nil)
+err|attempt to call a nil value (for iterator 'for iterator')
+err|attempt to call a number value (for iterator 'for iterator')
+err|attempt to call a table value (for iterator 'for iterator')
+ok|
+err|x
+ok|
+ok|
+ok|
+ok|
+== the hint when the value comes from a call or an index ==
+err|attempt to perform arithmetic on a nil value
+err|attempt to perform arithmetic on a nil value (field 'x')
+err|attempt to perform arithmetic on a nil value (field 'integer index')
+err|bad argument #1 to 'floor' (number expected, got no value)
+err|attempt to perform arithmetic on a nil value (local 'b')
+err|attempt to perform arithmetic on a nil value
+err|attempt to perform arithmetic on a nil value
+err|attempt to perform arithmetic on a nil value (field 'x')
+== error levels ==
+err|msg
+err|msg
+err|msg
+err|msg
+err|msg
+err|msg
+err|nil
+err|nil
+err|42
+err|table: 0x74b103c180
+err|msg
+err|msg
+err|bad argument #2 to 'error' (number has no integer representation)
+err|OBJ
+err|inner
+err|inner
+err|inner
+== assert, pcall, xpcall ==
+err|assertion failed!
+err|assertion failed!
+err|custom
+err|42
+err|bad argument #1 to 'assert' (value expected)
+ok|true
+err|nil
+err|bad argument #1 to 'pcall' (value expected)
+ok|nil
+ok|function: 0x102ca9984|"x"
+ok|function: 0x102ca9984|"x"|0
+y
+ok|function: 0x102ca9984|function: 0x102ca9e34|"y"
+ok|function: 0x74b1009050|function: 0x74b1005560
+ok|function: 0x74b1009170|function: 0x74b1005580|1
+ok|function: 0x74b10092c0|function: 0x74b10092f0
+err|bad argument #2 to 'xpcall' (function expected, got number)
+err|bad argument #2 to 'xpcall' (function expected, got no value)
+ok|
+ok|
+err|bad argument #1 to 'select' (index out of range)
+err|bad argument #1 to 'select' (index out of range)
+ok|1|2
+ok|"#"
+err|bad argument #1 to 'select' (number expected, got no value)
+ok|
+done

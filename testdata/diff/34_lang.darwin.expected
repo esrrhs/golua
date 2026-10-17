@@ -1,0 +1,91 @@
+integer	float	float	float
+1	nil	3	nil
+1	1.0	-0.0	9.007199254741e+15
+9223372036854775807	-9223372036854775808
+1e+15	1e+16	1e+300	1e-300
+1|1.0|-0.0|9.2233720368548e+18
+true|"3"	false|"bad argument #2 to 'string.format' (number has no integer representation)"
+false|"bad argument #2 to 'string.format' (number has no integer representation)"
+-7 -7 7 ff 10
+ 3.14|3.14 |+3.14| 7
+abc|007|8
+true|"7"	false|"bad argument #2 to 'string.format' (number expected, got string)"
+false|"bad argument #2 to 'string.format' (no value)"	false|"invalid conversion '%y' to 'format'"
+3|-4|3.0|-4.0
+1|1|1.5|0.5|-1|-1
+9.2233720368548e+18|-9.2233720368548e+18|1.4142135623731|nan
+true
+-2|-9223372036854775808|0
+true|false
+true|true
+1|7|6|-6|1024|128
+1|7|255|-72057594037927936
+true|9.2233720368548e+18
+9.2233720368548e+18|-9.2233720368548e+18
+1|-1|1|1.5
+false|"bad argument #2 to 'math.fmod' (zero)"	true|nan
+3|4|-4|-3
+true|9.2233720368548e+18	true|3
+3|3.5|-9223372036854775808
+11|9|20|2.5|100.0
+100.0|10|16|0.5
+false|"34_lang.lua:53: attempt to add a 'string' with a 'number'"
+false|"34_lang.lua:54: attempt to add a 'string' with a 'number'"
+false|"34_lang.lua:55: attempt to compare string with number"
+"12"|"1.0"|"1.5x"|"a12.0"
+false|"34_lang.lua:57: attempt to concatenate a table value"	false|"34_lang.lua:57: attempt to concatenate a nil value"
+0|3|2|"xxx"
+false|"34_lang.lua:59: attempt to get length of a number value"	false|"34_lang.lua:59: attempt to get length of a nil value"
+float	float	two	two	2
+str	float	2
+3	3
+t1	t2	true
+yes	no	true
+true|nil
+false|"34_lang.lua:75: table index is NaN"
+true|nil
+false|"34_lang.lua:77: table index is nil"
+3|4|1
+5|2
+2
+true|3
+1	2	3
+3	1	2	3
+"x"|"y"
+1	2	3
+x	y
+1	2	2
+11	13	16
+0	1	2	3
+0	0	3
+1	2	3
+1
+0	1
+1,2,3
+1,3,5
+6
+3	true	true
+empty loops	1
+4	1.0,1.5,2.0,2.5
+3	1.0,2.0,3.0
+false|"34_lang.lua:170: bad 'for' initial value (number expected, got string)"
+false|"34_lang.lua:171: 'for' step is zero"
+1:10,2:20,3:30
+false|"34_lang.lua:183: attempt to call a number value (for iterator 'for iterator')"
+false|"34_lang.lua:184: bad argument #1 to 'for iterator' (table expected, got nil)"
+99	true
+shadow	function: 0x102e0e508
+true|function: 0x7b1b009410
+true|nil|"attempt to load a text chunk (mode is 'b')"
+true
+locked
+false|"cannot change a protected metatable"
+false|"cannot change a protected metatable"
+false|"bad argument #1 to 'setmetatable' (table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected, got no value)"
+false	true
+false|"bad argument #1 to 'setmetatable' (table expected, got nil)"
+1	1
+1
+false|"34_lang.lua:215: attempt to call a nil value (method 'nope')"
+false|"34_lang.lua:216: attempt to call a number value (field 'x')"
+ABC	bc	7	a|b|c	2

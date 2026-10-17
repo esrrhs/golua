@@ -1,0 +1,50 @@
+== shebang ==
+true|nil|"[string \"#!/usr/bin/lua...\"]:1: unexpected symbol near '#'"
+true|nil|"[string \"#comment...\"]:1: unexpected symbol near '#'"
+true|function: 0x7b14c08750
+true|function: 0x7b14c087e0
+true|nil|"[string \"﻿return 1\"]:1: unexpected symbol near '<\\239>'"
+"nil"|"[string \"#!/x...\"]:1: unexpected symbol near '#'"
+true|nil|"[string \"#\"]:1: unexpected symbol near '#'"
+== loadfile and dofile ==
+true|function: 0x7b14c08750
+2
+true|nil|"attempt to load a text chunk (mode is 'b')"
+true|function: 0x7b14c08840
+true|nil|"cannot open no_such_file_xyz: No such file or directory"
+true|function: 0x7b14c08900
+true|nil|"cannot open 42: No such file or directory"
+false|"cannot open no_such_file_xyz: No such file or directory"
+true
+== C stack overflow ==
+false|"49_loadfile.lua:55: C stack overflow"
+false|"49_loadfile.lua:60: stack overflow"
+true
+false|"49_loadfile.lua:65: C stack overflow"
+false|"C stack overflow"
+false|"49_loadfile.lua:73: C stack overflow"
+true|true
+== yield across a C boundary ==
+true|false|"attempt to yield across a C-call boundary"
+true|false|"attempt to yield across a C-call boundary"
+true|true
+true|true|nil
+true|false|"49_loadfile.lua:106: module 'nope' not found:\
+\9no field package.preload['nope']\
+\9no file '/usr/local/share/lua/5.4/nope.lua'\
+\9no file '/usr/local/share/lua/5.4/nope/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/nope.lua'\
+\9no file '/usr/local/lib/lua/5.4/nope/init.lua'\
+\9no file './nope.lua'\
+\9no file './nope/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/nope.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './nope.so'"
+== finalizers ==
+close
+true
+true
+5
+true|table: 0x7b0de41b40
+done
+table: 0x7b0de41b40

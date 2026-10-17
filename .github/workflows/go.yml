@@ -97,14 +97,23 @@ jobs:
             echo "  ok  $target"
           done
 
-  # Lua's own test suite, in testdata/official, compared against a
-  # reference interpreter built from source on the runner -- see
-  # official_test.go.  The goldens checked into the repository are
-  # darwin; this job captures fresh ones from PUC-Lua itself, so the
-  # suite is a real gate on every platform and the goldens cannot rot
-  # unnoticed.  (No Windows: Lua's own makefile is a Unix makefile.)
+  # The two suites that answer to PUC-Lua itself: Lua's own, in
+  # testdata/official, and this port's own, in testdata/diff -- see
+  # official_test.go and diff_test.go.  Both compare against a
+  # reference interpreter built from source on the runner.
+  #
+  # Neither can work from goldens alone: a good many of these answers
+  # belong to the machine and not to Lua -- 'os.date' asks the C
+  # library, and the NaN that 0/0 produces carries the sign the CPU gave
+  # it, so 'nan' here is '-nan' there.  The goldens in the repository
+  # are darwin, and a platform that has none skips; LUA_REF captures
+  # fresh ones seconds before they are compared, which is what makes
+  # every run here a real differential one and keeps the committed
+  # goldens from rotting unnoticed.
+  #
+  # (No Windows: Lua's own makefile is a Unix makefile.)
   official:
-    name: Official Lua 5.4.9 suite (${{ matrix.os }})
+    name: PUC-Lua suites (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -145,3 +154,9 @@ jobs:
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
         run: go test -v -run TestOfficialSuite -timeout 20m .
+
+      - name: Differential suite
+        shell: bash
+        env:
+          LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
+        run: go test -v -run TestDifferentialSuite -timeout 20m .

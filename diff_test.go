@@ -25,6 +25,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -108,17 +110,58 @@ func diffRunCase(t *testing.T, path string) string {
 	return string(out)
 }
 
+// diffGolden is where a case's expected output lives.  It carries the
+// platform, because a good many of these answers are the platform's and
+// not Lua's: 'os.date' asks the C library, and the NaN that 0/0 produces
+// carries the sign the CPU gave it, so 'nan' here is '-nan' there.
+func diffGolden(path string) string {
+	return strings.TrimSuffix(path, ".lua") + "." + runtime.GOOS + ".expected"
+}
+
+// diffCapture writes every golden afresh from the reference interpreter
+// LUA_REF points at.  It is how the goldens came to be, and how they are
+// renewed; the committed ones are darwin, and a platform that has none
+// skips the suite rather than comparing itself to somebody else's
+// machine.  CI sets LUA_REF, so there every run is a real differential
+// one, captured seconds before it is compared.
+func diffCapture(t *testing.T, ref string, files []string) {
+	t.Helper()
+	n := 0
+	for _, path := range files {
+		cmd := &exec.Cmd{
+			Path: ref,
+			Args: []string{"lua", filepath.Base(path)},
+			Dir:  filepath.Dir(path),
+		}
+		out, err := cmd.CombinedOutput()
+		if err != nil && len(out) == 0 {
+			t.Fatalf("%s: the reference interpreter failed: %v", filepath.Base(path), err)
+		}
+		if err := os.WriteFile(diffGolden(path), out, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		n++
+	}
+	t.Logf("captured %d golden files for GOOS=%s from %s", n, runtime.GOOS, ref)
+}
+
 func TestDifferentialSuite(t *testing.T) {
-	files, err := filepath.Glob("testdata/diff/*.lua")
+	files, err := filepath.Glob(filepath.Join("testdata", "diff", "*.lua"))
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no differential cases found: %v", err)
 	}
+	sort.Strings(files)
+	if ref := os.Getenv("LUA_REF"); ref != "" {
+		diffCapture(t, ref, files)
+	}
 	for _, path := range files {
-		base := strings.TrimSuffix(path, ".lua")
-		want, err := os.ReadFile(base + ".expected")
+		golden := diffGolden(path)
+		want, err := os.ReadFile(golden)
 		if err != nil {
-			t.Errorf("%s: missing golden file: %v", filepath.Base(path), err)
-			continue
+			/* no golden for this platform: say so once and move on */
+			t.Logf("no golden for GOOS=%s (%s); skipping the suite -- point LUA_REF at a reference interpreter to capture one",
+				runtime.GOOS, filepath.Base(golden))
+			return
 		}
 		got := diffRunCase(t, path)
 		if diffNormalise(got) != diffNormalise(string(want)) {

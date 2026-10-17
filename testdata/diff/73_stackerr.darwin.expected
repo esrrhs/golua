@@ -1,0 +1,88 @@
+== recursion depth ==
+plain	false	73_stackerr.lua:26: stack overflow	999984
+pcall	false	C stack overflow	197
+xpcall	true	196
+__index	false	73_stackerr.lua:59: C stack overflow	196
+__tostring	false|"C stack overflow"	196
+__concat	false|"73_stackerr.lua:71: C stack overflow"	196
+__eq	true|true	0
+forin	false|"73_stackerr.lua:84: stack overflow"	333324
+forin tail	0	100001
+nest60	true	nil
+nest60 run	true	table
+fact	0
+== error: the object and the level ==
+false|nil
+false|nil
+false|nil
+false|nil
+false|false
+false|false
+false|42
+false|42
+false|table: 0x7881a19e40
+false|table: 0x7881a1a240
+false|OBJ
+false|"msg"
+false|"msg"
+false|"msg"
+false|"73_stackerr.lua:17: msg"
+false|"73_stackerr.lua:131: msg"
+false|"msg"
+false|"msg"
+false|"msg"
+false|"bad argument #2 to 'error' (number has no integer representation)"
+false|"msg"
+true|""
+false|"73_stackerr.lua:139: attempt to index a nil value (field 'x')"
+false|"73_stackerr.lua:140: attempt to get length of a nil value"
+lvl	false|"73_stackerr.lua:144: here"
+lvl2	false	73_stackerr.lua:144: here
+coro err	false|"73_stackerr.lua:151: in coro"
+status	dead
+resume dead	false|"cannot resume dead coroutine"
+wrap err	false|"73_stackerr.lua:155: wrapped"
+wrap again	false|"cannot resume dead coroutine"
+identity	false	true
+handler	true	O
+== coroutine boundaries ==
+r1	true|3
+r2	true|20
+status	dead
+r3	false|"cannot resume dead coroutine"
+across pcall	true
+across sort	false|"attempt to yield across a C-call boundary"
+across gsub	false|"attempt to yield across a C-call boundary"
+across metamethod	true
+across xpcall handler	true
+main	thread: 0x1035ad988
+main yieldable	false
+in coro yieldable	true
+running	true	false
+same	true
+close live	true
+status	dead
+close suspended	true
+close dead	true
+false|"bad argument #1 to 'coroutine.close' (thread expected, got number)"
+false|"cannot close a running coroutine"
+== to-be-closed ==
+normal	body,b,a
+error	false	73_stackerr.lua:248: boom	b/73_stackerr.lua:248: boom,a/73_stackerr.lua:248: boom
+close errs	false	73_stackerr.lua:254: in close	a/73_stackerr.lua:254: in close
+not closable	false	73_stackerr.lua:260: variable 'c' got a non-closable value
+nil close	true	nil
+close not fn	false	73_stackerr.lua:270: attempt to call a number value (metamethod 'close')
+coro close	true	coro
+const assign	refuse: c:1: attempt to assign to const variable 'c'
+const ok	ok: 1
+const read	ok: 2
+reassign close	refuse: c:1: attempt to assign to const variable 'c'
+close const	refuse: c:1: unexpected symbol near '<'
+dup attr	refuse: c:1: unexpected symbol near '<'
+attr unknown	refuse: c:1: unknown attribute 'nope'
+close global	refuse: c:1: syntax error near '<'
+close in loop	ok: 1
+close break	ok: 1
+close goto out	ok: 1
+close return	ok: 1

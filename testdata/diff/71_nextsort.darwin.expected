@@ -1,0 +1,90 @@
+== next: the contract ==
+empty	0
+hole	3	1:10,3:30,5:50
+true|nil
+true|nil
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+false|"invalid key to 'next'"
+true|nil
+false|"invalid key to 'next'"
+true|nil
+no __index	nil	nil
+after set	b	2
+first	1	1
+second	2	2
+third	3	3
+fourth	4	4
+fifth	nil	nil
+removed ahead	true	3	3
+== next: writing while walking ==
+change value	1:1,2:2,3:33
+clear visited	1:1,2:2,3:3	0
+after	0
+add far	1:1,2:2,3:3,10:10
+add hash int	1:1,2:2,3:3,4:4,5:5,6:6,7:7,8:8,1000:1000
+== pairs and ipairs over a changing table ==
+pairs clear	1:1,2:2,3:3,5:5
+ipairs grow	1:1,2:2,3:3,4:4,5:5,6:6,7:7
+len	5
+len after	4
+len hole	4
+len gap	3
+len back	50
+== table.sort: arguments ==
+true
+true
+true
+true
+true
+false|"bad argument #1 to 'table.sort' (table expected, got no value)"
+false|"bad argument #1 to 'table.sort' (table expected, got nil)"
+false|"bad argument #1 to 'table.sort' (table expected, got string)"
+false|"bad argument #1 to 'table.sort' (table expected, got number)"
+false|"bad argument #2 to 'table.sort' (function expected, got number)"
+false|"bad argument #2 to 'table.sort' (function expected, got string)"
+false|"bad argument #2 to 'table.sort' (function expected, got table)"
+== table.sort: bad comparators ==
+true
+true
+true
+true
+true
+true
+true
+true
+false|"71_nextsort.lua:201: invalid order function for sorting"
+false|"71_nextsort.lua:205: boom"
+false|table: 0x77f9031bc0
+true
+false|"attempt to yield from outside a coroutine"
+nargs	true	ok	2:2<3 2:1<2
+== table.sort: what it produces ==
+ints	0,1,2,3,4,5,6,7,8,9
+strs	apple,banana,kiwi,orange,pear
+mixed	0.5,1.5,2,3
+false|"attempt to compare string with number"
+false|"attempt to compare number with string"
+false|"attempt to compare two boolean values"
+false|"attempt to compare two table values"
+false|"attempt to compare number with nil"
+no n	1,2,3,4,5
+sorted	true	1,2,3,4,5
+unstable20	1,14,13,12,11,15,17,16,18,19,10,8,3,2,9,4,6,5,7,20
+unstable30	30,18,12,21,27,24,9,15,6,3,22,4,7,28,25,16,19,1,10,13,29,26,2,8,20,11,23,17,14,5
+true
+untouched	10
+mutate	true	2,5,100,6,7,100,100,8
+== table.sort: reverse and big ==
+reverse	5,4,3,2,1
+big hash	266653	1	500
+big sorted	true

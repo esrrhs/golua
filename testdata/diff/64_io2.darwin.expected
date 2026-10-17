@@ -1,0 +1,63 @@
+== io.popen, reading ==
+userdata	file
+hello	nil	
+true	exit	0
+a
+b
+c
+	true	exit	0
+x	nil	true	exit	0
+	nil	exit	3
+nil	signal	15
+== io.popen, writing ==
+userdata	file
+file (0x1fd1a98b0)	file (0x1fd1a98b0)
+xyz123true	exit	0
+       6
+true	exit	0
+true	exit	0
+stored
+== io.popen, refused ==
+true|file (0x1fd1a98b0)
+false|"bad argument #1 to 'io.popen' (string expected, got no value)"
+true|file (0x1fd1a9948)
+false|"bad argument #2 to 'io.popen' (invalid mode)"
+false|"bad argument #2 to 'io.popen' (invalid mode)"
+true|file (0x1fd1a99e0)
+== io.tmpfile ==
+userdata	file
+file (0x1fd1a9a78)	0	abc
+3	3
+true	true
+true|true
+true|file (0x1fd1a9a78)
+== io.lines with a file name ==
+a,b,c
+a
+,b
+,c
+
+ab,cnil
+true|0
+true|""
+true|0
+false|"cannot open file '/no/such/file/xyz' (No such file or directory)"
+true|function: 0x100ce8580|nil|nil|file (0x1fd1a9b10)
+true|function: 0x100ce5fa0
+false|"cannot open file '5' (No such file or directory)"
+true|function: 0x100ce60f0|nil|nil|file (0x1fd1a9ba8)
+true
+== file methods on a real file ==
+file	0	0
+true	true	true	true
+false|"bad argument #2 to '?' (invalid option 'x')"
+false|"bad argument #2 to '?' (string expected, got no value)"
+file (0x1fd1a9c40)
+true
+6	0	nil	Bad file descriptor	9
+false|"bad argument #2 to '?' (invalid format)"
+true	closed file
+false|"attempt to use a closed file"
+false|"attempt to use a closed file"
+true
+done

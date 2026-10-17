@@ -1,0 +1,101 @@
+== locals ==
+ok
+ok
+refuse|c:1: too many local variables (limit is 200) in main function near 'return'
+refuse|c:1: too many local variables (limit is 200) in main function near 'end'
+ok
+refuse|c:1: too many local variables (limit is 200) in main function near '='
+refuse|c:1: too many local variables (limit is 200) in main function near ','
+== locals with an initialiser that needs a temporary ==
+ok
+refuse|c:1: too many local variables (limit is 200) in main function near '='
+refuse|c:1: too many local variables (limit is 200) in main function near '='
+== upvalues ==
+ok
+ok
+refuse|c:1: too many local variables (limit is 200) in main function near ','
+refuse|c:1: too many local variables (limit is 200) in main function near ','
+refuse|c:1: too many local variables (limit is 200) in main function near '('
+== constants ==
+ok
+ok
+refuse|c:1: too many local variables (limit is 200) in main function near '='
+refuse|c:1: too many local variables (limit is 200) in main function near '='
+== expression and nesting depth ==
+ok
+refuse|C stack overflow
+ok
+refuse|C stack overflow
+ok
+ok
+ok
+ok
+refuse|C stack overflow
+refuse|C stack overflow
+== table constructors ==
+ok
+ok
+ok
+== syntax that has to be refused ==
+refuse|c:1: no visible label 'x' for <goto> at line 1
+refuse|c:1: label 'x' already defined on line 1
+ok
+refuse|c:1: break outside loop at line 1
+ok
+ok
+ok
+refuse|c:1: <eof> expected near 'return'
+refuse|c:1: unexpected symbol near <eof>
+refuse|c:1: 'end' expected near <eof>
+refuse|c:1: unexpected symbol near ']'
+refuse|c:1: unfinished string near <eof>
+refuse|c:1: unfinished string near <eof>
+refuse|c:1: unfinished long string (starting at line 1) near <eof>
+refuse|c:1: malformed number near '0x'
+refuse|c:1: malformed number near '1e'
+refuse|c:1: malformed number near '1e+'
+refuse|c:1: unexpected symbol near '.'
+refuse|c:1: malformed number near '1..2'
+refuse|c:1: malformed number near '1...'
+refuse|c:1: unexpected symbol near '..'
+refuse|c:1: unexpected symbol near '\'
+ok
+refuse|c:1: hexadecimal digit expected near ''\x''
+refuse|c:1: hexadecimal digit expected near ''\x1''
+refuse|c:1: hexadecimal digit expected near ''\xZ'
+refuse|c:1: hexadecimal digit expected near ''\u{}'
+ok
+refuse|c:1: UTF-8 value too large near ''\u{ffffffff'
+refuse|c:1: decimal escape too large near ''\999''
+refuse|c:1: decimal escape too large near ''\400''
+refuse|c:1: <name> expected near '1'
+refuse|c:1: <name> expected near '1'
+ok
+ok
+refuse|c:1: unexpected symbol near '1'
+refuse|c:1: <name> expected near '1'
+ok
+ok
+refuse|c:1: <name> expected near '1'
+refuse|c:1: unknown attribute 'bogus'
+refuse|c:1: attempt to assign to const variable 'a'
+ok
+ok
+ok
+== string and table size limits ==
+err|resulting string too large
+err|resulting string too large
+err|resulting string too large
+ok|"a"|0
+ok|"a"|-1
+ok|""|1073741824
+err|invalid value (nil) at index 1 in table for 'concat'
+ok|table: 0x78490113c0
+ok|table: 0x7849011440|","|5|3
+err|invalid value (nil) at index 0 in table for 'concat'
+err|invalid value (nil) at index -1 in table for 'concat'
+ok|
+ok|"abc"|2147483648
+ok|"abc"|1|1099511627776
+ok|
+done

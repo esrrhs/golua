@@ -1,0 +1,80 @@
+== __name ==
+false|"48_keys.lua:23: attempt to perform arithmetic on a Point value (upvalue 't')"
+false|"48_keys.lua:24: attempt to perform arithmetic on a Point value (upvalue 't')"
+true|0
+false|"48_keys.lua:26: attempt to index a nil value (field 'x')"
+false|"48_keys.lua:27: attempt to call a Point value (upvalue 't')"
+false|"48_keys.lua:28: attempt to concatenate a Point value (upvalue 't')"
+false|"48_keys.lua:29: attempt to compare two Point values"
+true|false
+false|"48_keys.lua:31: attempt to call a nil value (method 'foo')"
+"Point"
+false|"48_keys.lua:33: attempt to concatenate a Point value (upvalue 't')"
+"S"
+"tabl"
+== protected metatables ==
+"locked"
+false|"cannot change a protected metatable"
+"locked"
+false|"cannot change a protected metatable"
+false
+true
+== keys ==
+false|"48_keys.lua:51: table index is nil"
+false|"48_keys.lua:52: table index is NaN"
+true|nil
+true|nil
+true|nil
+"float"|1
+1|"float"|"integer"
+"two"|"integer"
+"three"|nil
+"negzero"|"negzero"
+"big"
+true
+true
+true
+false|"bad argument #1 to 'next' (table expected, got number)"
+true|nil
+"str"|nil
+1|2
+true|1
+== raw ==
+false|"bad argument #1 to 'rawget' (table expected, got number)"
+false|"bad argument #1 to 'rawget' (table expected, got no value)"
+false|"bad argument #2 to 'rawget' (value expected)"
+false|"bad argument #1 to 'rawset' (table expected, got number)"
+false|"bad argument #2 to 'rawset' (value expected)"
+false|"bad argument #1 to 'rawlen' (table or string expected, got number)"
+false|"bad argument #1 to 'rawlen' (table or string expected, got no value)"
+false|"bad argument #1 to 'rawequal' (value expected)"
+true|false
+3|2
+nil|"mt"|0|99
+1|1
+== error objects ==
+false|nil
+false|nil
+false|false
+false|nil
+false|table: 0x7b17031280
+false|E
+false|"m"
+false|"48_keys.lua:18: m"
+false|"48_keys.lua:126: m"
+false|"m"
+false|"m"
+false|"48_keys.lua:129: x"
+false|"assertion failed!"
+false|"msg"
+false|table: 0x7b17031700
+false|nil
+1|2
+false|"bad argument #1 to 'assert' (value expected)"
+false|"e"
+false|"H:e"
+false|"bad argument #2 to 'xpcall' (function expected, got no value)"
+false|"bad argument #2 to 'xpcall' (function expected, got number)"
+attempt to call a number value
+true|false|nil
+done

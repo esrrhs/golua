@@ -1,0 +1,43 @@
+start	1	2
+true	3
+suspended
+got	10
+true	done	10
+dead
+false	cannot resume dead coroutine
+1
+4
+9
+end
+false	cannot resume dead coroutine
+true	from-pcall
+true	1
+true	2
+true	mm:foo
+v	val
+true	val
+true	iter:1
+loop	2	10
+true	iter:2
+loop	3	20
+true	iter:3
+true	iterdone
+false	11_coroutine.lua:64: boom
+dead
+false	11_coroutine.lua:64: boom
+true
+false	cannot resume dead coroutine
+false	table	42
+thread: 0x100901988	true
+false
+in-co running	thread: 0x100906df8	false
+in-co yieldable	true
+main yieldable	true
+suspended
+true
+dead
+lua: 11_coroutine.lua:95: cannot close a running coroutine
+stack traceback:
+	[C]: in function 'coroutine.close'
+	11_coroutine.lua:95: in main chunk
+	[C]: in ?

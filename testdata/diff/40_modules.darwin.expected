@@ -1,0 +1,145 @@
+== package ==
+table	table	table
+string	string	string
+"/\
+;\
+?\
+!\
+-\
+"
+table	4
+1	function
+2	function
+3	function
+4	function
+true	true
+true	true
+function
+== searchpath ==
+true|nil|"no file './nonexistent_module_xyz.lua'\
+\9no file './nonexistent_module_xyz/init.lua'"
+true|nil|"no file './a/b.lua'"
+true|nil|"no file './a.lua'"
+true|nil|"no file './a.lua'"
+true|nil|"no file './a.lua'"
+false|"bad argument #1 to 'package.searchpath' (string expected, got no value)"
+true|nil|"no file './42.lua'"
+true|nil|"no file '42'"
+true|nil|"no file './a.lua'"
+true|nil|"no file './a.lua'"
+true|nil|"no file ''"
+true|nil|"no file './.lua'"
+== require with preload ==
+table	m1	1
+true
+true
+true|true|":preload:"
+true
+true|false|":preload:"
+false
+true|true|":preload:"
+true|true|":preload:"	true
+true|1|":preload:"
+false|"40_modules.lua:71: module boom"
+false|"40_modules.lua:71: module boom"
+nil
+false|"plain"
+true|42|":preload:"
+== package.loaded is consulted first ==
+already
+false|"module 'pre' not found:\
+\9no field package.preload['pre']\
+\9no file '/usr/local/share/lua/5.4/pre.lua'\
+\9no file '/usr/local/share/lua/5.4/pre/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/pre.lua'\
+\9no file '/usr/local/lib/lua/5.4/pre/init.lua'\
+\9no file './pre.lua'\
+\9no file './pre/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/pre.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './pre.so'"
+false|"module 'pre' not found:\
+\9no field package.preload['pre']\
+\9no file '/usr/local/share/lua/5.4/pre.lua'\
+\9no file '/usr/local/share/lua/5.4/pre/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/pre.lua'\
+\9no file '/usr/local/lib/lua/5.4/pre/init.lua'\
+\9no file './pre.lua'\
+\9no file './pre/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/pre.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './pre.so'"
+== circular ==
+false|"C stack overflow"
+== bad names ==
+false|"bad argument #1 to 'require' (string expected, got no value)"
+false|"module '42' not found:\
+\9no field package.preload['42']\
+\9no file '/usr/local/share/lua/5.4/42.lua'\
+\9no file '/usr/local/share/lua/5.4/42/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/42.lua'\
+\9no file '/usr/local/lib/lua/5.4/42/init.lua'\
+\9no file './42.lua'\
+\9no file './42/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/42.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './42.so'"
+false|"bad argument #1 to 'require' (string expected, got nil)"
+false|"module '' not found:\
+\9no field package.preload['']\
+\9no file '/usr/local/share/lua/5.4/.lua'\
+\9no file '/usr/local/share/lua/5.4//init.lua'\
+\9no file '/usr/local/lib/lua/5.4/.lua'\
+\9no file '/usr/local/lib/lua/5.4//init.lua'\
+\9no file './.lua'\
+\9no file './/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './.so'"
+false|"module 'no_such_module_xyz' not found:\
+\9no field package.preload['no_such_module_xyz']\
+\9no file '/usr/local/share/lua/5.4/no_such_module_xyz.lua'\
+\9no file '/usr/local/share/lua/5.4/no_such_module_xyz/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/no_such_module_xyz.lua'\
+\9no file '/usr/local/lib/lua/5.4/no_such_module_xyz/init.lua'\
+\9no file './no_such_module_xyz.lua'\
+\9no file './no_such_module_xyz/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/no_such_module_xyz.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './no_such_module_xyz.so'"
+false|"module 'a.b.c' not found:\
+\9no field package.preload['a.b.c']\
+\9no file '/usr/local/share/lua/5.4/a/b/c.lua'\
+\9no file '/usr/local/share/lua/5.4/a/b/c/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/a/b/c.lua'\
+\9no file '/usr/local/lib/lua/5.4/a/b/c/init.lua'\
+\9no file './a/b/c.lua'\
+\9no file './a/b/c/init.lua'\
+\9no file '/usr/local/lib/lua/5.4/a/b/c.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './a/b/c.so'\
+\9no file '/usr/local/lib/lua/5.4/a.so'\
+\9no file '/usr/local/lib/lua/5.4/loadall.so'\
+\9no file './a.so'"
+true|table: 0x1015d2560
+true|table: 0x1015d1430
+== searchers can be replaced ==
+true|"from searcher:custom"|nil
+false|"attempt to call a number value"
+false|"module 'whatever' not found:"
+false|"module 'whatever' not found:\
+\00942"
+false|"40_modules.lua:132: searcher says no"
+== loadlib ==
+true|nil|string|string
+false|string
+false|string
+true|nil|string|string
+true|nil|string|string
+true|nil|string|string
+== module state ==
+table	1
+2
+2
+loaded entries	true
+done

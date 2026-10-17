@@ -1,0 +1,79 @@
+false	bad argument #1 to 'floor' (number expected, got string)	1
+false	bad argument #1 to 'floor' (number expected, got nil)	1
+false	bad argument #1 to 'floor' (number expected, got no value)	1
+false	bad argument #1 to 'abs' (number expected, got boolean)	1
+false	bad argument #1 to 'max' (value expected)	1
+true	nil	0
+true		0
+true	a	0
+false	bad argument #2 to 'sub' (number expected, got string)	1
+false	bad argument #1 to 'char' (value out of range)	1
+false	bad argument #1 to 'char' (value out of range)	1
+false	bad argument #2 to 'format' (number expected, got string)	1
+false	invalid conversion '%y' to 'format'	1
+false	bad argument #2 to 'format' (no value)	1
+false	wrong number of arguments to 'insert'	1
+false	invalid value (table) at index 1 in table for 'concat'	1
+false	bad argument #2 to 'concat' (string expected, got table)	1
+false	bad argument #5 to 'move' (table expected, got number)	1
+true	nil	0
+true	nil	0
+false	too many results to unpack	1
+false	bad argument #1 to 'date' (invalid conversion specifier '%Q')	1
+false	field 'year' missing in date table	1
+false	bad argument #1 to 'char' (value out of range)	1
+true	120	0
+true	nil	0
+true	x	0
+false	bad argument #1 to 'select' (index out of range)	1
+false	bad argument #1 to 'select' (number expected, got string)	1
+false	bad argument #1 to 'rawget' (table expected, got number)	1
+false	bad argument #1 to 'rawset' (table expected, got number)	1
+false	bad argument #1 to 'rawequal' (value expected)	1
+false	bad argument #1 to 'setmetatable' (table expected, got number)	1
+false	bad argument #2 to 'setmetatable' (nil or table expected, got number)	1
+false	bad argument #1 to 'getmetatable' (value expected)	1
+false	bad argument #1 to 'tostring' (value expected)	1
+false	bad argument #1 to 'tonumber' (value expected)	1
+false	bad argument #2 to 'tonumber' (base out of range)	1
+true	function: 0x104fe2624	0
+false	bad argument #1 to 'next' (table expected, got number)	1
+false	invalid key to 'next'	0
+false	nil	0
+false	assertion failed!	1
+true	false	0
+true	nil	0
+true	nil	0
+false	bad argument #1 to 'resume' (thread expected, got number)	1
+false	bad argument #1 to 'close' (thread expected, got number)	1
+false	bad argument #1 to 'open' (string expected, got no value)	1
+false	cannot open file '1' (No such file or directory)	1
+false	bad argument #2 to 'getinfo' (invalid option)	1
+true	nil	0
+false	module '1' not found:
+	no field package.preload['1']
+	no file '/usr/local/share/lua/5.4/1.lua'
+	no file '/usr/local/share/lua/5.4/1/init.lua'
+	no file '/usr/local/lib/lua/5.4/1.lua'
+	no file '/usr/local/lib/lua/5.4/1/init.lua'
+	no file './1.lua'
+	no file './1/init.lua'
+	no file '/usr/local/lib/lua/5.4/1.so'
+	no file '/usr/local/lib/lua/5.4/loadall.so'
+	no file './1.so'	1
+true	nil	0
+false	bad argument #2 to 'rename' (string expected, got no value)	1
+false	msg	0
+false	msg	1
+false	msg	1
+false	msg	0
+false	obj	0
+false	table: 0x781cc00d00	0
+false	nil	0
+false	in index	1
+false	in add	1
+false	in lt	1
+false	in call	1
+true	table: 0x781cc01000	0
+false	attempt to call a number value (metamethod 'close')	1
+done
