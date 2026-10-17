@@ -152,7 +152,7 @@ static int l_add (lua_State *L) {
   return 1;
 }
 
-static const luaL_Reg funcs[] = {{"add", l_add}, {NULL, NULL}};
+static const luaL_Reg funcs[] = { {"add", l_add}, {NULL, NULL} };
 
 int luaopen_myext (lua_State *L) {
   luaL_newlib(L, funcs);
