@@ -1,6 +1,9 @@
 package lua
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -93,18 +96,23 @@ func TestFormatChecksTheValueBeforeTheConversion(t *testing.T) {
 // of values, because rounding a hexadecimal fraction is decided by more
 // than the first digit that is dropped.
 //
-// Half of the last digit kept is 8, so a first dropped digit of 9 or
-// more rounds up and one of 7 or less does not -- but a first dropped
-// digit of exactly 8 is a tie, and the C library is observed to round
-// a tie *down*: '%.12a' of a value whose thirteenth digit is '8' keeps
-// the digit it had.  Deciding from the first dropped digit alone is
-// what made '%.8a' of 1e-300 answer 0x1.56e1fc2fp-997 here and
-// 0x1.56e1fc30p-997 in C: the digits are 56e1fc2f|8f359, the first
-// dropped digit is a bare '8', and the tail behind it is not zero.
+// Half of the last digit kept is 8, so a first dropped digit above 8
+// rounds up and one below does not -- but a first dropped digit of
+// exactly 8 is a tie, and whether a tie rounds up is decided by what
+// comes after that digit and then by the digit it lands on.  Deciding
+// from the first dropped digit alone is what made '%.8a' of 1e-300
+// answer 0x1.56e1fc2fp-997 here and 0x1.56e1fc30p-997 in C: the digits
+// are 56e1fc2f|8f359, the first dropped digit is a bare '8', and the
+// tail behind it is not zero.
+//
+// None of these is a tie, on purpose: a tie is the one thing the C
+// libraries disagree about, so it has a test of its own below.  The
+// seventh value is e and not pi for the same reason -- pi at a
+// precision of 12 is 0x1.921fb54442d1|8, which is exactly a tie.
 func TestFormatHexFloatRounding(t *testing.T) {
 	got := runChunk(t, `
 	local out = {}
-	for _, x in ipairs{1e-300, 5e-324, 0.1, 1/3, 1e300, math.pi,
+	for _, x in ipairs{1e-300, 5e-324, 0.1, 1/3, 1e300, 2.718281828459045,
 	                   2.2250738585072014e-308} do
 		local ds = {}
 		for _, p in ipairs{0, 1, 3, 8, 12, 13, 20} do
@@ -119,35 +127,79 @@ func TestFormatHexFloatRounding(t *testing.T) {
 0.10000000000000001: 0x2p-4 0x1.ap-4 0x1.99ap-4 0x1.9999999ap-4 0x1.99999999999ap-4 0x1.999999999999ap-4 0x1.999999999999a0000000p-4
 0.33333333333333331: 0x1p-2 0x1.5p-2 0x1.555p-2 0x1.55555555p-2 0x1.555555555555p-2 0x1.5555555555555p-2 0x1.55555555555550000000p-2
 1.0000000000000001e+300: 0x1p+996 0x1.8p+996 0x1.7e4p+996 0x1.7e43c880p+996 0x1.7e43c880075ap+996 0x1.7e43c8800759cp+996 0x1.7e43c8800759c0000000p+996
-3.1415926535897931: 0x2p+1 0x1.9p+1 0x1.922p+1 0x1.921fb544p+1 0x1.921fb54442d1p+1 0x1.921fb54442d18p+1 0x1.921fb54442d180000000p+1
+2.7182818284590451: 0x1p+1 0x1.6p+1 0x1.5bfp+1 0x1.5bf0a8b1p+1 0x1.5bf0a8b14577p+1 0x1.5bf0a8b145769p+1 0x1.5bf0a8b1457690000000p+1
 2.2250738585072014e-308: 0x1p-1022 0x1.0p-1022 0x1.000p-1022 0x1.00000000p-1022 0x1.000000000000p-1022 0x1.0000000000000p-1022 0x1.00000000000000000000p-1022`
 	if got != want {
 		t.Errorf("%%a rounds differently:\n%s", sideBySide(want, got))
 	}
 }
 
-// A tie rounds down, which is the half of the rule the test above can
-// only see if a value whose thirteenth digit is exactly 8 is asked
-// for.  The first three were found by searching random doubles for a
-// thirteenth digit of exactly 8 and nothing but zeros behind it; the
-// last three are powers of two, whose thirteenth digit is a 0 and which
-// therefore must not be touched by whatever makes the others round.
-func TestFormatHexFloatRoundsATieDown(t *testing.T) {
-	got := runChunk(t, `
-	local out = {}
-	for _, x in ipairs{-1.989032661366619e+244, -1.3701135617873088e-206,
-	                   1.0613447212142254e-202, 1.0, 2.0, 0.5} do
+// A tie is the one rounding the C libraries do differently, so what the
+// port does about it is pinned against the reference rather than
+// against a number, and the two cases are asked separately.
+//
+//	'even' -- 0.00034455349532716431, whose thirteen hexadecimal
+//	digits are 694a5fe80c9e|8 -- is a tie that lands on an even digit.
+//	Both rules leave it alone: to even is to stay, and down is to stay.
+//	Every C library answers 0x1.694a5fe80c9ep-12, so this one is
+//	compared like any other case.
+//
+//	'odd' -- 3.1851172729436392, 97b1ec3c9bdb|8 -- is a tie that lands
+//	on an odd one, 'b'.  glibc hands that digit to 'round_away', which
+//	rounds away from zero when it is odd, and answers ...bdc; Apple's
+//	library rounds a tie down whatever the digit is, and answers ...bdb.
+//	This port answers ...bdc -- what glibc answers, what the C library's
+//	own '%f' answers on every platform ('%.0f' of 1.5 is 2), and what
+//	makes '%a' agree with '%f' inside one call.  So what is asserted of
+//	it is the rule: the digit it lands on is even.  It is only compared
+//	to the reference when the reference was built against a library that
+//	rounds a tie the same way.
+func TestFormatHexFloatTieRounding(t *testing.T) {
+	ref := os.Getenv("LUA_REF")
+	if ref == "" {
+		t.Skip("no LUA_REF: point it at a reference interpreter to compare a %a tie")
+	}
+	const src = `local out = {}
+	for _, x in ipairs{0.00034455349532716431, 3.1851172729436392,
+	                   1.0, 2.0, 0.5} do
 		out[#out + 1] = string.format("%.12a", x)
 	end
-	return table.concat(out, "\n")
-	`)
-	want := `-0x1.74de452e6b43p+811
--0x1.1985d5d9dc9fp-684
-0x1.0a35a099950dp-671
-0x1.000000000000p+0
-0x1.000000000000p+1
-0x1.000000000000p-1`
-	if got != want {
-		t.Errorf("%%a rounds a tie differently:\n%s", sideBySide(want, got))
+	print(table.concat(out, "\n"))
+	`
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "tie.lua"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Split(strings.TrimSpace(fmtRunFile(t, ref, dir, "tie.lua")), "\n")
+	got := strings.Split(strings.TrimSpace(fmtRunFile(t, diffBuild(t), dir, "tie.lua")), "\n")
+	if len(want) != 5 || len(got) != 5 {
+		t.Fatalf("the tie chunk did not answer five times:\nPUC-Lua: %q\nthis:    %q",
+			want, got)
+	}
+	/* The even tie and the three powers of two, none of which rounds
+	   at all, are the same everywhere. */
+	for _, i := range []int{0, 2, 3, 4} {
+		if want[i] != got[i] {
+			t.Errorf("%%.12a of %s: PUC-Lua answers %s, this answers %s",
+				[]string{"the even tie", "", "", "1.0", "2.0"}[i], want[i], got[i])
+		}
+	}
+	mant := got[1]
+	if i := strings.IndexByte(mant, 'p'); i >= 0 {
+		mant = mant[:i]
+	}
+	if !strings.ContainsAny(mant[len(mant)-1:], "02468ace") {
+		t.Errorf("%%.12a of 3.1851172729436392 is a tie on an odd digit, so it "+
+			"has to land on an even one; this port answers %s", got[1])
+	}
+	if fmtRefTiesDown(t, ref) {
+		/* Apple's library: the one case in the whole library where a
+		   difference is the C library's and not this port's. */
+		t.Logf("PUC-Lua answers %s and this port %s: a %%a tie on an odd digit, "+
+			"which the reference's C library rounds down and this port rounds "+
+			"to even, the way glibc and that library's own '%%f' do", want[1], got[1])
+	} else if want[1] != got[1] {
+		t.Errorf("%%.12a of 3.1851172729436392: PUC-Lua answers %s, this answers %s",
+			want[1], got[1])
 	}
 }

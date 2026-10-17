@@ -720,11 +720,27 @@ in `lstrlib_test.go`:
   digit alone made `%.8a` of `1e-300` answer `0x1.56e1fc2fp-997` where C
   answers `0x1.56e1fc30p-997`: the digits are `56e1fc2f|8f359`.
 
-The one thing the format half cannot compare is `%s` of a value whose
-`print` is an address. Padding is decided from the address's real
-length, and the normalisation that makes addresses comparable rewrites
-it afterwards, so a table is not in the value list — not because it
-differs, but because no answer could be right.
+Two things the format half cannot ask, and says so rather than quietly
+passing them:
+
+* `%s` of a value whose `print` is an address. Padding is decided from
+  the address's real length, and the normalisation that makes addresses
+  comparable rewrites it afterwards, so a table is not in the value
+  list — not because it differs, but because no answer could be right.
+* **A `%a` tie on an odd digit**, which is the one rounding the C
+  libraries do differently: glibc hands the last digit kept to
+  `round_away`, which leaves an even digit alone and steps an odd one,
+  while Apple's library rounds a tie *down* whatever that digit is.
+  `%.0A` of `1.5` is `0X2P+0` under the first and `0X1P+0` under the
+  second, and no port can answer both. This port answers `0X2P+0` — what
+  glibc answers, what the C library's own `%f` answers on every platform
+  (`%.0f` of `1.5` is `2`), and what makes `%a` agree with `%f` inside a
+  single call. The fuzz therefore asks the reference that one question
+  first, and on a reference that answers `0X1P+0` it leaves the 720
+  grid cases that turn on it out of the comparison, on both sides. A tie
+  on an *even* digit is where both rules land anyway, so those are
+  compared like any other case, and `TestFormatHexFloatTieRounding`
+  pins both halves against the reference.
 
 It is worth saying what makes a fuzz like this worthless, because one
 round of it was. A generated chunk that does not *load* prints the same
@@ -779,7 +795,9 @@ booleans are never weakened, exactly as in PUC-Lua.
 9. **A coroutine suspends by parking its goroutine, and a C frame that suspended is still there when it wakes** — C's `lua_yield` long-jumps to the `lua_resume` that will pick the thread up again, and everything between is discarded; this port instead hands the yielded values to the resumer through a channel and then blocks on the next resume request, so the Lua stack, the saved program counter and — for a C caller — the C stack itself all survive at the yield point. That is what lets a metamethod or a Go function yield from the middle of a call, and it is what makes continuations work (§5.6). Two consequences follow. The C-call depth a thread inherits from its resumer is refreshed at every yield rather than only at the first resume, which is what C does too, since `lua_resume` runs on every resume. And a C function that yielded does not get to notice: `lua_callk` returns to it as if the call had simply finished, so the status a `lua_callk` continuation hears is `LUA_OK` where PUC-Lua's is always `LUA_YIELD` — a constant, so nothing can depend on the difference. `lua_pcallk`'s status does vary, and that one *is* PUC-Lua's: the port counts the yields the thread has made and reports `LUA_YIELD` when the call was interrupted by one.
 10. **Two short strings that are equal may not be the same object** — PUC-Lua interns short strings for as long as they live, so `lua_topointer` answers the same address for two equal ones and a C extension can use that address as a key. Here interning is a two-generation cache (§5.11), so a string can be interned again once it has aged out of both generations, and two live strings with the same bytes may then sit at different addresses. Nothing in Lua can see it: strings compare by content, which is why `luaS_eqshrstr` compares the hash and then the bytes where C's `eqshrstr` would compare pointers, and `rawequal`, `==`, table keys and `next` all behave as before. Only `lua_topointer` — and a `lua_rawsetp` keyed on it — can tell the difference.
 
-11. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
+11. **A `%a` tie on an odd digit rounds to even, which is what glibc does and what Apple's library does not** — PUC-Lua hands every conversion to the platform's `sprintf`, so what `string.format("%.0A", 1.5)` answers is what that library answers, and the libraries do not agree: `1.5` is `0x1.8p+0`, so a precision of zero drops exactly half of the last digit kept. glibc's `__printf_fp` hands the digit being kept to `round_away`, which leaves an even digit alone and steps an odd one, and answers `0X2P+0`; Apple's library rounds a tie *down* whatever that digit is, and answers `0X1P+0`. This port answers `0X2P+0`: it is what the C library's own `%f` answers on every platform (`%.0f` of `1.5` is `2`, in both libraries), and it is what makes `%a` agree with `%f` inside a single call. So on a host whose library is Apple's, `%.0a` of `1.5` is `0x2p+0` here and `0x1p+0` under PUC-Lua — the only case in the whole library where a difference is the C library's rather than this port's. A tie on an *even* digit is where both rules land anyway, so nothing differs there; the fuzz asks the reference which library it was built against and leaves the rest out (§5.12).
+
+12. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
 
 ---
 

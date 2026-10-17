@@ -1315,18 +1315,33 @@ func strHexValue(c byte) int {
 
 // strRoundsUp tells whether the hexadecimal digits being dropped from a
 // %a conversion -- 'tail' is the first of them -- are more than half of
-// the last digit kept.  Half is 8.  A tail that begins with exactly 8
-// and continues with nothing but zeros is a tie, and a tie rounds down.
-func strRoundsUp(tail []byte) bool {
-	if strHexValue(tail[0]) != 8 {
-		return strHexValue(tail[0]) > 8
+// the last digit kept, which is 'last'.  Half is 8.
+//
+// A tail that begins with exactly 8 and continues with nothing but
+// zeros is a tie, and the C library breaks a tie on the parity of the
+// last digit kept: glibc's __printf_fp hands that digit to
+// 'round_away', which leaves it alone when it is already even and
+// steps it when it is odd -- so the answer is always even.  That is
+// also what the C library does for '%f' on every platform ('%.0f' of
+// 1.5 is 2), and what this port's decimal conversions do.
+//
+// Apple's library is the one that differs: its '%a' rounds a tie *down*
+// whatever the last digit is, so '%.0A' of 1.5 is 0X1P+0 there and
+// 0X2P+0 under glibc.  This port answers 0X2P+0, so that '%a' and '%f'
+// agree with each other; formatfuzz_test.go asks the reference which
+// library it was built against and leaves those cases out of the
+// comparison when it was Apple's.
+func strRoundsUp(last byte, tail []byte) bool {
+	d := strHexValue(tail[0])
+	if d != 8 {
+		return d > 8
 	}
 	for _, c := range tail[1:] {
 		if c != '0' {
-			return true
+			return true /* more than half after all */
 		}
 	}
-	return false
+	return strHexValue(last)%2 == 1 /* a tie: to even */
 }
 
 // strHexFloat formats a non-negative finite float as '0x1.xxxp+e'.
@@ -1366,31 +1381,38 @@ func strHexFloat(x float64, prec int, alt bool) string {
 	}
 	intDigit := byte('1')
 	/* Round up when what is being dropped is more than half of the
-	   last digit kept -- and only then, because the C library is
-	   observed to round a tie *down*: '%.12a' of a value whose
-	   thirteenth digit is '8' keeps the digit it had.
-	   Half is 8 in hexadecimal, so the first dropped digit decides
-	   unless it is exactly 8, in which case whether any digit after
-	   it is nonzero decides.  Judging by the first dropped digit
-	   alone is what made '%.8a' of 1e-300 answer
+	   last digit kept.  Half is 8 in hexadecimal, so the first
+	   dropped digit decides unless it is exactly 8, in which case
+	   whatever follows it decides, and if nothing does then the
+	   parity of the last digit kept does.  Judging by the first
+	   dropped digit alone is what made '%.8a' of 1e-300 answer
 	   0x1.56e1fc2fp-997 where C answers 0x1.56e1fc30p-997: the
 	   digits are 56e1fc2f|8f359, the first dropped digit is a bare
 	   '8', and the rest of the tail is not zero. */
-	if prec < 13 && strRoundsUp(digits[prec:]) {
-		carry := true
-		for i := prec - 1; i >= 0 && carry; i-- {
-			v := strHexValue(digits[i])
-			if v == 15 {
-				digits[i] = '0'
-			} else {
-				digits[i] = "0123456789abcdef"[v+1]
-				carry = false
-			}
+	if prec < 13 {
+		/* the digit the rounding lands on: the integer digit when no
+		   fraction digit survives, the last one that does otherwise */
+		last := intDigit
+		if prec > 0 {
+			last = digits[prec-1]
 		}
-		if carry {
-			/* the integer digit goes from 1 to 2; the C library does
-			   not renormalize the result, it just prints "0x2.00..." */
-			intDigit = '2'
+		if strRoundsUp(last, digits[prec:]) {
+			carry := true
+			for i := prec - 1; i >= 0 && carry; i-- {
+				v := strHexValue(digits[i])
+				if v == 15 {
+					digits[i] = '0'
+				} else {
+					digits[i] = "0123456789abcdef"[v+1]
+					carry = false
+				}
+			}
+			if carry {
+				/* the integer digit goes from 1 to 2; the C library
+				   does not renormalize the result, it just prints
+				   "0x2.00..." */
+				intDigit = '2'
+			}
 		}
 	}
 	var sb strings.Builder
