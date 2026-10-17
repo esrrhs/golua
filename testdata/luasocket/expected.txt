@@ -1,0 +1,49 @@
+== mimetest.lua
+testing identity: ok
+testing b64 chained encode: ok
+testing b64 padding: ok
+testing b64 low-level: ok
+testing qp encoding and wrap: ok
+testing qp encoding and wrap: ok
+done in 0.01s
+== ltn12test.lua
+testing sink.table: ok
+testing sink.chain (with split): ok
+testing sink.chain (with merge): ok
+testing source.string and pump.all: ok
+testing source.table: ok
+testing source.chain (with split): ok
+testing source.chain (with several filters): ok
+testing source.chain (with split) and sink.chain (with merge): ok
+testing sink.chain (with several filters): ok
+testing filter.chain (and sink.chain, with split, merge): ok
+testing filter.chain (and sink.chain, a bunch): ok
+testing filter.chain (and source.chain, with split, merge): ok
+testing filter.chain (and source.chain, a bunch): ok
+== stufftest.lua
+ok
+ok
+ok
+ok
+ok
+ok
+ok
+== excepttest.lua
+OK
+== test_bind.lua
+done!
+== test_socket_error.lua
+Passed! Error is 'connection refused'.
+== test_getaddrinfo.lua
+done!
+== test_tcp_receive_zero.lua
+done!
+== test_udp_receive_zero.lua
+done!
+== socket_e2e.lua
+line:	hello	nil	nil
+big chunk:	100000
+timed out:	true	timeout	took at least 0.25s:	true
+select idle:	0
+udp:	ping
+done

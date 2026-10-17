@@ -200,7 +200,27 @@ print(1.5)                -- 然后检查数字长什么样
 以及那行带着模块版本号的行。套件还需要一个 4 MB 的 `utf8.dat`，它的 `genutf8.pl`
 用 perl 生成；测试里用 Go 写出同样的字节，这样它只需要一台有 C 编译器的机器。
 
-### 5.4 覆盖盘点
+### 5.4 第三个扩展：LuaSocket，它自己掌管内存与套接字
+
+[LuaSocket](https://lunarmodules.github.io/luasocket/) 是这里编译并运行的第三个真实扩展，
+也是走得最远的一个。LPeg 与 CJSON 都待在解释器内部，LuaSocket 则要掌管一个套接字：
+它把 `t_socket` 放进 userdata，给这个 userdata 挂上自己注册在 registry 里的 metatable，
+并要求每次方法调用都能通过 `luaL_testudata` 拿回当初放进去的那个指针。它找出两个
+前两个扩展都没碰到的真 bug：
+
+| LuaSocket 做的事 | 错在哪 |
+|---|---|
+| 用 `lua_setmetatable` 把一个套接字标成 `tcp{server}` | 为了回答「原来有没有 metatable」先 push 了一次，随后又从栈顶取 metatable 来设置——而此时栈顶已经是那个回答。套接字因此保留了原来的 metatable，`luaL_testudata` 不再认得 server，于是它上面的每次方法调用都报 "bad self" |
+| 用 `luaL_optlstring(L, 2, NULL, &size)`，然后测指针是否为 NULL，以此来区分「空块」与「流结束」 | NULL 交不出去：参数缺失时回答 `""`，而参数**就是**空串时也回答 `""`，因为两者是靠与 `""` 比较来区分的。此外 `luaL_checklstring` 还泄漏——每次调用都新分配一个 `C.CString`，而 mime 的过滤器每个分块都要调一次 |
+
+它的用例全部跑在回环地址上，所以机器不需要联网：TCP 连接、发送与接收（含一个要分多次
+`write` 的 100 KB 块）、一个必须超时而非阻塞的 `receive`、`select`、UDP、`getaddrinfo`，
+以及 mime 的两个过滤器——base64 与 quoted-printable——经 `ltn12` 走一遍。另有一个我们
+自己写的回环往返脚本 `socket_e2e.lua` 把它们串起来。它打印的每一行都取自 PUC-Lua 5.4.9
+的实跑结果，存在 `testdata/luasocket/expected.txt`。MIT 许可，随
+`testdata/luasocket/LICENSE` 一并再分发。
+
+### 5.5 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
 `testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
@@ -231,7 +251,7 @@ print(1.5)                -- 然后检查数字长什么样
 `<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
 `require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
 
-### 5.5 性能
+### 5.6 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时

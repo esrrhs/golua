@@ -488,10 +488,16 @@ func lua_rawseti(p *C.lua_State, idx C.int, n C.lua_Integer) {
 
 //export lua_setmetatable
 func lua_setmetatable(p *C.lua_State, idx C.int) C.int {
-	L := stateOf(p)
-	had := L.GetMetaTable(idxInt(idx)) /* PUC-Lua answers 1 when there was one */
-	L.SetMetaTable(idxInt(idx))
-	_ = had
+	/* Nothing may be pushed between reading the arguments and setting the
+	   table: the new metatable is the value already on top of the stack,
+	   so asking whether there is an old one -- which pushes -- would make
+	   the call set that answer instead, and leave a value behind.  An
+	   extension then finds its object carrying the metatable it had
+	   before, which is not the one it registered, and 'luaL_testudata'
+	   no longer recognises it.  That is how luasocket's server socket
+	   stopped being a tcp{server}.  PUC-Lua answers 1 whenever it sets
+	   one at all. */
+	stateOf(p).SetMetaTable(idxInt(idx))
 	return 1
 }
 
@@ -601,24 +607,39 @@ func luaL_optnumber(p *C.lua_State, arg C.int, def C.lua_Number) C.lua_Number {
 
 //export luaL_checklstring
 func luaL_checklstring(p *C.lua_State, arg C.int, l *C.size_t) *C.char {
-	s := stateOf(p).CheckString(int(arg))
-	if l != nil {
-		*l = C.size_t(len(s))
+	/* luaL_checklstring is lua_tolstring plus a type error, so it is
+	   written that way: the pointer has to outlive the call, and
+	   C.CString's fresh allocation does at the cost of never being
+	   freed -- mime's filters call it once per chunk. */
+	s := lua_tolstring(p, arg, l)
+	if s == nil {
+		stateOf(p).tagError(int(arg), LUA_TSTRING)
 	}
-	return C.CString(s)
+	return s
 }
 
 //export luaL_optlstring
 func luaL_optlstring(p *C.lua_State, arg C.int, def *C.char, l *C.size_t) *C.char {
 	L := stateOf(p)
-	s := L.OptString(int(arg), "")
-	if s == "" && def != nil {
-		s = C.GoString(def)
+	if L.IsNoneOrNil(int(arg)) {
+		/* The default is handed straight back, and NULL is a default an
+		   extension asks for on purpose: mime's filters take
+		   luaL_optlstring(L, 2, NULL, &size) and test the pointer for
+		   NULL to learn that the input is over, because '' is a chunk
+		   of no bytes and nil is the end of the stream.  Deciding that
+		   by comparing the result with "" instead confuses the two,
+		   and it also mistakes an argument that *is* the empty string
+		   for one that was left out. */
+		if l != nil {
+			n := C.size_t(0)
+			if def != nil {
+				n = C.strlen(def)
+			}
+			*l = n
+		}
+		return def
 	}
-	if l != nil {
-		*l = C.size_t(len(s))
-	}
-	return C.CString(s)
+	return luaL_checklstring(p, arg, l)
 }
 
 //export luaL_checktype

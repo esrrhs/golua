@@ -271,7 +271,31 @@ the one line naming the module's version. The suite wants a 4 MB
 `utf8.dat`, which its `genutf8.pl` builds with perl; the test writes the
 same bytes in Go, so that a C compiler is the only thing it needs.
 
-### 5.4 Coverage inventory
+### 5.4 A third one: LuaSocket, which owns memory and sockets
+
+[LuaSocket](https://lunarmodules.github.io/luasocket/) is the third real
+extension built and run here, and the one that reaches furthest. Where
+LPeg and CJSON stay inside the interpreter, LuaSocket owns a socket: it
+puts a `t_socket` in a userdata, gives that userdata the metatable it
+registered in the registry, and expects to be handed back exactly the
+pointer it put there — through `luaL_testudata`, once per method call.
+It found two real bugs, neither of which the smaller extensions touch:
+
+| What LuaSocket does | What was wrong |
+|---|---|
+| `lua_setmetatable`, to class a socket as a `tcp{server}` | the call pushed the *old* metatable to answer whether there was one, and then set the metatable from the top of the stack — which by then was that answer. A socket kept the metatable it already had, so `luaL_testudata` stopped recognising a server, and every method call on it raised "bad self" |
+| `luaL_optlstring(L, 2, NULL, &size)`, and then a test of the pointer for NULL, to tell an empty chunk from the end of the stream | NULL could not be handed back: an absent argument answered `""`, and so did an argument that *was* the empty string, because the two were told apart by comparing with `""`. `luaL_checklstring` leaked besides — a fresh `C.CString` per call, and mime's filters call it once per chunk |
+
+Its suites run over loopback, so the machine needs no network: TCP
+connect, send and receive (including a 100 KB chunk that takes several
+`write`s), a `receive` that has to time out rather than block, `select`,
+UDP, `getaddrinfo`, and both of mime's filters — base64 and
+quoted-printable — through `ltn12`. One loopback round trip of our own,
+`socket_e2e.lua`, ties them together. Every line is PUC-Lua 5.4.9's, kept
+in `testdata/luasocket/expected.txt`. MIT-licensed, redistributed under
+`testdata/luasocket/LICENSE`.
+
+### 5.5 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
 the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
@@ -310,7 +334,7 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
-### 5.5 Performance
+### 5.6 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end
