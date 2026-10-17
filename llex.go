@@ -282,19 +282,23 @@ func luaX_syntaxerror(ls *LexState, msg string) {
 func luaX_newstring(ls *LexState, str string) *TString {
 	L := ls.L
 	ts := luaS_newlstr(L, str)
+	/* PUC-Lua takes the string back out of the *key* of the entry, not
+	   out of its value (llex.c: keystrval), and it has to: 'addk' turns
+	   the value into the index of a constant the moment the string is
+	   used as one (lcode.c), so reading the value here would answer an
+	   integer for every string that has been a constant already. Every
+	   later occurrence of that literal would then be a new object, and
+	   two equal long literals in one chunk would stop being the same
+	   string -- which is what 'literals.lua' asserts. */
+	if saved := luaH_getstrkey(L, ls.h, ts); saved != nil {
+		return saved
+	}
+	/* not in use yet: t[string] = string, to anchor it for the rest of
+	   the compilation */
 	var key Value
 	setsvalue(&key, ts)
-	o := luaH_get(L, ls.h, &key)
-	if !ttisnil(o) { /* string already present? */
-		if ttisstring(o) {
-			return tsvalue(o)
-		}
-	} else { /* not in use yet */
-		var stv Value
-		setsvalue(&stv, ts)
-		luaH_finishset(L, ls.h, &key, o, &stv) /* t[string] = string */
-		/* table is not a metatable, so it does not need to invalidate cache */
-	}
+	luaH_set(L, ls.h, &key, &key)
+	/* table is not a metatable, so it does not need to invalidate cache */
 	return ts
 }
 

@@ -1,0 +1,13 @@
+long length	50
+long same literal	true
+long via local	true
+long via function	true
+long via literal again	true
+concat equal	true
+concat distinct	true
+short first use	hello
+short later literal	true
+short third	true
+short in table	true
+short via concat	true
+done

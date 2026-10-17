@@ -213,7 +213,7 @@ Weak tables and `__gc` are supported and pass their own tests —
 two of which count collections with `require"tracegc"` — see §6 for how
 they are done.
 
-The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (79
+The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (80
 cases) is compared byte for byte against golden files captured from
 PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
 interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the
@@ -443,7 +443,7 @@ conformance check than any output comparison. A script can print the
 right thing and still have been compiled differently; a listing cannot.
 Every instruction, operand, comment, constant, local variable and
 upvalue has to be PUC-Lua's, in PUC-Lua's order, with PUC-Lua's line
-numbers. Run over the 79 scripts of the differential suite (§5.10) —
+numbers. Run over the 80 scripts of the differential suite (§5.10) —
 some 81,000 lines of listing — the two agree line for line.
 
 Which is how it found the last real difference in the compiler:
@@ -464,7 +464,7 @@ print(f)
 ```
 
 gives `print` two constant slots in PUC-Lua and one here. Nothing Lua
-can observe depends on it, which is why 79 scripts of golden output
+can observe depends on it, which is why 80 scripts of golden output
 never showed it — but the constant indices are part of the bytecode, so
 the bytes `string.dump` writes were not always PUC-Lua's. The table is
 now the scanner's, and the occasional duplicate constant is reproduced.
@@ -476,6 +476,19 @@ binary chunks `luac -o` writes for them, compared byte for byte and then
 loaded back. Several files are combined the way luac.c does it — by
 compiling `"(function()end)();\n"` once per file and grafting each
 file's prototype onto the nested ones — so that is covered too.
+
+Sharing that table has a consequence, and it is the other half of the
+same translation: once a string has been used as a constant, the entry
+`addk` wrote for it holds an *integer*, not the string. `luaX_newstring`
+therefore cannot read the value back out of the entry to find the saved
+copy of a literal — C reads the **key** (`llex.c`:
+`keystrval(nodefromval(o))`), and this port has `luaH_getstrkey` for
+exactly that. Reading the value instead makes every later occurrence of
+a literal that has already been a constant a fresh object, so two equal
+long literals in one chunk stop being the same string, which is what
+PUC-Lua's own `literals.lua` and `verybig.lua` assert. Both of those
+regressed the moment constants started sharing the scanner's table, and
+both are green again; `testdata/diff/80_strid.lua` pins it.
 
 ### 5.10 Coverage inventory
 
@@ -584,7 +597,17 @@ Continuations — `lua_callk`, `lua_pcallk` and `lua_yieldk` with a non-NULL `k`
 
 The C block behind a userdata is freed when the userdata is collected: `C.malloc` is not memory Go's collector knows about, so without a finalizer an extension making userdata in a loop would grow without bound. Anything written in Lua, or ported to Go, needs none of this: `L.RequireF(modname, openf, true)` adds one to `package.loaded` (the port's `luaL_requiref`), or set `package.preload[name]` to a Go function and let `require` find it the usual way.
 3. **The collector is Go's, so its observable timing is not PUC-Lua's** — `collectgarbage("count")` reports the Go heap rather than PUC-Lua's own allocator, and `__gc` runs where this port runs a cycle (a collector step, `collectgarbage`, or `Close()`) rather than where PUC-Lua's step would have run it. Objects with a `__gc` are held between cycles so that Go cannot finalise them at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not — which is what C does and what makes `<close>`, `Close()` and weak tables deterministic:  a sweep removes an entry once nothing but the table refers to it. `collectgarbage("step")` is the one answer that cannot be matched: PUC-Lua answers true only when the step brought the collector back to the pause state, which a single step almost never does — it answers false for hundreds of calls in a row, even right after a full collection — while a step here is a whole cycle and answers true. Answering false instead would leave the documented idiom `while not collectgarbage("step") do end` spinning forever, which is the worse of the two.
-4. **Weak tables need two collector cycles** — a Go `weak.Pointer` is cleared in the cycle after the one that frees its object, so an entry survives one cycle longer than PUC-Lua would have kept it. Strings, numbers and booleans are never weakened, exactly as in PUC-Lua.
+4. **A weak entry disappears in one cycle, not part way through allocating** — a Go
+`weak.Pointer` is cleared in the cycle *after* the one that frees its object, so
+one cycle here runs Go's collector twice: the first frees what only a weak table
+referred to, the second clears its pointer. Where that can be measured it
+agrees: an entry is gone after one `collectgarbage()`, and gone after two
+million allocations without one, exactly as in PUC-Lua. What differs is the
+granularity — PUC-Lua's collector interleaves with allocation, so an entry
+vanishes during some particular allocation, while this port clears at a cycle
+boundary (a collection, `collectgarbage`, `Close()`, or allocation crossing a
+threshold), so "after which allocation" has no answer. Strings, numbers and
+booleans are never weakened, exactly as in PUC-Lua.
 5. **`os.setlocale` asks the C library, so it needs cgo** — the decimal point is the one part of a locale Lua observes, and it is observed in three places: `tostring` of a number, `string.format`'s `%f`/`%e`/`%g` (but not `%a` or `%q`, which is what lets `%q` round-trip), and `tonumber`, which accepts either separator while a source literal always uses `.`. Which locales are installed is the host's business, exactly as in PUC-Lua, and a name the C library refuses answers `nil`. Built with `CGO_ENABLED=0` there is no C library to ask, so every name but `"C"` answers `nil` and the decimal point stays `.`.
 6. **`os.date` refuses a slightly different range of times, `os.time` accepts dates the host's `mktime` refuses, and `os.date("!%z")` answers the UTC offset rather than the local one** — `struct tm` keeps the year in an `int`, and the host's `gmtime`/`localtime` answer NULL once it no longer fits, which is where PUC-Lua's "date result cannot be represented in this installation" comes from. This port asks the same question against `tm_year` and reproduces the top of the range exactly — 67768036191676799 is the last representable second (year 2147485547, `tm_year` `INT_MAX`) and one more is refused — but the bottom of the host's range stops a little short of `INT_MIN`, so a window of some 2×10¹⁴ seconds at the far negative end is answered here and refused there; no second beyond that is answered by either. For `os.time`, PUC-Lua builds a time with the C library's `mktime` and reports "time result cannot be represented in this installation" when it answers -1; which dates those are is up to the C library (on macOS, anything that normalises to a year before 1900; glibc accepts those). Go's `time.Date` has no such limit, so this port answers a number. The opposite happens for `%z` under `!`: the time is UTC, but the host's `gmtime` leaves its offset at the local value, so PUC-Lua prints the local offset where this port prints `+0000`. Everything PUC-Lua itself decides is reproduced — the bounds each field must satisfy before it reaches `struct tm` ("field 'year' is out-of-bound"), the missing and non-integer fields, a result of exactly -1, and every other specifier of `os.date`.
 7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh`, `tanh`, `frexp` and `ldexp` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. The one place the port deliberately steps outside Go's implementations is the band in which `exp(|x|)` overflows while `sinh(x)` and `cosh(x)` do not (709.78 < |x| < 710.48): Go's `math.Sinh` answers `inf` for `math.sinh(710)`, whose true value is `exp(710) / 2` = 1.1e308 and representable, so the halving is folded into the argument there instead.

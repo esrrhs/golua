@@ -538,6 +538,44 @@ func luaH_getshortstr(t *Table, key *TString) *Value {
 	}
 }
 
+// luaH_getstrkey answers the string a string key is *stored under*, or
+// nil when the key is absent (llex.c: keystrval(nodefromval(o))).
+//
+// It is not the same as the value the key maps to, and llex.c needs the
+// difference: the scanner's table anchors every string of a chunk by
+// mapping it to itself, but 'addk' overwrites that value with the index
+// of the constant as soon as the string is used as one (lcode.c). An
+// entry whose value has become an integer must still yield the string,
+// or every later occurrence of a literal that has already been used as a
+// a constant comes back as a fresh object — which is exactly what
+// PUC-Lua's own 'literals.lua' checks: two equal long literals in one
+// chunk have to be the same string.
+func luaH_getstrkey(L *State, t *Table, key *TString) *TString {
+	if sizenode(t) == 0 {
+		return nil
+	}
+	if key.tt == LUA_VSHRSTR {
+		n := hashstr(t, key)
+		for {
+			if t.nodes[n].key.tt == ctb(LUA_VSHRSTR) &&
+				luaS_eqshrstr(tsvalue(&t.nodes[n].key), key) {
+				return tsvalue(&t.nodes[n].key)
+			}
+			nx := t.nodes[n].next
+			if nx == 0 {
+				return nil
+			}
+			n += nx
+		}
+	}
+	var ko Value
+	setsvalue(&ko, key)
+	if i := getGenericNode(L, t, &ko, false); i >= 0 {
+		return tsvalue(&t.nodes[i].key)
+	}
+	return nil
+}
+
 // luaH_getstr searches a string key (ltable.c).
 func luaH_getstr(L *State, t *Table, key *TString) *Value {
 	if key.tt == LUA_VSHRSTR {
