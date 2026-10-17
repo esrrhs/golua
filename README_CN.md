@@ -304,7 +304,29 @@ cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
 ## 7. 已知差异与限制（相对 PUC-Lua 5.4.9）
 
 1. **`file:read(n)` 的计数超过 2 GiB 时按文件末尾处理**：C 把计数直接交给分配器，荒谬的计数是被分配器拒绝的（报 "not enough memory"；负数计数必然如此，本实现已还原这一点）。本实现不会做那个量级的分配，所以过大的计数读到空。二进制 chunk 不受影响：`string.dump` 产出的字节与 PUC-Lua 5.4.9 **完全一致**（strip 与否都一样），两边互相都能加载对方的产物。
-2. **加载 C 扩展模块需要宿主带 cgo 构建**：`cdlopen.go` 就是 `loadlib.c` 里 `lsys_load`/`lsys_sym` 那一半，会真的 dlopen 目标库，所以 `package.cpath`、四个 searcher 与 `require` 能直接吃按 `lua.h` 写的普通 `.so`，`package.loadlib` 返回的是 `dlerror()` 自己的消息加 `"open"` 或 `"init"`——与 PUC-Lua 逐字节相同。它必须要 cgo，原因只有一个：Go 二进制得把 `lua_*`/`luaL_*` 这些名字导出到**动态符号表**里，模块才能解析到，而只有走 cgo 的链接路径才做得到。用 `CGO_ENABLED=1` 构建（有 C 工具链时本就是默认），扩展按平台允许「名字留到加载时再解析」的方式编译——macOS 上加 `-undefined dynamic_lookup`；Linux 上宿主符号从可执行文件的动态表里解析，`-shared -fPIC` 就够了。`go test` 里有覆盖：`cdlopen_test.go` 会写一个用 `luaL_newlib` 的 C 扩展、编译它、`require` 它、再调进去。`CGO_ENABLED=0` 时后端缺失，`package.loadlib` 返回 `nil, "dynamic libraries not enabled", "absent"`——正是 PUC-Lua 在没有 `LUA_USE_DLOPEN` 时的逐字回答——而 `package.cpath` 里找到的 C 模块会给出 PUC-Lua 在那里的报错。桥接本身还有两个限制（都写在 `cdlopen.go` 的注释里）：C 侧调用 `lua_error` 目前走 panic 而不是解开 C 帧，跨越自身帧抛错的模块暂不支持；C API 的协程、hook、debug 部分尚未转发，调用它们的模块会加载失败。用 Lua 写的、或已改成 Go 的模块完全不需要这些：`L.RequireF(modname, openf, true)` 把模块放进 `package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，让 `require` 照常找到它。
+2. **加载 C 扩展模块需要宿主带 cgo 构建**：`cdlopen.go` 就是 `loadlib.c` 里 `lsys_load`/`lsys_sym` 那一半，会真的 dlopen 目标库，所以 `package.cpath`、四个 searcher 与 `require` 能直接吃按 `lua.h` 写的普通 `.so`，`package.loadlib` 返回的是 `dlerror()` 自己的消息加 `"open"` 或 `"init"`——与 PUC-Lua 逐字节相同。它必须要 cgo，原因只有一个：Go 二进制得把 `lua_*`/`luaL_*` 这些名字导出到**动态符号表**里，模块才能解析到，而只有走 cgo 的链接路径才做得到。用 `CGO_ENABLED=1` 构建（有 C 工具链时本就是默认），扩展按平台允许「名字留到加载时再解析」的方式编译——macOS 上加 `-undefined dynamic_lookup`；Linux 上宿主符号从可执行文件的动态表里解析，`-shared -fPIC` 就够了。`go test` 里有覆盖：`cdlopen_test.go` 写一个用 `luaL_newlib` 的 C 扩展、编译、`require`、再调进去；
+`cdlopen_api_test.go` 编译一个更大的扩展，把它打印的 **25 行输出与同一个扩展在 PUC-Lua 5.4.9 下的输出逐行比对**——
+带注册元表的 userdata、`luaL_checkudata`、`luaL_checkoption`、buffer API、user value、
+`lua_rawgetp`/`lua_rawsetp`、`lua_dump`、`lua_gc`、经 C 的 `lua_Debug` 读到的
+`lua_getstack`/`lua_getinfo`、`lua_stringtonumber`，以及 `lua_pushfstring` 的每一种转换
+（含 Lua 不认识的选项所报的 "invalid option"）。
+
+四个带 `...` 的函数——`lua_pushfstring`、`lua_pushvfstring`、`luaL_error`、`lua_gc`——
+写在 C 里（`cdlbridge.c`）：cgo 边界的**两个方向**都表达不了变参调用。它们复刻的是
+`luaO_pushvfstring` 而不是 `printf`：`%d` 是 Lua 整数，`%f` 是 `%.14g` 且结果看着像整数时补 `.0`，
+`%p` 是裸的 `%p`，`%U` 是 UTF-8 序列，其余一律报 PUC-Lua 的那个错。
+用 `printf` 会放过 `%.2f`（Lua 是拒绝的），也会把 `%d` 按 C 的 `int` 打印。
+
+`CGO_ENABLED=0` 时后端缺失，`package.loadlib` 返回 `nil, "dynamic libraries not enabled", "absent"`——
+正是 PUC-Lua 在没有 `LUA_USE_DLOPEN` 时的逐字回答——而 `package.cpath` 里找到的 C 模块
+会给出 PUC-Lua 在那里的报错。
+
+桥接还有两件做不到的事（都写在 `cdlopen.go` 的注释里）：C 侧 `lua_error` 走 panic 而不是解开
+扩展自己的 C 帧，跨越自身帧抛错的模块暂不支持；延续（`lua_callk`、`lua_pcallk`、
+带非 NULL `k` 的 `lua_yieldk`）会被丢弃，因为 yield 之后没有可返回的 C 帧。
+用 Lua 写的、或已改成 Go 的模块完全不需要这些：`L.RequireF(modname, openf, true)` 把模块放进
+`package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，
+让 `require` 照常找到它。
 3. **收集器是 Go 的，可观测时机与 PUC-Lua 不同**：`collectgarbage("count")` 报的是 Go 堆而非 PUC-Lua 分配器的口径；`__gc` 在本实现自己跑一轮的地方执行（收集步进、`collectgarbage`、`Close()`），而不是 PUC-Lua 步进的位置。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法，也正是 `<close>`、`Close()` 与弱表确定的原因：没有别处引用就会被清掉。`collectgarbage("step")` 是唯一无法对齐的返回值：PUC-Lua 只在「这一步把收集器带回了暂停态」时才返回 true，而单步几乎从不如此——它连续几百次都返回 false，紧接在一次完整收集之后也一样——而本实现的一步就是一整轮，所以返回 true。若改成返回 false，文档里的惯用法 `while not collectgarbage("step") do end` 就会永远转下去，两害相权取其轻。
 4. **弱表条目要多存活一轮**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，因此条目比 PUC-Lua 多活一个周期。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
 5. **错误信息文案**：与 PUC-Lua 保持一致（直译带来的好处），但 `ldebug` 的源码片段回显在部分路径可能省略。
@@ -328,9 +350,9 @@ go test -bench=. -benchmem -run=XXX ./...   # 基准
 go build -o lua ./cmd/lua # 命令行解释器
 ```
 
-其中两项需要的不止 Go：`cdlopen_test.go` 会编译一个 C 扩展并 `require` 它，
-在没有 cgo 或没有 C 编译器时自行跳过；因此 `CGO_ENABLED=0 go test ./...`
-也是受支持的配置，只是不走 dlopen 那条路径。
+其中两项需要的不止 Go：`cdlopen_test.go` 与 `cdlopen_api_test.go` 会编译 C 扩展
+并 `require` 它们，在没有 cgo 或没有 C 编译器时自行跳过；因此
+`CGO_ENABLED=0 go test ./...` 也是受支持的配置，只是不走 dlopen 那条路径。
 
 CI 在 Linux / macOS / Windows 上跑完整矩阵（`.github/workflows/go.yml`）：
 全平台 `go vet` + `go build` + `go test`，Linux 与 macOS 加跑 `go test -race`

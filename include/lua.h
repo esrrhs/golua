@@ -85,6 +85,21 @@
 #define LUA_OPLT 1
 #define LUA_OPLE 2
 
+/* size of the 'source' and 'short_src' buffers of lua_Debug */
+#define LUA_IDSIZE 60
+
+/* debug hook event codes and masks */
+#define LUA_HOOKCALL     0
+#define LUA_HOOKRET      1
+#define LUA_HOOKLINE     2
+#define LUA_HOOKCOUNT    3
+#define LUA_HOOKTAILCALL 4
+
+#define LUA_MASKCALL  (1 << LUA_HOOKCALL)
+#define LUA_MASKRET   (1 << LUA_HOOKRET)
+#define LUA_MASKLINE  (1 << LUA_HOOKLINE)
+#define LUA_MASKCOUNT (1 << LUA_HOOKCOUNT)
+
 /* garbage-collection options (the collector is Go's; see README §6) */
 #define LUA_GCSTOP       0
 #define LUA_GCRESTART    1
@@ -113,13 +128,50 @@ typedef int (*lua_Writer)(lua_State *L, const void *p, size_t sz, void *ud);
 typedef void *(*lua_Alloc)(void *ud, void *ptr, size_t osize, size_t nsize);
 typedef void (*lua_WarnFunction)(void *ud, const char *msg, int tocont);
 
+struct lua_Debug; /* defined below: lua_Hook only ever points at one */
+typedef void (*lua_Hook)(lua_State *L, struct lua_Debug *ar);
+
+/*
+** The debug record.  The fields up to short_src are the ones an
+** extension reads; i_ci is PUC-Lua's private pointer to its own call
+** record, which an extension must not touch -- it is declared void *
+** here because what it names lives on the Go side.
+*/
+struct lua_Debug {
+  int event;
+  const char *name;      /* (n) */
+  const char *namewhat;  /* (n) */
+  const char *what;      /* (S) */
+  const char *source;    /* (S) */
+  size_t srclen;         /* (S) */
+  int currentline;       /* (l) */
+  int linedefined;       /* (S) */
+  int lastlinedefined;   /* (S) */
+  unsigned char nups;    /* (u) */
+  unsigned char nparams; /* (u) */
+  char isvararg;         /* (u) */
+  char istailcall;       /* (t) */
+  unsigned short ftransfer; /* (r) */
+  unsigned short ntransfer; /* (r) */
+  char short_src[LUA_IDSIZE]; /* (S) */
+  void *i_ci;            /* private */
+};
+
+/* lua_Hook above names struct lua_Debug, which is this */
+typedef struct lua_Debug lua_Debug;
+
 /* ---- state ---- */
 lua_State *lua_newstate(lua_Alloc f, void *ud);
 void       lua_close(lua_State *L);
 lua_State *lua_newthread(lua_State *L);
 int        lua_resetthread(lua_State *L);
+int        lua_closethread(lua_State *L, lua_State *from);
 lua_CFunction lua_atpanic(lua_State *L, lua_CFunction panicf);
 lua_Number lua_version(lua_State *L);
+lua_Alloc  lua_getallocf(lua_State *L, void **ud);
+void       lua_setallocf(lua_State *L, lua_Alloc f, void *ud);
+int        lua_setcstacklimit(lua_State *L, unsigned int limit);
+void       lua_toclose(lua_State *L, int idx);
 
 /* ---- stack ---- */
 int  lua_absindex(lua_State *L, int idx);
@@ -160,6 +212,8 @@ lua_CFunction lua_tocfunction(lua_State *L, int idx);
 void        *lua_touserdata(lua_State *L, int idx);
 lua_State   *lua_tothread(lua_State *L, int idx);
 void        *lua_topointer(lua_State *L, int idx);
+const char  *lua_getupvalue(lua_State *L, int funcindex, int n);
+const char  *lua_setupvalue(lua_State *L, int funcindex, int n);
 lua_Number  lua_tonumber(lua_State *L, int idx);   /* macro in PUC-Lua */
 lua_Integer lua_tointeger(lua_State *L, int idx);  /* macro in PUC-Lua */
 
@@ -235,14 +289,25 @@ void lua_setwarnf(lua_State *L, lua_WarnFunction f, void *ud);
 
 /* ---- garbage collection, hooks, misc ---- */
 int lua_gc(lua_State *L, int what, ...);
-int lua_sethook(lua_State *L, void *f, int mask, int count);
-int lua_getstack(lua_State *L, int level, void *ar);
-int lua_getinfo(lua_State *L, const char *what, void *ar);
+void lua_sethook(lua_State *L, lua_Hook f, int mask, int count);
+lua_Hook lua_gethook(lua_State *L);
+int lua_gethookmask(lua_State *L);
+int lua_gethookcount(lua_State *L);
+int lua_getstack(lua_State *L, int level, lua_Debug *ar);
+int lua_getinfo(lua_State *L, const char *what, lua_Debug *ar);
+const char *lua_getlocal(lua_State *L, const lua_Debug *ar, int n);
+const char *lua_setlocal(lua_State *L, const lua_Debug *ar, int n);
 void *lua_upvalueid(lua_State *L, int fidx, int n);
 void  lua_upvaluejoin(lua_State *L, int fidx1, int n1, int fidx2, int n2);
-int   lua_getlocal(lua_State *L, const void *ar, int n);
-int   lua_setlocal(lua_State *L, const void *ar, int n);
 void  lua_xmove(lua_State *from, lua_State *to, int n);
+
+#define lua_getuservalue(L,idx)   lua_getiuservalue(L, idx, 1)
+#define lua_setuservalue(L,idx)   lua_setiuservalue(L, idx, 1)
+#define lua_pushliteral(L,s)      lua_pushstring(L, "" s)
+#define lua_replace(L,idx)        (lua_copy(L, -1, (idx)), lua_pop(L, 1))
+#define lua_pushunsigned(L,n)     lua_pushinteger(L, (lua_Integer)(n))
+#define lua_tounsignedx(L,i,is)   ((lua_Unsigned)lua_tointegerx(L, i, is))
+#define lua_tounsigned(L,i)       lua_tounsignedx(L, (i), NULL)
 
 #define lua_pop(L,n)          lua_settop(L, -(n)-1)
 #define lua_newtable(L)       lua_createtable(L, 0, 0)

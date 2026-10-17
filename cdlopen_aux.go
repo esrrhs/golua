@@ -90,3 +90,79 @@ func cdlStatus(err error) int {
 	}
 	return LUA_ERRSYNTAX
 }
+
+// ---------------------------------------------------------------------
+// luaL_checkudata / luaL_testudata
+// ---------------------------------------------------------------------
+
+// CDL_IDSIZE is LUA_IDSIZE: the size of lua_Debug's short_src, which
+// include/lua.h declares as 60 and cdlbridge.h has to match.
+const CDL_IDSIZE = 60
+
+// cdlTestUserData is luaL_testudata (lauxlib.c:245): it answers the
+// userdata at 'arg' when it carries the metatable registered under
+// 'tname', and nil otherwise; with 'check' it raises instead.
+func cdlTestUserData(L *State, arg int, tname string, check bool) unsafe.Pointer {
+	p := L.ToUserData(arg)
+	if p == nil || !L.GetMetaTable(arg) {
+		if check {
+			L.TypeError(arg, tname)
+		}
+		return nil
+	}
+	L.GetField(LUA_REGISTRYINDEX, tname) /* the registered metatable */
+	if !L.RawEqual(-1, -2) {
+		L.Pop(2)
+		if check {
+			L.TypeError(arg, tname)
+		}
+		return nil
+	}
+	L.Pop(2)
+	if block, ok := p.(unsafe.Pointer); ok {
+		return block
+	}
+	return nil
+}
+
+// dbUpValueJoin2 is dbUpValueJoin for lua_upvaluejoin, which takes the
+// two functions and the two upvalue numbers as arguments rather than
+// reading them from the stack.
+func dbUpValueJoin2(L *State, f1, n1, f2, n2 int) {
+	a := clLvalue(index2value(L, f1))
+	b := clLvalue(index2value(L, f2))
+	if a == nil || b == nil {
+		return
+	}
+	if n1 < 1 || n1 > len(a.upvals) || n2 < 1 || n2 > len(b.upvals) {
+		return
+	}
+	a.upvals[n1-1] = b.upvals[n2-1]
+}
+
+// ---------------------------------------------------------------------
+// identity of a C function
+// ---------------------------------------------------------------------
+
+// cdlPushCClosure pushes 'f' as a C closure with 'nup' upvalues, always
+// allocating one -- even when there are no upvalues.
+//
+// PUC-Lua's lua_pushcclosure uses a *light* C function when n is 0,
+// whose identity is the C function pointer, so two different extension
+// functions are two different addresses.  A Go func value has no such
+// identity: every closure cFunc makes is the same code address, so all
+// of them would compare equal, and 'luaL_argerror' -- which finds the
+// name of the running function by searching package.loaded for it --
+// would keep answering the same one.  Wrapping each in a closure of its
+// own gives it the identity C gets from the address of its function.
+func cdlPushCClosure(L *State, f GoFunc, nup int) {
+	cl := luaF_newCclosure(L, nup)
+	cl.f = f
+	L.checkStack(1)
+	L.top -= nup
+	for i := 0; i < nup; i++ {
+		cl.upvalue[i] = L.stack[L.top+i]
+	}
+	setclCvalue(&L.stack[L.top], cl)
+	L.top++
+}

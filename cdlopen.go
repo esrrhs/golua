@@ -16,19 +16,23 @@
 //
 // Two details shape the file:
 //
-//   - lua_State is an opaque handle C never dereferences: it is the
-//     state's cid cast to a pointer.  No Go pointer lives in C memory
-//     (which cgo forbids) and there is nothing to allocate.
+//   - lua_State is an opaque handle C never dereferences: the address
+//     of a malloc'd word holding a runtime/cgo.Handle.  No Go pointer
+//     lives in C memory (which cgo forbids), and encoding an id in the
+//     pointer instead would mean turning a uintptr into a pointer,
+//     which is the one thing go vet will not let past.
 //
 //   - Go cannot call a C function pointer, so every call into an
-//     extension goes through call_cfunction, which is ordinary C and can.
+//     extension goes through a trampoline in cdlbridge.h, which is
+//     ordinary C and can.
 //
-// Coverage is the core of the API -- stack, types, conversion, push,
-// get/set, call, and the auxiliary library -- which is what ordinary
-// extensions use.  The rest (coroutines, hooks, the debug API, userdata
-// values, lua_dump) is not forwarded yet; a library is opened lazily
-// (RTLD_LAZY) so that an extension that does not call them still loads,
-// and one that does gets an undefined-symbol error naming the function.
+// This file carries the core of the API -- stack, types, conversion,
+// push, get/set, call, and most of the auxiliary library.
+// cdlopen_ext.go carries the rest: coroutines, hooks, the debug API,
+// user values, lua_dump, and the auxiliary functions that go with them.
+// Together they are every name in include/lua.h and include/lauxlib.h
+// except the four that take '...', which cdlbridge.c has instead.
+// cdlopen_api_test.go pins them all against PUC-Lua 5.4.9.
 //
 // Not done: lua_error must longjmp out of the extension's own frame
 // rather than unwind through it.  Until a setjmp lands on this side of
@@ -37,39 +41,14 @@ package lua
 
 /*
 #include <dlfcn.h>
-#include <stdlib.h>
-#include <string.h>
 
-typedef struct lua_State lua_State;
-typedef long long lua_Integer;
-typedef double lua_Number;
-typedef unsigned long long lua_Unsigned;
+// cdlbridge.h holds every layout that has to agree with include/lua.h
+// and include/lauxlib.h, the trampolines C has to provide, and the
+// callbacks of the four variadic functions defined in cdlbridge.c.
+#include "cdlbridge.h"
 
-typedef int (*lua_CFunction)(lua_State *L);
-typedef const char *(*lua_Reader)(lua_State *L, void *data, size_t *size);
-
-typedef struct luaL_Reg {
-  const char *name;
-  lua_CFunction func;
-} luaL_Reg;
-
-typedef struct luaL_Buffer {
-  int ref;   // index into the host's buffer table
-} luaL_Buffer;
-
-// Go cannot call a C function pointer; these can.
-static int call_cfunction(lua_CFunction f, lua_State *L) { return f(L); }
-static const char *call_reader(lua_Reader f, lua_State *L, void *d, size_t *sz) {
-  return f(L, d, sz);
-}
-
-// PUC-Lua opens with RTLD_NOW, and the flags show up in dlerror's
-// message, so they have to match.
-static void *cdl_open(const char *path) { return dlopen(path, RTLD_NOW | RTLD_LOCAL); }
 static void *cdl_sym(void *h, const char *s) { return dlsym(h, s); }
 static const char *cdl_error(void) { return dlerror(); }
-
-static luaL_Reg *reg_at(luaL_Reg *l, int i) { return &l[i]; }
 */
 import "C"
 
@@ -132,7 +111,7 @@ func cgoReleaseState(L *State) {
 // sees an ordinary closure, and the closure crosses into C.
 func cFunc(f unsafe.Pointer) GoFunc {
 	return func(L *State) int {
-		return int(C.call_cfunction(C.lua_CFunction(f), L.statePtr()))
+		return int(C.cdl_call_cfunction(C.lua_CFunction(f), L.statePtr()))
 	}
 }
 
@@ -376,7 +355,9 @@ func lua_pushboolean(p *C.lua_State, b C.int) { stateOf(p).PushBoolean(b != 0) }
 
 //export lua_pushcclosure
 func lua_pushcclosure(p *C.lua_State, f C.lua_CFunction, n C.int) {
-	stateOf(p).PushGoClosure(cFunc(unsafe.Pointer(f)), int(n))
+	/* see cdlPushCClosure: a light C function would make every
+	   extension function compare equal */
+	cdlPushCClosure(stateOf(p), cFunc(unsafe.Pointer(f)), int(n))
 }
 
 //export lua_pushlightuserdata
@@ -489,13 +470,7 @@ func lua_arith(p *C.lua_State, op C.int) { stateOf(p).Arith(int(op)) }
 
 //export lua_newuserdatauv
 func lua_newuserdatauv(p *C.lua_State, sz C.size_t, uv C.int) unsafe.Pointer {
-	L := stateOf(p)
-	buf := make([]byte, int(sz))
-	v := L.NewUserData(buf, int(uv))
-	if p, ok := v.(unsafe.Pointer); ok {
-		return p
-	}
-	return unsafe.Pointer(&buf[0])
+	return cgoNewUserBlock(stateOf(p), int(sz), int(uv))
 }
 
 //export lua_newuserdata
@@ -535,7 +510,7 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 	}
 	return C.int(cdlStatus(L.LoadStream(nil, func() []byte {
 		var sz C.size_t
-		cs := C.call_reader(reader, p, data, &sz)
+		cs := C.cdl_call_reader(reader, p, data, &sz)
 		if cs == nil || sz == 0 {
 			return nil
 		}
@@ -615,12 +590,6 @@ func luaL_typeerror(p *C.lua_State, arg C.int, tname *C.char) C.int {
 	return 0
 }
 
-//export luaL_error
-func luaL_error(p *C.lua_State, fmt *C.char) C.int {
-	stateOf(p).Error2("%s", C.GoString(fmt))
-	return 0
-}
-
 //export luaL_setfuncs
 func luaL_setfuncs(p *C.lua_State, l *C.luaL_Reg, nup C.int) {
 	L := stateOf(p)
@@ -630,19 +599,27 @@ func luaL_setfuncs(p *C.lua_State, l *C.luaL_Reg, nup C.int) {
 	n := int(nup)
 	var regs []Reg
 	for i := 0; ; i++ {
-		r := C.reg_at(l, C.int(i))
+		r := C.cdl_reg_at(l, C.int(i))
 		if r == nil || r.name == nil {
 			break
 		}
 		name := C.GoString(r.name)
-		// luaL_Reg is {const char *name; lua_CFunction func;}, and the
-		// field is called 'func' -- which Go cannot spell -- so it is
-		// read at its offset: one pointer past 'name'.
-		fn := *(*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(r)) +
-			unsafe.Sizeof(r.name)))
+		/* luaL_Reg's second field is called 'func', which Go cannot
+		   spell, so it is read on the C side: cdl_reg_func. */
+		fn := unsafe.Pointer(C.cdl_reg_func(r))
 		regs = append(regs, Reg{Name: name, Func: cFunc(fn)})
 	}
-	L.SetFuncs(regs, n)
+	/* SetFuncs would push these as light C functions, which cannot tell
+	   two extension functions apart; see cdlPushCClosure */
+	L.checkStack(n)
+	for _, r := range regs {
+		for i := 0; i < n; i++ { /* copy the upvalues to the top */
+			L.PushValue(-n)
+		}
+		cdlPushCClosure(L, r.Func, n)
+		L.SetField(-(n + 2), r.Name)
+	}
+	L.Pop(n) /* remove the upvalues */
 }
 
 //export luaL_getsubtable
@@ -745,7 +722,11 @@ func luaL_buffinit(p *C.lua_State, b *C.luaL_Buffer) {
 	id := cgoBufNext
 	cgoBufs[id] = buf
 	cgoBufMu.Unlock()
-	b.ref = C.int(id)
+	/* the visible fields are the extension's to read, and 'ref' lives at
+	   the end of the struct that extension declared, so both are written
+	   through C rather than by a Go field access */
+	C.cdl_buf_init(b, p)
+	*C.cdl_buf_refp(b) = C.int(id)
 }
 
 func bufOf(b *C.luaL_Buffer) *Buffer {
@@ -753,7 +734,7 @@ func bufOf(b *C.luaL_Buffer) *Buffer {
 		return nil
 	}
 	cgoBufMu.Lock()
-	buf := cgoBufs[int(b.ref)]
+	buf := cgoBufs[int(*C.cdl_buf_refp(b))]
 	cgoBufMu.Unlock()
 	return buf
 }
@@ -817,7 +798,7 @@ var cdlHandles sync.Map // path -> unsafe.Pointer
 func cgoLoadSym(L *State, path, sym string) int {
 	cpath := C.CString(path)
 	defer C.free(unsafe.Pointer(cpath))
-	h := C.cdl_open(cpath)
+	h := C.cdl_dlopen(cpath)
 	if h == nil {
 		L.PushString(cdlErrMsg())
 		return pkErrLib

@@ -34,6 +34,21 @@ void luaL_checkversion_(lua_State *L, lua_Number ver, size_t sz);
 #define luaL_checkversion(L) \
   luaL_checkversion_(L, LUA_VERSION_NUM, LUAL_NUMSIZES)
 
+#define luaL_argcheck(L, cond,arg,extramsg) \
+  ((void)((cond) || luaL_argerror(L, (arg), (extramsg))))
+#define luaL_argexpected(L,cond,arg,tname) \
+  ((void)((cond) || luaL_typeerror(L, (arg), (tname))))
+#define luaL_checkstring(L,n)     (luaL_checklstring(L, (n), NULL))
+#define luaL_optstring(L,n,d)     (luaL_optlstring(L, (n), (d), NULL))
+#define luaL_typename(L,i)        lua_typename(L, lua_type(L, (i)))
+#define luaL_pushfail(L)          lua_pushnil(L)
+#define luaL_getmetatable(L,n)    (lua_getfield(L, LUA_REGISTRYINDEX, (n)))
+#define luaL_loadbuffer(L,s,sz,n) luaL_loadbufferx(L, s, sz, n, NULL)
+#define luaL_dofile(L, fn) \
+  (luaL_loadfile(L, fn) || lua_pcall(L, 0, LUA_MULTRET, 0))
+#define luaL_dostring(L, s) \
+  (luaL_loadstring(L, s) || lua_pcall(L, 0, LUA_MULTRET, 0))
+
 int  luaL_getmetafield(lua_State *L, int obj, const char *e);
 int  luaL_callmeta(lua_State *L, int obj, const char *e);
 const char *luaL_tolstring(lua_State *L, int idx, size_t *len);
@@ -108,11 +123,32 @@ struct luaL_Buffer {
 void luaL_addchar_(luaL_Buffer *B, char c);
 void luaL_buffinit(lua_State *L, luaL_Buffer *B);
 char *luaL_prepbuffsize(luaL_Buffer *B, size_t sz);
+void luaL_addgsub(luaL_Buffer *B, const char *s, const char *p,
+                  const char *r);
+char *luaL_buffinitsize(lua_State *L, luaL_Buffer *B, size_t sz);
 void luaL_addlstring(luaL_Buffer *B, const char *s, size_t l);
 void luaL_addstring(luaL_Buffer *B, const char *s);
 void luaL_addvalue(luaL_Buffer *B);
 void luaL_pushresult(luaL_Buffer *B);
 void luaL_pushresultsize(luaL_Buffer *B, size_t sz);
+
+/* the buffer's own bookkeeping, which the macros read straight out of
+   the struct -- see luaL_addsize and friends */
+#define luaL_bufflen(bf)     ((bf)->n)
+#define luaL_buffaddr(bf)    ((bf)->b)
+#define luaL_addsize(B,s)    ((B)->n += (s))
+#define luaL_buffsub(B,s)    ((B)->n -= (s))
+#define luaL_prepbuffer(B)   luaL_prepbuffsize(B, LUAL_BUFFERSIZE)
+
+/*
+** The standard FILE* handle, as lualib.h declares it.  An extension
+** that reaches through a file handle uses this; the port's own io
+** library keeps its file in the userdata the same way.
+*/
+typedef struct luaL_Stream {
+  void *f;              /* the host's file */
+  lua_CFunction closef; /* how to close it */
+} luaL_Stream;
 
 /* compatibility with 5.1's luaL_register */
 #define luaL_register(L,n,l) (luaL_setfuncs(L, (l), 0))
