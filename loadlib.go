@@ -13,19 +13,17 @@ package lua
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 )
 
 // Configuration constants (luaconf.h / lauxlib.h).
 const (
-	pkDirSep    = "/"        // LUA_DIRSEP
 	pkPathSep   = ";"        // LUA_PATH_SEP
 	pkPathMark  = "?"        // LUA_PATH_MARK
 	pkExecDir   = "!"        // LUA_EXEC_DIR
 	pkIgMark    = "-"        // LUA_IGMARK
 	pkVerSuffix = "_5_4"     // LUA_VERSUFFIX
-	pkLSUBSEP   = pkDirSep   // LUA_LSUBSEP
-	pkCSUBSEP   = pkDirSep   // LUA_CSUBSEP
 	pkPOF       = "luaopen_" // LUA_POF
 	pkOFSEP     = "_"        // LUA_OFSEP
 
@@ -53,6 +51,27 @@ const (
 	// pkDLMsg is the message used in place of dlerror().
 	pkDLMsg = "dynamic libraries not enabled"
 )
+
+// pkDirSep is LUA_DIRSEP, and it is not a constant because luaconf.h
+// does not have one either: it picks "\\" for Windows and "/" for
+// everything else.  It is what 'package.config' answers on its first
+// line, and what a module name's '.' turns into when 'require' looks
+// for a submodule -- 'a.b' becomes 'a\b' there and 'a/b' here.
+var pkDirSep = luaDirSep()
+
+// pkLSUBSEP and pkCSUBSEP are LUA_LSUBSEP and LUA_CSUBSEP: both are
+// LUA_DIRSEP, so both follow it.
+var (
+	pkLSUBSEP = pkDirSep
+	pkCSUBSEP = pkDirSep
+)
+
+func luaDirSep() string {
+	if runtime.GOOS == "windows" {
+		return "\\"
+	}
+	return "/"
+}
 
 // error codes for 'lookforfunc'
 const (

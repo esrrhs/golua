@@ -140,12 +140,15 @@ jobs:
           # prints no REPL prompt at all when its input is a pipe, and
           # main.lua tests the prompt.  dlopen has to be asked for, and
           # on Linux the executable has to export lua_* (-Wl,-E) for the
-          # C libraries of libs/ to resolve; macOS exports them anyway
-          # and its linker has no -E, hence the empty SYSLIBS.
+          # C libraries of libs/ to resolve; without it the reference
+          # itself answers "error loading module 'lib2-v2'" and the half
+          # of main.lua and attrib.lua that is about C libraries is
+          # compared against a shrug.  macOS exports them anyway and its
+          # linker has no -E, hence the empty SYSLIBS.
           if [ "$RUNNER_OS" = "macOS" ]; then
             make -C lua-5.4.9 -j4 posix SYSLIBS= MYCFLAGS=-DLUA_USE_DLOPEN
           else
-            make -C lua-5.4.9 -j4 posix MYCFLAGS=-DLUA_USE_DLOPEN
+            make -C lua-5.4.9 -j4 posix MYCFLAGS=-DLUA_USE_DLOPEN SYSLIBS="-Wl,-E"
           fi
           ./lua-5.4.9/src/lua -v
 

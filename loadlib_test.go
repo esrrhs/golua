@@ -47,7 +47,8 @@ func TestPackageFields(t *testing.T) {
 	L.GetField(-1, "config")
 	cfg, _ := L.ToString(-1)
 	L.Pop(1)
-	if cfg != "/\n;\n?\n!\n-\n" {
+	/* the first line is LUA_DIRSEP, which is "\\" on Windows */
+	if cfg != pkDirSep+"\n;\n?\n!\n-\n" {
 		t.Fatalf("package.config = %q", cfg)
 	}
 	L.GetField(-1, "path")
@@ -83,7 +84,11 @@ func TestPackageSearchPath(t *testing.T) {
 	if err := L.DoString(src); err != nil {
 		t.Fatalf("DoString: %v", err)
 	}
-	if got, want := globalString(t, L, "p"), filepath.Join(dir, "found.lua"); got != want {
+	/* the path handed to searchpath is used as it stands: it is the
+	   '.' in a module name that becomes LUA_DIRSEP, never the '/' that
+	   is already there.  So the answer keeps the separator the caller
+	   wrote, whatever the platform's is. */
+	if got, want := globalString(t, L, "p"), dir+"/found.lua"; got != want {
 		t.Fatalf("package.searchpath = %q, want %q", got, want)
 	}
 

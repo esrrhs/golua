@@ -1,0 +1,6 @@
+# Some of what is compared here is compared byte for byte, and a checkout
+# that rewrites line endings would change those bytes: a golden would stop
+# matching on every line of it, and a .luac would stop loading.  So the
+# goldens are pinned to LF, and the compiled chunks are not text at all.
+*.expected text eol=lf
+testdata/luac/*.luac binary

@@ -26,6 +26,20 @@ var luacPtr = regexp.MustCompile(`0x[0-9a-f]+`)
 
 func luacNorm(s string) string { return luacPtr.ReplaceAllString(s, "0xPTR") }
 
+// luacGolden reads one of the files PUC-Lua's luac wrote.  A Windows
+// checkout turns their '\n' into '\r\n' (core.autocrlf), and what is
+// being compared is what the compiler printed, so the carriage returns
+// come out before the comparison rather than as a difference in every
+// line of it.
+func luacGolden(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
+}
+
 // TestLuacListing compares a full listing -- every instruction, every
 // constant, every local and every upvalue of three chunks -- with what
 // PUC-Lua's luac prints for the same sources. The three are compiled
@@ -34,10 +48,7 @@ func luacNorm(s string) string { return luacPtr.ReplaceAllString(s, "0xPTR") }
 func TestLuacListing(t *testing.T) {
 	dir := filepath.Join("testdata", "luac")
 	t.Chdir(dir)
-	want, err := os.ReadFile("expected.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
+	want := luacGolden(t, "expected.txt")
 	out, errOut, code := luacRun("-l", "-l", "f1.lua", "f2.lua", "f3.lua")
 	if code != 0 {
 		t.Fatalf("luac exited with %d: %s", code, errOut)
@@ -72,6 +83,7 @@ func TestLuacDumpBytes(t *testing.T) {
 	dir := filepath.Join("testdata", "luac")
 	t.Chdir(dir)
 	for _, name := range []string{"combined.luac", "f1.luac"} {
+		/* binary, and compared byte for byte: no normalising here */
 		want, err := os.ReadFile(name)
 		if err != nil {
 			t.Fatal(err)
