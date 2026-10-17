@@ -28,7 +28,15 @@
 #ifndef cdlbridge_h
 #define cdlbridge_h
 
+/* dlfcn is the one thing here the platform decides: there is no dlopen
+   on Windows, and this file is compiled as part of the package whenever
+   cgo is on at all -- so what it needs has to be asked for
+   conditionally, not assumed.  See cdlbridge_nowin.go for why the file
+   is compiled there at all. */
+#if !defined(_WIN32)
 #include <dlfcn.h>
+#endif
+
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -168,7 +176,11 @@ static inline lua_CFunction cdl_reg_func(luaL_Reg *r) {
 }
 
 /* PUC-Lua opens with RTLD_NOW|RTLD_LOCAL, and the flags show up in
-   dlerror's message, so they have to match. */
+   dlerror's message, so they have to match.  On Windows there is no
+   dlopen to call: the two functions answer NULL, and nothing here
+   asks, because nothing here loads. */
+#if !defined(_WIN32)
+
 static inline void *cdl_dlopen(const char *path) { return dlopen(path, RTLD_NOW | RTLD_LOCAL); }
 
 /* Except when the symbol asked for is "*" -- 'load only this library'
@@ -179,6 +191,13 @@ static inline void *cdl_dlopen(const char *path) { return dlopen(path, RTLD_NOW 
 static inline void *cdl_dlopen_global(const char *path) {
   return dlopen(path, RTLD_NOW | RTLD_GLOBAL);
 }
+
+#else /* _WIN32 */
+
+static inline void *cdl_dlopen(const char *path) { return NULL; }
+static inline void *cdl_dlopen_global(const char *path) { return NULL; }
+
+#endif
 
 /* ---- the callbacks cdlbridge.c uses to reach the Go side ----
    These are //export-ed from Go, so cgo declares them too; the

@@ -1,4 +1,4 @@
-//go:build cgo
+//go:build cgo && unix
 
 // The few C API pieces that are not a straight forwarder onto an existing
 // State method, plus the allocation rule for userdata.

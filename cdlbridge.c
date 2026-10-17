@@ -32,6 +32,15 @@
 
 #include "cdlbridge.h"
 
+/* Everything in this file exists to serve a host that can load a
+   shared object, and the four variadic functions at the heart of it
+   are only reachable from one: there is no dlopen on Windows, and
+   every Go file that asks for any of this is built on unix only, so
+   the callbacks they call would not be defined there either.  The
+   file is still compiled -- see cdlbridge_nowin.go -- so it compiles
+   to nothing. */
+#if !defined(_WIN32)
+
 #define CDL_NKEEP 4  /* how many formatted results stay valid at once */
 
 static char *cdl_keep_buf[CDL_NKEEP];
@@ -360,3 +369,5 @@ void cdl_stream_clear (void *block) {
 void cdl_stream_close (FILE *f) {
   if (f != NULL) fclose(f);
 }
+
+#endif /* !defined(_WIN32) */

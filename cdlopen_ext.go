@@ -1,4 +1,4 @@
-//go:build cgo
+//go:build cgo && unix
 
 // The rest of the C API: coroutines, hooks, the debug API, userdata
 // values, lua_dump, and the pieces of the auxiliary library that an

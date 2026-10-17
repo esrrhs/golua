@@ -1,14 +1,23 @@
-//go:build cgo
+//go:build cgo && unix
 
 // The dynamic-loading backend: what lets this port call a C extension.
 //
 // A Lua extension is a shared object exporting luaopen_<name> that calls
 // the Lua C API.  On Unix it is built *without* linking liblua, and the
 // loader resolves lua_* and luaL_* from the host binary -- so the host has
-// to export them, and a Go binary can: a //export-ed function lands in the
-// dynamic symbol table where dlopen looks.  That was measured before it
-// was relied on (a shared object whose only undefined symbol was an
-// exported Go function resolved and ran), and it needs no linker flags.
+// to export them, and a Go binary can, but "can" takes a different amount
+// of help on each platform:
+//
+//   - macOS exports every global symbol of an executable by default, and
+//     the extension is compiled with -undefined dynamic_lookup so the
+//     names stay unresolved until the loader finds them.  Nothing to do.
+//
+//   - ELF exports nothing an executable does not ask for, and asking is
+//     the linker's --export-dynamic.  Go's own linker adds
+//     --export-dynamic-symbol=<name> for each //export-ed Go function,
+//     which is most of the API, but not for the four that are C: see
+//     cdlbridge.c, and the #cgo LDFLAGS below.  Without it a PUC-Lua
+//     shared object stops at "undefined symbol: lua_pushfstring".
 //
 // So the names below are the real lua_* and luaL_* names, and each is a
 // thin forwarder onto the same State methods the rest of the port uses --
@@ -55,6 +64,22 @@
 package lua
 
 /*
+// The ELF half of "the host has to export lua_*": ask the linker to put
+// *every* global symbol of the executable into its dynamic table, which
+// is what dlopen searches.  A //export-ed Go function already gets there
+// (Go's linker adds one --export-dynamic-symbol per name), but the four
+// variadic functions are C -- see cdlbridge.c -- and nothing exports a
+// plain C symbol of an executable without this.
+//
+// It is a link-time property of the final binary, so it travels with the
+// package: #cgo LDFLAGS of an imported package reach the link of
+// anything built against it (//go:cgo_ldflag).  Which is the point --
+// the promise is that a .so written for PUC-Lua loads as it is, and it
+// cannot be kept by asking whoever embeds this library to remember a
+// flag.  macOS needs nothing, and -undefined dynamic_lookup is what the
+// extension's own build carries there.
+#cgo linux LDFLAGS: -Wl,--export-dynamic
+
 #include <dlfcn.h>
 
 // cdlbridge.h holds every layout that has to agree with include/lua.h
