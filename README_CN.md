@@ -667,11 +667,16 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 用 Lua 写的、或已改成 Go 的模块完全不需要这些：`L.RequireF(modname, openf, true)` 把模块放进
 `package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，
 让 `require` 照常找到它。
-3. **`collectgarbage` 委托给 Go 的收集器，GC 差异只剩两个数字**：它照 C 的样子写成 `luaB_collectgarbage` 套 `lua_gc`——`collect` 与 `step` 真跑一轮 Go 的收集，`__gc` 会执行、弱表条目会消失；`stop`/`restart` 置一个"分配驱动的步进"会遵守的标志，`isrunning` 如实回答它；`setpause`、`setstepmul` 与两个模式记住收到的值、回答被替换掉的值，尽管 Go 的收集器并不理会它们。官方套件里 `coroutine`、`gengc`、`locals` 三个断言的正是"`collectgarbage` 之后立刻收过一次"，三者现在都逐字节一致。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法。
+3. **`collectgarbage` 委托给 Go 的收集器，而那是整个进程的收集器** —— 每个选项的语义都是 C 自己的：`collect` 与 `step` 跑一轮，`__gc` 会执行、弱表条目会消失；`stop`/`restart` 置一个「分配驱动的步进」会遵守的标志，`isrunning` 如实回答它；`setpause`、`setstepmul` 与两个模式记住收到的值、回答被替换掉的值。
 
-   这里一轮收集答不上来的，只有那些在度量一个并不存在的分配器的东西：`count` 报的是**整个 Go 堆**的 Kbytes 而非本 state 的，因为 Go 的堆不按 state 记账；`gc.lua`——官方套件里唯一一个测**收集器本身**的文件——问的是一次收集释放了多少内存、以及一长串对象的终结器按什么顺序跑，那是 PUC-Lua 三色标记的问题，不是 Go 的。
+   但 PUC-Lua 的收集器只遍历**一个** `lua_State` 的对象，脚本调 `collectgarbage()` 的代价由拥有它的解释器承担，与别人无关；这里那一句是 `runtime.GC()`——它会 stop the world 并标记整个**进程**分配过的东西，宿主应用的数据也在内；`collectgarbage("count")` 同理报的是整个堆的 Kbytes 而非本 state 的，因为 Go 的堆不按 state 记账。把本库嵌进自己的程序时，这个代价是宿主的：一个频繁调用 `collectgarbage()` 的脚本（放在循环里，或每次请求结束时）会暂停整个进程，宿主堆越大停得越久——在把 state 交给一个不是自己写的脚本之前，这件事值得知道。分配驱动的那次步进（见 `gcStep`）跑的是同一轮、因而同样的代价，但它每 65536 次表分配才触发一次，而且只有在真的有对象被 `__gc` 监视时才触发。
 
-在 `__gc` 内部，收集器按 C 的规则算作"已停止"：那里的 `collectgarbage` 对每个选项都回答 `nil`（`lua_gc` 返回 -1，`lbaselib.c` 的 `checkvalres` 把它变成 fail），终结器里的分配也不驱动任何周期，因此终结器不会嵌套。在终结器里关闭状态（`os.exit(0, true)`）会由那次关闭把剩下的终结器跑完——这正是 `main.lua` 的终结器顺序用例，现在与 PUC-Lua 逐行一致。
+   官方套件里 `coroutine`、`gengc`、`locals` 三个断言的正是「`collectgarbage` 之后立刻收过一次」，三者现在都逐字节一致。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法。
+
+   一轮收集在这里答不上来的，只有那些在度量一个并不存在的分配器的东西：`gc.lua`——官方套件里唯一一个测**收集器本身**的文件——问的是一次收集释放了多少内存、以及一长串对象的终结器按什么顺序跑，那是 PUC-Lua 三色标记的问题，不是 Go 的。
+
+   在 `__gc` 内部，收集器按 C 的规则算作「已停止」：那里的 `collectgarbage` 对每个选项都回答 `nil`（`lua_gc` 返回 -1，`lbaselib.c` 的 `checkvalres` 把它变成 fail），终结器里的分配也不驱动任何周期，因此终结器不会嵌套。在终结器里关闭状态（`os.exit(0, true)`）会由那次关闭把剩下的终结器跑完——这正是 `main.lua` 的终结器顺序用例，现在与 PUC-Lua 逐行一致。
+
 4. **弱表条目在「一轮」里被清掉，而不是随着分配被逐步清掉**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，所以本实现的一次 Lua 周期内部跑**两遍** `runtime.GC()`——第一遍让只剩弱引用的对象真的死掉，第二遍让它的弱指针失效。结果在能测到的地方是一致的：不调 `collectgarbage` 而分配两百万个表之后条目就没了，与 PUC-Lua 相同。真正的区别在**粒度**：PUC-Lua 的收集器与分配交织，条目是在某一次分配中途消失的；本实现只在周期边界（`Close()`，或分配越过阈值时）清除，所以「第几次分配之后条目消失」这个问题没有答案。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
 5. **错误信息的文案与位置**：与 PUC-Lua 一致，由 `24_errmsg`、`36_errors`、`66_errmsg`、`67_meta` 四个 golden 共数百行钉住——算术/位运算/连接/取长/比较/索引/调用各自的措辞、`error` 的 level、`assert`/`pcall`/`xpcall`/`select`、以及 `ldebug` 推断出的变量名（local/upvalue/global/field/常量/调用结果）。唯一无法相同的是未捕获错误行首的 `prog:`——那是 argv[0]，两个程序路径不同，测试里已归一化。
 6. **`os.setlocale` 去问 C 库，所以需要 cgo**：小数点（decimal point）是 locale 里 Lua 唯一真正观察的部分，体现在三处——数字转字符串、`string.format` 的 `%f`/`%e`/`%g`（不含 `%a` 与 `%q`，这正是 `%q` 能往返的原因）、以及 `tonumber`（两种分隔符都收，而源码里的数字字面量始终用 `.`）。装了哪些 locale 由宿主机决定，与 PUC-Lua 完全一致，C 库不认的名字返回 `nil`。以 `CGO_ENABLED=0` 构建时没有 C 库可问，于是除 `"C"` 以外的名字一律返回 `nil`，小数点固定为 `.`。

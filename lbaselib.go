@@ -2,8 +2,10 @@
 //
 // Every luaB_* function keeps its C name prefixed with 'base', and the
 // control flow follows the C source.  Three things are necessarily
-// different from C: there is no GC (so 'collectgarbage' is a stub), the
-// error mechanism is panic/recover instead of setjmp/longjmp (which is
+// different from C: there is no collector of our own (so
+// 'collectgarbage' drives Go's, and 'count' answers the Go heap rather
+// than an allocator of ours -- see baseCollectGarbage), the error
+// mechanism is panic/recover instead of setjmp/longjmp (which is
 // already handled by luaD_pcall), and every C function is a GoFunc.
 package lua
 
@@ -242,12 +244,9 @@ func baseRawSet(L *State) int {
 // collectgarbage
 // ---------------------------------------------------------------------
 
-// There is no collector in this port to drive: objects live on the Go
-// heap and Go reclaims them, so nothing here can start a collection,
-// stop one, or tune one.  Every option is still accepted -- a script
-// that calls them must not get an error -- and every one is answered
-// with 0, which is what C answers for the options that carry no value.
-// 'count' is the one exception; see baseCollectGarbage.
+// The ten options, in C's order: 'luaB_collectgarbage' turns the name
+// into one of these and then into a 'lua_gc' call, so the index here is
+// what decides which branch of baseCollectGarbage runs.
 var baseGCOpts = []string{"stop", "restart", "collect", "count", "step",
 	"setpause", "setstepmul", "isrunning", "generational", "incremental"}
 
