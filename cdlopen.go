@@ -86,14 +86,26 @@ import (
 // address would answer the same question, but only by converting a
 // uintptr to a pointer, which is exactly what the rules (and go vet)
 // forbid.
+// luaExtraSpace is LUA_EXTRASPACE (luaconf.h): the bytes PUC-Lua keeps in
+// front of every lua_State, which 'lua_getextraspace' hands to C.
+const luaExtraSpace = unsafe.Sizeof(uintptr(0))
+
 func (L *State) statePtr() *C.lua_State {
 	if L.cstate == nil {
-		block := C.malloc(C.size_t(unsafe.Sizeof(uintptr(0))))
-		if block == nil {
+		/* The block is LUA_EXTRASPACE bytes followed by the handle:
+		   'lua_getextraspace' hands C the bytes *before* the pointer it
+		   was given, and PUC-Lua really does keep them there, so they
+		   have to exist and be addressable. */
+		size := unsafe.Sizeof(uintptr(0))
+		base := C.malloc(C.size_t(luaExtraSpace) + C.size_t(size))
+		if base == nil {
 			panic("lua: out of memory for a lua_State handle")
 		}
+		C.memset(base, 0, C.size_t(luaExtraSpace))
+		block := unsafe.Pointer(uintptr(base) + luaExtraSpace)
 		*(*uintptr)(block) = uintptr(cgo.NewHandle(L))
 		L.cstate = block
+		L.cstateBase = base
 	}
 	return (*C.lua_State)(L.cstate)
 }
@@ -119,8 +131,9 @@ func cgoReleaseState(L *State) {
 		return
 	}
 	cgo.Handle(*(*uintptr)(L.cstate)).Delete()
-	C.free(L.cstate)
+	C.free(L.cstateBase)
 	L.cstate = nil
+	L.cstateBase = nil
 }
 
 // cFunc wraps a C function pointer as the GoFunc the VM calls: the VM

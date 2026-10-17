@@ -139,6 +139,22 @@ static int l_tonum(lua_State *L) {
   lua_pushinteger(L, (lua_Integer)lua_stringtonumber(L, luaL_checkstring(L, 1)));
   return 1;
 }
+/* lua_getextraspace reaches *behind* the lua_State* C was handed, so
+   there has to be something there -- and it has to be the state's own,
+   not somebody else's, or two states would share it. */
+static int l_extra(lua_State *L) {
+  void *p = lua_getextraspace(L);
+  unsigned char *q = (unsigned char *)p;
+  size_t i;
+  int ok = 1;
+  memset(p, 0x5A, LUA_EXTRASPACE);
+  for (i = 0; i < LUA_EXTRASPACE; i++) if (q[i] != 0x5A) ok = 0;
+  memset(p, 0xA5, LUA_EXTRASPACE);
+  for (i = 0; i < LUA_EXTRASPACE; i++) if (q[i] != 0xA5) ok = 0;
+  lua_pushboolean(L, ok);
+  lua_pushinteger(L, (lua_Integer)LUA_EXTRASPACE);
+  return 2;
+}
 static int l_noop(lua_State *L) { return 0; }
 
 static const luaL_Reg funcs[] = {
@@ -147,7 +163,7 @@ static const luaL_Reg funcs[] = {
   {"setuv", l_setuv}, {"getuv", l_getuv}, {"rawp", l_rawp},
   {"dumpsize", l_dumpsize}, {"gcinfo", l_gcinfo}, {"whereami", l_whereami},
   {"ver", l_ver}, {"yieldable", l_yieldable}, {"tonum", l_tonum},
-  {"noop", l_noop}, {NULL, NULL}
+  {"noop", l_noop}, {"extra", l_extra}, {NULL, NULL}
 };
 
 int luaopen_cext(lua_State *L) {
@@ -196,6 +212,8 @@ P("where", inner())
 P("ver", m.ver())
 P("yield", m.yieldable())
 P("tonum", m.tonum("3.5"), m.tonum("xyz"))
+-- the bytes in front of the lua_State*
+P("extra", m.extra())
 `
 
 // cExtWant is what PUC-Lua 5.4.9 prints for cExtDriver, line for line.
@@ -225,6 +243,7 @@ var cExtWant = []string{
 	"ver\t504.0",
 	"yield\tfalse",
 	"tonum\t4\t0",
+	"extra\ttrue\t8",
 }
 
 // compileCExt compiles <modname>.c in dir into <modname>.so. It reports

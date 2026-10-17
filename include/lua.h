@@ -24,6 +24,15 @@
 #define LUA_VERSION_NUM     504
 #define LUA_RELEASE         "Lua 5.4.9"
 
+/* The rest of the version block, which PUC-Lua spells in lua.h. */
+#define LUA_VERSION_RELEASE_NUM		(LUA_VERSION_NUM * 100 + 9)
+#define LUA_COPYRIGHT	LUA_RELEASE "  Copyright (C) 1994-2026 Lua.org, PUC-Rio"
+#define LUA_AUTHORS	"R. Ierusalimschy, L. H. de Figueiredo, W. Celes"
+
+/* The four bytes at the start of a precompiled chunk (lundump.h). An
+   extension that looks at a binary chunk asks for these. */
+#define LUA_SIGNATURE	"\x1bLua"
+
 /*
 ** The decoration PUC-Lua puts on every declaration in its headers.
 ** luaconf.h defines these, and an extension that declares its own
@@ -49,6 +58,7 @@
 #define lua_upvalueindex(i) (LUA_REGISTRYINDEX - (i))
 #define LUA_RIDX_MAINTHREAD 1
 #define LUA_RIDX_GLOBALS    2
+#define LUA_RIDX_LAST       LUA_RIDX_GLOBALS
 
 /* basic types */
 #define LUA_TNONE          (-1)
@@ -62,9 +72,20 @@
 #define LUA_TUSERDATA      7
 #define LUA_TTHREAD        8
 #define LUA_NUMTYPES       9
+#define LUA_NUMTAGS        LUA_NUMTYPES
 
 /* minimum stack available to a C function */
 #define LUA_MINSTACK 20
+
+/*
+** The bytes PUC-Lua keeps in front of every lua_State for the host to
+** use as it likes (luaconf.h).  'lua_getextraspace' reaches behind the
+** pointer, and the port really does keep them there -- they belong to
+** the state, are zeroed when it is first handed to C, and live as long
+** as it does.
+*/
+#define LUA_EXTRASPACE		(sizeof(void *))
+#define lua_getextraspace(L)	((void *)((char *)(L) - LUA_EXTRASPACE))
 
 /* predefined values in the registry */
 #define LUA_REFNIL (-1)

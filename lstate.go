@@ -173,6 +173,10 @@ type State struct {
 	// runtime/cgo.Handle naming the state.  It is nil until then, and
 	// nil for good in a build without cgo.
 	cstate unsafe.Pointer
+	// cstateBase is the block 'cstate' was carved out of: 'lua_getextraspace'
+	// reaches behind the pointer C was handed, so the malloc'd block starts
+	// LUA_EXTRASPACE bytes earlier and that is what has to be freed.
+	cstateBase unsafe.Pointer
 
 	// The allocator lua_setallocf has set, for lua_getallocf to hand
 	// back. Both are C-side only: an extension calls what it is given.

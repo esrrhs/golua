@@ -1,0 +1,30 @@
+basename	c.txt	c.txt	b	/	.
+dirname	/a/b	.	/a	/	.
+badargs	false	true	1
+toomany	false	bad argument #2 to 'posix.libgen.basename' (no more than 1 argument expected, got 2)
+ctype.graph	1	0	0	1
+ctype.print	1	1	0
+ctype.bad	false	true	false	bad argument #1 to 'posix.ctype.isgraph' (string expected, got boolean)
+fnmatch	0	1	0	1	0	1	0
+fnmatch.bad	false	false	true	1
+errno	2	22	35	13
+errno.count	number
+fcntl.const	0	1	2	512	8	3	4
+gmtime	70	0	1	0	0	0	0	4
+gmtime.more	109	69	2
+strftime	1970-01-01 00:00:00	Tuesday 060	%
+mktime	number
+time.bad	false	false	false	false	bad argument #2 to 'posix.time.strftime' (table expected, got number)
+stat.file	5:1:0:1
+stat.dir	64:2:1:0
+stat.link	5:1:0:1
+stat.lstat	5
+stat.missing	nil
+stat.bad	false	true	nil	1: No such file or directory	2
+stat.umask	number	number
+dirent.names	.,..,d,f.txt,link
+dirent.bad	true	false	bad argument #1 to 'posix.dirent.files' (lpfiles/nope: No such file or directory)
+glob	lpfiles/d,lpfiles/f.txt,lpfiles/link
+glob.none	nil
+utime	0:1000000
+utime.bad	false	true	nil	lpfiles/nope: No such file or directory	2

@@ -259,7 +259,31 @@ yield 的 `lua_pcallk`、抛错的 `lua_pcallk`、带 message handler 的、用 
 它打印的 31 行全部取自 PUC-Lua 5.4.9，存在 `testdata/continuation/expected.txt`，
 由 `TestContinuation` 逐行比对。为本仓库所写，MIT 许可，与其他 testdata 一致。
 
-### 5.7 覆盖盘点
+### 5.7 第五个扩展：luaposix，它把整个 C API 走了一遍
+
+[luaposix](https://github.com/luaposix/luaposix) 不是一个模块，而是三十个小模块，
+它们合起来几乎把 C API 调了个遍——而且回答的是**宿主自己的**数字：`errno`、
+`struct tm`、`struct stat`、目录列表。这里跑其中九个，即答案不依赖「哪台机器、哪一秒」
+的那九个。
+
+它找出两件事，而且都在头文件里，不在实现里：
+
+| luaposix 需要的 | 缺什么 |
+|---|---|
+| `LUA_FILEHANDLE` | 文件句柄元表注册所用的名字。缺了它 `posix.stdio` 根本编译不过；而一个要判断「某值是不是文件句柄」、或想造一个给 `io` 用的扩展，都需要它 |
+| `LUA_SIGNATURE`、`LUA_GNAME`、`LUA_NUMTAGS`、`LUA_RIDX_LAST`、`LUA_VERSION_RELEASE_NUM`、`LUA_AUTHORS`、`LUA_COPYRIGHT`、`luaL_intop`、`luaL_opt`、`lua_writestring` 及另外两个、`lua_getextraspace` | `lua.h` 与 `lauxlib.h` 里另外十来个宏。只有最后一个有点意思：它要摸 `lua_State*` **之前**的字节，所以那个指针背后的块现在真的在句柄前面留了 `LUA_EXTRASPACE` 字节，与 PUC-Lua 一致 |
+
+被废弃的整数转换宏（`luaL_checkint` 等）也补上了，但像 PUC-Lua 的 `luaconf.h` 那样
+藏在 `LUA_COMPAT_APIINTCASTS` 后面——默认不开，所以扩展默认看到的与它在 PUC-Lua 下
+看到的完全一致。三个公开头文件的其余宏与全部函数声明都已齐备；PUC-Lua 写成宏、
+本实现写成函数的那十来个（`lua_call`、`lua_pcall`、`lua_yield`、八个 `lua_is*`）
+两种写法行为相同。
+
+用例打印的 30 行全部取自 PUC-Lua 5.4.9，存在 `testdata/luaposix/expected.txt`，
+由 `TestLuaPosix` 逐行比对。它会创建文件、目录与链接，所以跑在自己的临时目录里。
+MIT 许可，随 `testdata/luaposix/LICENSE` 一并再分发。
+
+### 5.8 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
 `testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
@@ -290,7 +314,7 @@ yield 的 `lua_pcallk`、抛错的 `lua_pcallk`、带 message handler 的、用 
 `<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
 `require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
 
-### 5.8 性能
+### 5.9 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时

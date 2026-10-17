@@ -16,6 +16,9 @@
 /* extra error code for 'luaL_loadfilex' */
 #define LUA_ERRFILE (LUA_ERRERR + 1)
 
+/* the name of the global table (lauxlib.h) */
+#define LUA_GNAME "_G"
+
 typedef struct luaL_Buffer luaL_Buffer;
 
 typedef struct luaL_Reg {
@@ -132,6 +135,14 @@ void luaL_addvalue(luaL_Buffer *B);
 void luaL_pushresult(luaL_Buffer *B);
 void luaL_pushresultsize(luaL_Buffer *B, size_t sz);
 
+/* an arithmetic operation on lua_Integers, done in lua_Unsigned so that
+   the overflow is defined (lauxlib.h) */
+#define luaL_intop(op,v1,v2)  \
+	((lua_Integer)((lua_Unsigned)(v1) op (lua_Unsigned)(v2)))
+
+/* luaL_opt: 'f' applied to argument 'n', or 'd' when there is none */
+#define luaL_opt(L,f,n,d)	(lua_isnoneornil(L,(n)) ? (d) : f(L,(n)))
+
 /* the buffer's own bookkeeping, which the macros read straight out of
    the struct -- see luaL_addsize and friends */
 #define luaL_bufflen(bf)     ((bf)->n)
@@ -150,7 +161,53 @@ typedef struct luaL_Stream {
   lua_CFunction closef; /* how to close it */
 } luaL_Stream;
 
+/*
+** A file handle is a userdata with metatable 'LUA_FILEHANDLE' (lua.h of
+** PUC-Lua says so, and liolib.c registers it under that name).  An
+** extension testing whether a value is one -- or making one of its own
+** that io can use -- needs the name.
+*/
+#define LUA_FILEHANDLE "FILE*"
+
+/*
+** How the interpreter writes to stdout and stderr, which lua.c defines
+** and an extension printing the same way may use (lauxlib.h).
+*/
+#define lua_writestring(s, l) fwrite((s), sizeof(char), (l), stdout)
+#define lua_writeline() (lua_writestring("\n", 1), fflush(stdout))
+#define lua_writestringerror(s, p) (fprintf(stderr, (s), (p)), fflush(stderr))
+
+/* internal assertions: off, as PUC-Lua has them without LUAI_ASSERT */
+#define lua_assert(c) ((void)0)
+
 /* compatibility with 5.1's luaL_register */
 #define luaL_register(L,n,l) (luaL_setfuncs(L, (l), 0))
+
+/*
+** {============================================================
+** Compatibility with deprecated conversions
+**
+** PUC-Lua's luaconf.h only turns these on inside its LUA_COMPAT_5_3
+** block, which is off by default, so they are conditional here too:
+** an extension that wants them defines LUA_COMPAT_5_3 (or the macro
+** itself) exactly as it would against PUC-Lua.
+** =============================================================
+*/
+#if defined(LUA_COMPAT_APIINTCASTS)
+
+#define luaL_opt(L,f,n,d)	(lua_isnoneornil(L,(n)) ? (d) : f(L,(n)))
+
+#define luaL_checkunsigned(L,a)	((lua_Unsigned)luaL_checkinteger(L,a))
+#define luaL_optunsigned(L,a,d)	\
+	((lua_Unsigned)luaL_optinteger(L,a,(lua_Integer)(d)))
+
+#define luaL_checkint(L,n)	((int)luaL_checkinteger(L, (n)))
+#define luaL_optint(L,n,d)	((int)luaL_optinteger(L, (n), (d)))
+
+#define luaL_checklong(L,n)	((long)luaL_checkinteger(L, (n)))
+#define luaL_optlong(L,n,d)	((long)luaL_optinteger(L, (n), (d)))
+
+#endif
+/* }============================================================ */
 
 #endif

@@ -350,7 +350,37 @@ kept in `testdata/continuation/expected.txt`, and `TestContinuation`
 compares them. Written for this port; MIT, like the rest of the
 testdata.
 
-### 5.7 Coverage inventory
+### 5.7 A fifth one: luaposix, which surveys the whole C API
+
+[luaposix](https://github.com/luaposix/luaposix) is not one module but
+thirty small ones, and between them they call most of the C API — and
+answer with the host's own numbers: `errno`, `struct tm`, `struct stat`,
+a directory listing. Nine of them are run here, the ones whose answers
+do not depend on which machine or which second they were asked on.
+
+It found two things, and both were in the headers rather than in the
+port:
+
+| What luaposix needs | What was missing |
+|---|---|
+| `LUA_FILEHANDLE` | the name a file handle's metatable is registered under. `posix.stdio` would not compile at all, and an extension that asks whether a value is a file handle — or makes one for `io` to use — needs it |
+| `LUA_SIGNATURE`, `LUA_GNAME`, `LUA_NUMTAGS`, `LUA_RIDX_LAST`, `LUA_VERSION_RELEASE_NUM`, `LUA_AUTHORS`, `LUA_COPYRIGHT`, `luaL_intop`, `luaL_opt`, `lua_writestring` and its two companions, `lua_getextraspace` | a dozen more macros of `lua.h` and `lauxlib.h`. The last is the only interesting one: it reaches *behind* the `lua_State*` C was handed, so the block behind that pointer now really has `LUA_EXTRASPACE` bytes in front of the handle, the way PUC-Lua's does |
+
+The deprecated integer casts (`luaL_checkint` and friends) are there too,
+but behind `LUA_COMPAT_APIINTCASTS` as PUC-Lua's `luaconf.h` has it — off
+unless asked for, so that what an extension sees by default is exactly
+what it would see against PUC-Lua. Every other macro, and every function
+declaration, of the three public headers is present; the dozen that
+PUC-Lua spells as a macro and this port as a function (`lua_call`,
+`lua_pcall`, `lua_yield`, the eight `lua_is*`) behave the same either way.
+
+All 30 lines the suite prints are PUC-Lua 5.4.9's, kept in
+`testdata/luaposix/expected.txt`, and `TestLuaPosix` compares them. It
+makes files, a directory and a link, so it runs in a temporary directory
+of its own. MIT-licensed, redistributed under
+`testdata/luaposix/LICENSE`.
+
+### 5.8 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
 the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
@@ -389,7 +419,7 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
-### 5.8 Performance
+### 5.9 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end
