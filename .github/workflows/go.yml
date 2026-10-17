@@ -164,12 +164,14 @@ jobs:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
         run: go test -v -run TestDifferentialSuite -timeout 20m .
 
-      # The same comparison without cases anybody wrote: 37 615
-      # expressions built in the test and answered by both interpreters
-      # (fuzz_test.go).  It needs LUA_REF for the same reason the suite
-      # above does, so it has to run here and nowhere else.
+      # The same comparison without cases anybody wrote: 37 816
+      # expressions and snippets built in the test and answered by both
+      # interpreters (fuzz_test.go), and 174 775 pattern/subject pairs
+      # (patternfuzz_test.go).  Both need LUA_REF for the same reason
+      # the suite above does, so they have to run here and nowhere
+      # else.
       - name: Differential fuzz
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run TestFuzzDifferential -timeout 20m .
+        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential' -timeout 20m .

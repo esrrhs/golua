@@ -420,14 +420,32 @@ func hexOf(b byte) string {
 	return string([]byte{digits[b>>4], digits[b&0xf]})
 }
 
-func fuzzChunk(exprs, snippets []string) string {
-	var b strings.Builder
-	b.WriteString(`local function q(v)
-  if type(v) == "string" then return string.format("%q", v) end
-  if type(v) == "table" or type(v) == "function" then return type(v) end
+// fuzzQuote is the 'q' every harness here prints a value with.  It
+// writes the bytes out one by one rather than with '%q', because '%q'
+// escapes a newline as a backslash followed by a real newline -- a
+// traceback is a value that has several -- and a value that prints as
+// two lines breaks the one-line-per-case the comparison is built on:
+// the lines still line up, both sides being equally shifted, but the
+// case named in a failure is then the wrong one.
+//
+// \ddd is decimal in Lua, so \%d round-trips any byte, including a NUL,
+// and nothing is left that could end a line early.
+const fuzzQuote = `local function q(v)
+  local t = type(v)
+  if t == "string" then
+    return '"' .. v:gsub("[%c\"\\]", function(c)
+      return string.format("\\%d", c:byte())
+    end) .. '"'
+  end
+  if t == "table" or t == "function" then return t end
   return tostring(v)
 end
-local function P(i, ok, ...)
+`
+
+func fuzzChunk(exprs, snippets []string) string {
+	var b strings.Builder
+	b.WriteString(fuzzQuote)
+	b.WriteString(`local function P(i, ok, ...)
   local n = select("#", ...)
   local t = {}
   for k = 1, n do t[k] = q((select(k, ...))) end

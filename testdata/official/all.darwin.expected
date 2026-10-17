@@ -1,6 +1,6 @@
 
 	Starting Tests
-random seeds: 1792269934, 4336654712
+random seeds: 1792270925, 4377500024
 current path:
 ****/usr/local/share/lua/5.4/?.lua;/usr/local/share/lua/5.4/?/init.lua;/usr/local/lib/lua/5.4/?.lua;/usr/local/lib/lua/5.4/?/init.lua;./?.lua;./?/init.lua****
 
@@ -12,7 +12,7 @@ time: 1e-05 (+1e-05)
 testing stand-alone interpreter
 progname: /tmp/refcap/lua
 Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio
-(temporary program file used in these tests: /tmp/lua_wJzogh)
+(temporary program file used in these tests: /tmp/lua_jMJVL6)
 testing warnings
 /tmp/refcap/lua: main.lua:385: assertion failed!
 stack traceback:

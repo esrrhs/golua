@@ -673,6 +673,40 @@ about the Go runtime rather than about Lua:
 `Value` is 32 bytes rather than 40 for the same reason C's `TValue` is a
 union: a float shares the integer's field, stored as its IEEE bits.
 
+### 5.12 The differential fuzz
+
+Everything above is a case somebody wrote. This is the other kind: cases
+built in the test, none of them chosen, run through the reference
+interpreter and through `./cmd/lua` and compared line by line. It needs
+`LUA_REF`, so it runs in CI rather than on every machine, and it is
+exhaustive rather than random, so the same cases come back every run and
+a difference is always reproducible.
+
+| | Built | Answers compared |
+|---|---|---|
+| `fuzz_test.go` | 37 615 expressions — 43 operands against every operator, plus the calls that take a base or a format — and 201 written-out snippets for what combination cannot reach: syntax errors, metamethods, coroutines, hooks, patterns, non-string errors, stack overflow | 37 816 |
+| `patternfuzz_test.go` | 6 991 patterns — every pattern atom against every atom, plus the triples that need three pieces to mean anything — against 25 subjects | 1 048 650 |
+
+The pattern half exists because `lstrlib.c`'s `match` is two hundred
+lines of exactly the kind of logic nobody writes down the combinations
+of: a frontier followed by a set, a quantifier on a position capture,
+`%b` with a delimiter that is also a magic character. `32_pattern.lua`
+and `72_gsubbit.lua` are 366 lines of cases somebody *did* think of, and
+they pass; this is the rest.
+
+It is worth saying what makes a fuzz like this worthless, because one
+round of it was. A generated chunk that does not *load* prints the same
+syntax error on both sides, and identical output is what success looks
+like — 37 615 expressions were being compared without a single one of
+them running. Both halves now assert that the chunk ran to the end
+(`count` answered) before anything is compared, and each is checked by
+breaking something on purpose and watching it go red. The values are
+quoted byte by byte rather than with `%q` for a related reason: `%q`
+escapes a newline as a backslash followed by a real newline, so a value
+that prints as two lines quietly breaks the one-line-per-case the
+comparison rests on — the lines still line up, both sides being equally
+shifted, but the case named in a failure is then the wrong one.
+
 ---
 
 ## 6. Known differences from PUC-Lua 5.4.9
