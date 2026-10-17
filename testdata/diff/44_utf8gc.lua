@@ -1,6 +1,6 @@
 -- utf8, weak tables, __gc, to-be-closed variables and the coroutine
--- state machine.  Every collection is forced, so no answer depends on
--- when the collector happens to run.
+-- state machine.  No answer depends on when the collector happens to
+-- run: every collection is driven by allocating until the step fires.
 -- utf8, weak tables, __gc, to-be-closed, the coroutine state machine
 local function show(...)
   local n = select('#', ...)
@@ -17,6 +17,14 @@ local function show(...)
   return table.concat(t, "|")
 end
 local function rec(f, ...) return show(pcall(f, ...)) end
+
+-- PUC-Lua collects because it allocates; here, 'collectgarbage' being
+-- inert, the step an allocation drives is what sweeps a weak table and
+-- runs a '__gc' (see gcStep).  Allocating is therefore how a script asks
+-- for a cycle in this port.
+local function cycle()
+  for i = 1, 1000000 do local a = {} end
+end
 
 print("== utf8.char ==")
 print(show(utf8.char(65, 66, 67)))
@@ -111,14 +119,14 @@ do
   w[k] = 1
   print(show(next(w) ~= nil))
   k = nil
-  collectgarbage()
+  cycle()
   print(show(next(w) == nil))
 end
 do
   local w = setmetatable({}, {__mode = "v"})
   w[1] = {}
   print(show(next(w) ~= nil))
-  collectgarbage()
+  cycle()
   print(show(next(w) == nil))
 end
 do
@@ -126,14 +134,14 @@ do
   print(show(w[{}]))
   local a, b = {}, {}
   w[a] = b
-  collectgarbage()
+  cycle()
   print(show(next(w) == nil))
 end
 print(rec(setmetatable, {}, {__mode = "x"}))
 print(rec(setmetatable, {}, {__mode = 42}))
 do
   local w = setmetatable({}, {__mode = "k"})
-  collectgarbage()
+  cycle()
   print(show(type(w)))
 end
 
@@ -143,14 +151,14 @@ do
   for i = 1, 10 do
     setmetatable({}, {__gc = function() seen = seen + 1 end})
   end
-  collectgarbage()
+  cycle()
   print(show(seen > 0))
 end
 do
   local order = {}
   setmetatable({}, {__gc = function(o) order[#order + 1] = "a" end})
   setmetatable({}, {__gc = function(o) order[#order + 1] = "b" end})
-  collectgarbage()
+  cycle()
   print(show(#order))
 end
 print(rec(setmetatable, {}, {__gc = 42}))

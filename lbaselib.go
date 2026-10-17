@@ -242,9 +242,12 @@ func baseRawSet(L *State) int {
 // collectgarbage
 // ---------------------------------------------------------------------
 
-// There is no GC in this port (the Go collector reclaims everything),
-// so 'collectgarbage' only accepts the options and answers with
-// placeholder values; it never raises an error.
+// There is no collector in this port to drive: objects live on the Go
+// heap and Go reclaims them, so nothing here can start a collection,
+// stop one, or tune one.  Every option is still accepted -- a script
+// that calls them must not get an error -- and every one is answered
+// with 0, which is what C answers for the options that carry no value.
+// 'count' is the one exception; see baseCollectGarbage.
 var baseGCOpts = []string{"stop", "restart", "collect", "count", "step",
 	"setpause", "setstepmul", "isrunning", "generational", "incremental"}
 
@@ -262,28 +265,14 @@ const (
 	baseGCIncremental
 )
 
-// basePushMode pushes the name of a collector mode (pushmode).
-func basePushMode(L *State, mode string) int {
-	L.PushString(mode)
-	return 1
-}
-
-// gcModeInc / gcModeGen are the two collector modes.  PUC-Lua remembers
-// which one is in force and 'collectgarbage("generational")' /
-// 'collectgarbage("incremental")' answer with the one it replaced, which
-// is what lets a script put the mode back the way it found it.
+// gcModeInc / gcModeGen are the two collector modes PUC-Lua knows.  A C
+// library can ask for either through 'lua_gc' (see cdl_gc_cb), and the
+// answer it gets is the one it replaced; 'collectgarbage' longer offers
+// them, but the names stay because the C API still needs them.
 const (
 	gcModeInc = "incremental"
 	gcModeGen = "generational"
 )
-
-// baseSetMode is 'lua_gc(L, LUA_GCGEN | LUA_GCINC)': it answers with the
-// previous mode and switches to the new one.
-func baseSetMode(L *State, mode string) int {
-	previous := L.g.gcMode
-	L.g.gcMode = mode
-	return basePushMode(L, previous)
-}
 
 // gcCount is 'lua_gc(L, LUA_GCCOUNT)' expressed the way lbaselib.c does
 // it: Kbytes with a fractional part, i.e. bytes/1024 as a float.
@@ -293,70 +282,28 @@ func gcCount() float64 {
 	return float64(ms.HeapAlloc>>10) + float64(ms.HeapAlloc&1023)/1024
 }
 
+// baseCollectGarbage is 'collectgarbage'.
+//
+// 'count' answers with the number of Kbytes the Go heap is holding.
+// PUC-Lua answers with what its own allocator has handed out, so the
+// numbers are not the same -- there is no per-state accounting here --
+// but a script that prints or watches the figure still sees a real
+// number that grows and shrinks with the data, which a constant would
+// not give it.
+//
+// Every other option is answered with 0 and does nothing, because there
+// is nothing it could do: the objects are Go's, and Go decides when to
+// reclaim them.  What that costs is the two things a program can see a
+// collection do -- a '__gc' running, and an entry leaving a weak table
+// -- at the moment 'collectgarbage' is called.  Neither is lost: a
+// '__gc' runs from a collector step (see gcStep, which an allocation
+// drives) and when the state closes, and weak entries go with it.  Only
+// the "do it now" of 'collectgarbage' is gone.
 func baseCollectGarbage(L *State) int {
-	switch L.CheckOption(1, "collect", baseGCOpts) {
-	case baseGCCount:
-		/* PUC-Lua answers with the number of Kbytes its own allocator
-		   has handed out; here the equivalent figure is what the Go
-		   heap is holding.  It is not the same number (there is no
-		   per-state accounting), but scripts that print or watch
-		   'collectgarbage("count")' still see a real number that
-		   grows and shrinks with the data. */
+	if L.CheckOption(1, "collect", baseGCOpts) == baseGCCount {
 		L.PushNumber(gcCount())
 		return 1
-	case baseGCStep:
-		L.OptInteger(2, 0)
-		/* PUC-Lua's step does a bounded amount of work and says whether
-		   it finished a cycle; with a step size of 0 it finishes one,
-		   which is what every script that calls
-		   'collectgarbage("step")' and then looks at a weak table is
-		   asking for.  Go's collector is all or nothing, so the step
-		   is a whole cycle. */
-		L.gcCycle()
-		L.PushBoolean(true)
-		return 1
-	case baseGCSetPause:
-		p := int(L.OptInteger(2, 0))
-		L.PushInteger(int64(L.g.gcPause))
-		if p != 0 {
-			L.g.gcPause = p
-		}
-		return 1
-	case baseGCSetStepMul:
-		m := int(L.OptInteger(2, 0))
-		L.PushInteger(int64(L.g.gcStepMul))
-		if m != 0 {
-			L.g.gcStepMul = m
-		}
-		return 1
-	case baseGCIsRunning:
-		/* C answers with 'gcstp == 0': stopped by the program counts,
-		   Go's collector being unable to stop does not. */
-		L.PushBoolean(!L.g.gcStopped)
-		return 1
-	case baseGCGenerational:
-		L.OptInteger(2, 0)
-		L.OptInteger(3, 0)
-		return baseSetMode(L, gcModeGen)
-	case baseGCIncremental:
-		L.OptInteger(2, 0)
-		L.OptInteger(3, 0)
-		L.OptInteger(4, 0)
-		return baseSetMode(L, gcModeInc)
-	case baseGCCollect:
-		L.fullCollect()
-		L.PushInteger(0)
-		return 1
-	case baseGCStop:
-		L.g.gcStopped = true
-		L.PushInteger(0)
-		return 1
-	case baseGCRestart:
-		L.g.gcStopped = false
-		L.PushInteger(0)
-		return 1
 	}
-	/* not reached: CheckOption accepts nothing else */
 	L.PushInteger(0)
 	return 1
 }

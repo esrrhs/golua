@@ -20,7 +20,8 @@ func runChunk(t *testing.T, src string) string {
 }
 
 // The two things a Lua program can see the collector do, which this port
-// has to supply on top of Go's (see lgc.go and lgc_weak.go).  Both are
+// has to supply on top of Go's (see lgc.go and lgc_weak.go).  Since
+// 'collectgarbage' is inert -- see TestCollectGarbageIsInert -- both are
 // driven by allocating until the step fires; the loops are bounded so
 // that a regression fails instead of hanging.
 
@@ -33,7 +34,10 @@ func TestFinalizerRuns(t *testing.T) {
 				ran = debug.getinfo(1).name
 			end})
 		end
-		collectgarbage()   -- must be enough on its own
+		for i = 1, 1000000 do   -- allocating is what drives a cycle
+			local a = {}
+			if ran then break end
+		end
 		return ran
 	`)
 	if got != "__gc" {
@@ -41,18 +45,23 @@ func TestFinalizerRuns(t *testing.T) {
 	}
 }
 
-func TestWeakValues(t *testing.T) {
+// 'collectgarbage' answers with 0 and brings nothing forward: the
+// objects are Go's, and Go decides when to reclaim them.  What still
+// runs a '__gc' is the step an allocation drives, and the closing of
+// the state.
+func TestCollectGarbageIsInert(t *testing.T) {
 	got := runChunk(t, `
-		local cache = setmetatable({}, {__mode = "v"})
+		local n = 0
 		do
-			local o = {}     -- nothing but 'cache' refers to it
-			cache[1] = o
+			local o = {}
+			setmetatable(o, {__gc = function () n = n + 1 end})
 		end
-		collectgarbage()   -- must be enough on its own
-		return tostring(cache[1])
+		local c = collectgarbage("collect")
+		local s = collectgarbage("step")
+		return tostring(c) .. "," .. tostring(s) .. "," .. tostring(n)
 	`)
-	if got != "nil" {
-		t.Errorf("weak value was not cleared: %s", got)
+	if got != "0,0,0" {
+		t.Errorf("collectgarbage drove a cycle: %s", got)
 	}
 }
 
@@ -63,7 +72,10 @@ func TestWeakKeys(t *testing.T) {
 			local key = {}   -- nothing but 't' refers to it
 			t[key] = "value"
 		end
-		collectgarbage()   -- must be enough on its own
+		for i = 1, 1000000 do   -- allocating is what drives a cycle
+			local a = {}
+			if next(t) == nil then break end
+		end
 		local n = 0
 		for _ in pairs(t) do n = n + 1 end
 		return tostring(n)
@@ -80,29 +92,13 @@ func TestWeakKeepsWhatIsAlive(t *testing.T) {
 		local t = setmetatable({}, {__mode = "kv"})
 		t[keep] = keep
 		for i = 1, 6000 do
-			local a = {}
-			if i % 512 == 0 then collectgarbage() end
+			local a = {}   -- allocating is what drives a cycle
 			if t[keep] ~= keep then return "lost" end
 		end
 		return "kept"
 	`)
 	if got != "kept" {
 		t.Errorf("a live entry was dropped from a weak table")
-	}
-}
-
-func TestCollectGarbageSweepsWeak(t *testing.T) {
-	got := runChunk(t, `
-		local t = setmetatable({}, {__mode = "v"})
-		do
-			local o = {}
-			t[1] = o
-		end
-		collectgarbage()   -- must be enough on its own
-		return tostring(t[1])
-	`)
-	if got != "nil" {
-		t.Errorf(`collectgarbage("collect") did not sweep the weak table: %s`, got)
 	}
 }
 
@@ -113,8 +109,7 @@ func TestWeakIgnoresValues(t *testing.T) {
 		t["s"] = 1
 		t[1] = "x"
 		for i = 1, 6000 do
-			local a = {}
-			if i % 512 == 0 then collectgarbage() end
+			local a = {}   -- allocating is what drives a cycle
 		end
 		return tostring(t["s"]) .. tostring(t[1])
 	`)
@@ -142,32 +137,6 @@ func TestFinalizerRunsOnAllocation(t *testing.T) {
 	`)
 	if got != "true" {
 		t.Errorf("__gc never ran from a collector step: %s", got)
-	}
-}
-
-// 'collectgarbage("collect")' has to run the '__gc' of everything it
-// finds in that very cycle, not in the next one.
-//
-// Go hands a finalizer over on another goroutine and 'runtime.GC' returns
-// before it does, so a cycle that does not wait for the handover leaves
-// the metamethod for the next cycle to run -- which shows up as the count
-// being one short, and only sometimes, because it is a race.  The loop is
-// what makes the test see the race rather than luck.
-func TestFinalizerRunsInTheSameCycle(t *testing.T) {
-	got := runChunk(t, `
-		local bad = 0
-		for round = 1, 20 do
-			local n = 0
-			for i = 1, 3 do
-				setmetatable({}, {__gc = function () n = n + 1 end})
-			end
-			collectgarbage("collect")   -- must run all three now
-			if n ~= 3 then bad = bad + 1 end
-		end
-		return tostring(bad)
-	`)
-	if got != "0" {
-		t.Errorf("%s of 20 collections left a __gc for the next cycle", got)
 	}
 }
 

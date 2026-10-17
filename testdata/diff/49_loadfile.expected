@@ -1,18 +1,18 @@
 == shebang ==
 true|nil|"[string \"#!/usr/bin/lua...\"]:1: unexpected symbol near '#'"
 true|nil|"[string \"#comment...\"]:1: unexpected symbol near '#'"
-true|function: 0x7cb6c047b0
-true|function: 0x7cb6c04840
+true|function: 0x78f2c04840
+true|function: 0x78f2c048d0
 true|nil|"[string \"﻿return 1\"]:1: unexpected symbol near '<\\239>'"
 "nil"|"[string \"#!/x...\"]:1: unexpected symbol near '#'"
 true|nil|"[string \"#\"]:1: unexpected symbol near '#'"
 == loadfile and dofile ==
-true|function: 0x7cb6c04a20
+true|function: 0x78f2c04840
 2
 true|nil|"attempt to load a text chunk (mode is 'b')"
-true|function: 0x7cb6c04780
+true|function: 0x78f2c04930
 true|nil|"cannot open no_such_file_xyz: No such file or directory"
-true|function: 0x7cb6c04840
+true|function: 0x78f2c049f0
 true|nil|"cannot open 42: No such file or directory"
 false|"cannot open no_such_file_xyz: No such file or directory"
 true
@@ -45,6 +45,6 @@ close
 true
 true
 5
-true|table: 0x7cb2ca5200
+true|table: 0x78ec1cd4c0
 done
-table: 0x7cb2ca5200
+table: 0x78ec1cd4c0

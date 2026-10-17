@@ -92,16 +92,15 @@
 |---|---|---|
 | 对象生命周期 | 引用计数无关的三色增量 GC | Go 并发三色 GC，循环引用天然回收 |
 | `luaC_barrier*` 写屏障 | 手工维护 | 删除（Go GC 自带混合写屏障） |
-| `collectgarbage("collect")` | 完整 GC | 一整个周期：放开被 hold 的对象 → 清空栈顶以上的残留槽 → 清扫弱表 → `runtime.GC()` → 执行不可达对象的 `__gc` |
 | `collectgarbage("count")` | Lua 分配器发出的 Kbytes | Go 堆的 Kbytes（`runtime.ReadMemStats`） |
-| `collectgarbage("step")` | 有界步进，回答"这一轮是否结束" | 一整个周期，所以恒为 `true`（PUC-Lua 连续几百次都回答 `false`） |
-| `collectgarbage("stop"/"restart"/"isrunning")` | 停/开收集器 | 只关掉自动步进；显式 `collect` 照常收集，与 C 一致 |
-| `collectgarbage("setpause"/"setstepmul"/"incremental"/"generational")` | GC 调参与模式切换 | 接收并存下参数，回答旧值；没有代码读它们 |
-| `__gc` 元方法 | GC 触发终结 | `runtime.SetFinalizer` 发现不可达并入队，VM 在分配点（与 PUC-Lua 跑收集步进的位置相同）取出执行 |
+| `collectgarbage` 的**其余**所有选项 | 启动/停止/调参收集器 | **一律接收并返回 `0`**：这里没有收集器可启动、停止或调参，对象归 Go 管 |
+| `lua_gc`（C API，见 `cdl_gc_cb`） | 同上，来自 C | 仍然真做一整个周期，C 扩展要收集就给它收集 |
+| `__gc` 元方法 | GC 触发终结 | `runtime.SetFinalizer` 发现不可达并入队，VM 在周期边界取出执行：分配驱动的步进（与 PUC-Lua 跑收集步进的位置相同），或 `Close()` |
 | 弱表 `__mode = "k"/"v"/"kv"` | GC 清除 | 清扫时把弱引用换成 `weak.Pointer`（Go 1.24+）并清空槽位，让 Go 判断谁真的不可达；table/userdata/function/thread 生效，字符串/数字/布尔同 PUC-Lua 一样不参与弱化 |
 | `lua_newstate(alloc, ud)` | 自定义分配器 | `NewState()` |
 
-> 影响面可控：GC 只影响"什么时候回收"，不影响 Lua 的可观测语义（除了 `__gc` 时机与 `collectgarbage("count")` 的统计口径）。
+> 影响面可控：GC 只影响"什么时候回收"。`collectgarbage` 除 `count` 外全部返回 `0` 且不做任何事，
+> 所以 `__gc` 与弱表只在**分配驱动的步进**或 `Close()` 时生效，而不是随 `collectgarbage` 立即生效。
 
 ---
 
@@ -145,17 +144,20 @@
 归一化掉程序路径、`0x…` 地址、耗时、`os.tmpname` 结果、随机数种子后逐字节比对
 （`all.lua` 需要预编译 C 扩展，改为按文件驱动；`main.lua` 会派生子进程，也包含在内）。
 
-**33 个用例中 30 个输出完全一致**。其余 3 个的差异全部来自设计取舍
+**33 个用例中 27 个输出完全一致**。其余 6 个的差异全部来自设计取舍
 （没有自己的收集器）或测试环境：
 
 | 用例 | 差异原因 |
 |---|---|
-| `gc` | 这个文件测的**就是**收集器，而这里没有。三处断言量的是增量式收集器：step 之后 `gcinfo()` 会下降、步长越大所需步数越少、一次超大的 step 能跑完一整轮。这里的 step 就是一整轮且不回收 Lua 的对象，三条都不成立。之后该文件靠「一直分配表直到 `gcinfo()` 翻三倍」来量收集器的**速度**——没有回收器时这个循环不终止 |
+| `gc` | 这个文件测的**就是**收集器，而这里没有。它的断言量的是增量式收集器：step 之后 `gcinfo()` 会下降、步长越大所需步数越少、一次超大的 step 能跑完一整轮、弱表会被清扫——第一条需要"真的收过一次"的断言就挂。之后该文件靠「一直分配表直到 `gcinfo()` 翻三倍」来量收集器的**速度**——没有回收器时这个循环不终止 |
+| `coroutine`、`gengc`、`locals` | 三者都是在 `collectgarbage` 之后立刻查一次收集的结果：该消失的弱表条目（`C[1] == undef`、`t[1] == nil`），或该跑过的终结器（`locals` 用 `require"tracegc"` 数次数）。而 `collectgarbage` 现在不启动收集。除此之外三个文件完全一致；同样的弱表与 `__gc` 在 `closure`、`db`、`cstack`、`events`、`tracegc` 里照常通过——那里是分配在驱动步进 |
 | `all` | 环境差异，集中在四行：第二个随机数种子（PUC-Lua 截成 32 位，这里是 64 位地址）、`total memory: 44.6K` 对 `619.2K`（同一处口径）、耗时、以及解释器自身路径。套件其余部分全部吻合——包括 `attrib`、`files`、`gengc`、`locals` 加载的 C 扩展库 |
 | `heavy` | 两边都超时（每轮要构造 2 MB 的表，总量 2 GB）；在超时截断之前两边一致 |
 
-弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、`gengc`、
-`cstack`、`locals`（后两个用 `require"tracegc"` 数回收次数），做法见 §7。
+弱表与 `__gc` 均已实现：条目在只有表引用它时被清掉，`__gc` 会跑，两者都发生在
+周期边界——分配驱动的步进，或 `Close()`。`closure`、`db`、`cstack`、`events`、
+`tracegc` 与 80 个 golden 用例走的都是这条路，做法见 §7；把 `collectgarbage`
+做成空壳的代价见上文 §5.1。
 
 `go test` 内也镜像了这套比对：`testdata/diff/*.lua`（80 个用例）与从 PUC-Lua 5.4.9
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
@@ -572,8 +574,8 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 用 Lua 写的、或已改成 Go 的模块完全不需要这些：`L.RequireF(modname, openf, true)` 把模块放进
 `package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，
 让 `require` 照常找到它。
-3. **收集器是 Go 的，可观测时机与 PUC-Lua 不同**：`collectgarbage("count")` 报的是 Go 堆而非 PUC-Lua 分配器的口径；`__gc` 在本实现自己跑一轮的地方执行（收集步进、`collectgarbage`、`Close()`），而不是 PUC-Lua 步进的位置。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法，也正是 `<close>`、`Close()` 与弱表确定的原因：没有别处引用就会被清掉。`collectgarbage("step")` 是唯一无法对齐的返回值：PUC-Lua 只在「这一步把收集器带回了暂停态」时才返回 true，而单步几乎从不如此——它连续几百次都返回 false，紧接在一次完整收集之后也一样——而本实现的一步就是一整轮，所以返回 true。若改成返回 false，文档里的惯用法 `while not collectgarbage("step") do end` 就会永远转下去，两害相权取其轻。
-4. **弱表条目在「一轮」里被清掉，而不是随着分配被逐步清掉**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，所以本实现的一次 Lua 周期内部跑**两遍** `runtime.GC()`——第一遍让只剩弱引用的对象真的死掉，第二遍让它的弱指针失效。结果在能测到的地方是一致的：一次 `collectgarbage()` 之后条目就没了，不调 `collectgarbage` 而分配两百万个表之后条目也没了，两者都与 PUC-Lua 相同。真正的区别在**粒度**：PUC-Lua 的收集器与分配交织，条目是在某一次分配中途消失的；本实现只在周期边界（一次收集、`collectgarbage`、`Close()`，或分配越过阈值时）清除，所以「第几次分配之后条目消失」这个问题没有答案。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
+3. **`collectgarbage` 是空壳，这就是 GC 差异的全部**：`count` 报的是 Go 堆而非 PUC-Lua 分配器的口径；其余选项一律接收、返回 `0`、什么都不做——这里没有收集器可启动、停止或调参。程序本来能向一次收集索取的东西（`__gc` 跑起来、弱表条目消失）现在只在本实现跑一轮的地方发生：**分配驱动的步进**（见 `gcStep`）或 `Close()`。不是没了，只是不再"随叫随到"：带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法；弱表条目在只有表引用它时就被清掉。代价是那些"调完 `collectgarbage()` 立刻查弱表/数终结器"的脚本：官方套件里 `coroutine`、`gengc`、`locals` 三个正是如此，它们属于下面的差异之一。C 扩展不受影响：`lua_gc` 仍然真的跑一整轮。
+4. **弱表条目在「一轮」里被清掉，而不是随着分配被逐步清掉**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，所以本实现的一次 Lua 周期内部跑**两遍** `runtime.GC()`——第一遍让只剩弱引用的对象真的死掉，第二遍让它的弱指针失效。结果在能测到的地方是一致的：不调 `collectgarbage` 而分配两百万个表之后条目就没了，与 PUC-Lua 相同。真正的区别在**粒度**：PUC-Lua 的收集器与分配交织，条目是在某一次分配中途消失的；本实现只在周期边界（`Close()`，或分配越过阈值时）清除，所以「第几次分配之后条目消失」这个问题没有答案。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
 5. **错误信息的文案与位置**：与 PUC-Lua 一致，由 `24_errmsg`、`36_errors`、`66_errmsg`、`67_meta` 四个 golden 共数百行钉住——算术/位运算/连接/取长/比较/索引/调用各自的措辞、`error` 的 level、`assert`/`pcall`/`xpcall`/`select`、以及 `ldebug` 推断出的变量名（local/upvalue/global/field/常量/调用结果）。唯一无法相同的是未捕获错误行首的 `prog:`——那是 argv[0]，两个程序路径不同，测试里已归一化。
 6. **`os.setlocale` 去问 C 库，所以需要 cgo**：小数点（decimal point）是 locale 里 Lua 唯一真正观察的部分，体现在三处——数字转字符串、`string.format` 的 `%f`/`%e`/`%g`（不含 `%a` 与 `%q`，这正是 `%q` 能往返的原因）、以及 `tonumber`（两种分隔符都收，而源码里的数字字面量始终用 `.`）。装了哪些 locale 由宿主机决定，与 PUC-Lua 完全一致，C 库不认的名字返回 `nil`。以 `CGO_ENABLED=0` 构建时没有 C 库可问，于是除 `"C"` 以外的名字一律返回 `nil`，小数点固定为 `.`。
 7. **`os.date` 拒绝的时间范围略有出入，`os.time` 接受宿主 `mktime` 拒绝的日期，`os.date("!%z")` 给出 UTC 偏移而非本地偏移**：`struct tm` 的年份字段是 `int`，宿主 `gmtime`/`localtime` 一旦放不下就返回 NULL，PUC-Lua 的 “date result cannot be represented in this installation” 正来源于此。本移植按 `tm_year` 判同一条件，上界**完全吻合**——67768036191676799 是最后一个可表示的秒（2147485547 年，`tm_year` 恰为 `INT_MAX`），再加一秒即被拒；宿主的下界离 `INT_MIN` 还差一点，所以最负端约 2×10¹⁴ 秒的窗口内本移植给出答案而参考实现拒绝，再往外两边都不给。至于 `os.time`：PUC-Lua 用 C 库的 `mktime` 构造时间，返回 -1 时报 “time result cannot be represented in this installation”。哪些日期会被拒绝由 C 库决定：macOS 上所有归一化后落在 1900 年之前的都被拒，glibc 则接受。Go 的 `time.Date` 没有这个上限，所以本移植返回一个数值。PUC-Lua 自己判定的部分全部复现——字段进入 `struct tm` 前必须满足的边界（"field 'year' is out-of-bound"）、缺失字段与非整数字段，以及结果恰好为 -1 的情形。`%z` 则相反：加了 `!` 之后时间是 UTC，但宿主的 `gmtime` 把偏移量留在本地值上，于是 PUC-Lua 打印本地偏移，而本移植打印 `+0000`。

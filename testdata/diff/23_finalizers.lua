@@ -4,40 +4,42 @@
 --   * an object that is still reachable when the state closes is
 --     finalised all the same (C's 'separatetobefnz(g, 1)' takes every
 --     object that has a '__gc', reachable or not);
---   * an object dropped and collected is finalised by 'collectgarbage';
+--   * an object that is dropped reaches its '__gc' once allocating has
+--     driven a collector step -- 'collectgarbage' is inert here, there
+--     being no collector in this port to start or stop;
 --   * an object made inside a coroutine is finalised too, even though
---     the coroutine's stack is still there;
---   * 'collectgarbage' reports the mode it replaced, and 'stop' really
---     does stop it as far as 'isrunning' is concerned.
+--     the coroutine's stack is still there.
 
+local seen = 0
 local mt = {}
 function mt.__gc (o)
+  seen = seen + 1
   print("gc", o[1])
 end
 
--- dropped: 'collectgarbage' has to reach it
+-- PUC-Lua collects because it allocates; here the step an allocation
+-- drives is what runs the metamethod (see gcStep).
+local function cycle(n)
+  for i = 1, 2000000 do
+    local a = {}
+    if seen >= n then break end
+  end
+end
+
+-- dropped
 do
   local o = setmetatable({"dropped"}, mt)
 end
-collectgarbage()
+cycle(1)
 
 -- made inside a coroutine: the dead coroutine's stack must not hold it
 local co = coroutine.wrap(function ()
   setmetatable({"in a coroutine"}, mt)
 end)
 co()
-collectgarbage()
+cycle(2)
 
 -- still reachable when the state closes: finalised all the same
 _G.keep = setmetatable({"reachable"}, mt)
-
--- the mode is remembered, and changing it answers with the previous one
-print(collectgarbage("generational"))
-print(collectgarbage("incremental"))
-
-collectgarbage("stop")
-print(collectgarbage("isrunning"))
-collectgarbage("restart")
-print(collectgarbage("isrunning"))
 
 print("done")

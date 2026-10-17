@@ -2,14 +2,14 @@
 false|"x"
 false|"x"
 false|"x"
-false|"59_baselib.lua:32: x"
-false|"59_baselib.lua:39: x"
+false|"59_baselib.lua:29: x"
+false|"59_baselib.lua:36: x"
 false|"x"
 false|nil
 false|nil
 false|42
 false|42
-false|table: 0x7542804880
+false|table: 0x7c1ec089c0
 false|!
 false|true
 false|"x"
@@ -21,11 +21,11 @@ true|false|nil
 true|false|42
 false|"bad argument #1 to 'pcall' (value expected)"
 true|false|"attempt to call a number value"
-true|false|"59_baselib.lua:58: a"
-true|false|table: 0x7542804d40
+true|false|"59_baselib.lua:55: a"
+true|false|table: 0x7c1ec09000
 true|false|"y"
-true|false|"H:59_baselib.lua:61: a"
-true|false|"59_baselib.lua:62: a"
+true|false|"H:59_baselib.lua:58: a"
+true|false|"59_baselib.lua:59: a"
 true|false|"nil"
 true|true|3
 false|"bad argument #2 to 'xpcall' (function expected, got number)"
@@ -34,12 +34,12 @@ false|"bad argument #2 to 'xpcall' (function expected, got no value)"
 false|"bad argument #2 to 'xpcall' (function expected, got no value)"
 true|false|"error in error handling"
 false|"T"
-"59_baselib.lua:72: a\
+"59_baselib.lua:69: a\
 stack traceback:\
 \9[C]: in function 'error'\
-\00959_baselib.lua:72: in function <59_baselib.lua:72>\
+\00959_baselib.lua:69: in function <59_baselib.lua:69>\
 \9[C]: in function 'xpcall'\
-\00959_baselib.lua:72: in main chunk\
+\00959_baselib.lua:69: in main chunk\
 \9[C]: in ?"|0
 == select ==
 true|0
@@ -93,7 +93,7 @@ false|"bad argument #1 to 'tostring' (value expected)"
 false|"bad argument #1 to 'rawlen' (table or string expected, got number)"	false|"bad argument #1 to 'rawlen' (table or string expected, got no value)"	false|"bad argument #1 to 'rawlen' (table or string expected, got nil)"
 1	nil
 false|"bad argument #1 to 'rawget' (table expected, got number)"	true|nil
-table: 0x75428062c0	"v"	false|"bad argument #1 to 'rawset' (table expected, got number)"
+table: 0x7c1ec0b000	"v"	false|"bad argument #1 to 'rawset' (table expected, got number)"
 false|"table index is nil"	false|"table index is NaN"
 true|true|true|false|true
 false|"bad argument #2 to 'rawequal' (value expected)"	false|"bad argument #1 to 'rawequal' (value expected)"
@@ -101,14 +101,14 @@ false|"bad argument #2 to 'rawequal' (value expected)"	false|"bad argument #1 to
 "a"|1	nil	false|"invalid key to 'next'"
 false|"bad argument #1 to 'next' (table expected, got number)"	false|"bad argument #1 to 'next' (table expected, got no value)"	true|nil
 1|10	2|20	nil	nil
-true|function: 0x100a2e614|5|0	false|"bad argument #1 to 'ipairs' (value expected)"	true|function: 0x100a2e614|nil|0
-true|function: 0x100a2e614|table: 0x7542806b40|0
+true|function: 0x10257e614|5|0	false|"bad argument #1 to 'ipairs' (value expected)"	true|function: 0x10257e614|nil|0
+true|function: 0x10257e614|table: 0x7c1ec09e00|0
 == metatables ==
 "locked"	false|"cannot change a protected metatable"
 false|"bad argument #1 to 'setmetatable' (table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected, got no value)"
-nil	table: 0x1013965d0	nil
+nil	table: 0x102cb65d0	nil
 false|"bad argument #1 to 'getmetatable' (value expected)"
-table: 0x7542807100
+table: 0x7c1ec08980
 == require through package.preload ==
 "_xy"|true
 true
@@ -135,19 +135,21 @@ false|"module '5' not found:\
 \9no file '/usr/local/lib/lua/5.4/5.so'\
 \9no file '/usr/local/lib/lua/5.4/loadall.so'\
 \9no file './5.so'"
-false|"59_baselib.lua:150: boom"
+false|"59_baselib.lua:147: boom"
 42|":preload:"
 == collectgarbage ==
 true|0
 true|0
-boolean
 true|0
 true|0
-true|true
-true|"generational"
-true|"incremental"
 false|"bad argument #1 to 'collectgarbage' (invalid option 'bogus')"
 number
+"step"|true
+"setpause"|true
+"setstepmul"|true
+"isrunning"|true
+"incremental"|true
+"generational"|true
 == warn ==
 true	true	true
 false|"bad argument #1 to 'warn' (string expected, got no value)"	true	true

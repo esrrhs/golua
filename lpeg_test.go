@@ -76,6 +76,7 @@ func TestLPeg(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	lpegAskForACycle(t, filepath.Join(dir, "test.lua"))
 
 	inc, err := filepath.Abs("include")
 	if err != nil {
@@ -117,6 +118,32 @@ func TestLPeg(t *testing.T) {
 
 	want := lpegWant(t, src)
 	compareLines(t, got, want)
+}
+
+// lpegAskForACycle rewrites the one place in LPeg's own suite that asks
+// for a collection.
+//
+// 'test.lua' asserts, inside a match-time capture, that 'collectgarbage'
+// has swept a weak table.  There is no collector here to ask for one --
+// the objects are Go's and Go reclaims them -- so the line becomes what
+// does drive a sweep in this port: allocating until the step fires (see
+// gcStep).  Nothing the suite prints changes, which is why the golden
+// output captured from PUC-Lua still applies.
+func lpegAskForACycle(t *testing.T, path string) {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const ask = "    collectgarbage();\n"
+	const cycle = "    for i = 1, 200000 do local a = {} end   -- a cycle: see lgc.go\n"
+	if !strings.Contains(string(b), ask) {
+		t.Fatal("lpeg's test.lua no longer asks for a collection where it did")
+	}
+	out := strings.Replace(string(b), ask, cycle, 1)
+	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // lpegWant reads the lines PUC-Lua printed, which are kept beside the

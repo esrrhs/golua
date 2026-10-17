@@ -84,12 +84,10 @@ loading C dynamic libraries (replaced by Go-side module registration).
 |---|---|---|
 | Object lifetime | tri-color incremental GC | Go's concurrent tri-color GC; cycles collected naturally |
 | `luaC_barrier*` write barriers | manual | removed (Go has a hybrid write barrier) |
-| `collectgarbage("collect")` | full GC | a whole cycle: let the held objects go, clear the stack slots above the top, sweep the weak tables, `runtime.GC()`, run the `__gc` of what has become unreachable |
 | `collectgarbage("count")` | Kbytes handed out by Lua's allocator | Kbytes of the Go heap (`runtime.ReadMemStats`) |
-| `collectgarbage("step")` | a bounded step; answers whether a cycle finished | a whole cycle, so it always answers true (PUC-Lua answers false for hundreds of calls in a row) |
-| `collectgarbage("stop"/"restart"/"isrunning")` | stops and starts the collector | gates the automatic step only: an explicit `collect` still collects, which is what C does too |
-| `collectgarbage("setpause"/"setstepmul"/"incremental"/"generational")` | tuning knobs and modes | accepted, stored, and answered with the previous value; nothing reads them |
-| `__gc` | GC-driven finalization | `runtime.SetFinalizer` finds the object unreachable and queues the metamethod; the VM runs the queue at a cycle boundary — a step, `collectgarbage`, or `Close()` |
+| every other `collectgarbage` option | starts, stops or tunes the collector | **accepted and answered with 0**: there is no collector here to start, stop or tune, the objects being Go's |
+| `lua_gc` (the C API, `cdl_gc_cb`) | the same options from C | still does the work: a whole cycle, so an extension that asks for one gets one |
+| `__gc` | GC-driven finalization | `runtime.SetFinalizer` finds the object unreachable and queues the metamethod; the VM runs the queue at a cycle boundary — the step an allocation drives, or `Close()` |
 | Weak tables (`__mode`) | GC clearing | `weak.Pointer` for table/userdata/function; **string keys are never weakened** |
 | `lua_newstate(alloc, ud)` | custom allocator | `NewState()` |
 
@@ -200,20 +198,23 @@ and compared. **`all.lua` is driven file by file**, because it needs the C
 extension libraries pre-compiled; `main.lua` spawns the interpreter as a
 subprocess and is therefore included.
 
-**30 of the 33 files produce byte-identical output.** The remaining 3
+**27 of the 33 files produce byte-identical output.** The remaining 6
 differ only for reasons that follow from the design — there is no
 collector of our own — or from the test environment:
 
 | File | Why it differs |
 |---|---|
-| `gc` | the file is a test *of* the collector, and there is none here. Three assertions measure an incremental one: that `gcinfo()` falls after a step, that a bigger step size needs fewer steps, and that one huge step finishes a cycle. A step here is a whole cycle and reclaims nothing of Lua's, so all three fail. After them the file measures the collector's *pace* by allocating tables until `gcinfo()` has tripled — a loop that does not terminate when nothing is ever reclaimed |
+| `gc` | the file is a test *of* the collector, and there is none here. Its assertions measure an incremental one: that `gcinfo()` falls after a step, that a bigger step size needs fewer steps, that one huge step finishes a cycle, that a weak table is swept. They fail on the first one that needs a collection to have happened. After them the file measures the collector's *pace* by allocating tables until `gcinfo()` has tripled — a loop that does not terminate when nothing is ever reclaimed |
+| `coroutine`, `gengc`, `locals` | each checks the result of a collection right after a `collectgarbage` — a weak entry that must be gone (`C[1] == undef`, `t[1] == nil`) or a finalizer that must have run (`locals` counts them with `require"tracegc"`) — and `collectgarbage` no longer starts one. All three are otherwise identical, and the same weak tables and `__gc` pass in `closure`, `db`, `cstack`, `events` and `tracegc`, where allocation drives the step |
 | `all` | the environment, in four lines: the second PRNG seed (PUC-Lua's is truncated to 32 bits, this one is a 64-bit address), `total memory: 44.6K` against `619.2K` (the same accounting), the elapsed time, and the interpreter's own path. Everything else — including the C extension libraries `attrib`, `files`, `gengc` and `locals` load — matches |
 | `heavy` | times out on both sides (it builds 2 MB of tables per iteration, and 2 GB overall); the two agree as far as the timeout lets them |
 
-Weak tables and `__gc` are supported and pass their own tests —
-`closure`, `db`, `coroutine`, `gengc`, `cstack` and `locals`, the last
-two of which count collections with `require"tracegc"` — see §6 for how
-they are done.
+Weak tables and `__gc` are supported: an entry goes when nothing but the
+table refers to it, and a `__gc` runs, both at a cycle boundary — the step
+an allocation drives, or `Close()` — which is what `closure`, `db`,
+`cstack`, `events`, `tracegc` and the 80 golden cases exercise. See §6 for
+how they are done, and §5.1 above for what making `collectgarbage` inert
+costs.
 
 The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (80
 cases) is compared byte for byte against golden files captured from
@@ -598,17 +599,16 @@ Continuations — `lua_callk`, `lua_pcallk` and `lua_yieldk` with a non-NULL `k`
 `lua_error` is worth a note, because "it raises instead of longjmping" reads like a gap and is not one. A Go panic crosses a cgo frame: the runtime unwinds to the `recover` of the call that was protecting the call, and the extension's frame is left behind exactly as `longjmp` would leave it. Three levels deep — Lua → C → Lua → C → raise — the answer is PUC-Lua's, line for line, and that is what `TestCModuleErrors` pins. `longjmp` across the boundary is the thing that would be unsafe, since it would skip the runtime's own bookkeeping for the cgo call, so there is no `setjmp` here on purpose. What is lost is what `longjmp` loses too: a C frame holding something that needs cleanup does not get to clean it up.
 
 The C block behind a userdata is freed when the userdata is collected: `C.malloc` is not memory Go's collector knows about, so without a finalizer an extension making userdata in a loop would grow without bound. Anything written in Lua, or ported to Go, needs none of this: `L.RequireF(modname, openf, true)` adds one to `package.loaded` (the port's `luaL_requiref`), or set `package.preload[name]` to a Go function and let `require` find it the usual way.
-3. **The collector is Go's, so its observable timing is not PUC-Lua's** — `collectgarbage("count")` reports the Go heap rather than PUC-Lua's own allocator, and `__gc` runs where this port runs a cycle (a collector step, `collectgarbage`, or `Close()`) rather than where PUC-Lua's step would have run it. Objects with a `__gc` are held between cycles so that Go cannot finalise them at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not — which is what C does and what makes `<close>`, `Close()` and weak tables deterministic:  a sweep removes an entry once nothing but the table refers to it. `collectgarbage("step")` is the one answer that cannot be matched: PUC-Lua answers true only when the step brought the collector back to the pause state, which a single step almost never does — it answers false for hundreds of calls in a row, even right after a full collection — while a step here is a whole cycle and answers true. Answering false instead would leave the documented idiom `while not collectgarbage("step") do end` spinning forever, which is the worse of the two.
+3. **`collectgarbage` is inert, and that is the whole of the GC difference** — `count` reports the Go heap rather than PUC-Lua's own allocator; every other option is accepted, answered with `0`, and does nothing, because there is no collector here to start, stop or tune. What a program could ask of a collection — a `__gc` running, an entry leaving a weak table — now happens only where this port runs a cycle: the step an allocation drives (see `gcStep`), or `Close()`. It is not lost, only not on demand: an object with a `__gc` is held between cycles so that Go cannot finalise it at a moment of its own choosing, the metamethod of every object that still has one runs when the state closes, reachable or not, and a sweep removes a weak entry once nothing but the table refers to it. What that costs is the scripts that check a weak table — or count finalizers — immediately after `collectgarbage()`: three tests of the official suite (`coroutine`, `gengc`, `locals`) do, and they are among the differences below. A C extension is not affected: `lua_gc` still runs a real cycle.
 4. **A weak entry disappears in one cycle, not part way through allocating** — a Go
 `weak.Pointer` is cleared in the cycle *after* the one that frees its object, so
 one cycle here runs Go's collector twice: the first frees what only a weak table
 referred to, the second clears its pointer. Where that can be measured it
-agrees: an entry is gone after one `collectgarbage()`, and gone after two
-million allocations without one, exactly as in PUC-Lua. What differs is the
-granularity — PUC-Lua's collector interleaves with allocation, so an entry
-vanishes during some particular allocation, while this port clears at a cycle
-boundary (a collection, `collectgarbage`, `Close()`, or allocation crossing a
-threshold), so "after which allocation" has no answer. Strings, numbers and
+agrees: an entry is gone after two million allocations, exactly as in PUC-Lua.
+What differs is the granularity — PUC-Lua's collector interleaves with
+allocation, so an entry vanishes during some particular allocation, while this
+port clears at a cycle boundary (`Close()`, or allocation crossing a threshold),
+so "after which allocation" has no answer. Strings, numbers and
 booleans are never weakened, exactly as in PUC-Lua.
 5. **`os.setlocale` asks the C library, so it needs cgo** — the decimal point is the one part of a locale Lua observes, and it is observed in three places: `tostring` of a number, `string.format`'s `%f`/`%e`/`%g` (but not `%a` or `%q`, which is what lets `%q` round-trip), and `tonumber`, which accepts either separator while a source literal always uses `.`. Which locales are installed is the host's business, exactly as in PUC-Lua, and a name the C library refuses answers `nil`. Built with `CGO_ENABLED=0` there is no C library to ask, so every name but `"C"` answers `nil` and the decimal point stays `.`.
 6. **`os.date` refuses a slightly different range of times, `os.time` accepts dates the host's `mktime` refuses, and `os.date("!%z")` answers the UTC offset rather than the local one** — `struct tm` keeps the year in an `int`, and the host's `gmtime`/`localtime` answer NULL once it no longer fits, which is where PUC-Lua's "date result cannot be represented in this installation" comes from. This port asks the same question against `tm_year` and reproduces the top of the range exactly — 67768036191676799 is the last representable second (year 2147485547, `tm_year` `INT_MAX`) and one more is refused — but the bottom of the host's range stops a little short of `INT_MIN`, so a window of some 2×10¹⁴ seconds at the far negative end is answered here and refused there; no second beyond that is answered by either. For `os.time`, PUC-Lua builds a time with the C library's `mktime` and reports "time result cannot be represented in this installation" when it answers -1; which dates those are is up to the C library (on macOS, anything that normalises to a year before 1900; glibc accepts those). Go's `time.Date` has no such limit, so this port answers a number. The opposite happens for `%z` under `!`: the time is UTC, but the host's `gmtime` leaves its offset at the local value, so PUC-Lua prints the local offset where this port prints `+0000`. Everything PUC-Lua itself decides is reproduced — the bounds each field must satisfy before it reaches `struct tm` ("field 'year' is out-of-bound"), the missing and non-integer fields, a result of exactly -1, and every other specifier of `os.date`.

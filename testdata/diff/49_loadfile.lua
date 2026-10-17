@@ -115,20 +115,29 @@ do
   end
   print(table.concat(log, ","))
 end
+-- 'collectgarbage' is inert here (there is no collector in this port to
+-- start or stop), so a cycle is asked for by allocating: the step an
+-- allocation drives is what runs a '__gc' (see gcStep).
+local function cycle(until_)
+  for i = 1, 2000000 do
+    local a = {}
+    if until_() then break end
+  end
+end
 do
   local n = 0
   setmetatable({}, {__gc = function() n = n + 1 end})
-  collectgarbage("collect")
+  cycle(function() return n == 1 end)
   print(show(n == 1))
-  collectgarbage("collect")
-  print(show(n == 1))
+  cycle(function() return false end)
+  print(show(n == 1))   -- a second cycle does not run it again
 end
 do
   -- a finalizer that runs when the state is closed answers nothing that
-  -- can be compared, so only the count after a full collection is asked
+  -- can be compared, so only the count after a cycle is asked
   local n = 0
   for i = 1, 5 do setmetatable({}, {__gc = function() n = n + 1 end}) end
-  collectgarbage("collect")
+  cycle(function() return n == 5 end)
   print(show(n))
 end
 print(rec(setmetatable, {}, {__gc = print}))

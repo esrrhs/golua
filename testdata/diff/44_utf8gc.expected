@@ -61,9 +61,9 @@ false|"bad argument #2 to 'utf8.offset' (number expected, got string)"
 == utf8.codes ==
 1:65 2:128512 6:67
 []
-false|"44_utf8gc.lua:97: invalid UTF-8 code"
+false|"44_utf8gc.lua:105: invalid UTF-8 code"
 false|"bad argument #1 to 'utf8.codes' (string expected, got no value)"
-true|function: 0x1040c5d04|"42"|0
+true|function: 0x100139d04|"42"|0
 1|65
 
 
@@ -74,19 +74,19 @@ true
 true
 nil
 false
-true|table: 0x7552c08c80
-true|table: 0x7552c08680
+true|table: 0x74f480dc40
+true|table: 0x74f480dd00
 "table"
 == __gc ==
 true
 2
-true|table: 0x7552c085c0
+true|table: 0x74f480e040
 == to-be-closed ==
 body,c
-false	44_utf8gc.lua:171: boom	c
-false	44_utf8gc.lua:180: boom	b,a
-true|function: 0x7552c049c0
-true|function: 0x7552c04a50
+false	44_utf8gc.lua:179: boom	c
+false	44_utf8gc.lua:188: boom	b,a
+true|function: 0x74f4c04990
+true|function: 0x74f4c04a20
 == coroutine state machine ==
 "suspended"
 true|true|1
@@ -95,13 +95,13 @@ true|false|"cannot resume dead coroutine"
 "dead"
 true|true|1
 "suspended"
-true|false|"44_utf8gc.lua:197: x"
+true|false|"44_utf8gc.lua:205: x"
 "dead"
 true
 "dead"
 true|true
 false
-thread: 0x104715988|true
+thread: 0x100791988|true
 true
 true
 false|"bad argument #1 to 'coroutine.close' (thread expected, got no value)"

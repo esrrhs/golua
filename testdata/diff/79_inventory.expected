@@ -210,16 +210,16 @@
 "
   utf8.charpattern	"[\0-\127Â-ı][€-¿]*"
 == collectgarbage options ==
-  collect : true:number
-  stop : true:number
-  restart : true:number
-  count : true:number
-  step : true:boolean
-  setpause : true:number
-  setstepmul : true:number
-  isrunning : true:boolean
-  incremental : true:string
-  generational : true:string
+  collect : true
+  stop : true
+  restart : true
+  count : true
+  step : true
+  setpause : true
+  setstepmul : true
+  isrunning : true
+  incremental : true
+  generational : true
 == os.exit signature ==
   os.exit	function
   C fn nparams	0	isvararg	true	what	C

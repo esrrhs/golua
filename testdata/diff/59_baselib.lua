@@ -5,15 +5,12 @@
 -- through the file system, so that nothing here depends on what is
 -- installed.
 --
--- One thing is deliberately not asserted: what 'collectgarbage("step")'
--- answers.  In PUC-Lua a single step almost never finishes a cycle --
--- 'lua_gc' answers true only when the collector has come back to
--- GCSpause -- so it answers false for hundreds of calls in a row, even
--- right after a full collection.  Here a step is a whole cycle, so it
--- answers true; answering false instead would leave
--- 'while not collectgarbage("step") do end' spinning forever, which is
--- worse than the difference.  The boolean is therefore turned into a
--- type.
+-- What the tuning options answer is deliberately not asserted.  There
+-- is no collector in this port to start, stop or tune -- the objects
+-- are Go's -- so 'step', 'isrunning' and the two modes are accepted and
+-- answered with 0, where PUC-Lua answers a boolean or the name of the
+-- mode it replaced.  Only that the option is accepted is asked of them
+-- here; 'count' still answers a real number.
 
 local function show(...)
   local n = select('#', ...)
@@ -155,14 +152,16 @@ print(show(require("_num")))
 print("== collectgarbage ==")
 print(rec(collectgarbage))
 print(rec(collectgarbage, "collect"))
-print(type((collectgarbage("step"))))
 print(rec(collectgarbage, "stop"))
 print(rec(collectgarbage, "restart"))
-print(rec(collectgarbage, "isrunning"))
-print(rec(collectgarbage, "incremental"))
-print(rec(collectgarbage, "generational"))
 print(rec(collectgarbage, "bogus"))
 print(type(collectgarbage("count")))
+-- only that the option is accepted: what it answers cannot be matched
+for _, o in ipairs({"step", "setpause", "setstepmul", "isrunning",
+                    "incremental", "generational"}) do
+  local ok = pcall(collectgarbage, o)
+  print(show(o, ok))
+end
 
 print("== warn ==")
 print(rec(warn, "@on"), rec(warn, "@off"), rec(warn, "message"))

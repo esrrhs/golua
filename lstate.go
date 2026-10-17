@@ -104,12 +104,17 @@ type globalState struct {
 	warnf      WarnFunc
 	udWarn     any
 	memErrMsg  *TString
-	gcDebt     int    // allocations since the last collector step
-	closing    bool   // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
-	gcMode     string // "incremental" or "generational": see baseSetMode
-	gcStopped  bool   // 'gcstp & GCSTPUSR': the program stopped the collector
-	gcPause    int    // 'gcpause': LUAI_GCPAUSE, remembered for 'setpause'
-	gcStepMul  int    // 'gcstepmul': LUAI_GCMUL, remembered for 'setstepmul'
+	gcDebt     int  // allocations since the last collector step
+	closing    bool // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
+	// The four fields below are the collector's knobs.  'collectgarbage'
+	// no longer touches them -- it has no collector to talk to -- so
+	// only the C API's 'lua_gc' (see cdl_gc_cb) reads or writes them
+	// now, and only 'gcStopped' has an effect of its own: it gates the
+	// step an allocation drives.
+	gcMode    string // "incremental" or "generational"
+	gcStopped bool   // 'gcstp & GCSTPUSR': the program stopped the collector
+	gcPause   int    // 'gcpause': LUAI_GCPAUSE, answered by 'setpause'
+	gcStepMul int    // 'gcstepmul': LUAI_GCMUL, answered by 'setstepmul'
 }
 
 // State is the Go equivalent of lua_State.
