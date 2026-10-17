@@ -389,6 +389,13 @@ func formatvarinfo(kind, name string) string {
 	if kind == "" {
 		return "" /* no information */
 	}
+	/* C writes this with "%s", and a Lua string may hold a NUL -- the
+	   constant in '"a\0b" & 1' is one -- which C's printf stops at.
+	   PUC-Lua therefore reports that constant as 'a', and so does this:
+	   without the cut the message would name bytes it never shows. */
+	if i := strings.IndexByte(name, 0); i >= 0 {
+		name = name[:i]
+	}
 	return fmt.Sprintf(" (%s '%s')", kind, name)
 }
 

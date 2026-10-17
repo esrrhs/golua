@@ -258,3 +258,50 @@ func TestMetamethods(t *testing.T) {
 	}
 	L.Pop(1)
 }
+
+// TestVarinfoStopsAtANUL pins where an error message stops naming the
+// constant it is about.
+//
+// PUC-Lua builds " (constant '...')" with printf's "%s", and C's "%s"
+// stops at a NUL -- so the constant in '"a\0b" & 1' is named 'a' and
+// nothing after it.  A Lua string can hold a NUL: only the message
+// cannot.  The port was printing the whole thing, NUL and all, which is
+// the one difference the differential fuzz found in 37 615 expressions.
+//
+// It is here rather than only in testdata/diff because the fuzz needs a
+// reference interpreter beside it, and this does not.
+func TestVarinfoStopsAtANUL(t *testing.T) {
+	/* Only the bitwise operators name the constant: 5.4 says "attempt
+	   to add a 'string' with a 'number'" for the arithmetic ones, and
+	   an index or a call names something else again. */
+	got := runChunk(t, `
+	local out = {}
+	local function say(...)
+		out[#out + 1] = select(2, pcall(...))
+	end
+	say(function() return "a\0b" & 1 end)
+	say(function() return "a\0b" | 1 end)
+	say(function() return "a\0b" ~ 1 end)
+	say(function() return "a\0b" << 1 end)
+	say(function() return "a\0b" >> 1 end)
+	say(function() return ~"a\0b" end)
+	say(function() return "ab" & 1 end)
+	say(function() return "\0" & 1 end)
+	say(function() return "\0ab" & 1 end)
+	say(function() return "abc\0def" & 1 end)
+	return table.concat(out, "\n")
+	`)
+	want := `test:6: attempt to perform bitwise operation on a string value (constant 'a')
+test:7: attempt to perform bitwise operation on a string value (constant 'a')
+test:8: attempt to perform bitwise operation on a string value (constant 'a')
+test:9: attempt to perform bitwise operation on a string value (constant 'a')
+test:10: attempt to perform bitwise operation on a string value (constant 'a')
+test:11: attempt to perform bitwise operation on a string value (constant 'a')
+test:12: attempt to perform bitwise operation on a string value (constant 'ab')
+test:13: attempt to perform bitwise operation on a string value (constant '')
+test:14: attempt to perform bitwise operation on a string value (constant '')
+test:15: attempt to perform bitwise operation on a string value (constant 'abc')`
+	if got != want {
+		t.Errorf("the constant in an error message:\n%s", sideBySide(want, got))
+	}
+}
