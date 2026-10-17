@@ -207,11 +207,26 @@ func TestPackageLoadLib(t *testing.T) {
 		t.Fatal("package.loadlib did not return nil")
 	}
 	L.Pop(1)
-	if got := globalString(t, L, "b"); !strings.Contains(got, pkDLMsg) {
-		t.Fatalf("package.loadlib message = %q", got)
-	}
-	if got := globalString(t, L, "c"); got != pkLibFail {
-		t.Fatalf("package.loadlib 'where' = %q, want %q", got, pkLibFail)
+	msg := globalString(t, L, "b")
+	where := globalString(t, L, "c")
+	/* Two builds, two answers.  With the cgo backend the message is
+	   dlerror()'s own text and LIB_FAIL is "open", exactly as in a
+	   PUC-Lua built with LUA_USE_DLOPEN; without it there is no dlopen
+	   at all and both answers say so. */
+	if pkHasDynLoad() {
+		if !strings.Contains(msg, "nosuch.so") {
+			t.Fatalf("package.loadlib message = %q, want dlerror text naming the library", msg)
+		}
+		if where != "open" {
+			t.Fatalf("package.loadlib 'where' = %q, want %q", where, "open")
+		}
+	} else {
+		if !strings.Contains(msg, pkDLMsg) {
+			t.Fatalf("package.loadlib message = %q, want it to name %q", msg, pkDLMsg)
+		}
+		if where != pkLibFail {
+			t.Fatalf("package.loadlib 'where' = %q, want %q", where, pkLibFail)
+		}
 	}
 }
 

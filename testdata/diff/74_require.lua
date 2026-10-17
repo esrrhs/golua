@@ -128,7 +128,13 @@ do
   package.path = old
 end
 P("cpath type", type(package.cpath))
-P("loadlib", show(pcall(package.loadlib, "x", "y")))
+-- The message 'package.loadlib' answers comes from dlerror when the host
+-- can dlopen and from the port when it cannot (a build without cgo), so
+-- only the shape is safe to assert.
+do
+  local ok, a, b, c = pcall(package.loadlib, "x", "y")
+  P("loadlib", ok, a, type(b), type(c), b == nil or type(b) == "string")
+end
 P("searchers", #package.searchers, type(package.searchers[1]), type(package.searchers[4]))
 P("config", (package.config:gsub("\n", "\\n")))
 P("loaded keys", type(package.loaded), type(package.loaded["string"]), type(package.loaded["_G"]))

@@ -135,6 +135,44 @@ go build -o lua ./cmd/lua
 ./lua              # REPL
 ```
 
+### 4.1 C extension modules (needs cgo)
+
+A `.so` written against the usual headers loads through `require`. The
+headers are this repository's `include/lua.h` and `include/lauxlib.h`,
+whose names are the real `lua_*` / `luaL_*` ones, so existing C sources
+compile unchanged:
+
+```c
+#include "lua.h"
+#include "lauxlib.h"
+
+static int l_add (lua_State *L) {
+  lua_pushinteger(L, luaL_checkinteger(L, 1) + luaL_checkinteger(L, 2));
+  return 1;
+}
+
+static const luaL_Reg funcs[] = {{"add", l_add}, {NULL, NULL}};
+
+int luaopen_myext (lua_State *L) {
+  luaL_newlib(L, funcs);
+  return 1;
+}
+```
+
+```bash
+# macOS: let the lua_* names stay unresolved until load time
+cc -shared -fPIC -I/path/to/fakescript_go/include \
+   -undefined dynamic_lookup -o myext.so myext.c
+# Linux: the host's symbols come from the executable's dynamic table
+cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
+
+./lua -e 'print(require("myext").add(3, 4))'   # 7
+```
+
+`package.cpath` is the platform's, so `LUA_CPATH` or `package.cpath` put
+the extension where `require` will look. See §6 item 2 for what the
+build needs and what the bridge does not cover yet.
+
 ---
 
 ## 5. Roadmap
@@ -159,17 +197,16 @@ and compared. **`all.lua` is driven file by file**, because it needs the C
 extension libraries pre-compiled; `main.lua` spawns the interpreter as a
 subprocess and is therefore included.
 
-**28 of the 31 comparable files produce byte-identical output.**
-(`all.lua` needs the C extension libraries pre-compiled and `heavy.lua`
-times out on both sides, so neither is part of the count.) The remaining
-3 differ only for reasons that follow from the design — there is no
+**29 of the 33 files produce byte-identical output.** The remaining 4
+differ only for reasons that follow from the design — there is no
 collector of our own — or from the test environment:
 
 | File | Why it differs |
 |---|---|
 | `gc` | `collectgarbage("count")` accounting, and the granularity of `collectgarbage("step", n)`: PUC-Lua's step does a bounded amount of work, so `dosteps(10) < dosteps(2)`; Go's collector is all or nothing, so a step is a whole cycle and both take one |
+| `all` | the same accounting, in the one line that prints it: `total memory: 44.7K` against `611.9K`. Everything else in the suite — including the C extension libraries `attrib`, `files`, `gengc` and `locals` load — matches |
 | `literals` | `os.setlocale("pt_BR")` is unavailable here (see §6), so the decimal-point tests are skipped |
-| `attrib` | needs the pre-compiled C extension (`package.loadlib`) |
+| `heavy` | times out on both sides (it builds 2 GB of tables); the two agree as far as the timeout lets them |
 
 Weak tables and `__gc` are supported and pass their own tests —
 `closure`, `db`, `coroutine`, `gengc`, `cstack` and `locals`, the last
@@ -182,7 +219,46 @@ PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
 interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the
 script varargs, the usage messages and the exit status.
 
-### 5.2 Performance
+### 5.2 Coverage inventory
+
+Conformance is measured by comparing outputs, but it is also worth asking
+the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
+enumerates every name the reference interpreter exposes — `_G` and the nine
+standard libraries, all thirty metamethods, all ten `collectgarbage` options,
+and the version-visible constants — and prints them sorted, so that the
+order of `pairs` (which PUC-Lua randomises per run) cannot matter. The
+answer is **byte-identical to PUC-Lua 5.4.9**, which is to say that nothing
+is missing and nothing is extra:
+
+| Table | Entries | New in 5.4 |
+|---|---|---|
+| `_G` | 36 | `warn` |
+| `string` | 17 | `pack`, `unpack`, `packsize` |
+| `math` | 35 | `LUA_COMPAT_MATHLIB` (`pow`, `frexp`, `ldexp`, `log10`, `atan2`) |
+| `debug` | 17 | `setcstacklimit`, `getuservalue`, `setuservalue` |
+| `coroutine` | 8 | `close` |
+| `table` / `io` / `os` / `utf8` / `package` | 7 / 14 / 11 / 6 / 8 | — |
+
+All thirty metamethods are recognised, including `__close`, `__gc`, `__mode`,
+`__name`, `__pairs`, `__ipairs` and `__metatable`.
+
+The behaviour that a name list cannot show is pinned by
+`testdata/diff/78_new54.lua`: `warn` and its `@on`/`@off` control messages,
+`debug.setcstacklimit` and the depth it actually buys, integer `math.random`
+(and that a given seed produces the identical sequence), the new `%q`,
+the mode argument of `load`, `table.pack`/`unpack` at their boundaries, and
+integer division and modulo on negative operands.
+
+The rest of the suite covers the areas in between — coercion and `tonumber`
+in every base, `next` and traversal while a table is being modified,
+`table.sort` with a comparator that misbehaves, `string.gsub`'s replacement
+protocol, the bitwise library, recursion depth and the two overflow errors,
+`error` objects and levels, coroutine boundaries that refuse to be crossed,
+`<close>` and `<const>`, the whole debug library, `utf8` and the byte-level
+string functions, the lexer's escapes and long strings, `require` and
+`package.searchpath`, and `os`/`io` at their edges.
+
+### 5.3 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end
@@ -211,7 +287,7 @@ a channel round trip rather than a swap of stack pointers.
 ## 6. Known differences from PUC-Lua 5.4.9
 
 1. **`file:read(n)` with a count above 2 GiB is treated as end of file** — C hands the count straight to the allocator, and it is the allocator that rejects an absurd one ("not enough memory", which a negative count always is and this port reproduces). This port will not allocate on that scale, so a count that large reads nothing. Binary chunks are not affected: `string.dump` produces the same bytes PUC-Lua 5.4.9 produces — stripped or not — and each loads the other's.
-2. **No C dynamic library loading** — `package.cpath` is the platform's, `package.loadlib` exists and answers `nil, "dynamic libraries not enabled", "absent"`, which is word for word what PUC-Lua answers when it is built without `LUA_USE_DLOPEN`; a reference build with dynamic loading answers a `dlopen` message and `"open"` instead. `package.searchpath`, the four searchers, `package.preload`, `package.loaded` and `require` are complete, including the searcher's own error format and the loop detection. Port C extensions to Go modules: `L.RequireF(modname, openf, true)` adds one to `package.loaded` (the port's `luaL_requiref`), or set `package.preload[name]` to a Go function and let `require` find it the usual way.
+2. **C extension modules load only when the host is built with cgo** — `cdlopen.go` is the `lsys_load`/`lsys_sym` half of `loadlib.c` and dlopens the library for real, so `package.cpath`, the four searchers and `require` work on an ordinary `.so` written against `lua.h`, and `package.loadlib` answers `dlerror()`'s own message with `"open"` or `"init"`, byte for byte what PUC-Lua answers. It needs cgo for one reason: a Go binary has to export the `lua_*`/`luaL_*` names into its **dynamic symbol table** for the module to resolve them, and only the cgo path can do that. Build with `CGO_ENABLED=1` (the default where a C toolchain is present) and compile the extension the way its platform allows the names to stay unresolved until load time — `-undefined dynamic_lookup` on macOS; on Linux, where the host's symbols are resolved from the executable's dynamic table, `-shared -fPIC` is enough. `go test` covers it: `cdlopen_test.go` writes a C extension with `luaL_newlib`, compiles it, `require`s it and calls into it. With `CGO_ENABLED=0` the backend is absent, `package.loadlib` answers `nil, "dynamic libraries not enabled", "absent"` — word for word what PUC-Lua answers when built without `LUA_USE_DLOPEN` — and a C module found in `package.cpath` is the error PUC-Lua gives there. Two limits of the bridge (both noted in `cdlopen.go`): `lua_error` from C raises a panic rather than unwinding the C frames, so a module that throws across its own frames is not supported yet, and the coroutine, hook and debug parts of the C API are not forwarded, so a module that calls them fails to load. Anything written in Lua, or ported to Go, needs none of this: `L.RequireF(modname, openf, true)` adds one to `package.loaded` (the port's `luaL_requiref`), or set `package.preload[name]` to a Go function and let `require` find it the usual way.
 3. **The collector is Go's, so its observable timing is not PUC-Lua's** — `collectgarbage("count")` reports the Go heap rather than PUC-Lua's own allocator, and `__gc` runs where this port runs a cycle (a collector step, `collectgarbage`, or `Close()`) rather than where PUC-Lua's step would have run it. Objects with a `__gc` are held between cycles so that Go cannot finalise them at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not — which is what C does and what makes `<close>`, `Close()` and weak tables deterministic:  a sweep removes an entry once nothing but the table refers to it. `collectgarbage("step")` is the one answer that cannot be matched: PUC-Lua answers true only when the step brought the collector back to the pause state, which a single step almost never does — it answers false for hundreds of calls in a row, even right after a full collection — while a step here is a whole cycle and answers true. Answering false instead would leave the documented idiom `while not collectgarbage("step") do end` spinning forever, which is the worse of the two.
 4. **Weak tables need two collector cycles** — a Go `weak.Pointer` is cleared in the cycle after the one that frees its object, so an entry survives one cycle longer than PUC-Lua would have kept it. Strings, numbers and booleans are never weakened, exactly as in PUC-Lua.
 5. **Only the `"C"` locale is available** — `os.setlocale` has no libc locale database behind it, so any other name returns `nil` (as PUC-Lua does when the locale is not installed). Number formatting and parsing always use `.` as the decimal point.
@@ -233,6 +309,11 @@ gofmt -l .                                  # must print nothing
 go test -bench=. -benchmem -run=XXX ./...   # benchmarks
 go build -o lua ./cmd/lua
 ```
+
+Two of those need more than Go: `cdlopen_test.go` compiles a C extension
+and `require`s it, and skips itself when there is no cgo or no C
+compiler, so `CGO_ENABLED=0 go test ./...` is a supported configuration
+that simply does not exercise the dlopen path.
 
 CI runs the whole matrix on Linux, macOS and Windows (`.github/workflows/go.yml`):
 `go vet`, `go build`, `go test` everywhere, `go test -race` on Linux and

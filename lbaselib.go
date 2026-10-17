@@ -22,16 +22,17 @@ const (
 )
 
 // ---------------------------------------------------------------------
-// luaL_tolstring (lauxlib.c)
+// lTolstring (lauxlib.c luaL_tolstring)
 // ---------------------------------------------------------------------
 
-// luaL_tolstring converts the value at 'idx' to a string using the
+// lTolstring converts the value at 'idx' to a string using the
 // '__tostring' metamethod (or '__name'), pushes the resulting string on
-// the stack and returns it (lauxlib.c luaL_tolstring).
+// the stack and returns it (lauxlib.c luaL_tolstring). The exported
+// name luaL_tolstring belongs to the C API (see cdlopen.go).
 //
 // The implementation lives in lstrlib.go (strToLString), which already
 // follows the C code step by step.
-func luaL_tolstring(L *State, idx int) string {
+func lTolstring(L *State, idx int) string {
 	return strToLString(L, idx)
 }
 
@@ -42,8 +43,8 @@ func luaL_tolstring(L *State, idx int) string {
 func basePrint(L *State) int {
 	n := L.GetTop()           /* number of arguments */
 	for i := 1; i <= n; i++ { /* for each argument */
-		s := luaL_tolstring(L, i) /* convert it to string */
-		if i > 1 {                /* not the first element? */
+		s := lTolstring(L, i) /* convert it to string */
+		if i > 1 {            /* not the first element? */
 			os.Stdout.WriteString("\t") /* add a tab before it */
 		}
 		os.Stdout.WriteString(s) /* print it */
@@ -691,7 +692,7 @@ func baseXPCall(L *State) int {
 
 func baseToString(L *State) int {
 	L.CheckAny(1)
-	luaL_tolstring(L, 1)
+	lTolstring(L, 1)
 	return 1
 }
 

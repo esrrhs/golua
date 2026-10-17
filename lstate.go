@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"unsafe"
 )
 
 const (
@@ -142,6 +143,15 @@ type State struct {
 	// luaD_closeprotected), so 'coroutine.close' can report it again.
 	lastErr Value
 	hasErr  bool
+
+	// cstate is this state as the `lua_State *` C sees.  The
+	// dynamic-loading backend (cdlopen.go, cgo only) fills it in the
+	// first time C is handed this state: it is the address of a small
+	// malloc'd block -- C never dereferences it, and cgo will not let a
+	// Go pointer be left in C memory -- whose one word is a
+	// runtime/cgo.Handle naming the state.  It is nil until then, and
+	// nil for good in a build without cgo.
+	cstate unsafe.Pointer
 }
 
 // coRuntime is the channel pair that drives a coroutine goroutine.
@@ -420,6 +430,10 @@ func (L *State) Close() {
 	// (nothing to free: the Go GC does it)
 	L.status = LUA_OK
 	L.dead = true
+	/* the block C was handed as this state's `lua_State *`, if any */
+	if releaseCState != nil {
+		releaseCState(L)
+	}
 	if L.co != nil && !L.isMain {
 		go func() { L.co.req <- &resumeReq{kind: reqClose} }()
 	}

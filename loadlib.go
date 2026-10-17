@@ -11,7 +11,6 @@
 package lua
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -113,26 +112,48 @@ func pkSetPath(L *State, fieldname, envname, dft string) {
 // dynamic loading (always fails in a static Go binary)
 // ---------------------------------------------------------------------
 
-// pkLoadSym is lsys_load: there is no dlopen in Go, so it always fails,
-// pushing an error message (lsys_sym would do the same).
-func pkLoadSym(L *State, path, sym string) error {
-	L.PushString(pkDLMsg) /* deviation: no dynamic libraries */
-	return errors.New(pkDLMsg)
+// pkDynLoadSym is lsys_load and lsys_sym, as one step: open 'path', find
+// 'sym' in it, and leave the function on the stack.
+//
+// It is nil unless the dynamic-loading backend is in the build: that
+// backend needs cgo (cdlopen.go), because the host has to export the
+// lua_* and luaL_* names for the extension to resolve.  Without it there
+// is no dlopen in a static Go binary, and every load reports why.
+var pkDynLoadSym func(L *State, path, sym string) int
+
+// releaseCState gives back whatever the dynamic-loading backend handed
+// out for a state. It is nil unless that backend is in the build.
+var releaseCState func(L *State)
+
+// pkLoadSym is pkLookForFunc's call into the loader (lsys_load plus
+// lsys_sym).  It answers 0, pkErrLib (the library could not be opened)
+// or pkErrFunc (the symbol is not in it), and leaves either the function
+// or the error message on the stack.
+func pkLoadSym(L *State, path, sym string) int {
+	if pkDynLoadSym == nil {
+		L.PushString(pkDLMsg) /* no backend: say which piece is missing */
+		return pkErrLib
+	}
+	return pkDynLoadSym(L, path, sym)
 }
+
+// pkHasDynLoad tells whether the dynamic-loading backend is in this
+// build. It is here so callers can tell "there is no dlopen in this
+// binary" apart from "dlopen was asked and said no".
+func pkHasDynLoad() bool { return pkDynLoadSym != nil }
 
 // pkLookForFunc is lookforfunc. It returns 0 (and a value on the stack)
 // on success, or an error code plus an error message.
 func pkLookForFunc(L *State, path, sym string) int {
-	if pkLoadSym(L, path, sym) != nil { /* must (and cannot) load library */
-		return pkErrLib /* unable to load library */
+	if stat := pkLoadSym(L, path, sym); stat != 0 {
+		return stat /* unable to load the library, or the symbol */
 	}
-	if sym == "*" { /* loading only library (no function)? */
-		L.PushBoolean(true) /* return 'true' */
-		return 0            /* no errors */
-	}
-	/* unreachable without dlopen: lsys_sym would push the function */
-	L.PushNil()
-	return 0
+	/* The loader has already left what lookforfunc returns: the function
+	   itself, or 'true' when only the library was asked for ("*").  C's
+	   lsys_load answers the pointer and lookforfunc pushes it; here the
+	   push has to happen where the pointer is, because a Go function
+	   value cannot be handed back as a void *. */
+	return 0 /* no errors */
 }
 
 // pkLoadFunc is loadfunc: it builds the "luaopen_X" name of a C module.
@@ -153,14 +174,32 @@ func pkLoadFunc(L *State, filename, modname string) int {
 
 // pkLoadLib is ll_loadlib: package.loadlib.
 func pkLoadLib(L *State) int {
-	L.CheckString(1) /* path */
-	L.CheckString(2) /* init */
-	/* deviation: the library is never loaded; report why. Note that C
-	   uses lua_insert here; the message is captured and re-pushed
-	   instead, which gives the same three results. */
-	L.PushNil()
-	L.PushString(pkDLMsg)
-	L.PushString(pkLibFail)
+	path := L.CheckString(1) /* path */
+	init := L.CheckString(2) /* init */
+	/* With the dynamic-loading backend this is loadlib.c's ll_loadlib
+	   exactly: ask for the function, and answer either it or nil plus
+	   the message the loader left.  Without it, report why. */
+	stat := pkLookForFunc(L, path, init)
+	if stat == 0 {
+		return 1 /* return the loaded function */
+	}
+	/* error; the message is on the stack top, under the two answers */
+	L.PushNil()  /* first result (failed) */
+	L.Insert(-2) /* put before the error message, as C does */
+	switch stat {
+	case pkErrLib:
+		/* LIB_FAIL is "open" when the build can dlopen and "absent"
+		   when it cannot */
+		if pkHasDynLoad() {
+			L.PushString("open") /* could not open the library */
+		} else {
+			L.PushString(pkLibFail)
+		}
+	case pkErrFunc:
+		L.PushString("init") /* library opened, no such function */
+	default:
+		L.PushString(pkLibFail)
+	}
 	return 3 /* return fail, error message, and where */
 }
 
@@ -268,33 +307,32 @@ func pkSearcherLua(L *State) int {
 	return pkCheckLoad(L, err, filename)
 }
 
-// pkSearcherC is searcher_C.
-//
-// deviation: Go cannot dlopen. C raises an error when the file is found
-// but cannot be loaded; here the message is returned instead, so that
-// 'require' keeps trying the remaining searchers and reports the usual
-// "module not found" error.
+// pkCheckLoadStat is checkload: 'stat' tells whether the module was
+// loaded, and when it was not, the loader's message is on the stack top
+// (where C reads it with lua_tostring(L, -1)).
+func pkCheckLoadStat(L *State, stat bool, filename string) int {
+	if stat { /* module loaded successfully? */
+		L.PushString(filename) /* will be 2nd argument to module */
+		return 2               /* return open function and file name */
+	}
+	return L.Error2("error loading module '%s' from file '%s':\n\t%s",
+		L.ToStringX(1), filename, L.ToStringX(-1))
+}
+
+// pkSearcherC is searcher_C: a file found in package.cpath is loaded as
+// a C module, and a failure to load it is a real error (C stops there,
+// it does not go on to the next searcher).
 func pkSearcherC(L *State) int {
 	name := L.CheckString(1)
 	filename, ok := pkFindFile(L, name, "cpath", pkCSUBSEP)
 	if !ok {
 		return 1 /* module not found in this path */
 	}
-	if pkLoadFunc(L, filename, name) != 0 {
-		L.Pop(1) /* remove the message pushed by lsys_load/lsys_sym */
-		L.PushString(pkDLMsg)
-		return 1
-	}
-	return pkCheckLoad(L, nil, filename)
+	return pkCheckLoadStat(L, pkLoadFunc(L, filename, name) == 0, filename)
 }
 
 // pkSearcherCRoot is searcher_Croot: a C submodule may live inside the
 // library named by the part of the module name before the first dot.
-//
-// deviation: Go cannot dlopen, so nothing can ever be loaded from the
-// root.  The search for it still happens, though, because that is what
-// contributes its "no file" lines to the message 'require' builds:
-// 'require("a.b.c")' lists "./a.so" as well as "./a/b/c.so".
 func pkSearcherCRoot(L *State) int {
 	name := L.CheckString(1)
 	dot := strings.IndexByte(name, '.')
@@ -306,9 +344,12 @@ func pkSearcherCRoot(L *State) int {
 	if !ok {
 		return 1 /* root not found */
 	}
-	if pkLoadFunc(L, filename, name) != 0 {
-		L.Pop(1) /* remove the message pushed by lsys_load/lsys_sym */
-		L.PushString(pkDLMsg)
+	if stat := pkLoadFunc(L, filename, name); stat != 0 {
+		if stat != pkErrFunc {
+			return pkCheckLoadStat(L, false, filename) /* real error */
+		}
+		/* else: open function not found */
+		L.PushString(fmt.Sprintf("no module '%s' in file '%s'", name, filename))
 		return 1
 	}
 	L.PushString(filename) /* will be 2nd argument to module */

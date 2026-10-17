@@ -1,0 +1,856 @@
+//go:build cgo
+
+// The dynamic-loading backend: what lets this port call a C extension.
+//
+// A Lua extension is a shared object exporting luaopen_<name> that calls
+// the Lua C API.  On Unix it is built *without* linking liblua, and the
+// loader resolves lua_* and luaL_* from the host binary -- so the host has
+// to export them, and a Go binary can: a //export-ed function lands in the
+// dynamic symbol table where dlopen looks.  That was measured before it
+// was relied on (a shared object whose only undefined symbol was an
+// exported Go function resolved and ran), and it needs no linker flags.
+//
+// So the names below are the real lua_* and luaL_* names, and each is a
+// thin forwarder onto the same State methods the rest of the port uses --
+// nothing here reimplements anything.
+//
+// Two details shape the file:
+//
+//   - lua_State is an opaque handle C never dereferences: it is the
+//     state's cid cast to a pointer.  No Go pointer lives in C memory
+//     (which cgo forbids) and there is nothing to allocate.
+//
+//   - Go cannot call a C function pointer, so every call into an
+//     extension goes through call_cfunction, which is ordinary C and can.
+//
+// Coverage is the core of the API -- stack, types, conversion, push,
+// get/set, call, and the auxiliary library -- which is what ordinary
+// extensions use.  The rest (coroutines, hooks, the debug API, userdata
+// values, lua_dump) is not forwarded yet; a library is opened lazily
+// (RTLD_LAZY) so that an extension that does not call them still loads,
+// and one that does gets an undefined-symbol error naming the function.
+//
+// Not done: lua_error must longjmp out of the extension's own frame
+// rather than unwind through it.  Until a setjmp lands on this side of
+// the boundary, raising from C goes through the panic path.
+package lua
+
+/*
+#include <dlfcn.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct lua_State lua_State;
+typedef long long lua_Integer;
+typedef double lua_Number;
+typedef unsigned long long lua_Unsigned;
+
+typedef int (*lua_CFunction)(lua_State *L);
+typedef const char *(*lua_Reader)(lua_State *L, void *data, size_t *size);
+
+typedef struct luaL_Reg {
+  const char *name;
+  lua_CFunction func;
+} luaL_Reg;
+
+typedef struct luaL_Buffer {
+  int ref;   // index into the host's buffer table
+} luaL_Buffer;
+
+// Go cannot call a C function pointer; these can.
+static int call_cfunction(lua_CFunction f, lua_State *L) { return f(L); }
+static const char *call_reader(lua_Reader f, lua_State *L, void *d, size_t *sz) {
+  return f(L, d, sz);
+}
+
+// PUC-Lua opens with RTLD_NOW, and the flags show up in dlerror's
+// message, so they have to match.
+static void *cdl_open(const char *path) { return dlopen(path, RTLD_NOW | RTLD_LOCAL); }
+static void *cdl_sym(void *h, const char *s) { return dlsym(h, s); }
+static const char *cdl_error(void) { return dlerror(); }
+
+static luaL_Reg *reg_at(luaL_Reg *l, int i) { return &l[i]; }
+*/
+import "C"
+
+import (
+	"runtime/cgo"
+	"sync"
+	"unsafe"
+)
+
+// ---------------------------------------------------------------------
+// lua_State as an opaque handle
+// ---------------------------------------------------------------------
+
+// A `lua_State *` has to be an address C can hold, even though C never
+// dereferences it: cgo will not let a Go pointer be left in C memory,
+// and the state is not a C object to begin with. So each state gets one
+// malloc'd word holding a runtime/cgo.Handle that names it, and that
+// address is what C carries around. Making the number up out of a Go
+// address would answer the same question, but only by converting a
+// uintptr to a pointer, which is exactly what the rules (and go vet)
+// forbid.
+func (L *State) statePtr() *C.lua_State {
+	if L.cstate == nil {
+		block := C.malloc(C.size_t(unsafe.Sizeof(uintptr(0))))
+		if block == nil {
+			panic("lua: out of memory for a lua_State handle")
+		}
+		*(*uintptr)(block) = uintptr(cgo.NewHandle(L))
+		L.cstate = block
+	}
+	return (*C.lua_State)(L.cstate)
+}
+
+func stateOf(p *C.lua_State) *State {
+	if p == nil {
+		panic("lua: C handed back a null lua_State")
+	}
+	h := cgo.Handle(*(*uintptr)(unsafe.Pointer(p)))
+	L, ok := h.Value().(*State)
+	if !ok {
+		panic("lua: C handed back an unknown lua_State")
+	}
+	return L
+}
+
+// cgoReleaseState gives back the handle a state's block holds. It is
+// called from State.Close, which is in a file built either way, hence
+// the indirection: without cgo there is no block and nothing to give
+// back.
+func cgoReleaseState(L *State) {
+	if L.cstate == nil {
+		return
+	}
+	cgo.Handle(*(*uintptr)(L.cstate)).Delete()
+	C.free(L.cstate)
+	L.cstate = nil
+}
+
+// cFunc wraps a C function pointer as the GoFunc the VM calls: the VM
+// sees an ordinary closure, and the closure crosses into C.
+func cFunc(f unsafe.Pointer) GoFunc {
+	return func(L *State) int {
+		return int(C.call_cfunction(C.lua_CFunction(f), L.statePtr()))
+	}
+}
+
+func cBool(b bool) C.int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// ---------------------------------------------------------------------
+// stack
+// ---------------------------------------------------------------------
+
+//export lua_gettop
+func lua_gettop(p *C.lua_State) C.int { return C.int(stateOf(p).GetTop()) }
+
+//export lua_settop
+func lua_settop(p *C.lua_State, idx C.int) { stateOf(p).SetTop(int(idx)) }
+
+//export lua_absindex
+func lua_absindex(p *C.lua_State, idx C.int) C.int { return C.int(stateOf(p).AbsIndex(int(idx))) }
+
+//export lua_checkstack
+func lua_checkstack(p *C.lua_State, n C.int) C.int { return cBool(stateOf(p).CheckStack(int(n))) }
+
+//export lua_rotate
+func lua_rotate(p *C.lua_State, idx, n C.int) { stateOf(p).Rotate(int(idx), int(n)) }
+
+//export lua_copy
+func lua_copy(p *C.lua_State, from, to C.int) { stateOf(p).Copy(int(from), int(to)) }
+
+//export lua_closeslot
+func lua_closeslot(p *C.lua_State, idx C.int) {
+	L := stateOf(p)
+	/* luaF_close on the given level; there is nothing to close in a
+	   frame the VM owns until to-be-closed variables reach it. */
+	L.CloseSlotAt(int(idx))
+}
+
+//export lua_pop
+func lua_pop(p *C.lua_State, n C.int) { stateOf(p).SetTop(-int(n) - 1) }
+
+//export lua_insert
+func lua_insert(p *C.lua_State, idx C.int) { stateOf(p).Rotate(int(idx), 1) }
+
+//export lua_remove
+func lua_remove(p *C.lua_State, idx C.int) {
+	L := stateOf(p)
+	L.Rotate(int(idx), -1)
+	L.Pop(1)
+}
+
+// ---------------------------------------------------------------------
+// types
+// ---------------------------------------------------------------------
+
+//export lua_type
+func lua_type(p *C.lua_State, idx C.int) C.int { return C.int(stateOf(p).Type(idxInt(idx))) }
+
+//export lua_typename
+func lua_typename(p *C.lua_State, tp C.int) *C.char { return C.CString(TypeName(int(tp))) }
+
+//export lua_isnil
+func lua_isnil(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsNil(idxInt(idx))) }
+
+//export lua_isboolean
+func lua_isboolean(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsBoolean(idxInt(idx))) }
+
+//export lua_isnumber
+func lua_isnumber(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsNumber(idxInt(idx))) }
+
+//export lua_isinteger
+func lua_isinteger(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsInteger(idxInt(idx))) }
+
+//export lua_isstring
+func lua_isstring(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsString(idxInt(idx))) }
+
+//export lua_istable
+func lua_istable(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsTable(idxInt(idx))) }
+
+//export lua_isthread
+func lua_isthread(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsThread(idxInt(idx))) }
+
+//export lua_isuserdata
+func lua_isuserdata(p *C.lua_State, idx C.int) C.int {
+	return cBool(stateOf(p).IsUserData(idxInt(idx)))
+}
+
+//export lua_islightuserdata
+func lua_islightuserdata(p *C.lua_State, idx C.int) C.int {
+	return cBool(stateOf(p).IsLightUserData(idxInt(idx)))
+}
+
+//export lua_isfunction
+func lua_isfunction(p *C.lua_State, idx C.int) C.int {
+	return cBool(stateOf(p).IsFunction(idxInt(idx)))
+}
+
+//export lua_iscfunction
+func lua_iscfunction(p *C.lua_State, idx C.int) C.int {
+	return cBool(stateOf(p).IsGoFunction(idxInt(idx)))
+}
+
+//export lua_isnone
+func lua_isnone(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsNone(idxInt(idx))) }
+
+//export lua_isnoneornil
+func lua_isnoneornil(p *C.lua_State, idx C.int) C.int {
+	return cBool(stateOf(p).IsNoneOrNil(idxInt(idx)))
+}
+
+//export lua_rawequal
+func lua_rawequal(p *C.lua_State, a, b C.int) C.int {
+	return cBool(stateOf(p).RawEqual(idxInt(a), idxInt(b)))
+}
+
+func idxInt(i C.int) int { return int(i) }
+
+// ---------------------------------------------------------------------
+// conversion
+// ---------------------------------------------------------------------
+
+//export lua_tonumberx
+func lua_tonumberx(p *C.lua_State, idx C.int, isnum *C.int) C.lua_Number {
+	n, ok := stateOf(p).ToNumber(idxInt(idx))
+	if isnum != nil {
+		*isnum = cBool(ok)
+	}
+	return C.lua_Number(n)
+}
+
+//export lua_tointegerx
+func lua_tointegerx(p *C.lua_State, idx C.int, isnum *C.int) C.lua_Integer {
+	n, ok := stateOf(p).ToInteger(idxInt(idx))
+	if isnum != nil {
+		*isnum = cBool(ok)
+	}
+	return C.lua_Integer(n)
+}
+
+//export lua_toboolean
+func lua_toboolean(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).ToBoolean(idxInt(idx))) }
+
+//export lua_tolstring
+func lua_tolstring(p *C.lua_State, idx C.int, l *C.size_t) *C.char {
+	s, _ := stateOf(p).ToString(idxInt(idx))
+	if l != nil {
+		*l = C.size_t(len(s))
+	}
+	return C.CString(s)
+}
+
+//export lua_tostring
+func lua_tostring(p *C.lua_State, idx C.int) *C.char { return lua_tolstring(p, idx, nil) }
+
+//export lua_tonumber
+func lua_tonumber(p *C.lua_State, idx C.int) C.lua_Number { return lua_tonumberx(p, idx, nil) }
+
+//export lua_tointeger
+func lua_tointeger(p *C.lua_State, idx C.int) C.lua_Integer { return lua_tointegerx(p, idx, nil) }
+
+//export lua_rawlen
+func lua_rawlen(p *C.lua_State, idx C.int) C.lua_Unsigned {
+	return C.lua_Unsigned(stateOf(p).RawLen(idxInt(idx)))
+}
+
+//export lua_touserdata
+func lua_touserdata(p *C.lua_State, idx C.int) unsafe.Pointer {
+	ud := stateOf(p).ToUserData(idxInt(idx))
+	if p2, ok := ud.(unsafe.Pointer); ok {
+		return p2
+	}
+	return nil
+}
+
+//export lua_topointer
+func lua_topointer(p *C.lua_State, idx C.int) unsafe.Pointer {
+	return ptrOf(stateOf(p).ToPointer(idxInt(idx)))
+}
+
+var (
+	ptrMu   sync.Mutex
+	ptrAddr = map[uintptr]unsafe.Pointer{}
+)
+
+// ptrOf answers the address lua_topointer hands back for a value. C uses
+// it as an identity, not as something to dereference, but it still has
+// to be an address rather than a number turned into one, so each
+// distinct value gets a one-byte block that is then always answered for
+// it. The blocks are never freed: there is no point at which C is known
+// to have finished with one.
+func ptrOf(v uintptr) unsafe.Pointer {
+	if v == 0 {
+		return nil /* as in C: no pointer to answer */
+	}
+	ptrMu.Lock()
+	defer ptrMu.Unlock()
+	p, ok := ptrAddr[v]
+	if !ok {
+		p = C.malloc(1)
+		if p == nil {
+			panic("lua: out of memory for a value's identity")
+		}
+		ptrAddr[v] = p
+	}
+	return p
+}
+
+// ---------------------------------------------------------------------
+// push
+// ---------------------------------------------------------------------
+
+//export lua_pushnil
+func lua_pushnil(p *C.lua_State) { stateOf(p).PushNil() }
+
+//export lua_pushnumber
+func lua_pushnumber(p *C.lua_State, n C.lua_Number) { stateOf(p).PushNumber(float64(n)) }
+
+//export lua_pushinteger
+func lua_pushinteger(p *C.lua_State, n C.lua_Integer) { stateOf(p).PushInteger(int64(n)) }
+
+//export lua_pushlstring
+func lua_pushlstring(p *C.lua_State, s *C.char, l C.size_t) *C.char {
+	stateOf(p).PushBytes([]byte(C.GoStringN(s, C.int(l))))
+	return s
+}
+
+//export lua_pushstring
+func lua_pushstring(p *C.lua_State, s *C.char) *C.char {
+	if s == nil {
+		stateOf(p).PushNil()
+		return nil
+	}
+	stateOf(p).PushString(C.GoString(s))
+	return s
+}
+
+//export lua_pushboolean
+func lua_pushboolean(p *C.lua_State, b C.int) { stateOf(p).PushBoolean(b != 0) }
+
+//export lua_pushcclosure
+func lua_pushcclosure(p *C.lua_State, f C.lua_CFunction, n C.int) {
+	stateOf(p).PushGoClosure(cFunc(unsafe.Pointer(f)), int(n))
+}
+
+//export lua_pushlightuserdata
+func lua_pushlightuserdata(p *C.lua_State, ud unsafe.Pointer) { stateOf(p).PushLightUserData(ud) }
+
+//export lua_pushvalue
+func lua_pushvalue(p *C.lua_State, idx C.int) { stateOf(p).PushValue(idxInt(idx)) }
+
+//export lua_pushglobaltable
+func lua_pushglobaltable(p *C.lua_State) { stateOf(p).PushGlobalTable() }
+
+// ---------------------------------------------------------------------
+// get and set
+// ---------------------------------------------------------------------
+
+//export lua_getglobal
+func lua_getglobal(p *C.lua_State, name *C.char) C.int {
+	return C.int(stateOf(p).GetGlobal(C.GoString(name)))
+}
+
+//export lua_gettable
+func lua_gettable(p *C.lua_State, idx C.int) C.int { return C.int(stateOf(p).GetTable(idxInt(idx))) }
+
+//export lua_getfield
+func lua_getfield(p *C.lua_State, idx C.int, k *C.char) C.int {
+	return C.int(stateOf(p).GetField(idxInt(idx), C.GoString(k)))
+}
+
+//export lua_geti
+func lua_geti(p *C.lua_State, idx C.int, n C.lua_Integer) C.int {
+	return C.int(stateOf(p).GetI(idxInt(idx), int64(n)))
+}
+
+//export lua_rawget
+func lua_rawget(p *C.lua_State, idx C.int) C.int { return C.int(stateOf(p).RawGet(idxInt(idx))) }
+
+//export lua_rawgeti
+func lua_rawgeti(p *C.lua_State, idx C.int, n C.lua_Integer) C.int {
+	return C.int(stateOf(p).RawGetI(idxInt(idx), int64(n)))
+}
+
+//export lua_getmetatable
+func lua_getmetatable(p *C.lua_State, idx C.int) C.int {
+	return cBool(stateOf(p).GetMetaTable(idxInt(idx)))
+}
+
+//export lua_createtable
+func lua_createtable(p *C.lua_State, narr, nrec C.int) { stateOf(p).CreateTable(int(narr), int(nrec)) }
+
+//export lua_newtable
+func lua_newtable(p *C.lua_State) { stateOf(p).CreateTable(0, 0) }
+
+//export lua_setglobal
+func lua_setglobal(p *C.lua_State, name *C.char) { stateOf(p).SetGlobal(C.GoString(name)) }
+
+//export lua_settable
+func lua_settable(p *C.lua_State, idx C.int) { stateOf(p).SetTable(idxInt(idx)) }
+
+//export lua_setfield
+func lua_setfield(p *C.lua_State, idx C.int, k *C.char) {
+	stateOf(p).SetField(idxInt(idx), C.GoString(k))
+}
+
+//export lua_seti
+func lua_seti(p *C.lua_State, idx C.int, n C.lua_Integer) { stateOf(p).SetI(idxInt(idx), int64(n)) }
+
+//export lua_rawset
+func lua_rawset(p *C.lua_State, idx C.int) { stateOf(p).RawSet(idxInt(idx)) }
+
+//export lua_rawseti
+func lua_rawseti(p *C.lua_State, idx C.int, n C.lua_Integer) {
+	stateOf(p).RawSetI(idxInt(idx), int64(n))
+}
+
+//export lua_setmetatable
+func lua_setmetatable(p *C.lua_State, idx C.int) C.int {
+	L := stateOf(p)
+	had := L.GetMetaTable(idxInt(idx)) /* PUC-Lua answers 1 when there was one */
+	L.SetMetaTable(idxInt(idx))
+	_ = had
+	return 1
+}
+
+//export lua_next
+func lua_next(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).Next(idxInt(idx))) }
+
+//export lua_len
+func lua_len(p *C.lua_State, idx C.int) { stateOf(p).Len(idxInt(idx)) }
+
+//export lua_concat
+func lua_concat(p *C.lua_State, n C.int) { stateOf(p).Concat(int(n)) }
+
+//export lua_compare
+func lua_compare(p *C.lua_State, a, b, op C.int) C.int {
+	L := stateOf(p)
+	i, j := idxInt(a), idxInt(b)
+	switch op {
+	case 0: /* LUA_OPEQ */
+		return cBool(L.Equal(i, j))
+	case 1: /* LUA_OPLT */
+		return cBool(L.LessThan(i, j))
+	case 2: /* LUA_OPLE */
+		return cBool(L.Equal(i, j) || L.LessThan(i, j))
+	}
+	return 0
+}
+
+//export lua_arith
+func lua_arith(p *C.lua_State, op C.int) { stateOf(p).Arith(int(op)) }
+
+//export lua_newuserdatauv
+func lua_newuserdatauv(p *C.lua_State, sz C.size_t, uv C.int) unsafe.Pointer {
+	L := stateOf(p)
+	buf := make([]byte, int(sz))
+	v := L.NewUserData(buf, int(uv))
+	if p, ok := v.(unsafe.Pointer); ok {
+		return p
+	}
+	return unsafe.Pointer(&buf[0])
+}
+
+//export lua_newuserdata
+func lua_newuserdata(p *C.lua_State, sz C.size_t) unsafe.Pointer { return lua_newuserdatauv(p, sz, 1) }
+
+// ---------------------------------------------------------------------
+// load, call, error
+// ---------------------------------------------------------------------
+
+//export lua_call
+func lua_call(p *C.lua_State, nargs, nresults C.int) { stateOf(p).Call(int(nargs), int(nresults)) }
+
+//export lua_pcall
+func lua_pcall(p *C.lua_State, nargs, nresults, msgh C.int) C.int {
+	return C.int(stateOf(p).PCall(int(nargs), int(nresults), int(msgh)))
+}
+
+//export lua_error
+func lua_error(p *C.lua_State) C.int {
+	// TODO: must longjmp, not unwind through the extension's frames.
+	stateOf(p).Error()
+	return 0
+}
+
+//export lua_load
+func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
+	chunkname, mode *C.char) C.int {
+	L := stateOf(p)
+	name := C.GoString(chunkname)
+	m := ""
+	if mode != nil {
+		m = C.GoString(mode)
+	}
+	if reader == nil { /* load from a string the caller put behind 'data' */
+		src := C.GoString((*C.char)(data))
+		return C.int(cdlStatus(L.LoadBytesMode([]byte(src), name, m)))
+	}
+	return C.int(cdlStatus(L.LoadStream(nil, func() []byte {
+		var sz C.size_t
+		cs := C.call_reader(reader, p, data, &sz)
+		if cs == nil || sz == 0 {
+			return nil
+		}
+		return []byte(C.GoStringN(cs, C.int(sz)))
+	}, name, m)))
+}
+
+// ---------------------------------------------------------------------
+// the auxiliary library
+// ---------------------------------------------------------------------
+
+//export luaL_checkversion_
+func luaL_checkversion_(p *C.lua_State, ver C.lua_Number, sz C.size_t) {}
+
+//export luaL_checkinteger
+func luaL_checkinteger(p *C.lua_State, arg C.int) C.lua_Integer {
+	return C.lua_Integer(stateOf(p).CheckInteger(int(arg)))
+}
+
+//export luaL_optinteger
+func luaL_optinteger(p *C.lua_State, arg C.int, def C.lua_Integer) C.lua_Integer {
+	return C.lua_Integer(stateOf(p).OptInteger(int(arg), int64(def)))
+}
+
+//export luaL_checknumber
+func luaL_checknumber(p *C.lua_State, arg C.int) C.lua_Number {
+	return C.lua_Number(stateOf(p).CheckNumber(int(arg)))
+}
+
+//export luaL_optnumber
+func luaL_optnumber(p *C.lua_State, arg C.int, def C.lua_Number) C.lua_Number {
+	return C.lua_Number(stateOf(p).OptNumber(int(arg), float64(def)))
+}
+
+//export luaL_checklstring
+func luaL_checklstring(p *C.lua_State, arg C.int, l *C.size_t) *C.char {
+	s := stateOf(p).CheckString(int(arg))
+	if l != nil {
+		*l = C.size_t(len(s))
+	}
+	return C.CString(s)
+}
+
+//export luaL_optlstring
+func luaL_optlstring(p *C.lua_State, arg C.int, def *C.char, l *C.size_t) *C.char {
+	L := stateOf(p)
+	s := L.OptString(int(arg), "")
+	if s == "" && def != nil {
+		s = C.GoString(def)
+	}
+	if l != nil {
+		*l = C.size_t(len(s))
+	}
+	return C.CString(s)
+}
+
+//export luaL_checktype
+func luaL_checktype(p *C.lua_State, arg, t C.int) { stateOf(p).CheckType(int(arg), int(t)) }
+
+//export luaL_checkany
+func luaL_checkany(p *C.lua_State, arg C.int) { stateOf(p).CheckAny(int(arg)) }
+
+//export luaL_checkstack
+func luaL_checkstack(p *C.lua_State, sz C.int, msg *C.char) {
+	stateOf(p).CheckStack2(int(sz), C.GoString(msg))
+}
+
+//export luaL_argerror
+func luaL_argerror(p *C.lua_State, arg C.int, msg *C.char) C.int {
+	stateOf(p).ArgError(int(arg), C.GoString(msg))
+	return 0
+}
+
+//export luaL_typeerror
+func luaL_typeerror(p *C.lua_State, arg C.int, tname *C.char) C.int {
+	stateOf(p).TypeError(int(arg), C.GoString(tname))
+	return 0
+}
+
+//export luaL_error
+func luaL_error(p *C.lua_State, fmt *C.char) C.int {
+	stateOf(p).Error2("%s", C.GoString(fmt))
+	return 0
+}
+
+//export luaL_setfuncs
+func luaL_setfuncs(p *C.lua_State, l *C.luaL_Reg, nup C.int) {
+	L := stateOf(p)
+	if l == nil {
+		return
+	}
+	n := int(nup)
+	var regs []Reg
+	for i := 0; ; i++ {
+		r := C.reg_at(l, C.int(i))
+		if r == nil || r.name == nil {
+			break
+		}
+		name := C.GoString(r.name)
+		// luaL_Reg is {const char *name; lua_CFunction func;}, and the
+		// field is called 'func' -- which Go cannot spell -- so it is
+		// read at its offset: one pointer past 'name'.
+		fn := *(*unsafe.Pointer)(unsafe.Pointer(uintptr(unsafe.Pointer(r)) +
+			unsafe.Sizeof(r.name)))
+		regs = append(regs, Reg{Name: name, Func: cFunc(fn)})
+	}
+	L.SetFuncs(regs, n)
+}
+
+//export luaL_getsubtable
+func luaL_getsubtable(p *C.lua_State, idx C.int, fname *C.char) C.int {
+	return cBool(stateOf(p).GetSubTable(idxInt(idx), C.GoString(fname)))
+}
+
+//export luaL_ref
+func luaL_ref(p *C.lua_State, t C.int) C.int { return C.int(stateOf(p).Ref(idxInt(t))) }
+
+//export luaL_unref
+func luaL_unref(p *C.lua_State, t, ref C.int) { stateOf(p).Unref(idxInt(t), idxInt(ref)) }
+
+//export luaL_len
+func luaL_len(p *C.lua_State, idx C.int) C.lua_Integer {
+	return C.lua_Integer(stateOf(p).Len2(idxInt(idx)))
+}
+
+//export luaL_tolstring
+func luaL_tolstring(p *C.lua_State, idx C.int, l *C.size_t) *C.char {
+	s := stateOf(p).ToStringX(idxInt(idx))
+	if l != nil {
+		*l = C.size_t(len(s))
+	}
+	return C.CString(s)
+}
+
+//export luaL_callmeta
+func luaL_callmeta(p *C.lua_State, obj C.int, e *C.char) C.int {
+	return cBool(stateOf(p).CallMeta(idxInt(obj), C.GoString(e)))
+}
+
+//export luaL_getmetafield
+func luaL_getmetafield(p *C.lua_State, obj C.int, e *C.char) C.int {
+	return cBool(stateOf(p).GetMetaField(idxInt(obj), C.GoString(e)) != LUA_TNIL)
+}
+
+//export luaL_where
+func luaL_where(p *C.lua_State, lvl C.int) { stateOf(p).Where2(int(lvl)) }
+
+//export luaL_loadstring
+func luaL_loadstring(p *C.lua_State, s *C.char) C.int {
+	return C.int(cdlStatus(stateOf(p).LoadString(C.GoString(s), C.GoString(s))))
+}
+
+//export luaL_loadbufferx
+func luaL_loadbufferx(p *C.lua_State, buff *C.char, sz C.size_t, name, mode *C.char) C.int {
+	m := ""
+	if mode != nil {
+		m = C.GoString(mode)
+	}
+	return C.int(cdlStatus(stateOf(p).LoadBytesMode([]byte(C.GoStringN(buff, C.int(sz))), C.GoString(name), m)))
+}
+
+//export luaL_traceback
+func luaL_traceback(p *C.lua_State, l1 *C.lua_State, msg *C.char, level C.int) {
+	L := stateOf(p)
+	var from *State
+	if l1 != nil {
+		from = stateOf(l1)
+	}
+	m := ""
+	if msg != nil {
+		m = C.GoString(msg)
+		L.Traceback(from, m, true, int(level))
+		return
+	}
+	L.Traceback(from, "", false, int(level))
+}
+
+//export luaL_requiref
+func luaL_requiref(p *C.lua_State, name *C.char, openf C.lua_CFunction, glb C.int) {
+	L := stateOf(p)
+	var f GoFunc
+	if openf != nil {
+		f = cFunc(unsafe.Pointer(openf))
+	}
+	L.RequireF(C.GoString(name), f, glb != 0)
+}
+
+// ---------------------------------------------------------------------
+// the buffer API
+// ---------------------------------------------------------------------
+
+var (
+	cgoBufMu   sync.Mutex
+	cgoBufs    = map[int]*Buffer{}
+	cgoBufNext int
+)
+
+//export luaL_buffinit
+func luaL_buffinit(p *C.lua_State, b *C.luaL_Buffer) {
+	if b == nil {
+		return
+	}
+	L := stateOf(p)
+	buf := L.NewBuffer()
+	cgoBufMu.Lock()
+	cgoBufNext++
+	id := cgoBufNext
+	cgoBufs[id] = buf
+	cgoBufMu.Unlock()
+	b.ref = C.int(id)
+}
+
+func bufOf(b *C.luaL_Buffer) *Buffer {
+	if b == nil {
+		return nil
+	}
+	cgoBufMu.Lock()
+	buf := cgoBufs[int(b.ref)]
+	cgoBufMu.Unlock()
+	return buf
+}
+
+//export luaL_addchar_
+func luaL_addchar_(b *C.luaL_Buffer, c C.char) {
+	if buf := bufOf(b); buf != nil {
+		buf.AddChar(byte(c))
+	}
+}
+
+//export luaL_addlstring
+func luaL_addlstring(b *C.luaL_Buffer, s *C.char, l C.size_t) {
+	if buf := bufOf(b); buf != nil {
+		buf.AddBytes([]byte(C.GoStringN(s, C.int(l))))
+	}
+}
+
+//export luaL_addstring
+func luaL_addstring(b *C.luaL_Buffer, s *C.char) {
+	if buf := bufOf(b); buf != nil && s != nil {
+		buf.AddString(C.GoString(s))
+	}
+}
+
+//export luaL_addvalue
+func luaL_addvalue(b *C.luaL_Buffer) {
+	if buf := bufOf(b); buf != nil {
+		buf.AddValue()
+	}
+}
+
+//export luaL_pushresult
+func luaL_pushresult(b *C.luaL_Buffer) {
+	if buf := bufOf(b); buf != nil {
+		buf.PushResult()
+	}
+}
+
+//export luaL_pushresultsize
+func luaL_pushresultsize(b *C.luaL_Buffer, sz C.size_t) { luaL_pushresult(b) }
+
+//export luaL_prepbuffsize
+func luaL_prepbuffsize(b *C.luaL_Buffer, sz C.size_t) *C.char { return nil }
+
+// ---------------------------------------------------------------------
+// lsys_load / lsys_sym: what loadlib.go calls
+// ---------------------------------------------------------------------
+
+// cdlHandles remembers the dlopen handles so a library is never unloaded
+// while its functions are still reachable.
+var cdlHandles sync.Map // path -> unsafe.Pointer
+
+// cgoLoadSym is lsys_load and lsys_sym together.  It opens 'path', finds
+// 'sym' in it, and leaves the function on the stack; with sym == "*" the
+// library is only opened and true is left instead, as in loadlib.c.
+//
+// It answers pkErrLib when the library will not open and pkErrFunc when
+// the symbol is not in it, and in both cases leaves dlerror's message --
+// which is what PUC-Lua pushes, so the two agree word for word.
+func cgoLoadSym(L *State, path, sym string) int {
+	cpath := C.CString(path)
+	defer C.free(unsafe.Pointer(cpath))
+	h := C.cdl_open(cpath)
+	if h == nil {
+		L.PushString(cdlErrMsg())
+		return pkErrLib
+	}
+	cdlHandles.Store(path, unsafe.Pointer(h))
+	if sym == "*" { /* loading only the library (no function)? */
+		L.PushBoolean(true)
+		return 0
+	}
+	csym := C.CString(sym)
+	defer C.free(unsafe.Pointer(csym))
+	fp := C.cdl_sym(h, csym)
+	if fp == nil {
+		L.PushString(cdlErrMsg())
+		return pkErrFunc
+	}
+	L.PushGoFunc(cFunc(fp))
+	return 0
+}
+
+// cdlErrMsg is the last dlopen/dlsym message, which is what loadlib.c
+// puts in the error: "dlopen(x, 0x0006): tried: ...".
+func cdlErrMsg() string {
+	if msg := C.cdl_error(); msg != nil {
+		return C.GoString(msg)
+	}
+	return "unknown dynamic loading error"
+}
+
+// init puts the loader where loadlib.go looks for it.  With cgo -- which
+// this whole file requires -- an extension resolves lua_* and luaL_*
+// against this binary, so require can find a C module in cpath.
+func init() {
+	pkDynLoadSym = cgoLoadSym
+	releaseCState = cgoReleaseState
+}

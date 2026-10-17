@@ -143,14 +143,15 @@
 归一化掉程序路径、`0x…` 地址、耗时、`os.tmpname` 结果、随机数种子后逐字节比对
 （`all.lua` 需要预编译 C 扩展，改为按文件驱动；`main.lua` 会派生子进程，也包含在内）。
 
-**31 个可比用例中 28 个输出完全一致**（`all.lua` 需要预编译 C 扩展，`heavy.lua`
-两边都超时，都不计入）。其余 3 个的差异全部来自设计取舍（没有自己的收集器）或测试环境：
+**33 个用例中 29 个输出完全一致**。其余 4 个的差异全部来自设计取舍
+（没有自己的收集器）或测试环境：
 
 | 用例 | 差异原因 |
 |---|---|
 | `gc` | 两处口径：`collectgarbage("count")` 报的是 Go 堆（PUC-Lua 报自己的分配器）；`collectgarbage("step", n)` 的粒度——PUC-Lua 的 step 只做定量工作，故 `dosteps(10) < dosteps(2)`，而 Go 的收集器要么全做要么不做，一次 step 就是一整轮，两边都是 1 次 |
+| `all` | 同一处口径，只出现在打印它的那一行：`total memory: 44.7K` 对 `611.9K`。套件其余部分全部吻合——包括 `attrib`、`files`、`gengc`、`locals` 加载的 C 扩展库 |
 | `literals` | `os.setlocale("pt_BR")` 在本实现不可用（见 §7），跳过了小数点用例 |
-| `attrib` | 需要预编译的 C 扩展（`package.loadlib`） |
+| `heavy` | 两边都超时（它要构造 2 GB 的表）；在超时截断之前两边一致 |
 
 弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、`gengc`、
 `cstack`、`locals`（后两个用 `require"tracegc"` 数回收次数），做法见 §7。
@@ -159,7 +160,38 @@
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
 
-### 5.2 性能
+### 5.2 覆盖盘点
+
+一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
+`testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
+`_G` 与九个标准库、全部三十个元方法、`collectgarbage` 的十个选项、以及版本可见的常量——
+排序后打印，这样 `pairs` 的顺序（PUC-Lua 每次运行都随机化）就不会造成影响。
+答案是**与 PUC-Lua 5.4.9 逐字节一致**，也就是说没有缺项，也没有多项：
+
+| 表 | 条目数 | 5.4 新增 |
+|---|---|---|
+| `_G` | 36 | `warn` |
+| `string` | 17 | `pack`、`unpack`、`packsize` |
+| `math` | 35 | `LUA_COMPAT_MATHLIB`（`pow`、`frexp`、`ldexp`、`log10`、`atan2`） |
+| `debug` | 17 | `setcstacklimit`、`getuservalue`、`setuservalue` |
+| `coroutine` | 8 | `close` |
+| `table` / `io` / `os` / `utf8` / `package` | 7 / 14 / 11 / 6 / 8 | — |
+
+三十个元方法全部被识别，含 `__close`、`__gc`、`__mode`、`__name`、`__pairs`、
+`__ipairs`、`__metatable`。
+
+名字列表看不出来的行为，由 `testdata/diff/78_new54.lua` 钉住：`warn` 及其
+`@on`/`@off` 控制消息、`debug.setcstacklimit` 与它实际换来的栈深、整数版
+`math.random`（以及同一种子产出完全相同的序列）、新的 `%q`、`load` 的 mode 参数、
+`table.pack`/`unpack` 的边界、以及负数上的整数除法与取模。
+
+其余用例覆盖夹在中间的地带：各种进制下的强制转换与 `tonumber`、表被修改时的
+`next` 与遍历、比较器不规矩时的 `table.sort`、`string.gsub` 的替换协议、位库、
+递归深度与两种溢出错误、`error` 对象与 level、跨不过去的协程边界、`<close>` 与
+`<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
+`require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
+
+### 5.3 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时
@@ -231,12 +263,48 @@ go build -o lua ./cmd/lua
 ./lua                 # REPL
 ```
 
+### 6.1 加载 C 扩展模块（需要 cgo）
+
+按常规头文件写的 `.so` 可以经 `require` 直接加载。头文件用本仓库的
+`include/lua.h` 与 `include/lauxlib.h`，里面的名字就是真的 `lua_*` / `luaL_*`，
+所以现成的 C 源码无需改动即可编译：
+
+```c
+#include "lua.h"
+#include "lauxlib.h"
+
+static int l_add (lua_State *L) {
+  lua_pushinteger(L, luaL_checkinteger(L, 1) + luaL_checkinteger(L, 2));
+  return 1;
+}
+
+static const luaL_Reg funcs[] = {{"add", l_add}, {NULL, NULL}};
+
+int luaopen_myext (lua_State *L) {
+  luaL_newlib(L, funcs);
+  return 1;
+}
+```
+
+```bash
+# macOS：让 lua_* 这些名字留到加载时再解析
+cc -shared -fPIC -I/path/to/fakescript_go/include \
+   -undefined dynamic_lookup -o myext.so myext.c
+# Linux：宿主符号从可执行文件的动态表里来
+cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
+
+./lua -e 'print(require("myext").add(3, 4))'   # 7
+```
+
+`package.cpath` 与平台一致，用 `LUA_CPATH` 或 `package.cpath` 把扩展放到
+`require` 会找的地方即可。构建前提与桥接尚未覆盖的部分见 §7 第 2 条。
+
 ---
 
 ## 7. 已知差异与限制（相对 PUC-Lua 5.4.9）
 
 1. **`file:read(n)` 的计数超过 2 GiB 时按文件末尾处理**：C 把计数直接交给分配器，荒谬的计数是被分配器拒绝的（报 "not enough memory"；负数计数必然如此，本实现已还原这一点）。本实现不会做那个量级的分配，所以过大的计数读到空。二进制 chunk 不受影响：`string.dump` 产出的字节与 PUC-Lua 5.4.9 **完全一致**（strip 与否都一样），两边互相都能加载对方的产物。
-2. **不加载 C 动态库**：`package.cpath` 与平台一致；`package.loadlib` 返回 `nil, "dynamic libraries not enabled", "absent"`——这正是 PUC-Lua 在没有 `LUA_USE_DLOPEN` 时逐字的回答，开了动态加载的参考构建则返回一条 `dlopen` 消息加 `"open"`。`package.searchpath`、四个 searcher、`package.preload`、`package.loaded`、`require` 全部完整，含 searcher 自己的报错格式与循环检测。C 扩展请用 Go 模块改写：`L.RequireF(modname, openf, true)` 把模块放进 `package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，让 `require` 照常找到它。
+2. **加载 C 扩展模块需要宿主带 cgo 构建**：`cdlopen.go` 就是 `loadlib.c` 里 `lsys_load`/`lsys_sym` 那一半，会真的 dlopen 目标库，所以 `package.cpath`、四个 searcher 与 `require` 能直接吃按 `lua.h` 写的普通 `.so`，`package.loadlib` 返回的是 `dlerror()` 自己的消息加 `"open"` 或 `"init"`——与 PUC-Lua 逐字节相同。它必须要 cgo，原因只有一个：Go 二进制得把 `lua_*`/`luaL_*` 这些名字导出到**动态符号表**里，模块才能解析到，而只有走 cgo 的链接路径才做得到。用 `CGO_ENABLED=1` 构建（有 C 工具链时本就是默认），扩展按平台允许「名字留到加载时再解析」的方式编译——macOS 上加 `-undefined dynamic_lookup`；Linux 上宿主符号从可执行文件的动态表里解析，`-shared -fPIC` 就够了。`go test` 里有覆盖：`cdlopen_test.go` 会写一个用 `luaL_newlib` 的 C 扩展、编译它、`require` 它、再调进去。`CGO_ENABLED=0` 时后端缺失，`package.loadlib` 返回 `nil, "dynamic libraries not enabled", "absent"`——正是 PUC-Lua 在没有 `LUA_USE_DLOPEN` 时的逐字回答——而 `package.cpath` 里找到的 C 模块会给出 PUC-Lua 在那里的报错。桥接本身还有两个限制（都写在 `cdlopen.go` 的注释里）：C 侧调用 `lua_error` 目前走 panic 而不是解开 C 帧，跨越自身帧抛错的模块暂不支持；C API 的协程、hook、debug 部分尚未转发，调用它们的模块会加载失败。用 Lua 写的、或已改成 Go 的模块完全不需要这些：`L.RequireF(modname, openf, true)` 把模块放进 `package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，让 `require` 照常找到它。
 3. **收集器是 Go 的，可观测时机与 PUC-Lua 不同**：`collectgarbage("count")` 报的是 Go 堆而非 PUC-Lua 分配器的口径；`__gc` 在本实现自己跑一轮的地方执行（收集步进、`collectgarbage`、`Close()`），而不是 PUC-Lua 步进的位置。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法，也正是 `<close>`、`Close()` 与弱表确定的原因：没有别处引用就会被清掉。`collectgarbage("step")` 是唯一无法对齐的返回值：PUC-Lua 只在「这一步把收集器带回了暂停态」时才返回 true，而单步几乎从不如此——它连续几百次都返回 false，紧接在一次完整收集之后也一样——而本实现的一步就是一整轮，所以返回 true。若改成返回 false，文档里的惯用法 `while not collectgarbage("step") do end` 就会永远转下去，两害相权取其轻。
 4. **弱表条目要多存活一轮**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，因此条目比 PUC-Lua 多活一个周期。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
 5. **错误信息文案**：与 PUC-Lua 保持一致（直译带来的好处），但 `ldebug` 的源码片段回显在部分路径可能省略。
@@ -259,6 +327,10 @@ gofmt -l .                # 必须无输出
 go test -bench=. -benchmem -run=XXX ./...   # 基准
 go build -o lua ./cmd/lua # 命令行解释器
 ```
+
+其中两项需要的不止 Go：`cdlopen_test.go` 会编译一个 C 扩展并 `require` 它，
+在没有 cgo 或没有 C 编译器时自行跳过；因此 `CGO_ENABLED=0 go test ./...`
+也是受支持的配置，只是不走 dlopen 那条路径。
 
 CI 在 Linux / macOS / Windows 上跑完整矩阵（`.github/workflows/go.yml`）：
 全平台 `go vet` + `go build` + `go test`，Linux 与 macOS 加跑 `go test -race`
