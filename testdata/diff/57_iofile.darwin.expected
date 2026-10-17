@@ -21,15 +21,15 @@
 "r++"    nil bad argument #2 to 'io.open' (invalid mode)
 == open a file that is not there ==
 true|nil|"_io_nope.txt: No such file or directory"|2
-true|file (0x1fd1a98b0)
+true|file (0xADDR)
 true|nil|": No such file or directory"|2
-true|file (0x1fd1a9948)
+true|file (0xADDR)
 false|"bad argument #1 to 'io.open' (string expected, got no value)"
 true|nil|"5: No such file or directory"|2
 false|"bad argument #2 to 'io.open' (invalid mode)"
 == write and read back ==
-true|file (0x1fd1a99e0)	true|file (0x1fd1a99e0)	true|file (0x1fd1a99e0)	false|"bad argument #3 to '?' (string expected, got boolean)"
-true|file (0x1fd1a99e0)
+true|file (0xADDR)	true|file (0xADDR)	true|file (0xADDR)	false|"bad argument #3 to '?' (string expected, got boolean)"
+true|file (0xADDR)
 false|"bad argument #2 to '?' (string expected, got table)"
 false|"bad argument #2 to '?' (string expected, got nil)"
 true|true
@@ -101,9 +101,9 @@ n
 5     	hello 
 424. 5 
 x     	ERR	57_iofile.lua:120: bad argument #2 to 'for iterator' (invalid format)
-true|function: 0x7a56c14370|nil|nil|file (0x1fd1a99e0)
-true|function: 0x7a56c14410|nil|nil|file (0x1fd1a9a78)
-true|function: 0x7a56c144b0
+true|function: 0xADDR|nil|nil|file (0xADDR)
+true|function: 0xADDR|nil|nil|file (0xADDR)
+true|function: 0xADDR
 "hello" "424.5 "
 == a file with no newline at the end ==
 "no newline"	nil	nil	""
@@ -111,8 +111,8 @@ true|function: 0x7a56c144b0
 true|true	closed file	false|"attempt to use a closed file"	false|"attempt to use a closed file"
 file	file	file	nil
 true|true
-true|file (0x1fd1a7750)
-true|file (0x1fd1a7750)
+true|file (0xADDR)
+true|file (0xADDR)
 true|true
 == the os file functions ==
 true|true	true|true

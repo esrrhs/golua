@@ -73,7 +73,7 @@ hello,world
 a1,b2
 4	<><><><>
 4	<><><><>
-true|function: 0x100de0480	true|function: 0x100de3590
+true|function: 0xADDR	true|function: 0xADDR
 5|5	5|5
 2|2	nil
 4|3	1|0

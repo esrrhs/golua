@@ -37,7 +37,7 @@ olleh	5
 ABC
  3.14|42   |00007|ff|FF|10|A|str|"a\"b\
 "
-42 -42 42 1.500000 1.5 1.500000e+00 1.500000E+00 0x1.8p+0 0X1.8P+0
+42 -42 42 1.500000 1.5 1.500000e+00 1.500000E+00 0xADDR.8p+0 0X1.8P+0
 a          b c         |
 false	bad argument #2 to 'string.format' (number expected, got string)
 false	invalid conversion '%y' to 'format'

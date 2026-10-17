@@ -9,9 +9,9 @@ regs	100	true|5050
 regs	200	true|20100
 regs	250	true|31375
 regs	300	true|45150
-ctor	100	true|table: 0x7690c00400
-ctor	250	true|table: 0x7690c00380
-ctor	300	true|table: 0x7690c003c0
+ctor	100	true|table: 0xADDR
+ctor	250	true|table: 0xADDR
+ctor	300	true|table: 0xADDR
 paren	10	true|1
 paren	199	nil|"C stack overflow\
 stack traceback:\
@@ -31,7 +31,7 @@ stack traceback:\
 \00938_limits.lua:21: in local 'try'\
 \00938_limits.lua:58: in main chunk\
 \9[C]: in ?"
-table	10	true|table: 0x7690c00700
+table	10	true|table: 0xADDR
 table	199	nil|"C stack overflow\
 stack traceback:\
 \9[C]: in function 'load'\
@@ -62,13 +62,13 @@ args	100	true|100
 args	1000	nil|"g:1: function or expression needs too many registers near '254'"
 0                     	true|0
 1                     	true|1
-0x10                  	true|16
+0xADDR                  	true|16
 0X10                  	true|16
-0x1p4                 	true|16.0
-0x1p-2                	true|0.25
+0xADDRp4                 	true|16.0
+0xADDRp-2                	true|0.25
 0x.8p1                	true|1.0
 0x                    	nil|"g:1: malformed number near '0x'"
-0x1p                  	nil|"g:1: malformed number near '0x1p'"
+0xADDRp                  	nil|"g:1: malformed number near '0xADDRp'"
 .5                    	true|0.5
 5.                    	true|5.0
 1e2                   	true|100.0
@@ -78,9 +78,9 @@ args	1000	nil|"g:1: function or expression needs too many registers near '254'"
 1e                    	nil|"g:1: malformed number near '1e'"
 .5e2                  	true|50.0
 5.e2                  	true|500.0
-0x7fffffffffffffff    	true|9223372036854775807
-0x8000000000000000    	true|-9223372036854775808
-0xffffffffffffffff    	true|-1
+0xADDR    	true|9223372036854775807
+0xADDR    	true|-9223372036854775808
+0xADDR    	true|-1
 9223372036854775807   	true|9223372036854775807
 9223372036854775808   	true|9.2233720368548e+18
 1e400                 	true|inf

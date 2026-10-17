@@ -29,7 +29,7 @@ true|"\27LuaT\0\25“\13\
 \26\
 \4\8\8xV\0\0\0\0\0\0\0\0\0\0\0(w@\0‘@62_dumpload.lua³³\0\0\2ƒ\1\0\0€H\0\2\0G\0\1\0€€€ƒ\0\0\0€€€"
 == kinds of function ==
-table: 0x1011ad430
+table: 0xADDR
 42
 3
 3
@@ -45,16 +45,16 @@ goto
 9223372036854775807	-9223372036854775808
 false|"62_dumpload.lua:72: in chunk"
 == load ==
-true|function: 0x7931005ee0
+true|function: 0xADDR
 2
 true|nil|"binary string: bad binary format (truncated chunk)"
 true|nil|"binary string: bad binary format (version mismatch)"
 true|nil|"[string \"return 1 +\"]:1: unexpected symbol near <eof>"
 true|nil|":1: unexpected symbol near '@'"
 true|nil|"x:1: unexpected symbol near '='"
-true|function: 0x7930c04d80
+true|function: 0xADDR
 
-true|function: 0x7930c04e70
+true|function: 0xADDR
 function	nil
 true|nil|"attempt to load a binary chunk (mode is 't')"
 true|nil|"attempt to load a text chunk (mode is 'b')"
@@ -63,17 +63,17 @@ true|nil|"attempt to load a binary chunk (mode is 'z')"
 function	function
 true|nil|"attempt to load a text chunk (mode is 'x')"
 true|nil|"attempt to load a text chunk (mode is '5')"
-true|function: 0x7930c04f60
+true|function: 0xADDR
 function	function	function
 == load with an environment ==
 nil
 7
 1	1	nil
-table: 0x7930801180
-true|function: 0x7930c05200
-true|function: 0x7930c05290
+table: 0xADDR
+true|function: 0xADDR
+true|function: 0xADDR
 == load of a dumped chunk keeps its upvalues ==
-table: 0x1011ad430
+table: 0xADDR
 == a chunk written by the reference interpreter ==
 78	true
 nil

@@ -20,8 +20,8 @@ false|false
 false|false
 false|42
 false|42
-false|table: 0x7881a19e40
-false|table: 0x7881a1a240
+false|table: 0xADDR
+false|table: 0xADDR
 false|OBJ
 false|"msg"
 false|"msg"
@@ -55,7 +55,7 @@ across sort	false|"attempt to yield across a C-call boundary"
 across gsub	false|"attempt to yield across a C-call boundary"
 across metamethod	true
 across xpcall handler	true
-main	thread: 0x1035ad988
+main	thread: 0xADDR
 main yieldable	false
 in coro yieldable	true
 running	true	false

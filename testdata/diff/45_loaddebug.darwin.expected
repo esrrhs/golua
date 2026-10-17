@@ -1,16 +1,16 @@
 == chunk names ==
-true|function: 0x7635008930
-true|function: 0x76350089c0
-true|function: 0x7635008a50
-true|function: 0x7635008ae0
-true|function: 0x7635008b70
-true|function: 0x7635008c00
-true|function: 0x7635008c90
+true|function: 0xADDR
+true|function: 0xADDR
+true|function: 0xADDR
+true|function: 0xADDR
+true|function: 0xADDR
+true|function: 0xADDR
+true|function: 0xADDR
 true|nil|"attempt to load a text chunk (mode is 'b')"
-true|function: 0x7635008d20
-true|function: 0x7635008db0
-true|function: 0x7635008e40
-true|function: 0x7635008ed0
+true|function: 0xADDR
+true|function: 0xADDR
+true|function: 0xADDR
+true|function: 0xADDR
 true|nil|"[string \"42\"]:1: unexpected symbol near '42'"
 false|"bad argument #1 to 'load' (function expected, got no value)"
 false|"chunky:1: x"
@@ -27,7 +27,7 @@ true|"table"
 "function"|1
 
 true|nil|"45_loaddebug.lua:92: in reader"
-true|function: 0x76350097a0
+true|function: 0xADDR
 "nil"|"(load):1: malformed number near '1r'"
 true	function	true
 == debug.getinfo ==
@@ -36,13 +36,13 @@ true	function	true
 "Lua"|-1
 "C"|"=[C]"
 "main"|true
-table: 0x76350318c0
+table: 0xADDR
 true|nil
 false|"bad argument #1 to 'debug.getinfo' (number expected, got string)"
 false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
 "C"
-true|table: 0x7635031b40
-true|table: 0x7635031c00
+true|table: 0xADDR
+true|table: 0xADDR
 == debug.getlocal ==
 a=1 b=2 c=3 (for state)=4 (for state)=5 (for state)=1 i=7
 false|"bad argument #1 to 'debug.getlocal' (level out of range)"
@@ -84,7 +84,7 @@ true
 true
 true
 true
-true|function: 0x7635006160|"cr"|42
+true|function: 0xADDR|"cr"|42
 == table library ==
 "102030"
 "10,20,30"
@@ -127,9 +127,9 @@ nil
 false|"bad argument #2 to 'table.remove' (position out of bounds)"
 true|nil
 false|"bad argument #1 to 'table.remove' (table expected, got no value)"
-table: 0x7635030840
+table: 0xADDR
 2,3,4,4,5
 false|"bad argument #5 to 'table.move' (table expected, got number)"
-true|table: 0x7635030980
+true|table: 0xADDR
 false|"bad argument #2 to 'table.move' (number expected, got no value)"
 done

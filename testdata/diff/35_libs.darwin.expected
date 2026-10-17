@@ -18,9 +18,9 @@ a=1,b=2
 nil	false|"bad argument #1 to 'next' (table expected, got number)"	false|"invalid key to 'next'"
 1a,2b
 1a
-true|function: 0x100686624|42|0	true|function: 0x100686624|nil|0	true|function: 0x100686624|"x"|0
+true|function: 0xADDR|42|0	true|function: 0xADDR|nil|0	true|function: 0xADDR|"x"|0
 110,220,330,440
-true|function: 0x100685cbc|42|nil	true|function: 0x100685cbc|nil|nil
+true|function: 0xADDR|42|nil	true|function: 0xADDR|nil|nil
 false|"attempt to call a number value"
 true|1	true|1|2|3
 false|"assertion failed!"	false|"message"
@@ -69,7 +69,7 @@ line2\
 "
 "a\13\
 b"
-"1"|"0x1p+0"
+"1"|"0xADDRp+0"
 "true"|"nil"
 false|"bad argument #2 to 'string.format' (no value)"	false|"bad argument #2 to 'string.format' (value has no literal form)"
 true
@@ -99,10 +99,10 @@ false|"wrong number of arguments to 'insert'"	false|"bad argument #1 to 'table.i
 3	1	1
 false|"bad argument #2 to 'table.remove' (position out of bounds)"	false|"bad argument #2 to 'table.remove' (position out of bounds)"
 true|nil	false|"bad argument #1 to 'table.remove' (table expected, got no value)"	false|"bad argument #1 to 'table.remove' (table expected, got number)"
-true|table: 0x7bc080f100	1,2,1,2,3
-true|table: 0x7bc080f200	0
+true|table: 0xADDR	1,2,1,2,3
+true|table: 0xADDR	0
 false|"bad argument #5 to 'table.move' (table expected, got number)"
-true|table: 0x7bc080f380	false|"bad argument #1 to 'table.move' (table expected, got number)"
+true|table: 0xADDR	false|"bad argument #1 to 'table.move' (table expected, got number)"
 false
 true|100	true|10000	false|"35_libs.lua:202: stack overflow"
 false|"35_libs.lua:208: '__index' chain too long; possible loop"

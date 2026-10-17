@@ -1,22 +1,22 @@
 == load with a reader ==
-ok|function: 0x7856c04630
-ok|function: 0x7856c04750
-ok|function: 0x7856c04870
-ok|function: 0x7856c04990
-ok|function: 0x7856c04ab0
+ok|function: 0xADDR
+ok|function: 0xADDR
+ok|function: 0xADDR
+ok|function: 0xADDR
+ok|function: 0xADDR
 ok|
 ok|
 ok|
-ok|function: 0x7856c04f30
-ok|function: 0x7856c05050
-ok|function: 0x7856c05140
-ok|function: 0x7856c05200
-ok|function: 0x7856c052c0
+ok|function: 0xADDR
+ok|function: 0xADDR
+ok|function: 0xADDR
+ok|function: 0xADDR
+ok|function: 0xADDR
 ok|
 ok|
 ok|5
-ok|function: 0x7857005480
-ok|function: 0x7856c055c0
+ok|function: 0xADDR
+ok|function: 0xADDR
 ok|
 ok|
 err|attempt to call a nil value
@@ -37,50 +37,50 @@ ok|
 ok|
 ok|
 == table.unpack limits ==
-ok|table: 0x7857039580
-ok|table: 0x7857039600|2
-ok|table: 0x78570396c0|1|3
-ok|table: 0x7857039780|1|4
-ok|table: 0x7857039840|2|1
-ok|table: 0x7857039900
-ok|table: 0x7857039980|1|0
+ok|table: 0xADDR
+ok|table: 0xADDR|2
+ok|table: 0xADDR|1|3
+ok|table: 0xADDR|1|4
+ok|table: 0xADDR|2|1
+ok|table: 0xADDR
+ok|table: 0xADDR|1|0
 ok|
-ok|table: 0x7857038040|0
-ok|table: 0x7857038100|-1
-ok|table: 0x78570381c0|-3
-ok|table: 0x7857038280|-4
-ok|table: 0x7857038340|1|-1
+ok|table: 0xADDR|0
+ok|table: 0xADDR|-1
+ok|table: 0xADDR|-3
+ok|table: 0xADDR|-4
+ok|table: 0xADDR|1|-1
 err|attempt to get length of a number value
 err|bad argument #2 to 'table.unpack' (number has no integer representation)
 err|bad argument #3 to 'table.unpack' (number has no integer representation)
-ok|table: 0x7857038500|2147483648
+ok|table: 0xADDR|2147483648
 ok|
 ok|
 err|too many results to unpack
 == table.move / insert / remove edges ==
-ok|table: 0x7857038080|1|3|1
-ok|table: 0x7857038180|1|3|2
-ok|table: 0x7857038280|2|3|1
-ok|table: 0x7857038380|1|0|1
-ok|table: 0x7857038480|0|2|1
-ok|table: 0x7857038580|1|3|0
-ok|table: 0x7857038680|1|3|4
-ok|table: 0x78570387c0|1|0|1|table: 0x7857038800
+ok|table: 0xADDR|1|3|1
+ok|table: 0xADDR|1|3|2
+ok|table: 0xADDR|2|3|1
+ok|table: 0xADDR|1|0|1
+ok|table: 0xADDR|0|2|1
+ok|table: 0xADDR|1|3|0
+ok|table: 0xADDR|1|3|4
+ok|table: 0xADDR|1|0|1|table: 0xADDR
 err|bad argument #5 to 'table.move' (table expected, got number)
 err|bad argument #2 to 'table.move' (number expected, got no value)
-ok|table: 0x7857038980|"1"|3|1
-ok|table: 0x7857038a80|5
+ok|table: 0xADDR|"1"|3|1
+ok|table: 0xADDR|5
 err|bad argument #2 to 'table.insert' (position out of bounds)
-ok|table: 0x7857038b80|4|5
+ok|table: 0xADDR|4|5
 err|bad argument #2 to 'table.insert' (position out of bounds)
 err|wrong number of arguments to 'insert'
 err|wrong number of arguments to 'insert'
-ok|table: 0x7857038d40
-ok|table: 0x7857038dc0|3
-ok|table: 0x7857038e80|4
+ok|table: 0xADDR
+ok|table: 0xADDR|3
+ok|table: 0xADDR|4
 err|bad argument #2 to 'table.remove' (position out of bounds)
-ok|table: 0x7857038f80
-ok|table: 0x7857039000|3|4
+ok|table: 0xADDR
+ok|table: 0xADDR|3|4
 == coroutine.wrap and close ==
 ok|	ok|
 err|69_loadvar.lua:132: in co
@@ -88,8 +88,8 @@ err|69_loadvar.lua:133: in co
 ok|
 ok|
 err|bad argument #1 to 'coroutine.wrap' (function expected, got number)
-ok|thread: 0x1050b64b8
-ok|thread: 0x1050b6598
+ok|thread: 0xADDR
+ok|thread: 0xADDR
 ok|
 ok|
 ok|

@@ -13,13 +13,13 @@ m1,m2,f3,inner
 3,3,3,3,3
 == vararg in constructors ==
 3|2
-1|table: 0x7a96c00440
+1|table: 0xADDR
 100
 60|60
 false|"attempt to call a nil value"
 1|2|3
-table: 0x7a96c00300
-table: 0x7a96c00380
+table: 0xADDR
+table: 0xADDR
 3
 2|3
 3

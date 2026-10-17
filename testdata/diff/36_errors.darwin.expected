@@ -65,9 +65,9 @@ true
 true|true
 false|OBJ
 false|42
-false|MyType: 0x797ac00340
-MyType: 0x797ac00440
-false|table: 0x797ac004c0
+false|MyType: 0xADDR
+MyType: 0xADDR
+false|table: 0xADDR
 false|"36_errors.lua:149: variable 'x' got a non-closable value"
 true
 true
@@ -80,14 +80,14 @@ true
 false|"36_errors.lua:163: variable 'x' got a non-closable value"
 true|nil|"[string \"goto nowhere\"]:1: no visible label 'nowhere' for <goto> at line 1"
 true|nil|"[string \"::a:: ::a::\"]:1: label 'a' already defined on line 1"
-true|function: 0x797ac08bd0
+true|function: 0xADDR
 true|nil|"[string \"for i=1,10 do goto cont end\"]:1: no visible label 'cont' for <goto> at line 1"
 true|nil|"[string \"local x <nope> = 1\"]:1: unknown attribute 'nope'"
 true|nil|"[string \"local x <const> = 1; x = 2\"]:1: attempt to assign to const variable 'x'"
 true|nil|"[string \"break\"]:1: break outside loop at line 1"
 true|nil|"[string \"return 1 return 2\"]:1: <eof> expected near 'return'"
 true|nil|"[string \"function 1() end\"]:1: <name> expected near '1'"
-true|function: 0x797ac087b0
-true|function: 0x797ac088a0
+true|function: 0xADDR
+true|function: 0xADDR
 true|nil|"[string \"x::<label>\"]:1: syntax error near '::'"
-function: 0x797ac08990	true|function: 0x797ac08a20
+function: 0xADDR	true|function: 0xADDR

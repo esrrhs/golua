@@ -121,8 +121,8 @@ false|"module 'a.b.c' not found:\
 \9no file '/usr/local/lib/lua/5.4/a.so'\
 \9no file '/usr/local/lib/lua/5.4/loadall.so'\
 \9no file './a.so'"
-true|table: 0x1015d2560
-true|table: 0x1015d1430
+true|table: 0xADDR
+true|table: 0xADDR
 == searchers can be replaced ==
 true|"from searcher:custom"|nil
 false|"attempt to call a number value"

@@ -36,7 +36,7 @@ false	bad argument #1 to 'getmetatable' (value expected)	1
 false	bad argument #1 to 'tostring' (value expected)	1
 false	bad argument #1 to 'tonumber' (value expected)	1
 false	bad argument #2 to 'tonumber' (base out of range)	1
-true	function: 0x104fe2624	0
+true	function: 0xADDR	0
 false	bad argument #1 to 'next' (table expected, got number)	1
 false	invalid key to 'next'	0
 false	nil	0
@@ -68,12 +68,12 @@ false	msg	1
 false	msg	1
 false	msg	0
 false	obj	0
-false	table: 0x781cc00d00	0
+false	table: 0xADDR	0
 false	nil	0
 false	in index	1
 false	in add	1
 false	in lt	1
 false	in call	1
-true	table: 0x781cc01000	0
+true	table: 0xADDR	0
 false	attempt to call a number value (metamethod 'close')	1
 done

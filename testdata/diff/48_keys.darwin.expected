@@ -57,7 +57,7 @@ false|nil
 false|nil
 false|false
 false|nil
-false|table: 0x7b17031280
+false|table: 0xADDR
 false|E
 false|"m"
 false|"48_keys.lua:18: m"
@@ -67,7 +67,7 @@ false|"m"
 false|"48_keys.lua:129: x"
 false|"assertion failed!"
 false|"msg"
-false|table: 0x7b17031700
+false|table: 0xADDR
 false|nil
 1|2
 false|"bad argument #1 to 'assert' (value expected)"

@@ -8,14 +8,14 @@ inf -inf
 inf INF inf INF
   inf|-inf |
 +1.000000 +1
-0x1p+0 0X1P+0
-0x0p+0	-0x0p+0
-0x1p-1	0x1.5555555555555p-2	0x1.fep+7
-0x1.555p-2	0x1.p+0	0x1.7e43c8800759cp+996
+0xADDRp+0 0X1P+0
+0xADDRp+0	-0xADDRp+0
+0xADDRp-1	0xADDR.5555555555555p-2	0xADDR.fep+7
+0xADDR.555p-2	0xADDR.p+0	0xADDR.7e43c8800759cp+996
 0.33333333333333331	9007199254740992
 0.100000000000000005551115123125782702118158340454101562500000000000000000000000000000000000000000000
 -255 -255 255 ff FF 377
-0xff 010 0XFF
+0xADDR 010 0XFF
  1.50|42      |+42| 42|0001.500
 9007199254740992	7fffffffffffffff
 false|"bad argument #2 to 'string.format' (number has no integer representation)"
@@ -23,7 +23,7 @@ true|"10"
 true|"ffffffffffffffff"
 true|"A"	true|","
 false|"invalid conversion '%y' to 'format'"	false|"bad argument #2 to 'string.format' (no value)"
-"0x10" true|16
+"0xADDR" true|16
 "0X1p4" true|16.0
 "0x.8p1" true|1.0
 "1e2" true|100.0
@@ -31,7 +31,7 @@ false|"invalid conversion '%y' to 'format'"	false|"bad argument #2 to 'string.fo
 "5." true|5.0
 " 1 " true|1
 "1e999" true|inf
-"0xffffffffffffffff" true|-1
+"0xADDR" true|-1
 "9223372036854775808" true|9.2233720368548e+18
 "" true|nil
 "z" true|nil

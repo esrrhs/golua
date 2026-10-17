@@ -10,10 +10,10 @@ true|false|"58_codbg.lua:48: inside"
 dead
 true|false|"cannot resume dead coroutine"
 == running ==
-thread: 0x1011e5988|true
+thread: 0xADDR|true
 true
 false
-thread: 0x1011e8728|false
+thread: 0xADDR|false
 true
 "running"
 true|true
@@ -39,11 +39,11 @@ true|true|"y"
 true|true
 "c"
 == debug.getinfo ==
-true|table: 0x767cc10bc0
+true|table: 0xADDR
 "58_codbg.lua"|115|-1|"Lua"|"@58_codbg.lua"|0|1|false|true
 nil|"@58_codbg.lua"|-1|0|true|false
 125|"main"
-table: 0x767cc111c0
+table: 0xADDR
 true|nil
 false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
 false|"bad argument #2 to 'debug.getinfo' (invalid option)"

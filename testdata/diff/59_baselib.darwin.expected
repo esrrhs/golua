@@ -9,7 +9,7 @@ false|nil
 false|nil
 false|42
 false|42
-false|table: 0x7a7ac003c0
+false|table: 0xADDR
 false|!
 false|true
 false|"x"
@@ -22,7 +22,7 @@ true|false|42
 false|"bad argument #1 to 'pcall' (value expected)"
 true|false|"attempt to call a number value"
 true|false|"59_baselib.lua:55: a"
-true|false|table: 0x7a7ac00a00
+true|false|table: 0xADDR
 true|false|"y"
 true|false|"H:59_baselib.lua:58: a"
 true|false|"59_baselib.lua:59: a"
@@ -58,14 +58,14 @@ true|"a"
 true
 == tonumber ==
 "10"	true|10
-"0x10"	true|16
+"0xADDR"	true|16
 " 10 "	true|10
 "10a"	true|nil
 ""	true|nil
 "1e2"	true|100.0
 ".5"	true|0.5
 "5."	true|5.0
-"0x1p4"	true|16.0
+"0xADDRp4"	true|16.0
 "10"	true|10
 base	2	true|nil	true|2	true|nil
 base	8	true|nil	true|8	true|nil
@@ -93,7 +93,7 @@ false|"bad argument #1 to 'tostring' (value expected)"
 false|"bad argument #1 to 'rawlen' (table or string expected, got number)"	false|"bad argument #1 to 'rawlen' (table or string expected, got no value)"	false|"bad argument #1 to 'rawlen' (table or string expected, got nil)"
 1	nil
 false|"bad argument #1 to 'rawget' (table expected, got number)"	true|nil
-table: 0x7a7ac03a40	"v"	false|"bad argument #1 to 'rawset' (table expected, got number)"
+table: 0xADDR	"v"	false|"bad argument #1 to 'rawset' (table expected, got number)"
 false|"table index is nil"	false|"table index is NaN"
 true|true|true|false|true
 false|"bad argument #2 to 'rawequal' (value expected)"	false|"bad argument #1 to 'rawequal' (value expected)"
@@ -101,14 +101,14 @@ false|"bad argument #2 to 'rawequal' (value expected)"	false|"bad argument #1 to
 "a"|1	nil	false|"invalid key to 'next'"
 false|"bad argument #1 to 'next' (table expected, got number)"	false|"bad argument #1 to 'next' (table expected, got no value)"	true|nil
 1|10	2|20	nil	nil
-true|function: 0x1008ee624|5|0	false|"bad argument #1 to 'ipairs' (value expected)"	true|function: 0x1008ee624|nil|0
-true|function: 0x1008ee624|table: 0x7a7ac42600|0
+true|function: 0xADDR|5|0	false|"bad argument #1 to 'ipairs' (value expected)"	true|function: 0xADDR|nil|0
+true|function: 0xADDR|table: 0xADDR|0
 == metatables ==
 "locked"	false|"cannot change a protected metatable"
 false|"bad argument #1 to 'setmetatable' (table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected, got no value)"
-nil	table: 0x100fb65d0	nil
+nil	table: 0xADDR	nil
 false|"bad argument #1 to 'getmetatable' (value expected)"
-table: 0x7a7ac40e00
+table: 0xADDR
 == require through package.preload ==
 "_xy"|true
 true

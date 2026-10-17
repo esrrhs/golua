@@ -13,7 +13,7 @@ ab	true	file
 a+	true	file
 false|"bad argument #2 to 'io.open' (invalid mode)"
 false|"bad argument #2 to 'io.open' (invalid mode)"
-true|file (0x1fd1a98b0)
+true|file (0xADDR)
 false|"bad argument #1 to 'io.open' (string expected, got no value)"
 true|nil|"42: No such file or directory"|2
 false|"bad argument #1 to 'io.open' (string expected, got nil)"
@@ -23,7 +23,7 @@ true	file
 a	"line1\
 line2\
 line3\
-10 20.5 0x10 abc\
+10 20.5 0xADDR abc\
 "
 l	"line1"
 ll	"line1"|"line2"
@@ -40,22 +40,22 @@ nnnn
 100	"line1\
 line2\
 line3\
-10 20.5 0x10 abc\
+10 20.5 0xADDR abc\
 "
 la	"line1"|"line2\
 line3\
-10 20.5 0x10 abc\
+10 20.5 0xADDR abc\
 "
 al	"line1\
 line2\
 line3\
-10 20.5 0x10 abc\
+10 20.5 0xADDR abc\
 "
 *l	"line1"
 *a	"line1\
 line2\
 line3\
-10 20.5 0x10 abc\
+10 20.5 0xADDR abc\
 "
 *n	
 *L	"line1\
@@ -63,30 +63,30 @@ line3\
 bad1	true|"line1\
 line2\
 line3\
-10 20.5 0x10 abc\
+10 20.5 0xADDR abc\
 "
 bad2	false|"bad argument #2 to '?' (invalid format)"
 bad3	false|"bad argument #2 to '?' (string expected, got boolean)"
 bad4	false|"bad argument #2 to '?' (string expected, got table)"
 bad5	false|"not enough memory"
 == lines ==
-4	line1/line2/line3/10 20.5 0x10 abc
+4	line1/line2/line3/10 20.5 0xADDR abc
 4	"line1\
 "/"line2\
 "/"line3\
-"/"10 20.5 0x10 abc\
+"/"10 20.5 0xADDR abc\
 "
 0	
 4
 4
 false|"cannot open file '42' (No such file or directory)"
-true|function: 0x799f404410
+true|function: 0xADDR
 false|"cannot open file 'no_such_file_xyz' (No such file or directory)"
-true|function: 0x10550e880|nil|nil|file (0x1fd1a98b0)
-true|function: 0x799e800000|nil|nil|file (0x1fd1a9948)
+true|function: 0xADDR|nil|nil|file (0xADDR)
+true|function: 0xADDR|nil|nil|file (0xADDR)
 == write ==
-true|file (0x1fd1a99e0)
-true|file (0x1fd1a99e0)
+true|file (0xADDR)
+true|file (0xADDR)
 false|"bad argument #2 to '?' (string expected, got nil)"
 false|"bad argument #2 to '?' (string expected, got boolean)"
 false|"bad argument #2 to '?' (string expected, got table)"
@@ -117,12 +117,12 @@ closed file
 true|true
 false|"attempt to use a closed file"
 == output/input redirection ==
-file (0x1fd1a99e0)
+file (0xADDR)
 nil
-true|file (0x1fd1a9a78)
-true|file (0x1fd1a7750)
+true|file (0xADDR)
+true|file (0xADDR)
 false|"cannot open file '42' (No such file or directory)"
-true|file (0x1fd1a76b8)
+true|file (0xADDR)
 == file methods ==
 table
 true

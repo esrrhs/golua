@@ -14,21 +14,21 @@ false|"bad argument #2 to 'os.setlocale' (invalid option '5')"
 true|nil
 true|"C"
 == os.time ==
-true|-28800
-true|-28800
-true|951796800
-true|951796800
-true|951793200
-true|2147454847
-true|-115200
+true|0
+true|0
+true|951825600
+true|951825600
+true|951825600
+true|2147483647
+true|-86400
 false|"field 'year' missing in date table"
-true|-28739
-true|31550400
-true|2692800
-true|-2664000
-true|-72000
-true|61200
-true|-28800
+true|61
+true|31579200
+true|2721600
+true|-2635200
+true|-43200
+true|90000
+true|0
 false|"bad argument #1 to 'os.time' (table expected, got number)"
 false|"bad argument #1 to 'os.time' (table expected, got string)"
 == os.date ==
@@ -46,9 +46,9 @@ true|"19 70 1970 70 4 01"
 false|"bad argument #1 to 'os.date' (invalid conversion specifier '%k %l %s')"
 true|"UTC"
 true|"1970"
-true|table: 0x7c4b02ce80
-true|table: 0x7c4b02cf40
-true|table: 0x7c4b02d000
+true|table: 0xADDR
+true|table: 0xADDR
+true|table: 0xADDR
 false|"date result cannot be represented in this installation"
 false|"date result cannot be represented in this installation"
 true|""
@@ -113,7 +113,7 @@ false|"module 'no_such_module_xyz' not found:\
 \9no file '/usr/local/lib/lua/5.4/no_such_module_xyz.so'\
 \9no file '/usr/local/lib/lua/5.4/loadall.so'\
 \9no file './no_such_module_xyz.so'"
-true|table: 0x1029b6560	true|table: 0x1029b6610
+true|table: 0xADDR	true|table: 0xADDR
 nil
 true|42|"/tmp/p36dir/m1.lua"	true|42
 true|true|"/tmp/p36dir/m2.lua"	true|true

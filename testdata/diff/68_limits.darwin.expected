@@ -90,8 +90,8 @@ ok|"a"|0
 ok|"a"|-1
 ok|""|1073741824
 err|invalid value (nil) at index 1 in table for 'concat'
-ok|table: 0x78490113c0
-ok|table: 0x7849011440|","|5|3
+ok|table: 0xADDR
+ok|table: 0xADDR|","|5|3
 err|invalid value (nil) at index 0 in table for 'concat'
 err|invalid value (nil) at index -1 in table for 'concat'
 ok|

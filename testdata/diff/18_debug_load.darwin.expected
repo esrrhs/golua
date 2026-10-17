@@ -1,4 +1,4 @@
-true	table: 0x10554f430
+true	table: 0xADDR
 Lua	2	5	0	2	false		nil
 @18_debug_load.lua	18_debug_load.lua	-1
 true	function	table
@@ -12,17 +12,17 @@ msg
 true
 true
 function	function
-nil	table: 0x10554a5d0	nil
+nil	table: 0xADDR	nil
 MT
 MT
 table
-function: 0x794cc04930	nil
+function: 0xADDR	nil
 2
-function: 0x794cc049c0
+function: 0xADDR
 nil
 
 42
-true	function: 0x794cc04ba0
+true	function: 0xADDR
 true	nil	attempt to load a text chunk (mode is 'b')
 7
 true	nil	attempt to load a binary chunk (mode is 't')
@@ -34,7 +34,7 @@ false	18_debug_load.lua:72: with level
 false	nil
 false	nil
 false	false
-false	table: 0x794d400400
+false	table: 0xADDR
 false	E!
 true	1	2
 false	H:18_debug_load.lua:81: boom

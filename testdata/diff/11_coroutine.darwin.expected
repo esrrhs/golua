@@ -28,9 +28,9 @@ false	11_coroutine.lua:64: boom
 true
 false	cannot resume dead coroutine
 false	table	42
-thread: 0x100901988	true
+thread: 0xADDR	true
 false
-in-co running	thread: 0x100906df8	false
+in-co running	thread: 0xADDR	false
 in-co yieldable	true
 main yieldable	true
 suspended

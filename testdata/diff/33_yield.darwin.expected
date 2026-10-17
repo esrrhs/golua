@@ -4,14 +4,14 @@ true|1|2|3
 true|1|2|3
 false|"33_yield.lua:26: boom"
 false|"boom"
-false|table: 0x7cf6c10400
+false|table: 0xADDR
 false|T
 true|"x"|"y"
 true|1	true|2	false|"cannot resume dead coroutine"
 dead
 suspended	true	dead
-thread: 0x102e15988|true
-true|"thread: 0x7cf6c181c8|false"
+thread: 0xADDR|true
+true|"thread: 0xADDR|false"
 true
 true
 false
@@ -36,7 +36,7 @@ true|"body"
 1	2	false|"cannot resume dead coroutine"
 false|"33_yield.lua:113: in wrap"	false|"cannot resume dead coroutine"
 false|"in wrap"
-false|table: 0x7cf6c12400
+false|table: 0xADDR
 1	2
 true|"o1"
 true|"o2"

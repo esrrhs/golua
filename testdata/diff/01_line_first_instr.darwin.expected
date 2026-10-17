@@ -4,7 +4,7 @@ false	01_line_first_instr.lua:10: attempt to index a nil value (field 'a')
 false	01_line_first_instr.lua:11: attempt to divide by zero
 false	01_line_first_instr.lua:12: attempt to perform 'n%0'
 false	01_line_first_instr.lua:13: e
-false	table: 0x10532e190
+false	table: 0xADDR
 false	TOSTR
 closed	01_line_first_instr.lua:22: z
 false	01_line_first_instr.lua:22: z

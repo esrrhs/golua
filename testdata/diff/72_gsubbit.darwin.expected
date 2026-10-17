@@ -82,8 +82,8 @@ gmatch1	a1,b2,c3
 gmatch pos	1,2,3,4
 gmatch empty	<>,<>,<>,<>
 false|"bad argument #1 to 'string.gmatch' (string expected, got no value)"
-true|function: 0x1032aaee0
-true|function: 0x1032adad0
+true|function: 0xADDR
+true|function: 0xADDR
 it	a	b	c
 true|3|3
 true|4|4

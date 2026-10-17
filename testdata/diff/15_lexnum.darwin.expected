@@ -27,8 +27,8 @@ true
 4
 true	nil	[string "return "\x""]:1: hexadecimal digit expected near '"\x"'
 true	nil	[string "return "\u{}""]:1: hexadecimal digit expected near '"\u{}'
-true	function: 0x75c2c04690
-true	function: 0x75c2c04750
+true	function: 0xADDR
+true	function: 0xADDR
 abc	a]]b	line1
 line2
 42
@@ -38,6 +38,6 @@ true	true
 true	nil	[string "return 0x"]:1: malformed number near '0x'
 true	nil	[string "return 1e"]:1: malformed number near '1e'
 true	nil	[string "return 1..2"]:1: malformed number near '1..2'
-true	function: 0x75c2c048d0
+true	function: 0xADDR
 -1
 true	nil	[string "return 0xg"]:1: malformed number near '0xg'

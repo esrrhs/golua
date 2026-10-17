@@ -74,8 +74,8 @@ false|"34_lang.lua:171: 'for' step is zero"
 false|"34_lang.lua:183: attempt to call a number value (for iterator 'for iterator')"
 false|"34_lang.lua:184: bad argument #1 to 'for iterator' (table expected, got nil)"
 99	true
-shadow	function: 0x102e0e508
-true|function: 0x7b1b009410
+shadow	function: 0xADDR
+true|function: 0xADDR
 true|nil|"attempt to load a text chunk (mode is 'b')"
 true
 locked

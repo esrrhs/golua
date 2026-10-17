@@ -64,7 +64,7 @@ false|"bad argument #1 to 'debug.setupvalue' (function expected, got number)"
 false|"bad argument #2 to 'debug.getupvalue' (number expected, got no value)"
 false|"bad argument #3 to 'debug.setupvalue' (value expected)"
 == getmetatable / setmetatable ==
-nil	table: 0x105492570	nil
+nil	table: 0xADDR	nil
 nil	nil
 table
 table
@@ -102,7 +102,7 @@ stack traceback:\
 \00965_debug.lua:162: in main chunk\
 \9[C]: in ?"
 false|"bad argument #2 to 'debug.traceback' (number expected, got string)"
-true|table: 0x75a542de00
+true|table: 0xADDR
 "m\
 stack traceback:\
 \9[C]: in function 'debug.traceback'\
@@ -113,7 +113,7 @@ stack traceback:"
 == getregistry ==
 table	thread	table	nil	nil
 true
-true|table: 0x1054913d0
+true|table: 0xADDR
 == setcstacklimit ==
 true|200
 number

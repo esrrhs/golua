@@ -38,7 +38,10 @@ var diffAddrRe = regexp.MustCompile(`0x[0-9a-f]+`)
 
 // diffNormalise removes host-dependent details from captured output.
 func diffNormalise(s string) string {
-	return diffAddrRe.ReplaceAllString(s, "0xADDR")
+	s = diffAddrRe.ReplaceAllString(s, "0xADDR")
+	/* a checkout that rewrites line endings would otherwise make every
+	   line of every case differ, which is not a difference in Lua */
+	return strings.ReplaceAll(s, "\r\n", "\n")
 }
 
 var (
@@ -62,6 +65,14 @@ func diffBuild(t *testing.T) string {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			diffBinErr = &diffBuildError{string(out), err}
 			return
+		}
+		/* Go writes lua.exe on Windows whatever -o said, and exec
+		   reports a file it cannot find as "not found in %PATH%",
+		   which is a long way from the truth. */
+		if _, err := os.Stat(bin); err != nil {
+			if _, err := os.Stat(bin + ".exe"); err == nil {
+				bin += ".exe"
+			}
 		}
 		diffBin = bin
 		/* the binary is shared by every test in the package (the CLI
@@ -94,6 +105,20 @@ func (e *diffBuildError) Error() string {
 	return e.cause.Error() + "\n" + e.out
 }
 
+// diffEnv is the environment every case runs under, on both sides.
+//
+// TZ is pinned because 'os.date' and 'os.time' ask the host -- the C
+// library on the reference's side, Go's time package on this port's --
+// and every answer that is not explicitly UTC carries the runner's
+// offset.  A golden captured in one timezone therefore cannot match a
+// runner in another, which is a worse problem than the platform one
+// the per-GOOS golden names solve: two machines of the same GOOS
+// disagree.  UTC is what both sides agree on anywhere, so that is what
+// the cases see.  Local time is still compared -- by the official
+// suite, which captures its goldens from LUA_REF seconds before it
+// compares them.
+func diffEnv() []string { return append(os.Environ(), "TZ=UTC") }
+
 // diffRunCase runs one case file the way the reference interpreter was
 // invoked ("lua <file>" with the case directory as the working directory,
 // so that chunk names and 'arg' match) and returns stdout+stderr merged,
@@ -105,6 +130,7 @@ func diffRunCase(t *testing.T, path string) string {
 		Path: bin,
 		Args: []string{"lua", filepath.Base(path)}, /* argv[0] decides the message prefix */
 		Dir:  filepath.Dir(path),
+		Env:  diffEnv(),
 	}
 	out, _ := cmd.CombinedOutput() /* the exit status is not part of the golden output */
 	return string(out)
@@ -114,6 +140,8 @@ func diffRunCase(t *testing.T, path string) string {
 // platform, because a good many of these answers are the platform's and
 // not Lua's: 'os.date' asks the C library, and the NaN that 0/0 produces
 // carries the sign the CPU gave it, so 'nan' here is '-nan' there.
+// The timezone is not in the name because it does not need to be: see
+// diffEnv, which pins it.
 func diffGolden(path string) string {
 	return strings.TrimSuffix(path, ".lua") + "." + runtime.GOOS + ".expected"
 }
@@ -132,12 +160,19 @@ func diffCapture(t *testing.T, ref string, files []string) {
 			Path: ref,
 			Args: []string{"lua", filepath.Base(path)},
 			Dir:  filepath.Dir(path),
+			Env:  diffEnv(), /* see diffEnv: TZ has to agree on both sides */
 		}
 		out, err := cmd.CombinedOutput()
 		if err != nil && len(out) == 0 {
 			t.Fatalf("%s: the reference interpreter failed: %v", filepath.Base(path), err)
 		}
-		if err := os.WriteFile(diffGolden(path), out, 0o644); err != nil {
+		/* Normalised on the way in, not only on the way out: a heap
+		   address is a different one every run, so a golden that kept
+		   them raw would show up as 82 changed files every time
+		   anybody re-captured, and a change nobody can read is noise
+		   that hides the real ones.  They are compared normalised
+		   either way -- see diffNormalise. */
+		if err := os.WriteFile(diffGolden(path), []byte(diffNormalise(string(out))), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		n++

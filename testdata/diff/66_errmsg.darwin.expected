@@ -112,7 +112,7 @@ err|msg
 err|nil
 err|nil
 err|42
-err|table: 0x74b103c180
+err|table: 0xADDR
 err|msg
 err|msg
 err|bad argument #2 to 'error' (number has no integer representation)
@@ -130,13 +130,13 @@ ok|true
 err|nil
 err|bad argument #1 to 'pcall' (value expected)
 ok|nil
-ok|function: 0x102ca9984|"x"
-ok|function: 0x102ca9984|"x"|0
+ok|function: 0xADDR|"x"
+ok|function: 0xADDR|"x"|0
 y
-ok|function: 0x102ca9984|function: 0x102ca9e34|"y"
-ok|function: 0x74b1009050|function: 0x74b1005560
-ok|function: 0x74b1009170|function: 0x74b1005580|1
-ok|function: 0x74b10092c0|function: 0x74b10092f0
+ok|function: 0xADDR|function: 0xADDR|"y"
+ok|function: 0xADDR|function: 0xADDR
+ok|function: 0xADDR|function: 0xADDR|1
+ok|function: 0xADDR|function: 0xADDR
 err|bad argument #2 to 'xpcall' (function expected, got number)
 err|bad argument #2 to 'xpcall' (function expected, got no value)
 ok|

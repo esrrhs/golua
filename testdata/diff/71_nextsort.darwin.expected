@@ -64,7 +64,7 @@ true
 true
 false|"71_nextsort.lua:201: invalid order function for sorting"
 false|"71_nextsort.lua:205: boom"
-false|table: 0x77f9031bc0
+false|table: 0xADDR
 true
 false|"attempt to yield from outside a coroutine"
 nargs	true	ok	2:2<3 2:1<2
