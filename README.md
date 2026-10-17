@@ -187,7 +187,7 @@ build needs and what the bridge does not cover yet.
 | **P4** | API layer: `lapi` `lauxlib` `linit` | ✅ |
 | **P5** | Standard libraries | ✅ |
 | **P6** | `cmd/lua` CLI + REPL, `cmd/luac` compiler, `ldump`/`lundump` | ✅ |
-| **P7** | Official Lua 5.4 test suite, benchmarks, CI on 3 OSes | 🔄 |
+| **P7** | Official Lua 5.4 test suite, benchmarks, CI on 3 OSes | ✅ |
 
 ### 5.1 Conformance: the official test suite
 
@@ -216,11 +216,33 @@ an allocation drives, or `Close()` — which is what `closure`, `db`,
 how they are done, and §5.1 above for what making `collectgarbage` inert
 costs.
 
-The suite is also mirrored inside `go test`: `testdata/diff/*.lua` (80
-cases) is compared byte for byte against golden files captured from
-PUC-Lua 5.4.9, and `cli_test.go` pins the observable behaviour of the
-interpreter itself — `-v`/`-e`/`-l`/`-E`/`-W`/`--`, the `arg` table, the
-script varargs, the usage messages and the exit status.
+**The 33 official files are in the repository and are first-class `go
+test` cases.** `testdata/official/` holds all of `testes/` (redistributed
+under the same MIT licence as Lua itself) beside a
+`<name>.<goos>.expected`: what the reference interpreter, built from
+source, printed for that file. `official_test.go` runs one side and then
+the other, normalises, and compares — so `go test ./...` now carries 27
+identical / 5 known differences / 1 not run. A few things about it are
+deliberate:
+
+- The files run in a copy made in `t.TempDir()`. `attrib.lua` writes a
+  dozen chunks under `libs/` and requires them; `main.lua` spawns
+  subprocesses. Nothing may be written into `testdata/`, a checkout is
+  often read-only, and a leftover file would change the next run's answer.
+- The exit status is not part of the comparison: several of these files
+  *end* in a failed assert, which is the point of them.
+- `heavy` is not run (it times out on both sides); `all`, `gc`,
+  `coroutine`, `gengc` and `locals` are registered differences, and the
+  test says so out loud if one of them ever starts matching — that is
+  progress and it should not go unnoticed.
+- `attrib` and `literals` differ depending on *how the binary was built*:
+  without cgo there is no dlopen and no `setlocale`, and those two files
+  test exactly those. The test does not guess at `CGO_ENABLED`; it asks
+  the binary it just built (the third value `package.loadlib` returns,
+  and whether `os.setlocale` answers), so `CGO_ENABLED=0 go test ./...`
+  passes too.
+- To re-capture after a Lua release, or on a platform that has no golden
+  yet: `LUA_REF=/path/to/lua go test -run TestOfficialSuite`.
 
 ### 5.2 A real C extension: LPeg
 
@@ -660,10 +682,14 @@ themselves when there is no cgo or no C compiler, so
 `CGO_ENABLED=0 go test ./...` is a supported configuration that simply
 does not exercise the dlopen path.
 
-CI runs the whole matrix on Linux, macOS and Windows (`.github/workflows/go.yml`):
-`go vet`, `go build`, `go test` everywhere, `go test -race` on Linux and
-macOS (the race detector needs cgo), plus a `gofmt` check and a single
-pass over the benchmarks on Linux.
+CI runs the whole matrix on Linux, macOS and Windows
+(`.github/workflows/go.yml`) — four jobs:
+
+| Job | Platforms | What it does |
+|---|---|---|
+| **build** | 3 OS × `oldstable` + `stable` | `go vet`, `go build`, `go test`; `go test -race` on Linux and macOS (the race detector needs cgo); a `gofmt` check and one pass over the benchmarks on Linux |
+| **nocgo** | 3 OS | `CGO_ENABLED=0` build and test, plus cross-compiles for five targets — this is what keeps the pure-Go promise true |
+| **official** | Linux + macOS | downloads Lua 5.4.9 from lua.org, builds a reference interpreter from source, and runs `go test -run TestOfficialSuite` with `LUA_REF` pointed at it: goldens are captured fresh for that platform and then compared byte for byte. That makes the official suite a real gate everywhere and stops the checked-in darwin goldens from rotting unnoticed. (No Windows: Lua's own makefile is a Unix one.) |
 
 Reference sources for review (not vendored): `lua-5.4.9`, <https://www.lua.org/ftp/lua-5.4.9.tar.gz>.
 

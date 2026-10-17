@@ -136,7 +136,7 @@
 | **P4 API 层** | `lapi` `lauxlib` `linit` | 宿主注册 Go 函数、userdata、registry 引用 | ✅ |
 | **P5 标准库** | base/coroutine/table/math/string/utf8/os/io/debug/package | 官方 `lua-5.4.9-tests` 子集全绿 | ✅ |
 | **P6 工具链** | `cmd/lua`（脚本执行 + REPL）、`cmd/luac`（编译器）、`ldump`/`lundump` | `go run ./cmd/lua test.lua` | ✅ |
-| **P7 验收** | 官方测试集 + 自建用例 + 基准 + CI（Linux/macOS/Windows） | 全平台 `go test -race` 通过 | 🔄 |
+| **P7 验收** | 官方测试集（33 个入库，`go test` 一等公民）+ 自建用例 + 基准 + CI（4 个作业） | 全平台 `go test -race` 通过 | ✅ |
 
 ### 5.1 一致性实测（官方测试集）
 
@@ -162,6 +162,24 @@
 `go test` 内也镜像了这套比对：`testdata/diff/*.lua`（80 个用例）与从 PUC-Lua 5.4.9
 采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
+
+**这 33 个官方用例现在就躺在仓库里，是 `go test` 的一等公民**：`testdata/official/`
+存着 `testes/` 的全部 33 个 `.lua`（同 MIT 许可一起再分发），旁边是
+`<name>.<goos>.expected`——参考解释器源码编译出来后对该文件打印的内容。
+`official_test.go` 一边跑参考、一边跑本实现，归一化后逐字节比对，于是
+`go test ./...` 里就带上了 27 个全等 / 5 个已知差异 / 1 个不跑。它有几个刻意的安排：
+
+- 用例跑在 `t.TempDir()` 里的一份副本上。`attrib.lua` 会往 `libs/` 写十几个
+  chunk 再 `require` 它们，`main.lua` 会派生子进程——不能写进 `testdata/`，
+  而且一次残留会改变下一次的答案。
+- 退出码不算在比对里。这些文件里有好几个**就是**以一个失败的 `assert` 收尾的。
+- `heavy` 不跑（两边都超时）；`all` / `gc` / `coroutine` / `gengc` / `locals`
+  是登记在案的差异，哪个哪天变得全等了，测试会专门说一句——那是进展，不该被埋掉。
+- `attrib` 与 `literals` 的差异取决于**构建**：没有 cgo 就没有 dlopen 与
+  `setlocale`，而这两个文件测的正是这两样。测试不猜 `CGO_ENABLED`，它去问
+  刚编出来的那个二进制（`package.loadlib` 返回的第三个值、`os.setlocale`
+  是否答得上来），因此 `CGO_ENABLED=0 go test ./...` 也照样通过。
+- 换 Lua 版本或换平台后重新采集：`LUA_REF=/path/to/lua go test -run TestOfficialSuite`。
 
 ### 5.2 一个真实的 C 扩展：LPeg
 
@@ -621,9 +639,13 @@ go build -o luac ./cmd/luac   # 命令行编译器
 并 `require` 它们，在没有 cgo 或没有 C 编译器时自行跳过；因此
 `CGO_ENABLED=0 go test ./...` 也是受支持的配置，只是不走 dlopen 那条路径。
 
-CI 在 Linux / macOS / Windows 上跑完整矩阵（`.github/workflows/go.yml`）：
-全平台 `go vet` + `go build` + `go test`，Linux 与 macOS 加跑 `go test -race`
-（竞态检测需要 cgo），Linux 上另有 `gofmt` 检查与一轮 `benchtime=1x` 的基准自检。
+CI 在 Linux / macOS / Windows 上跑完整矩阵（`.github/workflows/go.yml`），四个作业：
+
+| 作业 | 平台 | 内容 |
+|---|---|---|
+| **build** | 3 OS × `oldstable`+`stable` | `go vet` + `go build` + `go test`；Linux/macOS 加 `go test -race`；Linux 另加 `gofmt` 与一轮 `benchtime=1x` 的基准自检 |
+| **nocgo** | 3 OS | `CGO_ENABLED=0` 下的 `go build` + `go test`，外加 5 个目标的交叉编译——纯 Go 这条路的承诺由它守住 |
+| **official** | Linux + macOS | 从 lua.org 拉 5.4.9 源码现编一个参考解释器，`LUA_REF` 指向它跑 `go test -run TestOfficialSuite`：先采集本平台的 golden，再逐字节比对。这样官方套件在每个平台上都是真闸门，已入库的 darwin golden 也不会悄悄烂掉（Windows 不在此列：Lua 自带的 makefile 是 Unix 的） |
 
 参考源码用于对照审校（不入库）：`lua-5.4.9`，<https://www.lua.org/ftp/lua-5.4.9.tar.gz>。
 

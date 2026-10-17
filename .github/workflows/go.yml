@@ -57,3 +57,84 @@ jobs:
       - name: Benchmarks compile and run
         if: runner.os == 'Linux'
         run: go test -run=XXX -bench=. -benchtime=1x ./...
+
+  # Everything above runs with cgo, which is the default.  Without cgo
+  # the package must still build and pass: it loses only the loading of
+  # shared objects (see README §5.3), and it is the configuration that
+  # cross-compiles.  This job is what keeps that promise true.
+  nocgo:
+    name: Pure Go, no cgo (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      CGO_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+          cache: false
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./...
+
+      # A cross-compile is the other thing cgo takes away.  Build for
+      # every target this package claims, without any toolchain but Go's.
+      - name: Cross-compile
+        shell: bash
+        run: |
+          set -e
+          for target in windows/amd64 windows/arm64 darwin/arm64 linux/arm64 linux/386; do
+            GOOS=${target%/*} GOARCH=${target#*/} go build ./...
+            echo "  ok  $target"
+          done
+
+  # Lua's own test suite, in testdata/official, compared against a
+  # reference interpreter built from source on the runner -- see
+  # official_test.go.  The goldens checked into the repository are
+  # darwin; this job captures fresh ones from PUC-Lua itself, so the
+  # suite is a real gate on every platform and the goldens cannot rot
+  # unnoticed.  (No Windows: Lua's own makefile is a Unix makefile.)
+  official:
+    name: Official Lua 5.4.9 suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+          cache: false
+
+      - name: Build the reference interpreter
+        shell: bash
+        run: |
+          set -e
+          curl -sSfL -o lua-5.4.9.tar.gz https://www.lua.org/ftp/lua-5.4.9.tar.gz
+          tar zxf lua-5.4.9.tar.gz
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            make -C lua-5.4.9 -j4 macosx
+          else
+            # 'posix' alone leaves dlopen out, and the suite needs it.
+            make -C lua-5.4.9 -j4 posix MYCFLAGS=-DLUA_USE_DLOPEN
+          fi
+          ./lua-5.4.9/src/lua -v
+
+      - name: Official suite
+        shell: bash
+        env:
+          LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
+        run: go test -v -run TestOfficialSuite -timeout 20m .

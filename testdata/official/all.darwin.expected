@@ -1,0 +1,35 @@
+
+	Starting Tests
+random seeds: 1792240434, 4351351176
+current path:
+****/usr/local/share/lua/5.4/?.lua;/usr/local/share/lua/5.4/?/init.lua;/usr/local/lib/lua/5.4/?.lua;/usr/local/lib/lua/5.4/?/init.lua;./?.lua;./?/init.lua****
+
+    ---- total memory: 44.7K, max memory: 44.7K ----
+
+time: 1e-05 (+1e-05)
+
+***** FILE 'main.lua'*****
+testing stand-alone interpreter
+progname: /tmp/lua-5.4.9/src/lua
+Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio
+(temporary program file used in these tests: /tmp/lua_FYDMNl)
+/tmp/lua-5.4.9/src/lua: module 'lib2-v2' not found:
+	no field package.preload['lib2-v2']
+	no file '/usr/local/share/lua/5.4/lib2-v2.lua'
+	no file '/usr/local/share/lua/5.4/lib2-v2/init.lua'
+	no file '/usr/local/lib/lua/5.4/lib2-v2.lua'
+	no file '/usr/local/lib/lua/5.4/lib2-v2/init.lua'
+	no file './lib2-v2.lua'
+	no file './lib2-v2/init.lua'
+	no file './libs/lib2-v2.so'
+stack traceback:
+	[C]: in function 'require'
+	[C]: in ?
+/tmp/lua-5.4.9/src/lua: main.lua:67: exit
+stack traceback:
+	[C]: in function 'assert'
+	main.lua:67: in local 'RUN'
+	main.lua:230: in main chunk
+	(...tail calls...)
+	all.lua:155: in main chunk
+	[C]: in ?
