@@ -46,6 +46,11 @@ const (
 
 // incnny/decnny manipulate the "non-yieldable" part of nCcalls, which
 // lives in the upper 16 bits (lstate.h).
+//
+// nCcalls is l_uint32 there -- an *unsigned* 32-bit count -- and it has
+// to be: 0xffff0000 does not fit in a signed 32-bit int, so on a 386
+// build the mask itself does not compile.  Unsigned is also what C's
+// own arithmetic on it assumes ('nCcalls += 0x10000' wraps).
 func incnny(L *State) { L.nCcalls += 0x10000 }
 
 func decnny(L *State) { L.nCcalls -= 0x10000 }
@@ -163,8 +168,8 @@ type State struct {
 	openupval []*UpVal // open upvalues of this stack
 	tbclist   []int    // to-be-closed variables (stack indices)
 
-	errfunc int // current error handling function (stack index)
-	nCcalls int
+	errfunc int    // current error handling function (stack index)
+	nCcalls uint32 // l_uint32: see the note on incnny
 	nci     int
 
 	ciPool []*CallInfo
@@ -637,7 +642,7 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 	   C then bumps 'nCcalls' once more and calls the body with
 	   'ccall(..., 0)', so a running coroutine sits at
 	   getCcalls(from) + 1.  Here luaD_call supplies that +1. */
-	L.nCcalls = ccalls
+	L.nCcalls = uint32(ccalls)
 	if L.top == 1 {
 		// function was reset: use the pending function
 		L.stack[0] = L.prevFunc
@@ -746,7 +751,7 @@ func (L *State) Resume(from *State, nargs int) int {
 	co.status = LUA_OK
 	ccalls := 0
 	if from != nil {
-		ccalls = from.nCcalls & 0xffff /* getCcalls(from) */
+		ccalls = int(from.nCcalls & 0xffff) /* getCcalls(from) */
 	}
 	if ccalls >= LUAI_MAXCCALLS {
 		/* C's resume_error: "C stack overflow" */
@@ -828,7 +833,7 @@ func (L *State) Yield(nresults int) int {
 	   depth of whoever resumed it *now*: the resumer may be deeper in the
 	   stack than it was when this coroutine started.  'coRun' only runs
 	   once, so the depth is refreshed here. */
-	L.nCcalls = req.ccalls + 1
+	L.nCcalls = uint32(req.ccalls + 1)
 	narg := len(req.args)
 	L.checkStack(narg)
 	copy(L.stack[L.top:], req.args)

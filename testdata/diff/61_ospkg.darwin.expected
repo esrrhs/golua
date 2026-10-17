@@ -115,23 +115,23 @@ false|"module 'no_such_module_xyz' not found:\
 \9no file './no_such_module_xyz.so'"
 true|table: 0xADDR	true|table: 0xADDR
 nil
-true|42|"/tmp/p36dir/m1.lua"	true|42
-true|true|"/tmp/p36dir/m2.lua"	true|true
-true|true|"/tmp/p36dir/m3.lua"
-true|"sub.m4"|"/tmp/p36dir/sub/m4.lua"
-true|"sub.m4"|"/tmp/p36dir/sub/m4.lua"
-false|"error loading module 'bad' from file '/tmp/p36dir/bad.lua':\
-\9/tmp/p36dir/bad.lua:2: unexpected symbol near <eof>"
-false|"/tmp/p36dir/err.lua:1: boom"
-true|"argm"|"/tmp/p36dir/argm.lua"
+true|42|"./p36dir/m1.lua"	true|42
+true|true|"./p36dir/m2.lua"	true|true
+true|true|"./p36dir/m3.lua"
+true|"sub.m4"|"./p36dir/sub/m4.lua"
+true|"sub.m4"|"./p36dir/sub/m4.lua"
+false|"error loading module 'bad' from file './p36dir/bad.lua':\
+\9./p36dir/bad.lua:2: unexpected symbol near <eof>"
+false|"./p36dir/err.lua:1: boom"
+true|"argm"|"./p36dir/argm.lua"
 42	true	true
-false|"error loading module 'circ2' from file '/tmp/p36dir/circ2.lua':\
+false|"error loading module 'circ2' from file './p36dir/circ2.lua':\
 \9C stack overflow"
 false|"bad argument #1 to 'require' (string expected, got no value)"
 false|"module '5' not found:\
 \9no field package.preload['5']\
-\9no file '/tmp/p36dir/5.lua'\
-\9no file '/tmp/p36dir/5/init.lua'\
+\9no file './p36dir/5.lua'\
+\9no file './p36dir/5/init.lua'\
 \9no file '/usr/local/lib/lua/5.4/5.so'\
 \9no file '/usr/local/lib/lua/5.4/loadall.so'\
 \9no file './5.so'"
@@ -139,15 +139,15 @@ true|"pre:pre1"|":preload:"	true|"pre:pre1"
 true|"already"
 false|"module 'pre3' not found:\
 \9no field package.preload['pre3']\
-\9no file '/tmp/p36dir/pre3.lua'\
-\9no file '/tmp/p36dir/pre3/init.lua'\
+\9no file './p36dir/pre3.lua'\
+\9no file './p36dir/pre3/init.lua'\
 \9no file '/usr/local/lib/lua/5.4/pre3.so'\
 \9no file '/usr/local/lib/lua/5.4/loadall.so'\
 \9no file './pre3.so'"
 false|"module 'pre3' not found:\
 \9no field package.preload['pre3']\
-\9no file '/tmp/p36dir/pre3.lua'\
-\9no file '/tmp/p36dir/pre3/init.lua'\
+\9no file './p36dir/pre3.lua'\
+\9no file './p36dir/pre3/init.lua'\
 \9no file '/usr/local/lib/lua/5.4/pre3.so'\
 \9no file '/usr/local/lib/lua/5.4/loadall.so'\
 \9no file './pre3.so'"

@@ -149,7 +149,10 @@ print("== require ==")
 print(rec(require, "no_such_module_xyz"))
 print(rec(require, "string"), rec(require, "math"))
 print(package.loaded.no_such_module_xyz)
-package.path = "/tmp/p36dir/?.lua;/tmp/p36dir/?/init.lua"
+-- p36dir/ beside this file, not /tmp/p36dir: a case that reads files
+-- somebody else happened to leave in /tmp only passes on the machine
+-- that left them there.
+package.path = "./p36dir/?.lua;./p36dir/?/init.lua"
 print(rec(require, "m1"), rec(require, "m1"))
 print(rec(require, "m2"), rec(require, "m2"))
 print(rec(require, "m3"))

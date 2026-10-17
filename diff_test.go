@@ -66,11 +66,17 @@ func diffBuild(t *testing.T) string {
 			diffBinErr = &diffBuildError{string(out), err}
 			return
 		}
-		/* Go writes lua.exe on Windows whatever -o said, and exec
-		   reports a file it cannot find as "not found in %PATH%",
-		   which is a long way from the truth. */
-		if _, err := os.Stat(bin); err != nil {
-			if _, err := os.Stat(bin + ".exe"); err == nil {
+		/* Windows will not execute a file whose name has no
+		   extension, and os/exec says so as "executable file not
+		   found in %PATH%" -- which is a long way from the truth,
+		   since the file is right there.  Go writes lua.exe there
+		   whatever -o said; make sure of it either way. */
+		if runtime.GOOS == "windows" {
+			if _, err := os.Stat(bin); err == nil {
+				if err := os.Rename(bin, bin+".exe"); err == nil {
+					bin += ".exe"
+				}
+			} else if _, err := os.Stat(bin + ".exe"); err == nil {
 				bin += ".exe"
 			}
 		}

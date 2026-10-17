@@ -4,3 +4,11 @@
 # goldens are pinned to LF, and the compiled chunks are not text at all.
 *.expected text eol=lf
 testdata/luac/*.luac binary
+
+# Four of the goldens are not text either -- they are what a case printed
+# of a dumped chunk, or of a UTF-8 byte sequence -- and marking them text
+# would have Git rewrite bytes that are part of the answer.
+testdata/diff/14_utf8.*.expected binary
+testdata/diff/37_dump.*.expected binary
+testdata/diff/76_utf8str.*.expected binary
+testdata/diff/78_new54.*.expected binary

@@ -153,14 +153,17 @@ func TestCJSON(t *testing.T) {
 
 // stableLines drops the lines that cannot be compared: the ones printing a
 // table with string keys, whose order PUC-Lua does not fix, and the one
-// naming the module's version, which is CJSON's and not this port's.
+// naming the module's version, which is CJSON's and not this port's.  It
+// also spells a NaN the one way: its sign is the platform's to print --
+// glibc says "-nan" for what macOS says is "nan" (README §6.7) -- and
+// 'tostring(0/0)' is not the subject of this test.
 func stableLines(lines []string) []string {
 	out := make([]string, 0, len(lines))
 	for _, l := range lines {
 		if strings.Contains(l, `["`) || strings.Contains(l, "Lua CJSON version") {
 			continue
 		}
-		out = append(out, l)
+		out = append(out, strings.ReplaceAll(l, "-nan", "nan"))
 	}
 	return out
 }

@@ -301,7 +301,7 @@ func luaE_incCstack(L *State) {
 }
 
 func ccall(L *State, funcIdx, nresults int, inc int) {
-	L.nCcalls += inc
+	L.nCcalls += uint32(inc)
 	if L.nCcalls&0xffff >= LUAI_MAXCCALLS {
 		luaE_checkcstack(L)
 	}
@@ -309,7 +309,7 @@ func ccall(L *State, funcIdx, nresults int, inc int) {
 		ci.callstatus = CIST_FRESH /* mark that it is a "fresh" execute */
 		luaV_execute(L, ci)
 	}
-	L.nCcalls -= inc
+	L.nCcalls -= uint32(inc)
 }
 
 func luaD_call(L *State, funcIdx, nresults int) { ccall(L, funcIdx, nresults, 1) }
