@@ -686,6 +686,7 @@ a difference is always reproducible.
 |---|---|---|
 | `fuzz_test.go` | 37 615 expressions — 43 operands against every operator, plus the calls that take a base or a format — and 201 written-out snippets for what combination cannot reach: syntax errors, metamethods, coroutines, hooks, patterns, non-string errors, stack overflow | 37 816 |
 | `patternfuzz_test.go` | 6 991 patterns — every pattern atom against every atom, plus the triples that need three pieces to mean anything — against 25 subjects | 1 048 650 |
+| `formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
 lines of exactly the kind of logic nobody writes down the combinations
@@ -693,6 +694,37 @@ of: a frontier followed by a set, a quantifier on a position capture,
 `%b` with a delimiter that is also a magic character. `32_pattern.lua`
 and `72_gsubbit.lua` are 366 lines of cases somebody *did* think of, and
 they pass; this is the rest.
+
+The format half exists because `string.format` is the one place here
+that is not a translation of C at all. Everything else hands a format to
+Go's own `fmt` or reads a number the way Lua does; `str_format` has to
+reproduce **C's** `printf`, including the parts of it that are decided
+by the library rather than by the standard — and it is therefore
+hand-written: `strParseFormat`, `strPadField`, `strFormatUnsigned`,
+`strHexFloat`. It found two real differences, both now fixed and pinned
+in `lstrlib_test.go`:
+
+* **The value is checked before the specification.** In C, `d`, `i`,
+  `u`, `o`, `x`, `X` all go through `intcase`, which is
+  `luaL_checkinteger(L, arg); checkformat(...)`, and `e`, `E`, `f`, `g`,
+  `G` read the number the same way round — so `%#d` with `1.5` answers
+  "number has no integer representation", and only `%#d` with a real
+  integer answers "invalid conversion specification". Here the
+  specification was being judged first, so every one of those reported
+  the wrong complaint. `c` is the other way round and stays that way:
+  `%#c` with a string complains about the specification.
+* **`%a` rounds on more than the digit it drops.** Half of the last digit
+  kept is 8, so a first dropped digit above 8 rounds up and one below
+  does not — but a first dropped digit of exactly 8 is a tie, and the
+  tie is only a tie if everything behind it is zero. Deciding from that
+  digit alone made `%.8a` of `1e-300` answer `0x1.56e1fc2fp-997` where C
+  answers `0x1.56e1fc30p-997`: the digits are `56e1fc2f|8f359`.
+
+The one thing the format half cannot compare is `%s` of a value whose
+`print` is an address. Padding is decided from the address's real
+length, and the normalisation that makes addresses comparable rewrites
+it afterwards, so a table is not in the value list — not because it
+differs, but because no answer could be right.
 
 It is worth saying what makes a fuzz like this worthless, because one
 round of it was. A generated chunk that does not *load* prints the same

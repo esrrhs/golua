@@ -1313,6 +1313,22 @@ func strHexValue(c byte) int {
 	return int(c-'a') + 10
 }
 
+// strRoundsUp tells whether the hexadecimal digits being dropped from a
+// %a conversion -- 'tail' is the first of them -- are more than half of
+// the last digit kept.  Half is 8.  A tail that begins with exactly 8
+// and continues with nothing but zeros is a tie, and a tie rounds down.
+func strRoundsUp(tail []byte) bool {
+	if strHexValue(tail[0]) != 8 {
+		return strHexValue(tail[0]) > 8
+	}
+	for _, c := range tail[1:] {
+		if c != '0' {
+			return true
+		}
+	}
+	return false
+}
+
 // strHexFloat formats a non-negative finite float as '0x1.xxxp+e'.
 // 'prec' is the number of hexadecimal digits after the radix point
 // (-1 for the shortest representation) and 'alt' asks for the radix
@@ -1349,8 +1365,18 @@ func strHexFloat(x float64, prec int, alt bool) string {
 		frac -= float64(d)
 	}
 	intDigit := byte('1')
-	if prec < 13 && digits[prec] >= '9' {
-		/* round up; note that the C library rounds ties down */
+	/* Round up when what is being dropped is more than half of the
+	   last digit kept -- and only then, because the C library is
+	   observed to round a tie *down*: '%.12a' of a value whose
+	   thirteenth digit is '8' keeps the digit it had.
+	   Half is 8 in hexadecimal, so the first dropped digit decides
+	   unless it is exactly 8, in which case whether any digit after
+	   it is nonzero decides.  Judging by the first dropped digit
+	   alone is what made '%.8a' of 1e-300 answer
+	   0x1.56e1fc2fp-997 where C answers 0x1.56e1fc30p-997: the
+	   digits are 56e1fc2f|8f359, the first dropped digit is a bare
+	   '8', and the rest of the tail is not zero. */
+	if prec < 13 && strRoundsUp(digits[prec:]) {
 		carry := true
 		for i := prec - 1; i >= 0 && carry; i-- {
 			v := strHexValue(digits[i])
@@ -1600,8 +1626,14 @@ func strFormat(L *State) int {
 			strCheckFormat(L, form, strFmtFlagsC, false)
 			b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", string([]byte{byte(L.CheckInteger(arg))})))
 		case 'd', 'i':
-			strCheckFormat(L, form, strFmtFlagsI, true)
+			/* C fetches the argument first -- 'intcase' is
+			   'luaL_checkinteger(L, arg); checkformat(...)' -- so a
+			   value that is not an integer is complained about even
+			   when the specification is itself invalid: '%#d' with
+			   1.5 answers "number has no integer representation",
+			   not "invalid conversion specification". */
 			n := L.CheckInteger(arg)
+			strCheckFormat(L, form, strFmtFlagsI, true)
 			if f := strParseFormat(form); n == 0 && f.prec == 0 {
 				/* C's printf still writes the sign when there are no
 				   digits to write; Go's fmt returns before it gets
@@ -1611,18 +1643,22 @@ func strFormat(L *State) int {
 				b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", n))
 			}
 		case 'u':
+			n := L.CheckInteger(arg) /* as in 'intcase': value first */
 			strCheckFormat(L, form, strFmtFlagsU, true)
-			b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", uint64(L.CheckInteger(arg))))
+			b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", uint64(n)))
 		case 'o', 'x', 'X':
+			n := L.CheckInteger(arg) /* as in 'intcase': value first */
 			strCheckFormat(L, form, strFmtFlagsX, true)
 			b.AddString(strFormatUnsigned(strParseFormat(form),
-				uint64(L.CheckInteger(arg)), spec))
+				uint64(n), spec))
 		case 'a', 'A':
 			strCheckFormat(L, form, strFmtFlagsF, true)
 			b.AddString(strNumber2StrX(L, form, L.CheckNumber(arg)))
 		case 'e', 'E', 'f', 'g', 'G':
+			/* C reads the number first here too. */
+			n := L.CheckNumber(arg)
 			strCheckFormat(L, form, strFmtFlagsF, true)
-			b.AddString(strFormatFloat(form, L.CheckNumber(arg)))
+			b.AddString(strFormatFloat(form, n))
 		case 'p':
 			strCheckFormat(L, form, strFmtFlagsC, false)
 			p := L.ToPointer(arg)
