@@ -185,9 +185,20 @@ type State struct {
 }
 
 // coRuntime is the channel pair that drives a coroutine goroutine.
+//
+// The channels carry the request and the response as *values*, and the
+// value slices are scratch buffers owned by whoever is running: the two
+// sides take strict turns -- one is always parked while the other works
+// -- so a buffer is never touched by both. That matters because a
+// resume/yield pair is already two goroutine switches, roughly 280 ns
+// on this hardware, which is the larger part of its cost; allocating a
+// request, a response and a slice of values on top of that, twice per
+// pair, is the part that can be given back.
 type coRuntime struct {
-	req  chan *resumeReq
-	resp chan *resumeResp
+	req  chan resumeReq
+	resp chan resumeResp
+	vals []Value // scratch for the values handed to the resumer
+	args []Value // scratch for the arguments of a resume
 }
 
 type resumeReq struct {
@@ -459,7 +470,7 @@ func (L *State) Close() {
 		releaseCState(L)
 	}
 	if L.co != nil && !L.isMain {
-		go func() { L.co.req <- &resumeReq{kind: reqClose} }()
+		go func() { L.co.req <- resumeReq{kind: reqClose} }()
 	}
 }
 
@@ -488,7 +499,7 @@ func (L *State) NewThread() *State {
 	L1.hookmask = L.hookmask
 	L1.basehookcount = L.basehookcount
 	L1.hookcount = L.basehookcount /* resethookcount(L1) */
-	L1.co = &coRuntime{req: make(chan *resumeReq), resp: make(chan *resumeResp)}
+	L1.co = &coRuntime{req: make(chan resumeReq), resp: make(chan resumeResp)}
 	go L1.coMain()
 	// the thread object goes on the stack of the creating state
 	L.checkStack(1)
@@ -506,38 +517,38 @@ func (L *State) coMain() {
 		if req.kind == reqClose {
 			L.status = LUA_OK
 			L.dead = true
-			L.co.resp <- &resumeResp{status: LUA_OK}
+			L.co.resp <- resumeResp{status: LUA_OK}
 			return
 		}
 		/* 'coRun' returns only when the coroutine is through: a yield
 		   parks the goroutine inside (*State).Yield, which sends the
 		   resume response itself and waits there for the next resume
 		   request. */
-		status, vals, closed := L.coRun(req.args, req.ccalls)
+		status, closed := L.coRun(req.args, req.ccalls)
 		L.dead = true
 		if closed {
 			/* luaE_resetthread leaves the thread with status LUA_OK,
 			   so the error from '__close' is reported only once: a
 			   second 'coroutine.close' succeeds. */
 			L.status = LUA_OK
-			L.co.resp <- &resumeResp{status: status, vals: vals}
+			L.co.resp <- resumeResp{status: status, vals: L.co.vals}
 			return
 		}
 		L.status = byte(status)
-		if status != LUA_OK && len(vals) > 0 {
-			L.lastErr = vals[0]
+		if status != LUA_OK && len(L.co.vals) > 0 {
+			L.lastErr = L.co.vals[0]
 			L.hasErr = true
 		}
-		L.co.resp <- &resumeResp{status: status, vals: vals}
+		L.co.resp <- resumeResp{status: status, vals: L.co.vals}
 		return
 	}
 }
 
-// coRun runs the coroutine body with the given arguments. The third
+// coRun runs the coroutine body with the given arguments. The results
+// are left in L.co.vals, the coroutine's scratch slice. The second
 // result tells whether the run ended because the thread was closed.
-func (L *State) coRun(args []Value, ccalls int) (status int, vals []Value, closed bool) {
+func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 	status = LUA_OK
-	vals = nil
 	defer func() {
 		if r := recover(); r != nil {
 			switch x := r.(type) {
@@ -564,21 +575,25 @@ func (L *State) coRun(args []Value, ccalls int) (status int, vals []Value, close
 				if st != LUA_OK {
 					status = st
 					luaD_seterrorobj(L, st, 1)
-					vals = []Value{L.stack[1]}
+					L.co.vals = append(L.co.vals[:0], L.stack[1])
 				} else {
 					status = LUA_OK
 					L.top = 1
+					/* no results at all: 'L.co.vals' is a scratch slice
+					   that the last yield filled, and a stale value
+					   handed to the resumer would be a real one. */
+					L.co.vals = L.co.vals[:0]
 				}
 				return
 			case *luaError:
 				status = x.status
-				vals = []Value{x.value}
+				L.co.vals = append(L.co.vals[:0], x.value)
 				return
 			default:
 				status = LUA_ERRRUN
 				var v Value
 				setsvalue(&v, luaS_newlstr(L, fmt.Sprintf("%v", r)))
-				vals = []Value{v}
+				L.co.vals = append(L.co.vals[:0], v)
 				return
 			}
 		}
@@ -603,9 +618,8 @@ func (L *State) coRun(args []Value, ccalls int) (status int, vals []Value, close
 		L.stack[0] = L.prevFunc
 	}
 	luaD_call(L, 0, LUA_MULTRET)
-	vals = make([]Value, L.top)
-	copy(vals, L.stack[:L.top])
-	return status, vals, false
+	L.co.vals = append(L.co.vals[:0], L.stack[:L.top]...)
+	return status, false
 }
 
 // resetThreadStatus is luaE_resetthread: it unwinds the CallInfo list and
@@ -640,7 +654,7 @@ func (L *State) ResetThread() int {
 	}
 	if !L.dead && L.status == LUA_YIELD {
 		// still suspended: unwind it
-		L.co.req <- &resumeReq{kind: reqClose}
+		L.co.req <- resumeReq{kind: reqClose}
 		<-L.co.resp
 	}
 	L.dead = false
@@ -654,7 +668,7 @@ func (L *State) ResetThread() int {
 	L.openupval = nil
 	L.errfunc = 0
 	L.nCcalls = 0
-	L.co = &coRuntime{req: make(chan *resumeReq), resp: make(chan *resumeResp)}
+	L.co = &coRuntime{req: make(chan resumeReq), resp: make(chan resumeResp)}
 	go L.coMain()
 	return LUA_OK
 }
@@ -674,8 +688,7 @@ func (L *State) Resume(from *State, nargs int) int {
 	default:
 		return LUA_ERRRUN
 	}
-	args := make([]Value, nargs)
-	copy(args, from.stack[from.top-nargs:from.top])
+	co.co.args = append(co.co.args[:0], from.stack[from.top-nargs:from.top]...)
 	if co.status == LUA_OK {
 		// starting (or restarting) the coroutine: the function is the
 		// value that was pushed on the coroutine stack
@@ -695,7 +708,7 @@ func (L *State) Resume(from *State, nargs int) int {
 		/* C's resume_error: "C stack overflow" */
 		return resumeError(from, "C stack overflow")
 	}
-	co.co.req <- &resumeReq{kind: reqResume, args: args, ccalls: ccalls}
+	co.co.req <- resumeReq{kind: reqResume, args: co.co.args, ccalls: ccalls}
 	resp := <-co.co.resp
 	co.status = byte(resp.status)
 	if resp.status == LUA_OK || resp.status == LUA_YIELD {
@@ -755,15 +768,14 @@ func (L *State) Yield(nresults int) int {
 	}
 	ci := L.ci
 	L.nYields++
-	vals := make([]Value, nresults)
-	copy(vals, L.stack[L.top-nresults:L.top])
+	L.co.vals = append(L.co.vals[:0], L.stack[L.top-nresults:L.top]...)
 	/* The yielded values leave the stack, because that is what C does:
 	   'auxresume' hands them to the resumer with 'lua_xmove', which
 	   takes them off this thread's stack.  A continuation that counts
 	   with 'lua_gettop' -- PUC-Lua's own 'dofilecont' does -- must see
 	   the same stack here as there (test 'v2' below pins it). */
 	L.top -= nresults
-	L.co.resp <- &resumeResp{status: LUA_YIELD, vals: vals}
+	L.co.resp <- resumeResp{status: LUA_YIELD, vals: L.co.vals}
 	req := <-L.co.req /* wait for the next resume (or a close) */
 	if req.kind == reqClose {
 		panic(&closeSignal{}) /* unwind: the coroutine is being closed */
