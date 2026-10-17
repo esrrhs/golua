@@ -225,6 +225,13 @@ the other, normalises, and compares — so `go test ./...` now carries 27
 identical / 5 known differences / 1 not run. A few things about it are
 deliberate:
 
+- `testdata/official/libs/*.c` — the five C libraries Lua's own makefile
+  builds — are compiled into that copy, so `attrib.lua` and `main.lua`
+  exercise the C half of the suite for real: versioned module names
+  (`lib2-v2`), `luaopen_` chains, and a library that borrows a symbol
+  from one opened before it. Without them both files stop at "cannot
+  load dynamic library" and none of that is tested.
+
 - The files run in a copy made in `t.TempDir()`. `attrib.lua` writes a
   dozen chunks under `libs/` and requires them; `main.lua` spawns
   subprocesses. Nothing may be written into `testdata/`, a checkout is
@@ -242,7 +249,25 @@ deliberate:
   and whether `os.setlocale` answers), so `CGO_ENABLED=0 go test ./...`
   passes too.
 - To re-capture after a Lua release, or on a platform that has no golden
-  yet: `LUA_REF=/path/to/lua go test -run TestOfficialSuite`.
+  yet: `LUA_REF=/path/to/lua go test -run TestOfficialSuite`. The
+  reference has to be built the way CI builds it — `make posix` with
+  `-DLUA_USE_DLOPEN`, on macOS with `SYSLIBS=` — because `posix` is the
+  one target that is the same everywhere *and* leaves readline out, and
+  readline matters: with it, the reference prints no REPL prompt when its
+  input is a pipe, and `main.lua` tests the prompt.
+- `api.lua` matches but asserts nothing, and the test says so every run.
+  Its whole body sits behind `if T==nil then return end`, and `T` comes
+  from Lua's own `ltests.c`, which is `LUA_CORE`: it includes `lstate.h`,
+  `ltable.h`, `lcode.h` and `lopcodes.h` and walks `GCObject`, `CallInfo`
+  and `TValue` by hand (`L->ci->func.p`, `s2v`, `setobj2s`). There is no
+  C `lua_State` in this port to hand it, so it cannot be compiled against
+  one. Writing `T` in Go would not finish the job either: a third of what
+  `api.lua` asks `T` for is the debug allocator — `T.alloccount` and
+  `T.totalmem` set a limit after which allocations fail — and the
+  collector's own state (`T.gcstate`, `T.gccolor`), none of which exists
+  here. It is the same situation as `gc.lua`, not a gap that can be
+  closed; the C API is covered by §5.6–5.8, by the five real C
+  extensions, and by `capi_test.go`.
 
 ### 5.2 A real C extension: LPeg
 

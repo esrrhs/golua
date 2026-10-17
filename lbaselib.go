@@ -300,6 +300,16 @@ func gcCount() float64 {
 // drives) and when the state closes, and weak entries go with it.  Only
 // the "do it now" of 'collectgarbage' is gone.
 func baseCollectGarbage(L *State) int {
+	/* From inside a '__gc' PUC-Lua answers nil for every option, and not
+	   0: it has stopped the collector for the duration of the finalizer,
+	   and 'lua_gc' turns that into -1, which lbaselib.c's 'checkvalres'
+	   makes a fail.  So does this, for the same reason -- a finalizer is
+	   the one place where "the collector cannot be asked" is something a
+	   program can see. */
+	if L.g.gcInFinalizer {
+		L.PushNil()
+		return 1
+	}
 	if L.CheckOption(1, "collect", baseGCOpts) == baseGCCount {
 		L.PushNumber(gcCount())
 		return 1

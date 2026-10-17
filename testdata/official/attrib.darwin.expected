@@ -2,8 +2,7 @@ testing require
 package config: /|;|?|!|-|
 testing 'require' message
 +
-/tmp/lua-5.4.9/src/lua: attrib.lua:272: assertion failed!
-stack traceback:
-	[C]: in function 'assert'
-	attrib.lua:272: in main chunk
-	[C]: in ?
++
+testing assignments, logical operators, and constructors
++
+OK

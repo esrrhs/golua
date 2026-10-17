@@ -215,3 +215,91 @@ func TestCLINoEnv(t *testing.T) {
 		t.Errorf("without -E LUA_PATH must be used, got (%q, %d)", out, code)
 	}
 }
+
+// cliRunStdin runs the interpreter with 'in' on its standard input and
+// returns stdout, stderr and the exit status.  Every REPL test needs it:
+// the loop reads stdin, and none of what it prints can be reached through
+// the arguments.
+func cliRunStdin(t *testing.T, in string, args ...string) (string, string, int) {
+	t.Helper()
+	bin := diffBuild(t)
+	cmd := &exec.Cmd{Path: bin, Args: append([]string{"lua"}, args...)}
+	cmd.Stdin = strings.NewReader(in)
+	var out, errb strings.Builder
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+	code := 0
+	if err := cmd.Run(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			code = ee.ExitCode()
+		} else {
+			t.Fatalf("running %v: %v", args, err)
+		}
+	}
+	return out.String(), errb.String(), code
+}
+
+// TestCLIREPLPrintsOneResult pins the bug that made the REPL hand 'print'
+// the two arguments 'pmain' was called with: loadline starts by emptying
+// the stack, and without that 'lua -i' followed by '1+1' printed three
+// numbers instead of one.
+func TestCLIREPLPrintsOneResult(t *testing.T) {
+	out, _, _ := cliRunStdin(t, "1+1\n", "-i")
+	/* "> 2\n" and then the "> " of a line that never came, and the
+	   newline doREPL writes on the way out. */
+	if out != "Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio\n> 2\n> \n" {
+		t.Errorf("REPL printed %q", out)
+	}
+}
+
+// TestCLIREPLCallsPrint pins that the results of a line go to the global
+// 'print' -- not to something the interpreter builds itself -- and that a
+// 'print' it cannot call is reported on stderr, without the "lua: " that
+// every other message carries (doREPL clears progname).
+func TestCLIREPLCallsPrint(t *testing.T) {
+	_, errb, _ := cliRunStdin(t, "10\n", "-e", "print=nil", "-i")
+	if errb != "error calling 'print' (attempt to call a nil value)\n" {
+		t.Errorf("stderr of a REPL whose print is nil: %q", errb)
+	}
+}
+
+// TestCLIREPLPromptGlobal pins '_PROMPT': lua.c reads it through
+// 'tostring', which is the only reason a prompt that is not a string --
+// one whose __tostring counts, say -- can work at all.
+func TestCLIREPLPromptGlobal(t *testing.T) {
+	src := "local C = 0; _PROMPT=setmetatable({},{__tostring = function () C = C + 1; return C end})"
+	out, _, _ := cliRunStdin(t, "--\na = 2\n", "-e", src, "-i")
+	if !strings.HasSuffix(out, "123\n") {
+		t.Errorf("a prompt that counts: %q", out)
+	}
+	out, _, _ = cliRunStdin(t, "1+1\n", "-e", "_PROMPT='' _PROMPT2=''", "-i")
+	if !strings.HasSuffix(out, "2\n\n") {
+		t.Errorf("an empty _PROMPT is an empty prompt, not the default: %q", out)
+	}
+}
+
+// TestCLIScriptFromStdinGetsArgs pins that a script read from stdin ("-")
+// still gets its arguments: handle_script pushes arg[1..n], which is a
+// different thing from running stdin when there is no script (that one
+// gets nothing).
+func TestCLIScriptFromStdinGetsArgs(t *testing.T) {
+	out, _, _ := cliRunStdin(t, "print(...)", "-e", "arg[1] = 100", "-")
+	if out != "100\n" {
+		t.Errorf("a stdin script got %q, want \"100\\n\"", out)
+	}
+}
+
+// TestCLIDebugDebug pins that 'debug.debug' is the loop over stdin that
+// lua.c's db_debug is, and not a function that returns at once: a prompt
+// on stderr, one command per line, and 'cont' to leave.
+func TestCLIDebugDebug(t *testing.T) {
+	_, errb, _ := cliRunStdin(t, "io.stderr:write(1000)\ncont\n",
+		"-e", "require'debug'.debug()")
+	if errb != "lua_debug> 1000lua_debug> " {
+		t.Errorf("debug.debug wrote %q", errb)
+	}
+	_, errb, _ = cliRunStdin(t, "x=y=\ncont\n", "-e", "require'debug'.debug()")
+	if errb != "lua_debug> (debug command):1: unexpected symbol near '='\nlua_debug> " {
+		t.Errorf("a command that will not compile: %q", errb)
+	}
+}

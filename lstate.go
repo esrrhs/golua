@@ -106,6 +106,11 @@ type globalState struct {
 	memErrMsg  *TString
 	gcDebt     int  // allocations since the last collector step
 	closing    bool // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
+
+	// pendingRun is the queue of finalizers being run right now --
+	// see runFinalizers, which a nested lua_close has to be able to
+	// finish.
+	pendingRun []gcFinalizer
 	// The four fields below are the collector's knobs.  'collectgarbage'
 	// no longer touches them -- it has no collector to talk to -- so
 	// only the C API's 'lua_gc' (see cdl_gc_cb) reads or writes them
@@ -115,6 +120,14 @@ type globalState struct {
 	gcStopped bool   // 'gcstp & GCSTPUSR': the program stopped the collector
 	gcPause   int    // 'gcpause': LUAI_GCPAUSE, answered by 'setpause'
 	gcStepMul int    // 'gcstepmul': LUAI_GCMUL, answered by 'setstepmul'
+
+	// gcInFinalizer is 'gcstp & GCSTPGC' while a '__gc' metamethod is
+	// running: PUC-Lua stops the collector for the duration of one, and
+	// 'lua_gc' then answers -1 for every option, which is what makes
+	// 'collectgarbage' return nil inside a finalizer.  It is a global
+	// flag there, as it is here -- a finalizer that asks is asking from
+	// whichever state is closing.
+	gcInFinalizer bool
 }
 
 // State is the Go equivalent of lua_State.

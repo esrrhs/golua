@@ -158,3 +158,28 @@ func TestWeakSweptOnAllocation(t *testing.T) {
 		t.Errorf("weak value was not cleared by a collector step")
 	}
 }
+
+// TestCollectGarbageInsideAFinalizerAnswersNil pins that 'collectgarbage'
+// is not merely inert but *refused* inside a '__gc': PUC-Lua stops the
+// collector for the duration of a finalizer, 'lua_gc' answers -1 for
+// every option, and lbaselib.c's 'checkvalres' turns that into a fail.
+// A program can see the difference -- 'print(collectgarbage())' says nil
+// there and 0 anywhere else.
+func TestCollectGarbageInsideAFinalizerAnswersNil(t *testing.T) {
+	got := runChunk(t, `
+		local seen
+		do
+			local o = {}
+			setmetatable(o, {__gc = function ()
+				seen = tostring(collectgarbage()) .. "," ..
+				       tostring(collectgarbage("count")) .. "," ..
+				       tostring(collectgarbage("isrunning"))
+			end})
+		end
+		for i = 1, 1000000 do local a = {} end   -- a cycle: see lgc.go
+		return seen .. " / " .. tostring(collectgarbage())
+	`)
+	if got != "nil,nil,nil / 0" {
+		t.Errorf("collectgarbage inside a finalizer: %s", got)
+	}
+}

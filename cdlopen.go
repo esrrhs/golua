@@ -1024,13 +1024,22 @@ var cdlHandles sync.Map // path -> unsafe.Pointer
 func cgoLoadSym(L *State, path, sym string) int {
 	cpath := C.CString(path)
 	defer C.free(unsafe.Pointer(cpath))
-	h := C.cdl_dlopen(cpath)
+	/* '*' means "load only the library", and that is the one case in
+	   which loadlib.c opens it RTLD_GLOBAL: the symbols are meant to be
+	   visible to libraries loaded afterwards. */
+	global := sym == "*"
+	var h unsafe.Pointer
+	if global {
+		h = unsafe.Pointer(C.cdl_dlopen_global(cpath))
+	} else {
+		h = unsafe.Pointer(C.cdl_dlopen(cpath))
+	}
 	if h == nil {
 		L.PushString(cdlErrMsg())
 		return pkErrLib
 	}
-	cdlHandles.Store(path, unsafe.Pointer(h))
-	if sym == "*" { /* loading only the library (no function)? */
+	cdlHandles.Store(path, h)
+	if global {
 		L.PushBoolean(true)
 		return 0
 	}

@@ -171,6 +171,15 @@ static inline lua_CFunction cdl_reg_func(luaL_Reg *r) {
    dlerror's message, so they have to match. */
 static inline void *cdl_dlopen(const char *path) { return dlopen(path, RTLD_NOW | RTLD_LOCAL); }
 
+/* Except when the symbol asked for is "*" -- 'load only this library'
+   -- where loadlib.c passes RTLD_GLOBAL instead, so that a library
+   loaded that way lends its symbols to the ones opened after it.  Lua's
+   own suite needs exactly this: attrib.lua opens lib1 with "*" and then
+   loads lib11, whose luaopen_lib11 calls lib1's lib1_export. */
+static inline void *cdl_dlopen_global(const char *path) {
+  return dlopen(path, RTLD_NOW | RTLD_GLOBAL);
+}
+
 /* ---- the callbacks cdlbridge.c uses to reach the Go side ----
    These are //export-ed from Go, so cgo declares them too; the
    declarations must match cgo's exactly, which is why no const. */

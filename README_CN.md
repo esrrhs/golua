@@ -169,6 +169,10 @@
 `official_test.go` 一边跑参考、一边跑本实现，归一化后逐字节比对，于是
 `go test ./...` 里就带上了 27 个全等 / 5 个已知差异 / 1 个不跑。它有几个刻意的安排：
 
+- **`testdata/official/libs/*.c`（Lua 自带 makefile 里那五个 C 库）会在副本里
+  现编出来**，于是 `attrib.lua` 与 `main.lua` 真的跑了套件的 C 那一半：带版本号的
+  模块名（`lib2-v2`）、`luaopen_` 链、以及一个库借用在它之前打开的那个库的符号。
+  没有它们，这两个文件都停在「cannot load dynamic library」，上面这些一行也没测到。
 - 用例跑在 `t.TempDir()` 里的一份副本上。`attrib.lua` 会往 `libs/` 写十几个
   chunk 再 `require` 它们，`main.lua` 会派生子进程——不能写进 `testdata/`，
   而且一次残留会改变下一次的答案。
@@ -180,6 +184,18 @@
   刚编出来的那个二进制（`package.loadlib` 返回的第三个值、`os.setlocale`
   是否答得上来），因此 `CGO_ENABLED=0 go test ./...` 也照样通过。
 - 换 Lua 版本或换平台后重新采集：`LUA_REF=/path/to/lua go test -run TestOfficialSuite`。
+  参考解释器必须按 CI 的编法来（`make posix` 加 `-DLUA_USE_DLOPEN`，macOS 上再加
+  `SYSLIBS=`）：`posix` 是唯一在各平台一致的构建目标，而且它不带 readline——
+  带 readline 时参考解释器碰到管道输入**一个提示符都不打**，而 `main.lua` 是要测提示符的。
+- **`api.lua` 是全等的，但它一条断言也没跑**，测试每次都会专门说一句。它的正文整个
+  在 `if T==nil then return end` 后面，而 `T` 来自 Lua 自带的 `ltests.c`——
+  那个文件是 `LUA_CORE`：它 include 了 `lstate.h` `ltable.h` `lcode.h`
+  `lopcodes.h`，手工摆弄 `GCObject`、`CallInfo`、`TValue`（`L->ci->func.p`、
+  `s2v`、`setobj2s`）。这里根本没有 C 的 `lua_State` 可以交给它，所以它编译不过来。
+  用 Go 重写 `T` 也补不完：`api.lua` 向 `T` 要的东西里有三分之一是**调试分配器**
+  （`T.alloccount`、`T.totalmem`：设一个上限，之后的分配就失败）和收集器自身的状态
+  （`T.gcstate`、`T.gccolor`），这些在这里都不存在。这跟 `gc.lua` 是同一种情况，
+  不是能补上的缺口；C API 的覆盖由 §5.7–§5.9、五个真实 C 扩展和 `capi_test.go` 承担。
 
 ### 5.2 一个真实的 C 扩展：LPeg
 

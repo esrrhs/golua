@@ -312,6 +312,11 @@ func (L *State) fullCollect() {
 // new finalizer.
 func (L *State) closeFinalizers() {
 	if L.g.closing {
+		/* lua_close from inside a '__gc' -- which is what
+		   'os.exit(0, true)' does -- runs the finalizers that are left:
+		   C's close_state goes straight back to luaC_freeallobjects.
+		   The list is almost empty by now, so it cannot nest far. */
+		L.runFinalizers()
 		return
 	}
 	L.g.closing = true
@@ -446,15 +451,23 @@ var freeUdataCBlock func(u *Udata)
 
 // runFinalizers drains the queue, calling each metamethod with its
 // object.  It is called where PUC-Lua runs a collector step.
+//
+// The queue being drained lives on the global state, and not in a local,
+// because a '__gc' can reach it: 'os.exit(0, true)' calls lua_close from
+// inside a finalizer, and close_state then runs the finalizers that are
+// left -- which are the ones still in this very list.
 func (L *State) runFinalizers() {
-	if !gcHasPending() {
-		return
+	if len(L.g.pendingRun) == 0 {
+		if !gcHasPending() {
+			return
+		}
+		L.g.pendingRun = gcTakePending()
 	}
-	items := gcTakePending()
-	for i := range items {
-		it := &items[i]
+	for len(L.g.pendingRun) > 0 {
+		it := L.g.pendingRun[0]
+		L.g.pendingRun = L.g.pendingRun[1:]
 		if it.L.g != L.g { /* another state: leave it for its own thread */
-			gcQueueFinalizer(*it)
+			gcQueueFinalizer(it)
 			continue
 		}
 		/* C takes the object out of the "to be finalized" list before it
@@ -496,7 +509,11 @@ func (L *State) callFinalizer(obj Value) {
 	L.ci.callstatus |= CIST_FIN
 	oldah := L.allowhook
 	L.allowhook = 0
+	/* PUC-Lua stops the collector for the duration of a finalizer, and
+	   that is observable: 'collectgarbage' answers nil inside one. */
+	L.g.gcInFinalizer = true
 	status := L.PCall(1, 0, 0)
+	L.g.gcInFinalizer = false
 	L.allowhook = oldah
 	L.ci.callstatus &= ^uint16(CIST_FIN)
 	if status != LUA_OK {

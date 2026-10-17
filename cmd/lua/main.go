@@ -378,7 +378,7 @@ func stdinIsTTY() bool {
 func handleScript(fname string, afterDashDash bool) bool {
 	var err error
 	if fname == "-" && !afterDashDash {
-		err = runStdin()
+		err = runStdinScript()
 	} else {
 		err = runScript(fname)
 	}
@@ -426,9 +426,37 @@ func runFile(path string) error {
 	return callChunk()
 }
 
+// runStdin is 'dofile(L, NULL)' of lua.c: standard input run when there
+// is no script to run.  It gets no arguments -- 'arg' holds the
+// interpreter's own, and lua.c's dochunk calls the chunk with none.
 func runStdin() error { return doReader(os.Stdin, "=stdin") }
 
+// runStdinScript is what 'handle_script' does when the script is named
+// "-": standard input *is* the script, and a script runs with the
+// positive entries of 'arg' as its varargs.  That is not the same thing
+// as runStdin, and mixing the two up shows: 'echo "print(...)" | lua -e
+// "arg[1] = 100" -' prints 100 in PUC-Lua and nothing here.
+func runStdinScript() error {
+	if err := loadStdin(); err != nil {
+		return err
+	}
+	n, err := pushArgs()
+	if err != nil {
+		return err
+	}
+	return docall(n, lua.LUA_MULTRET)
+}
+
+func loadStdin() error { return loadReader(os.Stdin, "=stdin") }
+
 func doReader(f *os.File, name string) error {
+	if err := loadReader(f, name); err != nil {
+		return err
+	}
+	return callChunk()
+}
+
+func loadReader(f *os.File, name string) error {
 	data, err := os.ReadFile("/dev/stdin")
 	if err != nil {
 		/* fall back to reading the file handle directly */
@@ -448,8 +476,7 @@ func doReader(f *os.File, name string) error {
 			data = data[i+1:]
 		}
 	}
-	_ = name
-	return doString(string(data), name)
+	return L.LoadBytes(data, name)
 }
 
 func doString(src, name string) error {
@@ -506,7 +533,14 @@ func lastError() error {
 	return fmt.Errorf("%s", s)
 }
 
+// report is 'report' plus 'l_message' of lua.c: the message on stderr,
+// prefixed with progname -- except inside the REPL, where lua.c clears
+// progname precisely so that an error in a line has no prefix at all.
 func report(err error) {
+	if progName == "" {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return
+	}
 	fmt.Fprintf(os.Stderr, "%s: %v\n", progName, err)
 }
 
@@ -515,74 +549,127 @@ func report(err error) {
 // ---------------------------------------------------------------------
 
 func doREPL() {
+	oldProgName := progName
+	progName = "" /* no 'progname' on errors in interactive mode */
+	defer func() { progName = oldProgName }()
+
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	for {
-		fmt.Print(luaPrompt)
+		/* loadline starts by emptying the stack: a line is read against
+		   nothing but what the REPL itself has put there, and the
+		   results of the previous line are gone.  Without this the
+		   REPL would hand 'print' the arguments pmain was called with
+		   -- 'lua -i' and then '1+1' would print three numbers. */
+		L.SetTop(0)
+		fmt.Print(replPrompt(true))
 		if !in.Scan() {
-			return
+			break
 		}
 		chunk := in.Text()
-		for !tryChunk(chunk) { /* incomplete chunk? keep reading */
-			fmt.Print(luaPrompt2)
-			if !in.Scan() {
-				return
-			}
-			chunk += "\n" + in.Text()
+		/* lua.c's 'pushline': a line starting with '=' means "print the
+		   value of what follows", kept from 5.0. */
+		if strings.HasPrefix(chunk, "=") {
+			chunk = "return " + chunk[1:]
 		}
-	}
-}
-
-// tryChunk compiles and runs 'chunk' as "return <chunk>" first (so that
-// expressions print their value) and falls back to running it as a
-// statement.
-func tryChunk(chunk string) bool {
-	src := "return " + chunk
-	if err := L.LoadBytes([]byte(src), "=stdin"); err == nil {
-		if status := L.PCall(0, lua.LUA_MULTRET, 0); status != lua.LUA_OK {
-			lastError()
+		loadErr := loadLine(&chunk, in)
+		if loadErr != nil {
+			report(loadErr)
+		} else if err := docall(0, lua.LUA_MULTRET); err != nil {
+			report(err) /* with a traceback: docall installs msghandler */
 		} else {
 			printResults()
 		}
-		L.SetTop(0)
-		return true
 	}
 	L.SetTop(0)
-	if err := L.LoadBytes([]byte(chunk), "=stdin"); err != nil {
-		if msg := err.Error(); strings.Contains(msg, "<eof>") {
-			return false /* incomplete: keep reading */
-		}
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		return true
-	}
-	if status := L.PCall(0, lua.LUA_MULTRET, 0); status != lua.LUA_OK {
-		fmt.Fprintf(os.Stderr, "%v\n", lastError())
-	} else {
-		printResults()
-	}
-	L.SetTop(0)
-	return true
+	fmt.Println() /* lua_writeline, which ends doREPL */
 }
 
+// replPrompt is lua.c's 'get_prompt': the global _PROMPT, or _PROMPT2 on
+// a continuation line, with 'tostring' applied to it -- which is the only
+// reason a prompt that is not a string can work at all.  A _PROMPT that
+// is nil means the default; one that is the empty string is an empty
+// prompt and not the default.
+func replPrompt(first bool) string {
+	name, def := "_PROMPT2", luaPrompt2
+	if first {
+		name, def = "_PROMPT", luaPrompt
+	}
+	top := L.GetTop()
+	defer L.SetTop(top)
+	L.GetGlobal(name)
+	if L.Type(-1) == lua.LUA_TNIL {
+		return def
+	}
+	if L.CallMeta(-1, "__tostring") { /* luaL_tolstring asks first */
+		if s, ok := L.ToString(-1); ok {
+			return s /* a number counts: 'lua_isstring' says it does */
+		}
+		return def /* C would raise "'__tostring' must return a string" */
+	}
+	switch L.Type(-1) {
+	case lua.LUA_TNUMBER, lua.LUA_TSTRING:
+		if s, ok := L.ToString(-1); ok {
+			return s
+		}
+	case lua.LUA_TBOOLEAN:
+		if L.ToBoolean(-1) {
+			return "true"
+		}
+		return "false"
+	}
+	return def
+}
+
+// loadLine compiles one REPL line, reading continuation lines from 'in'
+// while the line is unfinished, and leaves the chunk on the stack.  It
+// answers the error to report, if any: the syntax error of a finished
+// line, or -- when input runs out in the middle of one -- the error of
+// the last try, which is what lua.c's 'multiline' returns and 'report'
+// then prints.
+//
+// It is 'addreturn' and 'multiline' of lua.c together: "return <line>"
+// first, so that an expression prints its value, and the line on its own
+// when that does not compile.
+func loadLine(chunk *string, in *bufio.Scanner) error {
+	for {
+		if err := L.LoadBytes([]byte("return "+*chunk), "=stdin"); err == nil {
+			return nil
+		}
+		L.SetTop(0)
+		err := L.LoadBytes([]byte(*chunk), "=stdin")
+		if err == nil {
+			return nil
+		}
+		/* lua.c's 'incomplete': the message ends with <eof>. */
+		if !strings.HasSuffix(err.Error(), "<eof>") {
+			return err /* a real syntax error: report it and go on */
+		}
+		fmt.Print(replPrompt(false))
+		if !in.Scan() {
+			return err /* input ran out mid-line: lua.c reports this too */
+		}
+		*chunk += "\n" + in.Text()
+	}
+}
+
+// printResults is 'l_print' of lua.c: the results of a line are handed
+// to the global 'print' -- the whole point being that 'print' is a
+// global and not a built-in, so a REPL whose 'print' has been replaced
+// prints with the replacement and complains when it cannot call it.
+// Building the line here from 'tostring' would silently swallow that,
+// which is what 'lua -e "print=nil" -i' is testing.
 func printResults() {
 	n := L.GetTop()
-	for i := 1; i <= n; i++ {
-		if i > 1 {
-			fmt.Print("\t")
-		}
-		L.PushValue(i)
-		L.GetGlobal("tostring")
-		L.PushValue(-2)
-		if L.PCall(1, 1, 0) != lua.LUA_OK {
-			s, _ := L.ToString(-1)
-			fmt.Print(s)
-		} else {
-			s, _ := L.ToString(-1)
-			fmt.Print(s)
-		}
-		L.Pop(2)
+	if n == 0 { /* any result to be printed? */
+		return
 	}
-	if n > 0 {
-		fmt.Println()
+	L.CheckStack(lua.LUA_MINSTACK) /* "too many results to print" */
+	L.GetGlobal("print")
+	L.Insert(1)
+	if L.PCall(n, 0, 0) != lua.LUA_OK {
+		msg, _ := L.ToString(-1)
+		L.Pop(1)
+		fmt.Fprintf(os.Stderr, "error calling 'print' (%s)\n", msg)
 	}
 }

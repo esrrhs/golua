@@ -14,6 +14,9 @@
 package lua
 
 import (
+	"bufio"
+	"fmt"
+	"os"
 	"strings"
 	"sync"
 )
@@ -814,10 +817,56 @@ func dbGetHook(L *State) int {
 	return 3
 }
 
-// deviation: C's 'debug.debug' reads commands from stdin in a loop;
-// there is no interactive mode here, so it returns immediately.
+// dbDebugFunc is 'db_debug': a prompt on stderr, one command per line
+// from stdin, and 'cont' -- or the end of input -- to leave.  Nothing
+// about it is interactive in the terminal sense: it is a loop over
+// standard input, which is why it can be driven from a pipe, and why
+// leaving it out was only ever a missing function and not a design
+// decision.
 func dbDebugFunc(L *State) int {
-	return 0
+	in := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Fprint(os.Stderr, dbDebugPrompt)
+		line, err := dbReadCommand(in)
+		if err != nil || line == "cont\n" {
+			return 0
+		}
+		if lerr := L.LoadBytes([]byte(line), "=(debug command)"); lerr != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", lerr.Error())
+		} else if L.PCall(0, 0, 0) != LUA_OK {
+			msg, _ := L.ToString(-1)
+			fmt.Fprintf(os.Stderr, "%s\n", msg)
+		}
+		L.SetTop(0) /* remove eventual returns */
+	}
+}
+
+const (
+	dbDebugPrompt = "lua_debug> "
+	/* C's fgets reads into a 250-byte buffer, so a command longer
+	   than 249 characters arrives in pieces and each piece is a
+	   command of its own. */
+	dbDebugLine = 250
+)
+
+// dbReadCommand is the 'fgets' of db_debug: at most dbDebugLine-1 bytes,
+// stopping after the newline, which is part of what it returns.
+func dbReadCommand(in *bufio.Reader) (string, error) {
+	var b []byte
+	for len(b) < dbDebugLine-1 {
+		c, err := in.ReadByte()
+		if err != nil {
+			if len(b) == 0 {
+				return "", err
+			}
+			break /* a last line with no newline in it */
+		}
+		b = append(b, c)
+		if c == '\n' {
+			break
+		}
+	}
+	return string(b), nil
 }
 
 func dbTraceback(L *State) int {

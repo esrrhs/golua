@@ -125,10 +125,17 @@ jobs:
           set -e
           curl -sSfL -o lua-5.4.9.tar.gz https://www.lua.org/ftp/lua-5.4.9.tar.gz
           tar zxf lua-5.4.9.tar.gz
+          # 'posix' on purpose, and not the platform's own target: it is
+          # the one build that is the same everywhere, and it leaves
+          # readline out.  Which matters -- with readline the reference
+          # prints no REPL prompt at all when its input is a pipe, and
+          # main.lua tests the prompt.  dlopen has to be asked for, and
+          # on Linux the executable has to export lua_* (-Wl,-E) for the
+          # C libraries of libs/ to resolve; macOS exports them anyway
+          # and its linker has no -E, hence the empty SYSLIBS.
           if [ "$RUNNER_OS" = "macOS" ]; then
-            make -C lua-5.4.9 -j4 macosx
+            make -C lua-5.4.9 -j4 posix SYSLIBS= MYCFLAGS=-DLUA_USE_DLOPEN
           else
-            # 'posix' alone leaves dlopen out, and the suite needs it.
             make -C lua-5.4.9 -j4 posix MYCFLAGS=-DLUA_USE_DLOPEN
           fi
           ./lua-5.4.9/src/lua -v

@@ -69,11 +69,29 @@ var officialKnownDiff = map[string]string{
 // both, so those files cannot match until the build has them too; they
 // are reported as differences, with the reason, rather than failed.
 var officialKnownDiffBuild = map[string]struct {
-	need string
-	why  string
+	needs []string
+	why   string
 }{
-	"attrib":   {"dlopen", "tests package.loadlib; without cgo there is no dlopen, and the file takes its other branch"},
-	"literals": {"locale", "tests the decimal point of the pt_BR locale; without cgo os.setlocale answers nil"},
+	"attrib":   {[]string{"dlopen", "clibs"}, "loads the C libraries of libs/ through package.loadlib and require"},
+	"main":     {[]string{"dlopen", "clibs"}, "runs 'lua -l lib2-v2' as a subprocess, and the module has to be there"},
+	"literals": {[]string{"locale"}, "tests the decimal point of the pt_BR locale; without cgo os.setlocale answers nil"},
+}
+
+// officialNoT are the files that match but assert nothing, because the
+// 'T' module is missing and their whole body sits behind it.
+//
+// 'T' comes from Lua's own ltests.c, and ltests.c is LUA_CORE: it
+// includes lstate.h, ltable.h, lcode.h and lopcodes.h and walks
+// GCObject, CallInfo and TValue by hand -- L->ci->func.p, s2v, setobj2s.
+// There is no C lua_State in this port to hand it, so it cannot be
+// compiled against one, and it is not a matter of writing the module in
+// Go either: a third of what api.lua asks 'T' for is the debug allocator
+// ('T.alloccount', 'T.totalmem' -- a limit after which allocations fail)
+// and the collector's own state ('T.gcstate', 'T.gccolor'), none of
+// which exists here. api.lua is the one file of the suite that is
+// entirely behind 'if T==nil then return end'.
+var officialNoT = map[string]string{
+	"api": "its whole body is behind 'if T==nil then return end', and there is no T: see officialNoT",
 }
 
 // officialSkip are the files that are not run at all.
@@ -85,12 +103,20 @@ var officialSkip = map[string]string{
 // 'errors', takes two seconds.
 const officialTimeout = 120 * time.Second
 
-// officialNormalise takes out what the host decides.
-func officialNormalise(s string, binPath string) string {
-	/* main.lua prints argv[0] as "progname" and then runs it, so the
-	   path of both interpreters has to become the same thing. */
-	s = strings.ReplaceAll(s, binPath, "PROG")
-	s = strings.ReplaceAll(s, "/tmp/lua-5.4.9/src/lua", "PROG")
+// officialNormalise takes out what the host decides.  refPath is the
+// path of the reference interpreter these goldens were captured with --
+// see officialRefPath -- and binPath is the one under test; both have to
+// come out, because main.lua prints argv[0] and several files print it
+// again in front of an uncaught error.
+func officialNormalise(s, binPath, refPath string) string {
+	/* An empty path would otherwise be "found" between every pair of
+	   characters, so it has to be skipped. */
+	if binPath != "" {
+		s = strings.ReplaceAll(s, binPath, "PROG")
+	}
+	if refPath != "" {
+		s = strings.ReplaceAll(s, refPath, "PROG")
+	}
 	for _, n := range []struct {
 		re   *regexp.Regexp
 		repl string
@@ -108,7 +134,36 @@ func officialNormalise(s string, binPath string) string {
 	return strings.ReplaceAll(s, "\r\n", "\n") /* Windows */
 }
 
-// officialWorkDir makes a scratch copy of the suite and returns it.
+// officialRefPath is the file that remembers which interpreter the
+// goldens for this GOOS came from.  It is written when they are captured
+// and read when they are compared, which is the only way the
+// comparison can take that path out of the output -- main.lua prints it
+// as "progname" -- on a run that never saw LUA_REF.
+func officialRefPath() string {
+	return filepath.Join(officialDir, runtime.GOOS+".refpath")
+}
+
+// officialWriteRefPath records 'ref' for the goldens just captured.
+func officialWriteRefPath(t *testing.T, ref string) {
+	t.Helper()
+	if err := os.WriteFile(officialRefPath(), []byte(ref), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// officialReadRefPath answers the recorded path, or "" when there is
+// none: without a golden for this GOOS the suite does not run at all, so
+// a missing file can only mean goldens from before this was recorded.
+func officialReadRefPath() string {
+	b, err := os.ReadFile(officialRefPath())
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// officialWorkDir makes a scratch copy of the suite, builds its C
+// libraries into it, and returns it.
 //
 // Several of these files write: attrib.lua creates a dozen chunks under
 // libs/ and require's them, main.lua writes temporary programs.  Nothing
@@ -120,7 +175,7 @@ func officialNormalise(s string, binPath string) string {
 // libs/ and libs/P1 must exist for attrib.lua: it writes into them, and
 // which of its files fails first when they do not is a matter of hash
 // order, so the answer is not even reproducible.
-func officialWorkDir(t *testing.T) string {
+func officialWorkDir(t *testing.T) (string, bool) {
 	t.Helper()
 	dir := t.TempDir()
 	files, err := filepath.Glob(filepath.Join(officialDir, "*.lua"))
@@ -141,7 +196,56 @@ func officialWorkDir(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	return dir
+	return dir, officialBuildLibs(t, dir)
+}
+
+// officialLibs are the C libraries Lua's own suite loads, in the
+// makefile's own pairs: <object> built from <source>.  lib2-v2 comes
+// from lib22.c and not lib2.c -- that is the point of it, two objects
+// with the same module name and different versions.
+var officialLibs = []struct{ so, src string }{
+	{"lib1.so", "lib1.c"},
+	{"lib11.so", "lib11.c"},
+	{"lib2.so", "lib2.c"},
+	{"lib21.so", "lib21.c"},
+	{"lib2-v2.so", "lib22.c"},
+}
+
+// officialBuildLibs compiles testdata/official/libs/*.c into the work
+// directory, the way Lua's own makefile does.  Without them attrib.lua
+// and main.lua stop at "cannot load dynamic library" and the whole C
+// half of the suite -- versioned module names, luaopen_ chains, symbols
+// one library borrows from another -- goes untested, which is the part
+// this port cares most about.  The objects are built against this
+// repository's own include/lua.h, and the lua_* names are left for the
+// process that loads them to answer, so the very same objects load into
+// the reference interpreter and into this one.
+//
+// It answers false when there is no C compiler or the linker will not
+// leave those names unresolved; the caller decides what to do then.
+func officialBuildLibs(t *testing.T, dir string) bool {
+	t.Helper()
+	cc, err := exec.LookPath("cc")
+	if err != nil {
+		return false /* no C compiler: see officialKnownDiffBuild */
+	}
+	inc, err := filepath.Abs("include")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range officialLibs {
+		src := filepath.Join(officialDir, "libs", l.src)
+		so := filepath.Join(dir, "libs", l.so)
+		args := []string{"-shared", "-fPIC", "-I" + inc, "-o", so, src}
+		if runtime.GOOS == "darwin" {
+			args = append(args, "-undefined", "dynamic_lookup")
+		}
+		if out, err := exec.Command(cc, args...).CombinedOutput(); err != nil {
+			t.Logf("cannot build %s here (%v): %s", l.so, err, out)
+			return false
+		}
+	}
+	return true
 }
 
 // officialProbe asks the binary under test what it was built with,
@@ -204,17 +308,19 @@ func TestOfficialSuite(t *testing.T) {
 		t.Skipf("no official cases in %s", officialDir)
 	}
 	sort.Strings(files)
-	dir := officialWorkDir(t)
+	dir, libs := officialWorkDir(t)
 
 	if ref := os.Getenv("LUA_REF"); ref != "" {
 		officialCapture(t, ref, dir, files)
+		officialWriteRefPath(t, ref)
 	}
 
 	bin := diffBuild(t)
 	caps := officialProbe(t, bin)
+	caps["clibs"] = libs /* the C libraries are a property of the run, not of the binary */
 	var (
-		same, differ, skipped int
-		firstDiff             string
+		same, differ, skipped, vacuous int
+		firstDiff                      string
 	)
 	for _, path := range files {
 		base := strings.TrimSuffix(filepath.Base(path), ".lua")
@@ -241,19 +347,33 @@ func TestOfficialSuite(t *testing.T) {
 		   files end with a failed assert, which is the point of them.
 		   What a file prints is the answer; whether it printed an
 		   assert failure along the way is already in the output. */
-		w := officialNormalise(string(want), "/tmp/lua-5.4.9/src/lua")
-		g := officialNormalise(got, bin)
+		w := officialNormalise(string(want), "", officialReadRefPath())
+		g := officialNormalise(got, bin, officialReadRefPath())
 
 		/* Is a difference here expected?  Two ways: the design (no
 		   collector), or the build (no cgo). */
 		why, known := officialKnownDiff[base]
-		if b, ok := officialKnownDiffBuild[base]; ok && !caps[b.need] {
-			why, known = b.why+" (no "+b.need+")", true
+		if b, ok := officialKnownDiffBuild[base]; ok {
+			var missing []string
+			for _, n := range b.needs {
+				if !caps[n] {
+					missing = append(missing, n)
+				}
+			}
+			if len(missing) > 0 {
+				why, known = b.why+" (no "+strings.Join(missing, ", ")+")", true
+			}
 		}
 
 		if w == g {
 			same++
-			if known {
+			if why, ok := officialNoT[base]; ok {
+				/* It matches, but it matches vacuously: say so every
+				   time, so that "27 identical" is never read as
+				   "27 files' worth of assertions ran". */
+				vacuous++
+				t.Logf("%-12s IDENTICAL BUT EMPTY: %s", base, why)
+			} else if known {
 				t.Logf("%-12s NOW IDENTICAL (was a known difference: %s)", base, why)
 			}
 			continue
@@ -271,8 +391,8 @@ func TestOfficialSuite(t *testing.T) {
 	if firstDiff != "" {
 		t.Logf("the first line that differs, across the known differences:\n%s", firstDiff)
 	}
-	t.Logf("official suite: %d identical, %d known difference, %d not run, of %d",
-		same, differ, skipped, len(files))
+	t.Logf("official suite: %d identical (%d of them assert nothing), %d known difference, %d not run, of %d",
+		same, vacuous, differ, skipped, len(files))
 }
 
 // officialFirstDiff prints the first line the two outputs disagree on,
