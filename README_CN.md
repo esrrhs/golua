@@ -246,7 +246,7 @@ PUC-Lua 5.4.9 的实跑结果，存在 `testdata/luafilesystem/expected.txt`。M
 **而不是**返回到挂起的那一帧——因为在 PUC-Lua 里那一帧已经没了：yield 从里面
 longjmp 出去，它的 C 栈被整个丢掉。
 
-本实现丢不掉 C 帧，也不需要丢。yield 是把协程所在的 goroutine **就地停住**（见第 7 节第 10 条），
+本实现丢不掉 C 帧，也不需要丢。yield 是把协程所在的 goroutine **就地停住**（见第 7 节第 11 条），
 所以要延续的那一帧在恢复时还在，接着往下走就是了——这正是延续可达的前提。
 `CallInfo` 带上 `k` 与它的上下文，`(*State).Yield` 在恢复时调延续并回答它压了几个值，
 `lua_pcallk` 则按 `ldo.c` 的 `findpcall` + `finishpcallk` 那样回收下面抛出的错误。
@@ -322,19 +322,39 @@ MIT 许可，随 `testdata/luaposix/LICENSE` 一并再分发。
 
 | 负载 | PUC-Lua 5.4.9 | 本实现 | 倍率 |
 |---|---|---|---|
-| `fib(26)`，递归调用 | 17.7 ms | 33.0 ms | 1.9× |
-| 算术循环，10⁷ 次 | 84.2 ms | 415.0 ms | 4.9× |
-| 整数键表，10⁶ 次写入+读取 | 25.1 ms | 71.1 ms | 2.8× |
-| `table.sort`，10⁵ 个元素 | 38.4 ms | 58.4 ms | 1.5× |
-| 闭包 upvalue 自增，2×10⁶ 次 | 51.5 ms | 128.3 ms | 2.5× |
-| 协程 yield/resume，2×10⁵ 次 | 25.7 ms | 140.7 ms | 5.5× |
-| `pcall` 一个 Lua 函数，5×10⁵ 次 | 60.8 ms | 80.3 ms | 1.3× |
-| `string.gmatch` + `gsub`，1 MB | 26.8 ms | 41.1 ms | 1.5× |
-| `verybig.lua`：写 120 KB 源码再编译 | 110 ms | 250 ms | 2.3× |
+| `fib(26)`，递归调用 | 6.5 ms | 16.1 ms | 2.5× |
+| 算术循环，10⁷ 次 | 63.6 ms | 229.3 ms | 3.6× |
+| 整数键表，10⁶ 次写入+读取 | 12.6 ms | 35.7 ms | 2.8× |
+| 字符串键表，10⁵ 次写入+读取 | 64.7 ms | 92.7 ms | 1.4× |
+| `table.sort`，10⁵ 个元素 | 27.6 ms | 39.3 ms | 1.4× |
+| 闭包 upvalue 自增，2×10⁶ 次 | 31.5 ms | 86.2 ms | 2.7× |
+| 协程 yield/resume，2×10⁵ 次 | 16.8 ms | 100.2 ms | 6.0× |
+| `pcall` 一个 Lua 函数，5×10⁵ 次 | 15.9 ms | 32.8 ms | 2.1× |
+| `string.gmatch` + `gsub`，1 MB | 34.4 ms | 54.4 ms | 1.6× |
+| 编译 120 KB 源码 | 5.0 ms | 10.8 ms | 2.2× |
 
 慢在哪：`Instruction` 是结构体而非位压缩的 uint32（每条指令要现解码），
-每次 `TValue` 访问都要过一遍类型分支，协程跑在独立的 goroutine 上，
-一次 yield/resume 是一次 channel 往返而不是换栈指针。
+每次 `TValue` 访问都要过一遍类型分支，协程跑在独立的 goroutine 上——
+一次 yield/resume 是**两次 goroutine 切换**，在本机用一个裸 channel 往返
+量出来约 280 ns。协程这一项的差距全是它，也是这张表里唯一优化不掉的数字。
+
+其余各项一直在缩小，其中两处改动起的作用最大，而且都不是 Lua 本身的问题，
+而是 Go 运行时的问题：
+
+* **算术指令有了整数快路径。** 两个整数永远不可能走到元方法，结果也一定是
+  整数，所以 `luaV_execute` 自己就把算术做了，不再走
+  `opCodeToArith` → `luaO_rawarith` → `intarith`。这段是写在 switch 里而不是
+  抽成辅助函数的：能抛错的辅助函数（`%` 与 `//`）超过编译器的内联预算，
+  而那次调用的开销和运算本身差不多。
+* **短字符串改用两代缓存做驻留，不再用弱引用。** 用弱引用持有，让 Go 的收集器
+  把死掉的串清掉，是「C 的收集器扫那张表」最直白的翻译——而它吃掉字符串键表
+  负载**一半**的时间：那样每个驻留串都挂着一个 runtime 的 weak handle，
+  而 handle 正是收集器一轮里要逐个走的东西。缓存最多持有两代，且完全不向
+  运行时注册任何东西。它带来的唯一后果是驻留不再是永久的，所以短字符串按
+  「哈希再比字节」比较（`luaS_eqshrstr`），绝不比指针。
+
+`Value` 是 32 字节而不是 40，理由和 C 的 `TValue` 是 union 一样：
+浮点数与整数共用那个字段，以 IEEE 位模式存放。
 
 ---
 
@@ -469,7 +489,9 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 8. **数学库是 Go 的，不是平台 libm**：`math.sin`、`cos`、`tan`、`exp`、`log`、`log10`、`sqrt`、`asin`、`acos`、`atan`、`atan2`、`pow`、`sinh`、`cosh`、`tanh`、`frexp`、`ldexp` 用的是 Go 的实现，与 libc 链接的那份不同。15 位有效数字一致，最后一位或两位在一部分入参上不同：在横跨 15 个数量级的 120 个入参上实测，`sqrt` 从不出现差异，`exp`、`log` 只有个位数（小于 1 ulp），`log10`、`tanh`、`asin`、`acos`、`atan` 有几十个（约 1 ulp），`sin`、`cos`、`tan` 占四分之一到一半。超过 2^53 之后需要先做参数归约，差距会拉大——`tan` 偏 6 ulp、`sin` 偏 7 ulp——因为两边都不是正确舍入，归约方式也不同。所有算术运算、`sqrt` 与两种整数转换都是精确的。NaN 按平台 C 库的写法拼写（macOS 恒为 `"nan"`，glibc 符号位为 1 时是 `"-nan"`），因为 C 的 `printf` 就是这么做的。唯一刻意绕开 Go 实现的地方是 `exp(|x|)` 溢出而 `sinh(x)`、`cosh(x)` 尚未溢出的那条带（709.78 < |x| < 710.48）：Go 的 `math.Sinh` 对 `math.sinh(710)` 返回 `inf`，而其真值是 `exp(710)/2` = 1.1e308、完全可表示，所以那里把「减半」折进了参数里。
 9. **`math.randomseed()` 不带参数时第二个种子不同**：PUC-Lua 返回的两个种子是「当前时间」与「`lua_State` 的地址」（lmathlib.c 的 `randseed`），本移植返回的也是这两个量，所以第一个种子（时间）一致，第二个是 Go 堆地址而非 C 堆地址——两者都是宿主地址，在任一实现里都不可复现。`math.randomseed(n)` 与 `math.randomseed(n, m)` 原样返回入参；生成器本身仍是同一个基于 xoshiro256** 的实现：同一种子下产出的序列完全相同，整数与浮点都是，用例已钉住 `math.random()`、`math.random(6)`、`math.random(10, 20)` 各 20 次取值。
 10. **协程是「停住 goroutine」而不是 longjmp，挂起的 C 帧醒来时还在**：C 的 `lua_yield` 是 longjmp 到「将来会把它接起来的那个 `lua_resume`」，中间的一切都被丢弃；本实现则把 yield 的值经 channel 交给恢复者，然后阻塞在下一个 resume 请求上，于是 Lua 栈、保存的程序计数器、乃至 C 调用者自己的栈，全都活在 yield 的那个点上。这正是元方法与 Go 函数能从调用中途 yield 的原因，也是延续能成立的原因（§5.6）。随之而来两点：协程从恢复者继承的 C 调用深度是**每次 yield 都刷新**，而非只在第一次 resume 时刷新——这与 C 一致，因为 `lua_resume` 每次 resume 都跑一遍。另外 yield 过的 C 函数察觉不到这件事：`lua_callk` 会像调用正常结束那样返回它，所以 `lua_callk` 的延续听到的 status 是 `LUA_OK`，而 PUC-Lua 那里恒为 `LUA_YIELD`——是个常量，没有东西能依赖这个差别。`lua_pcallk` 的 status 是会变的，那个**与 PUC-Lua 一致**：本实现数着该线程 yield 了几次，被 yield 打断时报告 `LUA_YIELD`。
-11. **性能**：`Instruction` 使用结构体而非位压缩 uint32，分派有额外开销；P7 阶段做基准后再决定是否改回位编码。
+11. **两个相等的短字符串不一定是同一个对象**：PUC-Lua 对短字符串的驻留贯穿其整个生命周期，所以 `lua_topointer` 对两个相等的串返回同一个地址，C 扩展也能拿这个地址当键。本实现的驻留是两代缓存（§5.9），一个串在两代都过期后可能被重新驻留，于是两个内容相同且都活着的串可能位于不同地址。Lua 层面看不到这件事：字符串按内容比较，所以 `luaS_eqshrstr` 是「比哈希再比字节」，而 C 那里的 `eqshrstr` 只比指针；`rawequal`、`==`、表的键与 `next` 的行为都和以前一样。只有 `lua_topointer`——以及拿它当键的 `lua_rawsetp`——能看出差别。
+
+12. **性能**：`Instruction` 使用结构体而非位压缩 uint32，分派有额外开销；P7 阶段做基准后再决定是否改回位编码。
 
 ---
 

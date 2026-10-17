@@ -428,20 +428,47 @@ through the two interpreters (Apple M1 Pro, PUC-Lua 5.4.9 built with
 
 | workload | PUC-Lua 5.4.9 | this port | ratio |
 |---|---|---|---|
-| `fib(26)`, recursive calls | 17.7 ms | 33.0 ms | 1.9× |
-| arithmetic loop, 10⁷ iterations | 84.2 ms | 415.0 ms | 4.9× |
-| integer-key table, 10⁶ insert+lookup | 25.1 ms | 71.1 ms | 2.8× |
-| `table.sort`, 10⁵ elements | 38.4 ms | 58.4 ms | 1.5× |
-| closure upvalue bump, 2×10⁶ calls | 51.5 ms | 128.3 ms | 2.5× |
-| coroutine yield/resume, 2×10⁵ | 25.7 ms | 140.7 ms | 5.5× |
-| `pcall` of a Lua function, 5×10⁵ | 60.8 ms | 80.3 ms | 1.3× |
-| `string.gmatch` + `gsub` over 1 MB | 26.8 ms | 41.1 ms | 1.5× |
-| `verybig.lua`: write a 120 KB chunk, then compile it | 110 ms | 250 ms | 2.3× |
+| `fib(26)`, recursive calls | 6.5 ms | 16.1 ms | 2.5× |
+| arithmetic loop, 10⁷ iterations | 63.6 ms | 229.3 ms | 3.6× |
+| integer-key table, 10⁶ insert+lookup | 12.6 ms | 35.7 ms | 2.8× |
+| string-key table, 10⁵ insert+lookup | 64.7 ms | 92.7 ms | 1.4× |
+| `table.sort`, 10⁵ elements | 27.6 ms | 39.3 ms | 1.4× |
+| closure upvalue bump, 2×10⁶ calls | 31.5 ms | 86.2 ms | 2.7× |
+| coroutine yield/resume, 2×10⁵ | 16.8 ms | 100.2 ms | 6.0× |
+| `pcall` of a Lua function, 5×10⁵ | 15.9 ms | 32.8 ms | 2.1× |
+| `string.gmatch` + `gsub` over 1 MB | 34.4 ms | 54.4 ms | 1.6× |
+| compile a 120 KB chunk | 5.0 ms | 10.8 ms | 2.2× |
 
 Where the time goes: `Instruction` is a struct instead of a packed
 uint32 (decoded on the fly), every `TValue` access goes through a tag
 switch, and each coroutine runs on a goroutine, so a yield/resume pair is
-a channel round trip rather than a swap of stack pointers.
+two goroutine switches — about 280 ns of them, measured on this machine
+with a bare channel round trip — rather than a swap of stack pointers.
+That is the whole of the coroutine gap and the one number here that
+cannot be optimised away.
+
+The rest has been shrinking, and the two changes that mattered were both
+about the Go runtime rather than about Lua:
+
+* **the arithmetic opcodes have an integer fast path.** Two integers can
+  never reach a metamethod and always produce an integer, so
+  `luaV_execute` does the arithmetic itself instead of walking
+  `opCodeToArith` → `luaO_rawarith` → `intarith`. It is written out in
+  the switch rather than moved to a helper, because a helper that can
+  raise (`%` and `//`) is over the compiler's inline budget and the call
+  costs about as much as the operation.
+* **short strings are interned in a two-generation cache, not weakly.**
+  Holding them weakly, so that Go's collector drops the dead ones, is
+  the obvious translation of a table C's collector sweeps — and it cost
+  *half* the time of a string-key table workload, because every interned
+  string then carries a runtime weak handle and the handles are exactly
+  what the collector walks during a cycle. The cache holds at most two
+  generations' worth and registers nothing with the runtime. Its one
+  consequence is that interning is no longer permanent, so short strings
+  are compared by hash and bytes (`luaS_eqshrstr`), never by pointer.
+
+`Value` is 32 bytes rather than 40 for the same reason C's `TValue` is a
+union: a float shares the integer's field, stored as its IEEE bits.
 
 ---
 
@@ -466,7 +493,9 @@ The C block behind a userdata is freed when the userdata is collected: `C.malloc
 7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh`, `tanh`, `frexp` and `ldexp` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. The one place the port deliberately steps outside Go's implementations is the band in which `exp(|x|)` overflows while `sinh(x)` and `cosh(x)` do not (709.78 < |x| < 710.48): Go's `math.Sinh` answers `inf` for `math.sinh(710)`, whose true value is `exp(710) / 2` = 1.1e308 and representable, so the halving is folded into the argument there instead.
 8. **`math.randomseed()` with no arguments returns a different second seed** — PUC-Lua returns the current time and the *address of the `lua_State`* as its two seeds (lmathlib.c: `randseed`), and this port returns the same two quantities, so the first seed — the time — matches and the second is a Go heap address rather than a C one; the numbers are both host addresses and are not reproducible in either implementation. `math.randomseed(n)` and `math.randomseed(n, m)` return their arguments unchanged, and the generator itself is the same xoshiro256**-based one: for a given seed it produces the identical sequence, integer or float, which the suite pins across 20 draws of `math.random()`, `math.random(6)` and `math.random(10, 20)`.
 9. **A coroutine suspends by parking its goroutine, and a C frame that suspended is still there when it wakes** — C's `lua_yield` long-jumps to the `lua_resume` that will pick the thread up again, and everything between is discarded; this port instead hands the yielded values to the resumer through a channel and then blocks on the next resume request, so the Lua stack, the saved program counter and — for a C caller — the C stack itself all survive at the yield point. That is what lets a metamethod or a Go function yield from the middle of a call, and it is what makes continuations work (§5.6). Two consequences follow. The C-call depth a thread inherits from its resumer is refreshed at every yield rather than only at the first resume, which is what C does too, since `lua_resume` runs on every resume. And a C function that yielded does not get to notice: `lua_callk` returns to it as if the call had simply finished, so the status a `lua_callk` continuation hears is `LUA_OK` where PUC-Lua's is always `LUA_YIELD` — a constant, so nothing can depend on the difference. `lua_pcallk`'s status does vary, and that one *is* PUC-Lua's: the port counts the yields the thread has made and reports `LUA_YIELD` when the call was interrupted by one.
-10. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
+10. **Two short strings that are equal may not be the same object** — PUC-Lua interns short strings for as long as they live, so `lua_topointer` answers the same address for two equal ones and a C extension can use that address as a key. Here interning is a two-generation cache (§5.9), so a string can be interned again once it has aged out of both generations, and two live strings with the same bytes may then sit at different addresses. Nothing in Lua can see it: strings compare by content, which is why `luaS_eqshrstr` compares the hash and then the bytes where C's `eqshrstr` would compare pointers, and `rawequal`, `==`, table keys and `next` all behave as before. Only `lua_topointer` — and a `lua_rawsetp` keyed on it — can tell the difference.
+
+11. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
 
 ---
 
