@@ -6,8 +6,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // This test pins the whole C API against PUC-Lua 5.4.9: every line the
@@ -225,23 +227,19 @@ var cExtWant = []string{
 	"tonum\t4\t0",
 }
 
-// buildCExt compiles cExtSrc into dir and returns the directory the
-// module must be required from. It reports false when there is no C
-// compiler, or when the platform will not let lua_* stay unresolved
-// until load time -- see buildCModule in cdlopen_test.go.
-func buildCExt(t *testing.T, dir string) bool {
+// compileCExt compiles <modname>.c in dir into <modname>.so. It reports
+// false when there is no C compiler, or when the platform will not let
+// lua_* stay unresolved until load time.
+func compileCExt(t *testing.T, dir, modname string) bool {
 	t.Helper()
 	cc, err := exec.LookPath("cc")
 	if err != nil {
 		t.Skip("no C compiler in PATH")
 	}
-	src := filepath.Join(dir, "cext.c")
-	so := filepath.Join(dir, "cext.so")
+	src := filepath.Join(dir, modname+".c")
+	so := filepath.Join(dir, modname+".so")
 	inc, err := filepath.Abs("include")
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(src, []byte(cExtSrc), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	args := []string{"-shared", "-fPIC", "-I" + inc, "-o", so, src}
@@ -254,20 +252,15 @@ func buildCExt(t *testing.T, dir string) bool {
 	return true
 }
 
-func TestCModuleAPI(t *testing.T) {
-	if !pkHasDynLoad() {
-		t.Skip("built without cgo, so there is no dlopen")
-	}
-	dir := t.TempDir()
-	if !buildCExt(t, dir) {
-		return
-	}
+// runCExtDriver runs a Lua chunk in a state whose cpath is dir, with
+// 'print' collected, and answers the lines it printed. The chunk is
+// named after it so that a "file:line" in the output is stable.
+func runCExtDriver(t *testing.T, dir, driver string) []string {
+	t.Helper()
 	L := NewState()
 	t.Cleanup(L.Close)
 	L.OpenLibs()
 
-	/* 'print' is collected instead of written, so the driver's output
-	   can be compared line by line */
 	var got []string
 	L.PushGoFunc(func(L *State) int {
 		n := L.GetTop()
@@ -283,18 +276,144 @@ func TestCModuleAPI(t *testing.T) {
 	if err := L.DoString("package.cpath = " + quoteLuaString(filepath.Join(dir, "?.so"))); err != nil {
 		t.Fatalf("setting cpath: %v", err)
 	}
-	if err := L.LoadString(cExtDriver, "=cext"); err != nil {
+	if err := L.LoadString(driver, "="+"cext"); err != nil {
 		t.Fatalf("loading the driver: %v", err)
 	}
 	if st := L.PCall(0, 0, 0); st != LUA_OK {
 		t.Fatalf("running the driver: %s", L.ToStringX(-1))
 	}
-	if len(got) != len(cExtWant) {
-		t.Fatalf("got %d lines, want %d:\n%s", len(got), len(cExtWant), strings.Join(got, "\n"))
+	return got
+}
+
+// compareLines checks each line against what PUC-Lua answered.
+func compareLines(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("got %d lines, want %d:\n%s", len(got), len(want), strings.Join(got, "\n"))
 	}
-	for i := range cExtWant {
-		if got[i] != cExtWant[i] {
-			t.Errorf("line %d:\n got %q\nwant %q", i+1, got[i], cExtWant[i])
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d:\n got %q\nwant %q", i+1, got[i], want[i])
 		}
+	}
+}
+
+func TestCModuleAPI(t *testing.T) {
+	if !pkHasDynLoad() {
+		t.Skip("built without cgo, so there is no dlopen")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "cext.c"), []byte(cExtSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !compileCExt(t, dir, "cext") {
+		return
+	}
+	compareLines(t, runCExtDriver(t, dir, cExtDriver), cExtWant)
+}
+
+// cErrSrc and cErrDriver cover an error crossing a C frame, which is the
+// one thing 'lua_error' has to get right: PUC-Lua longjmps out of the
+// extension's own frame, this port raises instead, and both have to
+// leave the error with the caller that was protecting the call.
+// Three levels deep (Lua -> C -> Lua -> C -> raise) and caught inside C
+// as well, so neither direction is left untested.
+const cErrSrc = `#include <stdio.h>
+#include <stdlib.h>
+#include "lua.h"
+#include "lauxlib.h"
+
+/* three levels: Lua -> C -> Lua -> C -> raise */
+static int l_inner(lua_State *L) {
+  lua_pushliteral(L, "from inner");
+  return lua_error(L);
+}
+static int l_middle(lua_State *L) {
+  lua_settop(L, 1);
+  lua_call(L, 0, 1);   /* calls a Lua function that calls l_inner */
+  lua_pushliteral(L, "unreachable");
+  return 1;
+}
+/* C -> lua_call -> C -> lua_pcall -> raise: the error is caught inside */
+static int l_catch_inside(lua_State *L) {
+  lua_settop(L, 1);
+  int st = lua_pcall(L, 0, 1, 0);
+  lua_pushinteger(L, st);
+  return 2;
+}
+static const luaL_Reg funcs[] = {
+  {"inner", l_inner}, {"middle", l_middle},
+  {"catch_inside", l_catch_inside}, {NULL, NULL}
+};
+int luaopen_nest(lua_State *L) { luaL_newlib(L, funcs); return 1; }
+`
+
+const cErrDriver = `local m = require("nest")
+local function P(n, ...) print(n, ...) end
+P("inner", pcall(m.inner))
+P("middle", pcall(m.middle, function() return m.inner() end))
+P("middle2", pcall(m.middle, function() error("lua err") end))
+P("catch", pcall(m.catch_inside, function() return m.inner() end))
+P("alive", _VERSION)
+`
+
+// cErrWant is what PUC-Lua 5.4.9 prints for cErrDriver.
+var cErrWant = []string{
+	"inner\tfalse\tfrom inner",
+	"middle\tfalse\tfrom inner",
+	"middle2\tfalse\tcext:5: lua err",
+	"catch\ttrue\tfrom inner\t2",
+	"alive\tLua 5.4",
+}
+
+func TestCModuleErrors(t *testing.T) {
+	if !pkHasDynLoad() {
+		t.Skip("built without cgo, so there is no dlopen")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "nest.c"), []byte(cErrSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !compileCExt(t, dir, "nest") {
+		return
+	}
+	got := runCExtDriver(t, dir, cErrDriver)
+	compareLines(t, got, cErrWant)
+}
+
+// TestCModuleUserDataFreed checks that the C block behind a userdata is
+// given back when the userdata is collected. C.malloc is not memory the
+// Go collector knows about, so an extension that makes userdata in a
+// loop would otherwise grow without bound.
+func TestCModuleUserDataFreed(t *testing.T) {
+	if !pkHasDynLoad() {
+		t.Skip("built without cgo, so there is no dlopen")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "cext.c"), []byte(cExtSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !compileCExt(t, dir, "cext") {
+		return
+	}
+	L := NewState()
+	t.Cleanup(L.Close)
+	L.OpenLibs()
+	src := "package.cpath = " + quoteLuaString(filepath.Join(dir, "?.so")) + "\n" +
+		"local m = require('cext')\n" +
+		"for i = 1, 2000 do local b = m.box(i) end\n" +
+		"collectgarbage()\n"
+	/* counted before the chunk runs: the collector may free some of the
+	   blocks while it is running, and those count too */
+	before := cdlUserFrees.Load()
+	if err := L.DoString(src); err != nil {
+		t.Fatalf("DoString: %v", err)
+	}
+	for i := 0; i < 20 && cdlUserFrees.Load() == before; i++ {
+		runtime.GC()
+		time.Sleep(10 * time.Millisecond) /* finalizers run on their own goroutine */
+	}
+	if got := cdlUserFrees.Load(); got <= before {
+		t.Fatalf("no userdata block was freed (%d before, %d after)", before, got)
 	}
 }

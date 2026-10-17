@@ -321,9 +321,18 @@ cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
 正是 PUC-Lua 在没有 `LUA_USE_DLOPEN` 时的逐字回答——而 `package.cpath` 里找到的 C 模块
 会给出 PUC-Lua 在那里的报错。
 
-桥接还有两件做不到的事（都写在 `cdlopen.go` 的注释里）：C 侧 `lua_error` 走 panic 而不是解开
-扩展自己的 C 帧，跨越自身帧抛错的模块暂不支持；延续（`lua_callk`、`lua_pcallk`、
+桥接还有一件做不到的事（写在 `cdlopen.go` 的注释里）：延续（`lua_callk`、`lua_pcallk`、
 带非 NULL `k` 的 `lua_yieldk`）会被丢弃，因为 yield 之后没有可返回的 C 帧。
+
+`lua_error` 值得单独说一句：「用 panic 而不是 longjmp」看着像缺口，其实不是。
+Go 的 panic **能穿过 cgo 帧**：runtime 展开到「保护该次调用的那层」的 recover，
+扩展自己的帧被丢下，与 longjmp 的效果一致。三层深——Lua → C → Lua → C → 抛错——
+输出与 PUC-Lua 逐行相同，`TestCModuleErrors` 钉住了这一点。反过来，
+**跨边界 longjmp 才是不安全的**（会跳过 runtime 为这次 cgo 调用维护的状态），
+所以这里刻意没有 setjmp。真正丢掉的东西 longjmp 也一样丢：持锁或需要析构的 C 帧不会被清理。
+
+userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不受 Go 收集器管辖，
+没有 finalizer 的话，一个在循环里造 userdata 的扩展会无上限地涨。
 用 Lua 写的、或已改成 Go 的模块完全不需要这些：`L.RequireF(modname, openf, true)` 把模块放进
 `package.loaded`（对应 C 的 `luaL_requiref`），或把 `package.preload[name]` 设成 Go 函数，
 让 `require` 照常找到它。

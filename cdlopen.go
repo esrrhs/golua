@@ -34,9 +34,24 @@
 // except the four that take '...', which cdlbridge.c has instead.
 // cdlopen_api_test.go pins them all against PUC-Lua 5.4.9.
 //
-// Not done: lua_error must longjmp out of the extension's own frame
-// rather than unwind through it.  Until a setjmp lands on this side of
-// the boundary, raising from C goes through the panic path.
+// On lua_error: PUC-Lua longjmps out of the extension's own frame. This
+// port raises instead, and the panic unwinds through that frame -- which
+// sounds wrong and is not, for two reasons that were measured before
+// being relied on (cdlopen_api_test.go, TestCModuleErrors).
+//
+//   - A Go panic crosses a cgo frame: the runtime unwinds to the
+//     recover in the call that was protecting the call, and the
+//     extension's frame is left behind exactly as longjmp would leave
+//     it. Three levels deep -- Lua -> C -> Lua -> C -> raise -- the
+//     answer is PUC-Lua's, line for line.
+//
+//   - longjmp across the boundary is the thing that would be unsafe:
+//     it would skip the runtime's own bookkeeping for the cgo call. So
+//     there is no setjmp here on purpose.
+//
+// What is lost is the same as what longjmp loses: a C frame that holds
+// something needing cleanup (a lock, a C++ destructor) does not get to
+// clean it up. PUC-Lua does not either.
 package lua
 
 /*
