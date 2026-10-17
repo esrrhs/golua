@@ -438,11 +438,18 @@ func freeexps(fs *FuncState, e1, e2 *expdesc) {
 func addk(fs *FuncState, key, v *Value) int {
 	L := fs.ls.L
 	f := fs.f
-	/* the constant table is per *function* ('fs->h'); the scanner's table
-	   ('ls->h') maps a string to itself and must not be touched here, or
-	   string constants stop being shared within a chunk */
-	idx := luaH_get(L, fs.h, key) /* query constant table */
-	if ttisinteger(idx) {         /* is there an index there? */
+	/* The table is the *scanner's* ('fs->ls->h'), shared by every
+	   function of the chunk, not one per function -- lcode.c:
+	   luaH_get(fs->ls->h, key). That is why a constant can go
+	   unreused: the entry holds an index into whichever function's
+	   constant table was being filled when the entry was made, and a
+	   later lookup only reuses it if that index still names the same
+	   value in the function being compiled now. Compiling
+	   'f = function() return print end; print(f)' therefore gives
+	   'print' two constant slots, and that is what PUC-Lua's luac
+	   prints. */
+	idx := luaH_get(L, fs.ls.h, key) /* query scanner table */
+	if ttisinteger(idx) {            /* is there an index there? */
 		k := int(ivalue(idx))
 		/* correct value? (warning: must distinguish floats from integers!) */
 		if k < fs.nk && ttypetag(&f.k[k]) == ttypetag(v) && luaV_rawequalobj(&f.k[k], v) {
@@ -453,7 +460,7 @@ func addk(fs *FuncState, key, v *Value) int {
 	k := fs.nk
 	var val Value
 	setivalue(&val, int64(k))
-	luaH_finishset(L, fs.h, key, idx, &val)
+	luaH_finishset(L, fs.ls.h, key, idx, &val)
 	f.k = append(f.k, *v) /* grows by one; nk == len(f.k) - 1 */
 	fs.nk++
 	return k

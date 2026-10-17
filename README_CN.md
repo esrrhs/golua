@@ -66,6 +66,7 @@
 | `loadlib.c` | `loadlib.go` | ⬜ | `require` + searcher；C 加载器换成 Go 模块注册表 |
 | `linit.c` | `linit.go` | ⬜ | `OpenLibs` |
 | `lua.c` | `cmd/lua/main.go` | ⬜ | 命令行解释器 + REPL |
+| `luac.c` | `luac.go` + `cmd/luac/main.go` | ⬜ | 独立编译器：dump / strip / 只解析 / listing |
 | **`lgc.c/.h`** | **（删除）** | ✅ | **由 Go 并发 GC 接管** |
 
 ### 2.3 关键类型映射
@@ -134,7 +135,7 @@
 | **P3 前端** | `llex` `lparser` `lcode` | `Load("return 1+2")` → `Call` → `3`；goto/for/vararg/闭包 | ✅ |
 | **P4 API 层** | `lapi` `lauxlib` `linit` | 宿主注册 Go 函数、userdata、registry 引用 | ✅ |
 | **P5 标准库** | base/coroutine/table/math/string/utf8/os/io/debug/package | 官方 `lua-5.4.9-tests` 子集全绿 | ✅ |
-| **P6 工具链** | `cmd/lua`（脚本执行 + REPL）、`ldump`/`lundump` | `go run ./cmd/lua test.lua` | ✅ |
+| **P6 工具链** | `cmd/lua`（脚本执行 + REPL）、`cmd/luac`（编译器）、`ldump`/`lundump` | `go run ./cmd/lua test.lua` | ✅ |
 | **P7 验收** | 官方测试集 + 自建用例 + 基准 + CI（Linux/macOS/Windows） | 全平台 `go test -race` 通过 | 🔄 |
 
 ### 5.1 一致性实测（官方测试集）
@@ -325,7 +326,45 @@ LPeg、CJSON、LuaSocket、LuaFileSystem 与 luaposix 合起来调用了 C API �
 | 对会 yield 的线程调 `lua_resume` | C 从协程自己的栈上取参数，把 yield 出来的值留在那里，并报告有几个，好让调用者用 `lua_xmove` 搬走。这两条这里原先都不成立：参数取自恢复者，值也被弹掉了 |
 | `lua_atpanic` | 返回 NULL 而不是上一个处理函数——而「把宿主的处理函数放回去」正是安装自己的处理函数的扩展唯一需要它做的事 |
 
-### 5.9 覆盖盘点
+### 5.9 独立编译器 luac——以及它的 listing 证明了什么
+
+`cmd/luac` 就是 luac.c，它补上了 PUC-Lua 里最后一件缺失的东西：把脚本编译成二进制
+chunk、只做语法检查而不运行（`-p`）、去掉调试信息（`-s`）、以及把字节码列出来
+（`-l`，两次是完整 listing）。真正的活由 `lua.Luac` 干，它放在库里而不是
+`cmd/luac`，因为 listing 必须读原型——luac.c 自己就是这么说的：它 include 了
+`lobject.h`、`lopcodes.h` 和 `lstate.h`。
+
+listing 值得一做的第二个理由：它是比任何输出比对都严格得多的**一致性检查**。一个
+脚本可以打印出正确的结果，而编译出来的东西并不一样；listing 不行。每条指令、每个
+操作数、每行注释、每个常量、每个局部变量与每个 upvalue 都必须是 PUC-Lua 的，顺序、
+行号也要一样。在差分套件的 79 个脚本上跑下来——约 **81000 行 listing**——两侧逐行
+一致。
+
+也正因如此，它挖出了编译器里最后一个真差异：
+
+**`addk` 用错了表。**`lcode.c` 是在**扫描器**的那张表（`fs->ls->h`）里查常量的，
+整个 chunk 的所有函数共用一张；而本移植给每个函数单独建了一张。后果不是「一个共享、
+一个不共享」——PUC 的表项里存的是**当初填它时那个函数**的常量下标，只有当这个下标
+在当前正在编译的函数里仍然指向同一个值时才会被复用。所以 PUC-Lua 会**漏掉**一些
+「每函数一张表」能找到的复用，像
+
+```lua
+local function f() return print end
+print(f)
+```
+
+这样的 chunk，PUC-Lua 会给 `print` 两个常量槽，本移植只给一个。Lua 层面没有东西能
+观察这件事，所以 79 个脚本的 golden 从来没露出来——但常量下标是字节码的一部分，
+于是 `string.dump` 写出的字节并不总是 PUC-Lua 的。现在那张表就是扫描器的，偶尔
+重复的常量也被复现出来了。
+
+`testdata/luac/` 把它钉住：三个源文件、它们合起来 683 行的 listing
+（`expected.txt`，取自 PUC-Lua 5.4.9，原型地址抹掉——跨进程不可能相同）、
+以及 `luac -o` 为它们写出的两个二进制 chunk（逐字节比对，再加载回来跑）。
+多文件合并用的也是 luac.c 的做法——把 `"(function()end)();\n"` 按文件数重复编译一遍，
+再把每个文件的原型接到嵌套原型上——所以那条路径也覆盖到了。
+
+### 5.10 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
 `testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
@@ -356,7 +395,7 @@ LPeg、CJSON、LuaSocket、LuaFileSystem 与 luaposix 合起来调用了 C API �
 `<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
 `require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
 
-### 5.10 性能
+### 5.11 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时
@@ -531,9 +570,9 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 8. **数学库是 Go 的，不是平台 libm**：`math.sin`、`cos`、`tan`、`exp`、`log`、`log10`、`sqrt`、`asin`、`acos`、`atan`、`atan2`、`pow`、`sinh`、`cosh`、`tanh`、`frexp`、`ldexp` 用的是 Go 的实现，与 libc 链接的那份不同。15 位有效数字一致，最后一位或两位在一部分入参上不同：在横跨 15 个数量级的 120 个入参上实测，`sqrt` 从不出现差异，`exp`、`log` 只有个位数（小于 1 ulp），`log10`、`tanh`、`asin`、`acos`、`atan` 有几十个（约 1 ulp），`sin`、`cos`、`tan` 占四分之一到一半。超过 2^53 之后需要先做参数归约，差距会拉大——`tan` 偏 6 ulp、`sin` 偏 7 ulp——因为两边都不是正确舍入，归约方式也不同。所有算术运算、`sqrt` 与两种整数转换都是精确的。NaN 按平台 C 库的写法拼写（macOS 恒为 `"nan"`，glibc 符号位为 1 时是 `"-nan"`），因为 C 的 `printf` 就是这么做的。唯一刻意绕开 Go 实现的地方是 `exp(|x|)` 溢出而 `sinh(x)`、`cosh(x)` 尚未溢出的那条带（709.78 < |x| < 710.48）：Go 的 `math.Sinh` 对 `math.sinh(710)` 返回 `inf`，而其真值是 `exp(710)/2` = 1.1e308、完全可表示，所以那里把「减半」折进了参数里。
 9. **`math.randomseed()` 不带参数时第二个种子不同**：PUC-Lua 返回的两个种子是「当前时间」与「`lua_State` 的地址」（lmathlib.c 的 `randseed`），本移植返回的也是这两个量，所以第一个种子（时间）一致，第二个是 Go 堆地址而非 C 堆地址——两者都是宿主地址，在任一实现里都不可复现。`math.randomseed(n)` 与 `math.randomseed(n, m)` 原样返回入参；生成器本身仍是同一个基于 xoshiro256** 的实现：同一种子下产出的序列完全相同，整数与浮点都是，用例已钉住 `math.random()`、`math.random(6)`、`math.random(10, 20)` 各 20 次取值。
 10. **协程是「停住 goroutine」而不是 longjmp，挂起的 C 帧醒来时还在**：C 的 `lua_yield` 是 longjmp 到「将来会把它接起来的那个 `lua_resume`」，中间的一切都被丢弃；本实现则把 yield 的值经 channel 交给恢复者，然后阻塞在下一个 resume 请求上，于是 Lua 栈、保存的程序计数器、乃至 C 调用者自己的栈，全都活在 yield 的那个点上。这正是元方法与 Go 函数能从调用中途 yield 的原因，也是延续能成立的原因（§5.6）。随之而来两点：协程从恢复者继承的 C 调用深度是**每次 yield 都刷新**，而非只在第一次 resume 时刷新——这与 C 一致，因为 `lua_resume` 每次 resume 都跑一遍。另外 yield 过的 C 函数察觉不到这件事：`lua_callk` 会像调用正常结束那样返回它，所以 `lua_callk` 的延续听到的 status 是 `LUA_OK`，而 PUC-Lua 那里恒为 `LUA_YIELD`——是个常量，没有东西能依赖这个差别。`lua_pcallk` 的 status 是会变的，那个**与 PUC-Lua 一致**：本实现数着该线程 yield 了几次，被 yield 打断时报告 `LUA_YIELD`。
-11. **两个相等的短字符串不一定是同一个对象**：PUC-Lua 对短字符串的驻留贯穿其整个生命周期，所以 `lua_topointer` 对两个相等的串返回同一个地址，C 扩展也能拿这个地址当键。本实现的驻留是两代缓存（§5.10），一个串在两代都过期后可能被重新驻留，于是两个内容相同且都活着的串可能位于不同地址。Lua 层面看不到这件事：字符串按内容比较，所以 `luaS_eqshrstr` 是「比哈希再比字节」，而 C 那里的 `eqshrstr` 只比指针；`rawequal`、`==`、表的键与 `next` 的行为都和以前一样。只有 `lua_topointer`——以及拿它当键的 `lua_rawsetp`——能看出差别。
+11. **两个相等的短字符串不一定是同一个对象**：PUC-Lua 对短字符串的驻留贯穿其整个生命周期，所以 `lua_topointer` 对两个相等的串返回同一个地址，C 扩展也能拿这个地址当键。本实现的驻留是两代缓存（§5.11），一个串在两代都过期后可能被重新驻留，于是两个内容相同且都活着的串可能位于不同地址。Lua 层面看不到这件事：字符串按内容比较，所以 `luaS_eqshrstr` 是「比哈希再比字节」，而 C 那里的 `eqshrstr` 只比指针；`rawequal`、`==`、表的键与 `next` 的行为都和以前一样。只有 `lua_topointer`——以及拿它当键的 `lua_rawsetp`——能看出差别。
 
-12. **性能**：`Instruction` 使用结构体而非位压缩 uint32，分派有额外开销；P7 阶段做基准后再决定是否改回位编码。
+12. **性能**：本实现比 C 慢一个随负载而变的常数倍——普通代码 1.4× 到 3.6×（§5.11），协程 6.0×，因为一次 yield/resume 是两次 goroutine 切换而非两个栈指针互换。这是与 PUC-Lua 的**性质**差异，不是**行为**差异：没有任何程序会因此给出不同的答案。唯一能观察到它的地方是「脚本本身就是截止时间」——一边超时、另一边跑完的负载——官方套件里的 `heavy` 之所以是已知差异，就是这个原因。
 
 ---
 
@@ -546,7 +585,8 @@ go test -race ./...       # 竞态检测
 go vet ./...
 gofmt -l .                # 必须无输出
 go test -bench=. -benchmem -run=XXX ./...   # 基准
-go build -o lua ./cmd/lua # 命令行解释器
+go build -o lua  ./cmd/lua    # 命令行解释器
+go build -o luac ./cmd/luac   # 命令行编译器
 ```
 
 其中两项需要的不止 Go：`cdlopen_test.go` 与 `cdlopen_api_test.go` 会编译 C 扩展

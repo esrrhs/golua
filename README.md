@@ -60,6 +60,7 @@ loading C dynamic libraries (replaced by Go-side module registration).
 | `ldump.c` / `lundump.c` | same names `.go` | ⬜ | self-consistent binary format |
 | `lbaselib` `lcorolib` `ltablib` `lmathlib` `lstrlib` `lutf8lib` `liolib` `loslib` `ldblib` `loadlib` `linit` | same names `.go` | ⬜ | standard libraries |
 | `lua.c` | `cmd/lua/main.go` | ⬜ | CLI + REPL |
+| `luac.c` | `luac.go` + `cmd/luac/main.go` | ⬜ | the standalone compiler: dump, strip, parse-only, listing |
 | **`lgc.c/.h`** | **(deleted)** | ✅ | **replaced by Go's concurrent GC** |
 
 ### 2.3 Type mapping
@@ -185,7 +186,7 @@ build needs and what the bridge does not cover yet.
 | **P3** | Front end: `llex` `lparser` `lcode` | ✅ |
 | **P4** | API layer: `lapi` `lauxlib` `linit` | ✅ |
 | **P5** | Standard libraries | ✅ |
-| **P6** | `cmd/lua` CLI + REPL, `ldump`/`lundump` | ✅ |
+| **P6** | `cmd/lua` CLI + REPL, `cmd/luac` compiler, `ldump`/`lundump` | ✅ |
 | **P7** | Official Lua 5.4 test suite, benchmarks, CI on 3 OSes | 🔄 |
 
 ### 5.1 Conformance: the official test suite
@@ -427,7 +428,56 @@ extensions had reached:
 | `lua_resume` on a thread that yields | C takes the arguments from the coroutine's own stack, leaves the yielded values there and reports how many there are, for the caller to `lua_xmove` across. Neither was true here: the arguments came from the resumer and the values had been taken off |
 | `lua_atpanic` | answered NULL instead of the previous handler, which is the one thing an extension installing its own needs in order to put the host's back |
 
-### 5.9 Coverage inventory
+### 5.9 The standalone compiler: luac, and what its listing proves
+
+`cmd/luac` is luac.c, and it is the last thing PUC-Lua ships that was
+missing: compiling a script to a binary chunk, checking one without
+running it (`-p`), stripping debug information (`-s`), and listing the
+bytecode (`-l`, twice for the full listing). The work is done by
+`lua.Luac`, which lives in the library rather than in `cmd/luac` because
+the listing has to read prototypes — luac.c says so itself by including
+`lobject.h`, `lopcodes.h` and `lstate.h`.
+
+The listing is worth having for a second reason: it is a far stricter
+conformance check than any output comparison. A script can print the
+right thing and still have been compiled differently; a listing cannot.
+Every instruction, operand, comment, constant, local variable and
+upvalue has to be PUC-Lua's, in PUC-Lua's order, with PUC-Lua's line
+numbers. Run over the 79 scripts of the differential suite (§5.10) —
+some 81,000 lines of listing — the two agree line for line.
+
+Which is how it found the last real difference in the compiler:
+
+**`addk` was using the wrong table.** `lcode.c` looks a constant up in
+the *scanner's* table (`fs->ls->h`), which is shared by every function
+of the chunk, while this port had given each function a table of its
+own. The consequence is not that one of them shares constants and the
+other does not — PUC-Lua's entry holds an index into whichever
+function's constant table was being filled at the time, and it is only
+reused if that index still names the same value in the function being
+compiled now. So PUC-Lua *misses* some reuse that a per-function table
+would find, and a chunk like
+
+```lua
+local function f() return print end
+print(f)
+```
+
+gives `print` two constant slots in PUC-Lua and one here. Nothing Lua
+can observe depends on it, which is why 79 scripts of golden output
+never showed it — but the constant indices are part of the bytecode, so
+the bytes `string.dump` writes were not always PUC-Lua's. The table is
+now the scanner's, and the occasional duplicate constant is reproduced.
+
+`testdata/luac/` pins it: three sources, their 683-line combined listing
+(`expected.txt`, taken from PUC-Lua 5.4.9 with the prototype addresses
+blanked out, since those cannot match across processes), and the two
+binary chunks `luac -o` writes for them, compared byte for byte and then
+loaded back. Several files are combined the way luac.c does it — by
+compiling `"(function()end)();\n"` once per file and grafting each
+file's prototype onto the nested ones — so that is covered too.
+
+### 5.10 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
 the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
@@ -466,7 +516,7 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
-### 5.10 Performance
+### 5.11 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end
@@ -540,9 +590,9 @@ The C block behind a userdata is freed when the userdata is collected: `C.malloc
 7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh`, `tanh`, `frexp` and `ldexp` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. The one place the port deliberately steps outside Go's implementations is the band in which `exp(|x|)` overflows while `sinh(x)` and `cosh(x)` do not (709.78 < |x| < 710.48): Go's `math.Sinh` answers `inf` for `math.sinh(710)`, whose true value is `exp(710) / 2` = 1.1e308 and representable, so the halving is folded into the argument there instead.
 8. **`math.randomseed()` with no arguments returns a different second seed** — PUC-Lua returns the current time and the *address of the `lua_State`* as its two seeds (lmathlib.c: `randseed`), and this port returns the same two quantities, so the first seed — the time — matches and the second is a Go heap address rather than a C one; the numbers are both host addresses and are not reproducible in either implementation. `math.randomseed(n)` and `math.randomseed(n, m)` return their arguments unchanged, and the generator itself is the same xoshiro256**-based one: for a given seed it produces the identical sequence, integer or float, which the suite pins across 20 draws of `math.random()`, `math.random(6)` and `math.random(10, 20)`.
 9. **A coroutine suspends by parking its goroutine, and a C frame that suspended is still there when it wakes** — C's `lua_yield` long-jumps to the `lua_resume` that will pick the thread up again, and everything between is discarded; this port instead hands the yielded values to the resumer through a channel and then blocks on the next resume request, so the Lua stack, the saved program counter and — for a C caller — the C stack itself all survive at the yield point. That is what lets a metamethod or a Go function yield from the middle of a call, and it is what makes continuations work (§5.6). Two consequences follow. The C-call depth a thread inherits from its resumer is refreshed at every yield rather than only at the first resume, which is what C does too, since `lua_resume` runs on every resume. And a C function that yielded does not get to notice: `lua_callk` returns to it as if the call had simply finished, so the status a `lua_callk` continuation hears is `LUA_OK` where PUC-Lua's is always `LUA_YIELD` — a constant, so nothing can depend on the difference. `lua_pcallk`'s status does vary, and that one *is* PUC-Lua's: the port counts the yields the thread has made and reports `LUA_YIELD` when the call was interrupted by one.
-10. **Two short strings that are equal may not be the same object** — PUC-Lua interns short strings for as long as they live, so `lua_topointer` answers the same address for two equal ones and a C extension can use that address as a key. Here interning is a two-generation cache (§5.10), so a string can be interned again once it has aged out of both generations, and two live strings with the same bytes may then sit at different addresses. Nothing in Lua can see it: strings compare by content, which is why `luaS_eqshrstr` compares the hash and then the bytes where C's `eqshrstr` would compare pointers, and `rawequal`, `==`, table keys and `next` all behave as before. Only `lua_topointer` — and a `lua_rawsetp` keyed on it — can tell the difference.
+10. **Two short strings that are equal may not be the same object** — PUC-Lua interns short strings for as long as they live, so `lua_topointer` answers the same address for two equal ones and a C extension can use that address as a key. Here interning is a two-generation cache (§5.11), so a string can be interned again once it has aged out of both generations, and two live strings with the same bytes may then sit at different addresses. Nothing in Lua can see it: strings compare by content, which is why `luaS_eqshrstr` compares the hash and then the bytes where C's `eqshrstr` would compare pointers, and `rawequal`, `==`, table keys and `next` all behave as before. Only `lua_topointer` — and a `lua_rawsetp` keyed on it — can tell the difference.
 
-11. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
+11. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
 
 ---
 
@@ -555,7 +605,8 @@ go test -race ./...
 go vet ./...
 gofmt -l .                                  # must print nothing
 go test -bench=. -benchmem -run=XXX ./...   # benchmarks
-go build -o lua ./cmd/lua
+go build -o lua  ./cmd/lua    # the standalone interpreter
+go build -o luac ./cmd/luac   # the standalone compiler
 ```
 
 Two of those need more than Go: `cdlopen_test.go` and

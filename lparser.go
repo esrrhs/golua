@@ -138,7 +138,6 @@ type FuncState struct {
 	f            *Proto
 	prev         *FuncState
 	ls           *LexState
-	h            *Table /* table to find (and reuse) elements in 'k' */
 	bl           *BlockCnt
 	pc           int
 	lasttarget   int
@@ -698,7 +697,8 @@ func open_func(ls *LexState, fs *FuncState, bl *BlockCnt) {
 	fs.firstlocal = ls.dyd.actvar.n
 	fs.firstlabel = ls.dyd.label.n
 	fs.bl = nil
-	fs.h = luaH_new(ls.L) /* create table for constants */
+	/* C's 'open_func' creates no table here: constants are looked up in
+	   the scanner's table, which is shared by the whole chunk. */
 	f.source = ls.source
 	f.maxstacksize = 2 /* registers 0/1 are always valid */
 	enterblock(fs, bl, false)
