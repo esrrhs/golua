@@ -1,4 +1,4 @@
-//go:build cgo
+//go:build cgo && unix
 
 package lua
 
@@ -25,6 +25,14 @@ package lua
 //     is compared.
 //   - the one line that carries the module's own version number.
 //
+// And one line is *rewritten* when the machine cannot run it as written.
+// The golden was captured where the C library has cs_CZ, so two lines
+// print a number with a decimal comma; a host that does not have that
+// locale installed -- a stock glibc image generates only C and en_US --
+// answers '.' there, and the port, which asks the same C library, answers
+// '.' too.  Whether the locale is installed is the host's business, so
+// the golden is made to agree with it rather than the other way round.
+//
 // The suite wants a 4 MB utf8.dat, which its genutf8.pl builds with perl.
 // Writing it here instead keeps the test to things the machine certainly
 // has -- a C compiler -- and it is the same bytes: every codepoint except
@@ -35,6 +43,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -178,7 +187,45 @@ func cjsonWant(t *testing.T, src string) []string {
 	if n := len(lines); n > 0 && lines[n-1] == "" {
 		lines = lines[:n-1]
 	}
+	if !cjsonHasCommaLocale() {
+		/* see the note at the top: a decimal comma is a comma with a
+		   digit on either side of it, and nothing else in the golden
+		   writes one */
+		re := regexp.MustCompile(`([0-9]),([0-9])`)
+		for i, l := range lines {
+			lines[i] = re.ReplaceAllString(l, "$1.$2")
+		}
+	}
 	return lines
+}
+
+// cjsonHasCommaLocale asks the C library whether it has the locale the
+// suite sets, rather than assuming it from the platform: which locales are
+// installed is a property of the machine, exactly as it is in PUC-Lua.
+//
+// The question is asked by setting the locale, and a locale is not a thing
+// a state owns but a thing the process owns -- it is C's, and the decimal
+// point every later number is written with comes from it.  So it is put
+// back before the answer is given: without that, the whole package prints
+// "8,2184074615549724e+307" from here on.
+func cjsonHasCommaLocale() bool {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	const probe = `
+		local was = os.setlocale()
+		local had = os.setlocale("cs_CZ")
+		os.setlocale(was)
+		return had
+	`
+	if err := L.LoadString(probe, "=locale"); err != nil {
+		return false
+	}
+	if L.PCall(0, 1, 0) != LUA_OK {
+		return false
+	}
+	s, ok := L.ToString(-1)
+	return ok && s != ""
 }
 
 // utf8Dat is what genutf8.pl writes: every codepoint but the surrogates,

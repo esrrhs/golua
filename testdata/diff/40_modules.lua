@@ -36,7 +36,11 @@ print(rec(package.searchpath, "a.b", "./?.lua", ".", "/"))
 print(rec(package.searchpath, "a", "./?.lua"))
 print(rec(package.searchpath, "a", "./?.lua", "."))
 print(rec(package.searchpath, "a", "./?.lua", ".", "."))
-print(rec(package.searchpath))
+-- No 'package.searchpath()' with no arguments at all: which argument the
+-- error then names is which of the two 'luaL_checkstring' calls the C
+-- compiler evaluated first, and that is unspecified -- gcc says "#2",
+-- clang says "#1".
+print(rec(package.searchpath, "a"))
 print(rec(package.searchpath, 42, "./?.lua"))
 print(rec(package.searchpath, "a", 42))
 print(rec(package.searchpath, "a", "./?.lua", 42))

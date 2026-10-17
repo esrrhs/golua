@@ -68,7 +68,9 @@ print(rec(os.time, {year = 1.5, month = 6, day = 15, hour = 12}))
 print(rec(os.time, {year = 2000.0, month = 6, day = 15, hour = 12}) ~= nil)
 print(rec(os.time, {year = true, month = 6, day = 15, hour = 12}))
 print(rec(os.time, {year = {}, month = 6, day = 15, hour = 12}))
-print(rec(os.time, {year = 2000, month = 6, day = 15, hour = 12, isdst = "x"}))
+-- 'isdst' is the host's to interpret: see 42_os.lua.  What is compared
+-- here is that the field is accepted, not the number it produces.
+print(show(type(os.time{year = 2000, month = 6, day = 15, hour = 12, isdst = "x"})))
 print(rec(os.time, {year = 2000, month = 6, day = 15, hour = 12, isdst = 0}) ~= nil)
 print(rec(os.time, {year = 2000, month = 6, day = 15, hour = 12, isdst = 1}) ~= nil)
 

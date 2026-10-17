@@ -69,7 +69,10 @@ print(rec(os.time, {year = 1970, month = 1, day = 1, hour = 0}))
 print(rec(os.time, {year = 1970, month = 1, day = 1, hour = 0, min = 0, sec = 0}))
 print(rec(os.time, {year = 2000, month = 2, day = 29, hour = 12}))
 print(rec(os.time, {year = 2000, month = 2, day = 29, hour = 12, isdst = false}))
-print(rec(os.time, {year = 2000, month = 2, day = 29, hour = 12, isdst = true}))
+-- 'isdst' goes to the host's 'mktime': glibc shifts an hour for a true
+-- one even where there is no DST, Apple's does not, so the number it
+-- answers is not comparable.  See 42_os.lua.
+print(show(type(os.time{year = 2000, month = 2, day = 29, hour = 12, isdst = true})))
 print(rec(os.time, {year = 2038, month = 1, day = 19, hour = 3, min = 14, sec = 7}))
 print(rec(os.time, {year = 1969, month = 12, day = 31, hour = 0}))
 print(rec(os.time, {}))

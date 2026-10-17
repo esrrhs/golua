@@ -91,7 +91,11 @@ print(rec(os.time, {year = 2000, month = 1, day = 1, hour = 25}))
 print(rec(os.time, {year = 2000, month = 1, day = 1, hour = 1, min = 60}))
 print(rec(os.time, {year = 2000, month = 1, day = 1, hour = 1, min = 1, sec = 60}))
 print(rec(os.time, {year = 2000, month = 1, day = 1, hour = 1.5}))
-print(rec(os.time, {year = 2000, month = 1, day = 1, hour = 1, min = 1, sec = 1, isdst = "x"}))
+-- 'isdst' reaches the host's 'mktime', and what it does with it is the
+-- host's own business: glibc shifts the answer by an hour for a true
+-- 'isdst' even in a zone that has no DST at all, Apple's mktime does
+-- not.  Only that the field is accepted is the same on both sides.
+print(show(type(os.time{year = 2000, month = 1, day = 1, hour = 1, min = 1, sec = 1, isdst = "x"})))
 print(show(os.time{year = 1970, month = 1, day = 1, hour = 0}))
 print(show(os.time{year = 1970, month = 1, day = 2, hour = 0}))
 print(show(os.time{year = 2000, month = 2, day = 29, hour = 12}))

@@ -41,7 +41,9 @@ P(rec(package.searchpath, "m2", "./req/?.lua;./req/sub/?.lua"))
 P(rec(package.searchpath, "m1", "./req/?"))
 P(rec(package.searchpath, "noext", "./req/?"))
 P(rec(package.searchpath, "m1", "./req/?.lua;./nope/?.lua"))
-P(rec(package.searchpath))
+-- Not 'package.searchpath()' with nothing at all: which argument the
+-- error names is then whichever 'luaL_checkstring' the C compiler
+-- evaluated first, which is unspecified (see 40_modules.lua).
 P(rec(package.searchpath, "m1"))
 P(rec(package.searchpath, 1, "x"))
 P(rec(package.searchpath, "m1", 1))

@@ -19,7 +19,6 @@ true|"./req/sub/m2.lua"
 true|nil|"no file './req/m1'"
 true|"./req/noext"
 true|"./req/m1.lua"
-false|"bad argument #1 to 'package.searchpath' (string expected, got no value)"
 false|"bad argument #2 to 'package.searchpath' (string expected, got no value)"
 true|nil|"no file 'x'"
 true|nil|"no file '1'"
@@ -90,7 +89,7 @@ preload not fn	false|"module 'pq' not found:\
 \9no file '/usr/local/lib/lua/5.4/loadall.so'\
 \9no file './pq.so'"
 loaded wins	canned
-lua: 74_require.lua:100: module 'pl' not found:
+lua: 74_require.lua:102: module 'pl' not found:
 	no field package.preload['pl']
 	no file '/usr/local/share/lua/5.4/pl.lua'
 	no file '/usr/local/share/lua/5.4/pl/init.lua'
@@ -103,5 +102,5 @@ lua: 74_require.lua:100: module 'pl' not found:
 	no file './pl.so'
 stack traceback:
 	[C]: in function 'require'
-	74_require.lua:100: in main chunk
+	74_require.lua:102: in main chunk
 	[C]: in ?

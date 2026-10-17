@@ -36,13 +36,32 @@ import (
 // compared; everything else must match byte for byte.
 var diffAddrRe = regexp.MustCompile(`0x[0-9a-f]+`)
 
-// diffNormalise removes host-dependent details from captured output.
+// diffNormalise removes what the host decides, on both sides alike.
+//
+// Two of these are not per-platform but per-C-library, which the
+// per-GOOS golden names cannot sort out: the reference and this port run
+// on the same machine and still disagree.
 func diffNormalise(s string) string {
 	s = diffAddrRe.ReplaceAllString(s, "0xADDR")
+	/* The sign of a NaN.  C asks printf, which on glibc writes "-nan"
+	   when the sign bit is set and "nan" when it is not, while Go's
+	   strconv writes neither and fmtNaN (lobject.go) has to guess the
+	   library's spelling from GOOS.  Which of the two a NaN *is* then
+	   depends on what produced it: 'math.huge - math.huge' is the
+	   negative one on every side, and Go's math.Mod hands back a
+	   positive one where C's fmod hands back the CPU's indefinite
+	   QNaN.  Not one of the cases is about that. */
+	s = strings.ReplaceAll(s, "-nan", "nan")
+	/* The name of the UTC zone.  TZ is pinned (see diffEnv), so the
+	   only thing os.date's '%Z' can answer is what the host's C
+	   library calls UTC: "UTC" on macOS, "GMT" on glibc. */
+	s = diffZoneRe.ReplaceAllString(s, "UTC")
 	/* a checkout that rewrites line endings would otherwise make every
 	   line of every case differ, which is not a difference in Lua */
 	return strings.ReplaceAll(s, "\r\n", "\n")
 }
+
+var diffZoneRe = regexp.MustCompile(`\bGMT\b`)
 
 var (
 	diffBin    string
@@ -205,9 +224,12 @@ func TestDifferentialSuite(t *testing.T) {
 			return
 		}
 		got := diffRunCase(t, path)
-		if diffNormalise(got) != diffNormalise(string(want)) {
+		w, g := diffNormalise(string(want)), diffNormalise(got)
+		if w != g {
+			/* normalised on the way out as well: a heap address in the
+			   message reads as a difference that is not one */
 			t.Errorf("%s: output differs from PUC-Lua 5.4.9\n--- want ---\n%s\n--- got ---\n%s",
-				filepath.Base(path), want, got)
+				filepath.Base(path), w, g)
 		}
 	}
 }

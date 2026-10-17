@@ -18,7 +18,7 @@ true|0
 true|0
 true|951825600
 true|951825600
-true|951825600
+"number"
 true|2147483647
 true|-86400
 false|"field 'year' missing in date table"

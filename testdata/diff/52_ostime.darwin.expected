@@ -27,7 +27,7 @@ false|"field 'year' is not an integer"
 true
 false|"field 'year' is not an integer"
 false|"field 'year' is not an integer"
-true|961070400
+"number"
 true
 true
 == the argument itself ==
