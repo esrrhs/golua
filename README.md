@@ -197,16 +197,15 @@ and compared. **`all.lua` is driven file by file**, because it needs the C
 extension libraries pre-compiled; `main.lua` spawns the interpreter as a
 subprocess and is therefore included.
 
-**29 of the 33 files produce byte-identical output.** The remaining 4
+**30 of the 33 files produce byte-identical output.** The remaining 3
 differ only for reasons that follow from the design — there is no
 collector of our own — or from the test environment:
 
 | File | Why it differs |
 |---|---|
-| `gc` | `collectgarbage("count")` accounting, and the granularity of `collectgarbage("step", n)`: PUC-Lua's step does a bounded amount of work, so `dosteps(10) < dosteps(2)`; Go's collector is all or nothing, so a step is a whole cycle and both take one |
-| `all` | the same accounting, in the one line that prints it: `total memory: 44.7K` against `611.9K`. Everything else in the suite — including the C extension libraries `attrib`, `files`, `gengc` and `locals` load — matches |
-| `literals` | `os.setlocale("pt_BR")` is unavailable here (see §6), so the decimal-point tests are skipped |
-| `heavy` | times out on both sides (it builds 2 GB of tables); the two agree as far as the timeout lets them |
+| `gc` | the file is a test *of* the collector, and there is none here. Three assertions measure an incremental one: that `gcinfo()` falls after a step, that a bigger step size needs fewer steps, and that one huge step finishes a cycle. A step here is a whole cycle and reclaims nothing of Lua's, so all three fail. After them the file measures the collector's *pace* by allocating tables until `gcinfo()` has tripled — a loop that does not terminate when nothing is ever reclaimed |
+| `all` | the environment, in four lines: the second PRNG seed (PUC-Lua's is truncated to 32 bits, this one is a 64-bit address), `total memory: 44.6K` against `619.2K` (the same accounting), the elapsed time, and the interpreter's own path. Everything else — including the C extension libraries `attrib`, `files`, `gengc` and `locals` load — matches |
+| `heavy` | times out on both sides (it builds 2 MB of tables per iteration, and 2 GB overall); the two agree as far as the timeout lets them |
 
 Weak tables and `__gc` are supported and pass their own tests —
 `closure`, `db`, `coroutine`, `gengc`, `cstack` and `locals`, the last
@@ -240,7 +239,39 @@ Every line its suite prints is PUC-Lua 5.4.9's, kept in
 interpreter nor the network. Both are MIT-licensed and redistributed
 under `testdata/lpeg/LICENSE`.
 
-### 5.3 Coverage inventory
+### 5.3 A second one: Lua CJSON, which found the locale
+
+[Lua CJSON](https://kyne.com.au/~mark/software/lua-cjson.php) 2.1.0.10 is
+built the same way from `testdata/cjson/` — three translation units — and
+runs its own 105-case suite, all of which pass. Where LPeg exercises
+patterns, userdata and the buffer API, CJSON exercises the other half of
+what an extension does: walking tables with `lua_next`, converting numbers
+and strings in both directions, and building error messages with
+`luaL_error`. And it found something LPeg did not:
+
+```lua
+os.setlocale("cs_CZ")     -- the suite forces a decimal comma on purpose,
+print(1.5)                -- to check what a number looks like then
+```
+
+`os.setlocale` used to answer `nil` for everything but `"C"`. It now goes
+to the C library's `setlocale` and remembers the decimal point, which is
+the one part of a locale Lua actually observes — and it is observed in
+three places: `tostring` of a number, `string.format`'s `%f`/`%e`/`%g`
+(but not `%a` or `%q`, which is what lets `%q` round-trip), and `tonumber`,
+which accepts either separator. That is also what turned the official
+suite's `literals.lua` green: its decimal-point cases had been skipped for
+want of it.
+
+Two kinds of line are left out of the comparison, both because PUC-Lua
+does not fix them: a line printing a table with string keys (`pairs` walks
+in hash order, and the hash is seeded afresh in every process — the
+reference interpreter prints these two ways on two runs of its own), and
+the one line naming the module's version. The suite wants a 4 MB
+`utf8.dat`, which its `genutf8.pl` builds with perl; the test writes the
+same bytes in Go, so that a C compiler is the only thing it needs.
+
+### 5.4 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
 the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
@@ -279,7 +310,7 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
-### 5.4 Performance
+### 5.5 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end
@@ -321,7 +352,7 @@ One thing the bridge does not do (noted in `cdlopen.go`): a continuation (`lua_c
 The C block behind a userdata is freed when the userdata is collected: `C.malloc` is not memory Go's collector knows about, so without a finalizer an extension making userdata in a loop would grow without bound. Anything written in Lua, or ported to Go, needs none of this: `L.RequireF(modname, openf, true)` adds one to `package.loaded` (the port's `luaL_requiref`), or set `package.preload[name]` to a Go function and let `require` find it the usual way.
 3. **The collector is Go's, so its observable timing is not PUC-Lua's** — `collectgarbage("count")` reports the Go heap rather than PUC-Lua's own allocator, and `__gc` runs where this port runs a cycle (a collector step, `collectgarbage`, or `Close()`) rather than where PUC-Lua's step would have run it. Objects with a `__gc` are held between cycles so that Go cannot finalise them at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not — which is what C does and what makes `<close>`, `Close()` and weak tables deterministic:  a sweep removes an entry once nothing but the table refers to it. `collectgarbage("step")` is the one answer that cannot be matched: PUC-Lua answers true only when the step brought the collector back to the pause state, which a single step almost never does — it answers false for hundreds of calls in a row, even right after a full collection — while a step here is a whole cycle and answers true. Answering false instead would leave the documented idiom `while not collectgarbage("step") do end` spinning forever, which is the worse of the two.
 4. **Weak tables need two collector cycles** — a Go `weak.Pointer` is cleared in the cycle after the one that frees its object, so an entry survives one cycle longer than PUC-Lua would have kept it. Strings, numbers and booleans are never weakened, exactly as in PUC-Lua.
-5. **Only the `"C"` locale is available** — `os.setlocale` has no libc locale database behind it, so any other name returns `nil` (as PUC-Lua does when the locale is not installed). Number formatting and parsing always use `.` as the decimal point.
+5. **`os.setlocale` asks the C library, so it needs cgo** — the decimal point is the one part of a locale Lua observes, and it is observed in three places: `tostring` of a number, `string.format`'s `%f`/`%e`/`%g` (but not `%a` or `%q`, which is what lets `%q` round-trip), and `tonumber`, which accepts either separator while a source literal always uses `.`. Which locales are installed is the host's business, exactly as in PUC-Lua, and a name the C library refuses answers `nil`. Built with `CGO_ENABLED=0` there is no C library to ask, so every name but `"C"` answers `nil` and the decimal point stays `.`.
 6. **`os.date` refuses a slightly different range of times, `os.time` accepts dates the host's `mktime` refuses, and `os.date("!%z")` answers the UTC offset rather than the local one** — `struct tm` keeps the year in an `int`, and the host's `gmtime`/`localtime` answer NULL once it no longer fits, which is where PUC-Lua's "date result cannot be represented in this installation" comes from. This port asks the same question against `tm_year` and reproduces the top of the range exactly — 67768036191676799 is the last representable second (year 2147485547, `tm_year` `INT_MAX`) and one more is refused — but the bottom of the host's range stops a little short of `INT_MIN`, so a window of some 2×10¹⁴ seconds at the far negative end is answered here and refused there; no second beyond that is answered by either. For `os.time`, PUC-Lua builds a time with the C library's `mktime` and reports "time result cannot be represented in this installation" when it answers -1; which dates those are is up to the C library (on macOS, anything that normalises to a year before 1900; glibc accepts those). Go's `time.Date` has no such limit, so this port answers a number. The opposite happens for `%z` under `!`: the time is UTC, but the host's `gmtime` leaves its offset at the local value, so PUC-Lua prints the local offset where this port prints `+0000`. Everything PUC-Lua itself decides is reproduced — the bounds each field must satisfy before it reaches `struct tm` ("field 'year' is out-of-bound"), the missing and non-integer fields, a result of exactly -1, and every other specifier of `os.date`.
 7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh`, `tanh`, `frexp` and `ldexp` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. The one place the port deliberately steps outside Go's implementations is the band in which `exp(|x|)` overflows while `sinh(x)` and `cosh(x)` do not (709.78 < |x| < 710.48): Go's `math.Sinh` answers `inf` for `math.sinh(710)`, whose true value is `exp(710) / 2` = 1.1e308 and representable, so the halving is folded into the argument there instead.
 8. **`math.randomseed()` with no arguments returns a different second seed** — PUC-Lua returns the current time and the *address of the `lua_State`* as its two seeds (lmathlib.c: `randseed`), and this port returns the same two quantities, so the first seed — the time — matches and the second is a Go heap address rather than a C one; the numbers are both host addresses and are not reproducible in either implementation. `math.randomseed(n)` and `math.randomseed(n, m)` return their arguments unchanged, and the generator itself is the same xoshiro256**-based one: for a given seed it produces the identical sequence, integer or float, which the suite pins across 20 draws of `math.random()`, `math.random(6)` and `math.random(10, 20)`.

@@ -58,6 +58,19 @@ typedef void (*lua_Hook)(lua_State *L, struct lua_Debug *ar);
 void *cdl_alloc(void *ud, void *ptr, size_t osize, size_t nsize);
 void *cdl_allocfn(void); /* the address of cdl_alloc, as a void * */
 
+/* The C library's own locale, which os.setlocale sets: there is no way
+   to reach it from Go, and a number has to be written the way the
+   locale says (1.5 is "1,5" under pt_BR).
+
+   cdl_lc_cat turns the category os.setlocale was given -- by its place
+   in Lua's list: "all", "collate", "ctype", "monetary", "numeric",
+   "time" -- into the LC_* it means. It is a function because the LC_*
+   are not plain numbers on every platform, and cgo cannot read a macro
+   it cannot evaluate. */
+const char *cdl_setlocale(int cat, const char *name);
+const char *cdl_decpoint(void);
+int cdl_lc_cat(int which);
+
 #include <stdlib.h>
 
 /* LUA_IDSIZE is 60 in PUC-Lua; short_src below must be the same size */

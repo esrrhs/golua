@@ -527,9 +527,12 @@ func tostringbuff(obj *Value) string {
 	}
 	s := fmtFloat(fltvalue(obj))
 	if !strings.ContainsAny(s, ".eEnNaxi") { // looks like an integer?
-		s += ".0"
+		/* PUC-Lua appends the locale's decimal point and a zero, not a
+		   hard-coded '.' -- under pt_BR this is "10,0". */
+		s += localeDecPoint + "0"
+		return s
 	}
-	return s
+	return num2strLocale(s)
 }
 
 // fmtNaN is the word C's printf writes for a NaN.
@@ -811,6 +814,20 @@ func luaO_str2num(s string, o *Value) bool {
 	if n, ok := l_str2d(s); ok {
 		setfltvalue(o, n)
 		return true
+	}
+	/* PUC-Lua's strtod is the C library's, so it reads the decimal point
+	   of the locale: under pt_BR, tonumber("3,4") is 3.4. The '.' is
+	   still read, which is why both work there -- 'literals.lua' asks
+	   for both. */
+	if alt := str2numLocale(s); alt != s {
+		if i, ok := l_str2int(alt); ok {
+			setivalue(o, i)
+			return true
+		}
+		if n, ok := l_str2d(alt); ok {
+			setfltvalue(o, n)
+			return true
+		}
 	}
 	return false
 }

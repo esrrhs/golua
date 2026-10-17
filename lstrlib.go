@@ -1558,7 +1558,12 @@ func strFormatFloat(form string, n float64) string {
 		/* no precision given: C uses 6 */
 		f = form[:len(form)-1] + strMaxDecimal + form[len(form)-1:]
 	}
-	return fmt.Sprintf(f, n)
+	/* 'f', 'e' and 'g' use the locale's decimal point, because C's printf
+	   does -- "%.3f" of 4.51 is "4,510" under pt_BR. '%a' is not
+	   touched: it writes a hexadecimal number, and the reference
+	   interpreter writes it with a '.' whatever the locale, which is
+	   what lets '%q' round-trip. */
+	return num2strLocale(fmt.Sprintf(f, n))
 }
 
 func strFormat(L *State) int {

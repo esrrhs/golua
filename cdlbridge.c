@@ -22,6 +22,7 @@
 */
 
 #include <stdlib.h>
+#include <locale.h>
 
 #include "cdlbridge.h"
 
@@ -288,4 +289,27 @@ void *cdl_alloc (void *ud, void *ptr, size_t osize, size_t nsize) {
 
 void *cdl_allocfn (void) {
   return (void *)cdl_alloc;
+}
+
+/* The locale, for os.setlocale. Go has no setlocale of its own, and the
+   C library's is the one that decides how a number is written -- so it
+   has to be C's, or os.setlocale does nothing that can be seen. */
+const char *cdl_setlocale (int cat, const char *name) {
+  return setlocale(cat, name);
+}
+
+const char *cdl_decpoint (void) {
+  struct lconv *lc = localeconv();
+  return lc->decimal_point;
+}
+
+int cdl_lc_cat (int which) {
+  switch (which) {
+    case 1: return LC_COLLATE;
+    case 2: return LC_CTYPE;
+    case 3: return LC_MONETARY;
+    case 4: return LC_NUMERIC;
+    case 5: return LC_TIME;
+    default: return LC_ALL;
+  }
 }

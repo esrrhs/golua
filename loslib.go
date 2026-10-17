@@ -469,23 +469,20 @@ func osDiffTime(L *State) int {
 	return 1
 }
 
-// localeName is the only locale this port can report. Go has no setlocale
-// and this port has no cgo, so "C" -- which is how the Go runtime behaves
-// by default anyway -- is the one locale that can be set or queried; every
-// other name is reported as unavailable, exactly as a C build does when the
-// locale is not installed.
-var localeName = "C"
-
+// osSetLocale is 'os.setlocale' (loslib.c). With cgo the C library's
+// locale is set, and with it the decimal point that numbers are written
+// with -- see locale.go. Without cgo only "C", which is how Go behaves
+// anyway, is available, and every other name is reported the way a C
+// build reports a locale it does not have.
 func osSetLocale(L *State) int {
-	catnames := []string{"all", "collate", "ctype", "monetary", "numeric", "time"}
-	L.CheckOption(2, "all", catnames)
+	cat := L.CheckOption(2, "all", localeCategories)
 	if L.IsNoneOrNil(1) { /* no locale: query the current one */
 		L.PushString(localeName)
 		return 1
 	}
-	if s, ok := L.ToString(1); ok && s == "C" {
-		localeName = "C"
-		L.PushString(localeName)
+	name, _ := L.ToString(1)
+	if got, ok := setLocale(localeCatOf(cat), name); ok {
+		L.PushString(got)
 		return 1
 	}
 	L.PushNil() /* locale not available */

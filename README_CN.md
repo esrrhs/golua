@@ -143,15 +143,14 @@
 归一化掉程序路径、`0x…` 地址、耗时、`os.tmpname` 结果、随机数种子后逐字节比对
 （`all.lua` 需要预编译 C 扩展，改为按文件驱动；`main.lua` 会派生子进程，也包含在内）。
 
-**33 个用例中 29 个输出完全一致**。其余 4 个的差异全部来自设计取舍
+**33 个用例中 30 个输出完全一致**。其余 3 个的差异全部来自设计取舍
 （没有自己的收集器）或测试环境：
 
 | 用例 | 差异原因 |
 |---|---|
-| `gc` | 两处口径：`collectgarbage("count")` 报的是 Go 堆（PUC-Lua 报自己的分配器）；`collectgarbage("step", n)` 的粒度——PUC-Lua 的 step 只做定量工作，故 `dosteps(10) < dosteps(2)`，而 Go 的收集器要么全做要么不做，一次 step 就是一整轮，两边都是 1 次 |
-| `all` | 同一处口径，只出现在打印它的那一行：`total memory: 44.7K` 对 `611.9K`。套件其余部分全部吻合——包括 `attrib`、`files`、`gengc`、`locals` 加载的 C 扩展库 |
-| `literals` | `os.setlocale("pt_BR")` 在本实现不可用（见 §7），跳过了小数点用例 |
-| `heavy` | 两边都超时（它要构造 2 GB 的表）；在超时截断之前两边一致 |
+| `gc` | 这个文件测的**就是**收集器，而这里没有。三处断言量的是增量式收集器：step 之后 `gcinfo()` 会下降、步长越大所需步数越少、一次超大的 step 能跑完一整轮。这里的 step 就是一整轮且不回收 Lua 的对象，三条都不成立。之后该文件靠「一直分配表直到 `gcinfo()` 翻三倍」来量收集器的**速度**——没有回收器时这个循环不终止 |
+| `all` | 环境差异，集中在四行：第二个随机数种子（PUC-Lua 截成 32 位，这里是 64 位地址）、`total memory: 44.6K` 对 `619.2K`（同一处口径）、耗时、以及解释器自身路径。套件其余部分全部吻合——包括 `attrib`、`files`、`gengc`、`locals` 加载的 C 扩展库 |
+| `heavy` | 两边都超时（每轮要构造 2 MB 的表，总量 2 GB）；在超时截断之前两边一致 |
 
 弱表与 `__gc` 均已实现并通过各自用例——`closure`、`db`、`coroutine`、`gengc`、
 `cstack`、`locals`（后两个用 `require"tracegc"` 数回收次数），做法见 §7。
@@ -178,7 +177,30 @@
 所以这个测试既不需要参照解释器，也不需要联网。二者均为 MIT 许可，随
 `testdata/lpeg/LICENSE` 一并再分发。
 
-### 5.3 覆盖盘点
+### 5.3 第二个扩展：Lua CJSON，它找出了 locale
+
+[Lua CJSON](https://kyne.com.au/~mark/software/lua-cjson.php) 2.1.0.10 用同样的方式从
+`testdata/cjson/` 编译（三个编译单元），并跑完它自带的 105 个用例——全部通过。LPeg
+练的是模式、userdata 与 buffer API，CJSON 练的是另一半：用 `lua_next` 遍历表、数字与
+字符串的双向转换、以及用 `luaL_error` 造错误消息。它还找出了一件 LPeg 没碰到的事：
+
+```lua
+os.setlocale("cs_CZ")     -- 套件故意切到小数逗号的老 locale，
+print(1.5)                -- 然后检查数字长什么样
+```
+
+`os.setlocale` 过去对 `"C"` 以外的名字一律返回 `nil`。现在它真的去问 C 库的
+`setlocale` 并记住小数点——这是 locale 里 Lua 唯一真正会观察的部分，体现在三处：
+数字转字符串、`string.format` 的 `%f`/`%e`/`%g`（不含 `%a` 与 `%q`，这正是 `%q`
+能往返的原因）、以及 `tonumber`（两种分隔符都收）。这也是官方套件 `literals.lua`
+转绿的原因：它那些小数点用例此前一直是跳过的。
+
+比对时剔除了两类行，都因为 PUC-Lua 自己就不固定：打印带字符串键的表的行（`pairs`
+按哈希顺序走，而哈希种子每个进程都重新生成——参考解释器连跑两次也会给出两种顺序），
+以及那行带着模块版本号的行。套件还需要一个 4 MB 的 `utf8.dat`，它的 `genutf8.pl`
+用 perl 生成；测试里用 Go 写出同样的字节，这样它只需要一台有 C 编译器的机器。
+
+### 5.4 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
 `testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
@@ -209,7 +231,7 @@
 `<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
 `require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
 
-### 5.4 性能
+### 5.5 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时
@@ -357,7 +379,7 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 3. **收集器是 Go 的，可观测时机与 PUC-Lua 不同**：`collectgarbage("count")` 报的是 Go 堆而非 PUC-Lua 分配器的口径；`__gc` 在本实现自己跑一轮的地方执行（收集步进、`collectgarbage`、`Close()`），而不是 PUC-Lua 步进的位置。带 `__gc` 的对象在两轮之间被强引用兜住，避免 Go 在自己挑的时刻终结它们；`Close()` 时会把**所有**还带 `__gc` 的对象跑一遍，可达的也算——这正是 C 的做法，也正是 `<close>`、`Close()` 与弱表确定的原因：没有别处引用就会被清掉。`collectgarbage("step")` 是唯一无法对齐的返回值：PUC-Lua 只在「这一步把收集器带回了暂停态」时才返回 true，而单步几乎从不如此——它连续几百次都返回 false，紧接在一次完整收集之后也一样——而本实现的一步就是一整轮，所以返回 true。若改成返回 false，文档里的惯用法 `while not collectgarbage("step") do end` 就会永远转下去，两害相权取其轻。
 4. **弱表条目要多存活一轮**：Go 的 `weak.Pointer` 在释放对象的**下一轮** GC 才失效，因此条目比 PUC-Lua 多活一个周期。字符串、数字、布尔不参与弱化，与 PUC-Lua 一致。
 5. **错误信息文案**：与 PUC-Lua 保持一致（直译带来的好处），但 `ldebug` 的源码片段回显在部分路径可能省略。
-6. **只支持 `"C"` locale**：`os.setlocale` 背后没有 libc 的 locale 数据库，其它名字一律返回 `nil`（与 PUC-Lua 在该 locale 未安装时的行为一致）；数字格式化与解析始终用 `.` 作小数点。
+6. **`os.setlocale` 去问 C 库，所以需要 cgo**：小数点（decimal point）是 locale 里 Lua 唯一真正观察的部分，体现在三处——数字转字符串、`string.format` 的 `%f`/`%e`/`%g`（不含 `%a` 与 `%q`，这正是 `%q` 能往返的原因）、以及 `tonumber`（两种分隔符都收，而源码里的数字字面量始终用 `.`）。装了哪些 locale 由宿主机决定，与 PUC-Lua 完全一致，C 库不认的名字返回 `nil`。以 `CGO_ENABLED=0` 构建时没有 C 库可问，于是除 `"C"` 以外的名字一律返回 `nil`，小数点固定为 `.`。
 7. **`os.date` 拒绝的时间范围略有出入，`os.time` 接受宿主 `mktime` 拒绝的日期，`os.date("!%z")` 给出 UTC 偏移而非本地偏移**：`struct tm` 的年份字段是 `int`，宿主 `gmtime`/`localtime` 一旦放不下就返回 NULL，PUC-Lua 的 “date result cannot be represented in this installation” 正来源于此。本移植按 `tm_year` 判同一条件，上界**完全吻合**——67768036191676799 是最后一个可表示的秒（2147485547 年，`tm_year` 恰为 `INT_MAX`），再加一秒即被拒；宿主的下界离 `INT_MIN` 还差一点，所以最负端约 2×10¹⁴ 秒的窗口内本移植给出答案而参考实现拒绝，再往外两边都不给。至于 `os.time`：PUC-Lua 用 C 库的 `mktime` 构造时间，返回 -1 时报 “time result cannot be represented in this installation”。哪些日期会被拒绝由 C 库决定：macOS 上所有归一化后落在 1900 年之前的都被拒，glibc 则接受。Go 的 `time.Date` 没有这个上限，所以本移植返回一个数值。PUC-Lua 自己判定的部分全部复现——字段进入 `struct tm` 前必须满足的边界（"field 'year' is out-of-bound"）、缺失字段与非整数字段，以及结果恰好为 -1 的情形。`%z` 则相反：加了 `!` 之后时间是 UTC，但宿主的 `gmtime` 把偏移量留在本地值上，于是 PUC-Lua 打印本地偏移，而本移植打印 `+0000`。
 8. **数学库是 Go 的，不是平台 libm**：`math.sin`、`cos`、`tan`、`exp`、`log`、`log10`、`sqrt`、`asin`、`acos`、`atan`、`atan2`、`pow`、`sinh`、`cosh`、`tanh`、`frexp`、`ldexp` 用的是 Go 的实现，与 libc 链接的那份不同。15 位有效数字一致，最后一位或两位在一部分入参上不同：在横跨 15 个数量级的 120 个入参上实测，`sqrt` 从不出现差异，`exp`、`log` 只有个位数（小于 1 ulp），`log10`、`tanh`、`asin`、`acos`、`atan` 有几十个（约 1 ulp），`sin`、`cos`、`tan` 占四分之一到一半。超过 2^53 之后需要先做参数归约，差距会拉大——`tan` 偏 6 ulp、`sin` 偏 7 ulp——因为两边都不是正确舍入，归约方式也不同。所有算术运算、`sqrt` 与两种整数转换都是精确的。NaN 按平台 C 库的写法拼写（macOS 恒为 `"nan"`，glibc 符号位为 1 时是 `"-nan"`），因为 C 的 `printf` 就是这么做的。唯一刻意绕开 Go 实现的地方是 `exp(|x|)` 溢出而 `sinh(x)`、`cosh(x)` 尚未溢出的那条带（709.78 < |x| < 710.48）：Go 的 `math.Sinh` 对 `math.sinh(710)` 返回 `inf`，而其真值是 `exp(710)/2` = 1.1e308、完全可表示，所以那里把「减半」折进了参数里。
 9. **`math.randomseed()` 不带参数时第二个种子不同**：PUC-Lua 返回的两个种子是「当前时间」与「`lua_State` 的地址」（lmathlib.c 的 `randseed`），本移植返回的也是这两个量，所以第一个种子（时间）一致，第二个是 Go 堆地址而非 C 堆地址——两者都是宿主地址，在任一实现里都不可复现。`math.randomseed(n)` 与 `math.randomseed(n, m)` 原样返回入参；生成器本身仍是同一个基于 xoshiro256** 的实现：同一种子下产出的序列完全相同，整数与浮点都是，用例已钉住 `math.random()`、`math.random(6)`、`math.random(10, 20)` 各 20 次取值。

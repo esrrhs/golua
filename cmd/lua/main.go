@@ -37,7 +37,7 @@ const (
 // (MIT) requires the notice to be kept, and the standalone interpreter
 // has to be indistinguishable from the reference one anyway: scripts
 // spawn 'lua -v' and look for "PUC-Rio" in its output.
-const version = "Lua 5.4.9  Copyright (C) 1994-2025 Lua.org, PUC-Rio"
+const version = "Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio"
 
 var L *lua.State
 
