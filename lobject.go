@@ -133,13 +133,18 @@ const (
 	LUA_OPBNOT = 13
 )
 
-// Value is the translation of TValue: an actual value plus a tag.
-// Fields mirror the C union: i for integers/booleans, n for floats and
-// p for every collectable (or light userdata).
+// Value is the translation of TValue: a tag plus the value itself.
+//
+// C's TValue is a tagged union, and so is this, with one deliberate
+// difference: where C overlays an integer, a float and a pointer in the
+// same bytes, this has two fields, 'i' for the integer (or a boolean),
+// and 'p' for every collectable. A float shares 'i', stored as its IEEE
+// bits -- which is what C's union does anyway, and what keeps Value at
+// 32 bytes instead of 40. Reading it costs nothing: 'Float64frombits'
+// compiles to a single move between register files.
 type Value struct {
 	tt int
-	i  int64
-	n  float64
+	i  int64 // an integer, or the bits of a float
 	p  any
 }
 
@@ -190,12 +195,12 @@ func ttisthread(v *Value) bool        { return v.tt == ctb(LUA_VTHREAD) }
 // ---------------------------------------------------------------------
 
 func ivalue(v *Value) int64     { return v.i }
-func fltvalue(v *Value) float64 { return v.n }
+func fltvalue(v *Value) float64 { return math.Float64frombits(uint64(v.i)) }
 func nvalue(v *Value) float64 {
 	if ttisinteger(v) {
 		return float64(v.i)
 	}
-	return v.n
+	return fltvalue(v)
 }
 func tsvalue(v *Value) *TString   { return v.p.(*TString) }
 func hvalue(v *Value) *Table      { return v.p.(*Table) }
@@ -227,8 +232,8 @@ func setbvalue(v *Value, b bool) {
 	}
 }
 func setivalue(v *Value, i int64)     { *v = Value{tt: LUA_VNUMINT, i: i} }
-func setfltvalue(v *Value, f float64) { *v = Value{tt: LUA_VNUMFLT, n: f} }
-func chgfltvalue(v *Value, f float64) { v.n = f }
+func setfltvalue(v *Value, f float64) { *v = Value{tt: LUA_VNUMFLT, i: int64(math.Float64bits(f))} }
+func chgfltvalue(v *Value, f float64) { v.i = int64(math.Float64bits(f)) }
 func chgivalue(v *Value, i int64)     { v.i = i }
 func setpvalue(v *Value, p any)       { *v = Value{tt: LUA_VLIGHTUSERDATA, p: p} }
 func setfvalue(v *Value, f GoFunc)    { *v = Value{tt: LUA_VLCF, p: f} }

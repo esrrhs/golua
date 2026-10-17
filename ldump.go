@@ -115,7 +115,7 @@ func (D *DumpState) dumpConstants(f *Proto) {
 		D.dumpByte(tt)
 		switch tt {
 		case LUA_VNUMFLT:
-			D.dumpNumber(o.n)
+			D.dumpNumber(fltvalue(o))
 		case LUA_VNUMINT:
 			D.dumpInteger(o.i)
 		case LUA_VSHRSTR, LUA_VLNGSTR:

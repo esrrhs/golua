@@ -22,6 +22,33 @@ func upvalValue(uv *UpVal) *Value {
 	return &uv.v
 }
 
+/*
+luaV_modcore and luaV_idivcore are the arithmetic of Lua's '%' and '//'
+
+	for a divisor that is neither 0 nor -1. They are separate from
+	luaV_mod and luaV_idiv for one reason: those two can raise, and the
+	cost of the call that raises is what keeps them over the compiler's
+	inline budget -- and '%' and '//' are the slowest arithmetic
+	operations, so it is exactly them that the interpreter loop wants
+	inlined. The loop therefore tests the divisor itself and only falls
+	back to luaV_mod / luaV_idiv for the two divisors that need care.
+*/
+func luaV_modcore(m, n int64) int64 {
+	r := m % n
+	if r != 0 && (r^n) < 0 { /* 'm/n' would be non-integer negative? */
+		r += n
+	}
+	return r
+}
+
+func luaV_idivcore(m, n int64) int64 {
+	q := m / n
+	if (m^n) < 0 && m%n != 0 { /* 'm/n' would be negative non-integer? */
+		q--
+	}
+	return q
+}
+
 func luaV_idiv(L *State, m, n int64) int64 {
 	if uint64(n)+1 <= 1 { /* special cases: -1 or 0 */
 		if n == 0 {
@@ -30,11 +57,7 @@ func luaV_idiv(L *State, m, n int64) int64 {
 		}
 		return -m /* n == -1; avoid overflow with mininteger // -1 */
 	}
-	q := m / n
-	if (m^n) < 0 && m%n != 0 { /* 'm/n' would be negative non-integer? */
-		q--
-	}
-	return q
+	return luaV_idivcore(m, n)
 }
 
 func luaV_mod(L *State, m, n int64) int64 {
@@ -45,11 +68,7 @@ func luaV_mod(L *State, m, n int64) int64 {
 		}
 		return 0 /* m % -1 == 0; avoid overflow */
 	}
-	r := m % n
-	if r != 0 && (r^n) < 0 { /* 'm/n' would be non-integer negative? */
-		r += n
-	}
-	return r
+	return luaV_modcore(m, n)
 }
 
 // luaV_modf is the float modulus (lvm.c). Unlike the integer version it
@@ -575,6 +594,62 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 			case OP_ADDI, OP_ADDK, OP_SUBK, OP_MULK, OP_MODK, OP_POWK,
 				OP_DIVK, OP_IDIVK, OP_BANDK, OP_BORK, OP_BXORK:
+				/* Fast path, not in lvm.c: an integer register with
+				   an integer immediate or constant can never reach a
+				   metamethod and always produces an integer, so the
+				   arithmetic is done here instead of walking
+				   opCodeToArith -> luaO_rawarith -> intarith. It is
+				   spelled out inside the loop rather than moved to a
+				   helper because the compiler will not inline such a
+				   helper (it is over the cost budget as soon as it
+				   can raise), and the call would cost about as much
+				   as the operation itself. */
+				rb := &L.stack[base+i.B]
+				if rb.tt == LUA_VNUMINT && i.Op != OP_POWK && i.Op != OP_DIVK {
+					v2 := int64(i.C - OFFSET_sC) /* the OP_ADDI immediate */
+					if i.Op != OP_ADDI {
+						kc := &k[i.C]
+						if kc.tt != LUA_VNUMINT {
+							vmArithK(L, ci, i, ra, base, k, &pc)
+							break
+						}
+						v2 = kc.i
+					}
+					/* '%' and '//' can raise (division by zero), so the
+					   current instruction must be saved first: that is
+					   what puts the right line in the error message. */
+					if i.Op == OP_MODK || i.Op == OP_IDIVK {
+						savestate(L, ci, pc)
+					}
+					pc++
+					switch i.Op {
+					case OP_ADDI, OP_ADDK:
+						setivalue(&L.stack[ra], rb.i+v2)
+					case OP_SUBK:
+						setivalue(&L.stack[ra], rb.i-v2)
+					case OP_MULK:
+						setivalue(&L.stack[ra], rb.i*v2)
+					case OP_MODK:
+						if uint64(v2)+1 <= 1 {
+							setivalue(&L.stack[ra], luaV_mod(L, rb.i, v2))
+						} else {
+							setivalue(&L.stack[ra], luaV_modcore(rb.i, v2))
+						}
+					case OP_IDIVK:
+						if uint64(v2)+1 <= 1 {
+							setivalue(&L.stack[ra], luaV_idiv(L, rb.i, v2))
+						} else {
+							setivalue(&L.stack[ra], luaV_idivcore(rb.i, v2))
+						}
+					case OP_BANDK:
+						setivalue(&L.stack[ra], rb.i&v2)
+					case OP_BORK:
+						setivalue(&L.stack[ra], rb.i|v2)
+					case OP_BXORK:
+						setivalue(&L.stack[ra], rb.i^v2)
+					}
+					break
+				}
 				vmArithK(L, ci, i, ra, base, k, &pc)
 			case OP_SHRI, OP_SHLI:
 				rb := &L.stack[base+i.B]
@@ -588,15 +663,79 @@ func luaV_execute(L *State, ci *CallInfo) {
 						setivalue(&L.stack[ra], luaV_shiftl(ic, ib))
 					}
 				}
-			case OP_ADD, OP_SUB, OP_MUL, OP_MOD, OP_POW, OP_DIV, OP_IDIV,
-				OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR:
-				/* '//' and '%' can raise (division by zero), so the
+			case OP_ADD, OP_SUB, OP_MUL, OP_BAND, OP_BOR, OP_BXOR,
+				OP_SHL, OP_SHR:
+				/* Fast path, as for the immediate and constant forms
+				   above: two integers can never reach a metamethod
+				   and always produce an integer. None of these eight
+				   can raise, so nothing has to be saved first. */
+				rb := &L.stack[base+i.B]
+				rc := &L.stack[base+i.C]
+				if rb.tt == LUA_VNUMINT && rc.tt == LUA_VNUMINT {
+					v1, v2 := rb.i, rc.i
+					var r int64
+					switch i.Op {
+					case OP_ADD:
+						r = v1 + v2
+					case OP_SUB:
+						r = v1 - v2
+					case OP_MUL:
+						r = v1 * v2
+					case OP_BAND:
+						r = v1 & v2
+					case OP_BOR:
+						r = v1 | v2
+					case OP_BXOR:
+						r = v1 ^ v2
+					case OP_SHL:
+						r = int64(luaV_shiftl(v1, v2))
+					case OP_SHR:
+						r = int64(luaV_shiftl(v1, -v2))
+					}
+					pc++
+					setivalue(&L.stack[ra], r)
+					break
+				}
+				var res Value
+				op := opCodeToArith(i.Op)
+				if luaO_rawarith(L, op, rb, rc, &res) {
+					pc++
+					L.stack[ra] = res
+				}
+			case OP_MOD, OP_IDIV:
+				/* these two can raise (division by zero), so the
 				   current instruction must be saved before running
 				   them: that is what puts the right line in the
 				   error message. */
-				if i.Op == OP_MOD || i.Op == OP_IDIV {
-					savestate(L, ci, pc)
+				savestate(L, ci, pc)
+				rb := &L.stack[base+i.B]
+				rc := &L.stack[base+i.C]
+				if rb.tt == LUA_VNUMINT && rc.tt == LUA_VNUMINT {
+					pc++
+					if uint64(rc.i)+1 <= 1 {
+						/* the divisor is -1 or 0: the two that need
+						   care, one of them fatally */
+						if i.Op == OP_MOD {
+							setivalue(&L.stack[ra], luaV_mod(L, rb.i, rc.i))
+						} else {
+							setivalue(&L.stack[ra], luaV_idiv(L, rb.i, rc.i))
+						}
+					} else if i.Op == OP_MOD {
+						setivalue(&L.stack[ra], luaV_modcore(rb.i, rc.i))
+					} else {
+						setivalue(&L.stack[ra], luaV_idivcore(rb.i, rc.i))
+					}
+					break
 				}
+				var res Value
+				op := opCodeToArith(i.Op)
+				if luaO_rawarith(L, op, rb, rc, &res) {
+					pc++
+					L.stack[ra] = res
+				}
+			case OP_POW, OP_DIV:
+				/* these two always produce a float, so there is no
+				   integer fast path for them */
 				rb := &L.stack[base+i.B]
 				rc := &L.stack[base+i.C]
 				var res Value
@@ -1140,7 +1279,9 @@ func vmArithK(L *State, ci *CallInfo, i Instruction, ra, base int, k []Value, pc
 	}
 }
 
-// opCodeToArith maps an opcode to its LUA_OP* code.
+// opCodeToArith maps an opcode to its LUA_OP* code. It is only used by
+// the slow (non integer/integer) paths; the integer fast paths are
+// spelled out in luaV_execute.
 func opCodeToArith(op int) int {
 	switch op {
 	case OP_ADDI, OP_ADDK, OP_ADD:
