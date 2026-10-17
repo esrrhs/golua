@@ -47,6 +47,21 @@ func index2value(L *State, idx int) *Value {
 	}
 }
 
+// stackIndexOf answers the 0-based stack slot an acceptable index names,
+// which is what luaF_* and the to-be-closed list count in: a positive
+// index counts from the frame's own base, a negative one from the top.
+// It answers -1 for an index that is not a stack slot at all (the
+// registry, or an upvalue).
+func stackIndexOf(L *State, idx int) int {
+	if idx > 0 {
+		return L.ci.funcIdx + idx
+	}
+	if ispseudo(idx) {
+		return -1
+	}
+	return L.top + idx
+}
+
 // AbsIndex converts an acceptable index into an absolute one.
 func (L *State) AbsIndex(idx int) int {
 	if idx > 0 || ispseudo(idx) {

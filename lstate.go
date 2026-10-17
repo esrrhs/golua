@@ -152,10 +152,16 @@ type State struct {
 	ciPool []*CallInfo
 
 	// coroutine machinery (there is no equivalent in C)
-	co       *coRuntime
-	parent   *State
-	isMain   bool
-	dead     bool
+	co     *coRuntime
+	parent *State
+	isMain bool
+	dead   bool
+	// started is whether this thread has ever been resumed. A thread
+	// that has not been is 'LUA_YIELD' here -- that is what makes
+	// coroutine.status call it "suspended", which is what PUC-Lua calls
+	// it too -- but C's lua_status answers LUA_OK for it, and it is the
+	// only way to tell "start it" from "wake it up" in lua_resume.
+	started  bool
 	prevFunc Value // function to run on the next resume after a reset
 
 	// lastErr is the error object of a coroutine that ended with an
@@ -484,6 +490,7 @@ func (L *State) NewThread() *State {
 	L1.isMain = false
 	L1.allowhook = 1
 	L1.status = LUA_YIELD
+	L1.started = false
 	L1.nCcalls = 0
 	L1.errfunc = 0
 	L1.reallocStack(BASIC_STACK_SIZE)
@@ -660,6 +667,7 @@ func (L *State) ResetThread() int {
 	L.dead = false
 	L.hasErr = false
 	L.lastErr = Value{}
+	L.started = false
 	L.status = LUA_YIELD
 	L.top = 1
 	L.ci = &L.baseCI
@@ -688,16 +696,34 @@ func (L *State) Resume(from *State, nargs int) int {
 	default:
 		return LUA_ERRRUN
 	}
-	co.co.args = append(co.co.args[:0], from.stack[from.top-nargs:from.top]...)
-	if co.status == LUA_OK {
-		// starting (or restarting) the coroutine: the function is the
-		// value that was pushed on the coroutine stack
-		fn := co.stack[co.top-1]
+	if !co.started {
+		/* Starting the coroutine. C finds the body at 'ci->func + 1',
+		   which is the first slot above the base frame -- where
+		   lua_newthread plus a push (or coroutine.create's xmove) put
+		   it -- and calls it; here it has to end up in slot 0, which is
+		   where coRun looks for it. */
+		if co.top < 1 {
+			co.top = 1
+		}
+		/* The arguments sit above the body, because that is where
+		   C's auxresume puts them (lua_xmove(L, co, narg)) and where
+		   an extension that calls lua_resume itself puts them. */
+		fnIdx := co.top - nargs - 1
+		var fn Value
+		if fnIdx >= 0 {
+			fn = co.stack[fnIdx]
+		}
+		co.co.args = append(co.co.args[:0], co.stack[fnIdx+1:co.top]...)
 		co.prevFunc = fn
-		co.top = 1
 		co.stack[0] = fn
+		co.top = 1
+		co.started = true
+	} else {
+		/* resuming from a yield: the arguments are on top of the
+		   coroutine's own stack, and they leave it as they are taken */
+		co.co.args = append(co.co.args[:0], co.stack[co.top-nargs:co.top]...)
+		co.top -= nargs
 	}
-	from.top -= nargs
 	co.parent = from
 	co.status = LUA_OK
 	ccalls := 0

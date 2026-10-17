@@ -128,11 +128,39 @@ func (L *State) Arith(op int) {
 // lua_closeslot
 // ---------------------------------------------------------------------
 
-// CloseSlotAt closes the to-be-closed variables above 'idx' and marks the
-// slot closed (lua_closeslot, lapi.c:1320).  A C function's own frame has
-// no to-be-closed variables of its own, and the VM runs the pending
-// closers of the enclosing frame when that frame returns.
-func (L *State) CloseSlotAt(idx int) { _ = idx }
+// CloseSlotAt marks the value at 'idx' as to-be-closed, so that its
+// '__close' metamethod runs when the C function that marked it returns
+// (lua_toclose, lapi.c:1274).
+//
+// The mark lives in the sign of the frame's 'nresults', the way it does
+// in C: PUC-Lua's 'hastocloseCfunc' looks for a count below
+// LUA_MULTRET, and luaD_poscall closes what is pending before it moves
+// the results.
+func (L *State) CloseSlotAt(idx int) {
+	level := stackIndexOf(L, idx)
+	if level < 0 {
+		return
+	}
+	luaF_newtbcupval(L, level)
+	if !hastocloseCfunc(L.ci.nresults) { /* not marked yet? */
+		L.ci.nresults = codeNresults(L.ci.nresults) /* mark it */
+	}
+}
+
+// CloseSlot closes the to-be-closed variable at 'idx' right now and
+// leaves nil in its slot (lua_closeslot, lapi.c:1320).  C insists the
+// slot was marked first; closing anything else is the same no-op here
+// that luaF_close is on a level with nothing pending above it.
+func (L *State) CloseSlot(idx int) {
+	level := stackIndexOf(L, idx)
+	if level < 0 {
+		return
+	}
+	luaF_close(L, level, closeKTOP, false)
+	if level >= 0 && level < len(L.stack) {
+		setnilvalue(&L.stack[level])
+	}
+}
 
 // ---------------------------------------------------------------------
 // luaL_typeerror

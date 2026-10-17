@@ -62,12 +62,33 @@ func moveresults(L *State, res, nres, wanted int) {
 // luaD_poscall finishes a function call (ldo.c).
 func luaD_poscall(L *State, ci *CallInfo, nres int) {
 	wanted := ci.nresults
+	if hastocloseCfunc(wanted) { /* to-be-closed variables pending? */
+		/* C does this inside 'moveresults', before the results are moved
+		   and with the return hook saved until after the '__close's --
+		   a hook cannot run with a close still pending. */
+		wanted = decodeNresults(wanted)
+		ci.nresults = wanted
+		luaF_close(L, ci.funcIdx+1, closeKTOP, true)
+		if L.hookmask != 0 {
+			rethook(L, ci, nres)
+		}
+		moveresults(L, ci.funcIdx, nres, wanted)
+		L.ci = ci.prev
+		return
+	}
 	if L.hookmask != 0 {
 		rethook(L, ci, nres)
 	}
 	moveresults(L, ci.funcIdx, nres, wanted)
 	L.ci = ci.prev
 }
+
+// hastocloseCfunc, codeNresults and decodeNresults are lapi.h's: whether
+// a C frame has to-be-closed variables pending, which PUC-Lua encodes in
+// the sign of the frame's 'nresults'.
+func hastocloseCfunc(n int) bool { return n < LUA_MULTRET }
+func codeNresults(n int) int     { return -n - 3 }
+func decodeNresults(n int) int   { return -n - 3 }
 
 // prepCallInfo prepares the CallInfo for a new call (ldo.c).
 func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {

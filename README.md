@@ -380,7 +380,54 @@ makes files, a directory and a link, so it runs in a temporary directory
 of its own. MIT-licensed, redistributed under
 `testdata/luaposix/LICENSE`.
 
-### 5.8 Coverage inventory
+### 5.8 The C API, end to end
+
+LPeg, CJSON, LuaSocket, LuaFileSystem and luaposix between them call a
+great deal of the C API, but they are programs with a job to do, not a
+survey of it: whole groups of functions are never reached. So
+`testdata/capi/capi.c` is the survey. It is an ordinary extension —
+compiled against `include/`, opened by `luaopen_capi`, found by `require`
+— that walks the API group by group and answers with numbers, booleans
+and fixed strings, which is what makes it comparable:
+
+| Group | What it calls |
+|---|---|
+| the stack | `lua_rotate`, `lua_absindex`, `lua_copy`, `lua_checkstack`, `lua_remove`, `lua_insert`, `lua_replace` |
+| arithmetic | `lua_arith` for all fourteen `LUA_OP*`, `lua_compare`, `lua_rawequal`, `lua_concat`, `lua_len`, `lua_rawlen` |
+| tables | every get/set pair — `getfield`/`setfield`, `geti`/`seti`, `rawget`/`rawset`, `rawgeti`/`rawseti` — plus `lua_next`, `lua_createtable` and the globals |
+| conversions | `lua_tointegerx`/`lua_tonumberx` with the `isnum` out parameter, and `lua_type`/`lua_typename` and every `lua_is*` on one value of each of the nine kinds |
+| lauxlib | `luaL_ref`/`luaL_unref`, `luaL_newmetatable`, `luaL_getsubtable`, `luaL_loadbufferx` with a mode, `luaL_fileresult`, `luaL_traceback`, `luaL_tolstring`, `luaL_gsub`, `luaL_addgsub`, `luaL_check*`/`luaL_opt*`, `luaL_argerror`, `luaL_typeerror`, `luaL_where`, and `luaL_requiref(L, "string", luaopen_string, 1)` |
+| userdata | `lua_newuserdatauv` with several user values, `lua_getiuservalue`/`lua_setiuservalue`, and `LUA_TNONE` past the end |
+| to-be-closed | `lua_toclose` and `lua_closeslot` |
+| the debug API | `lua_sethook` with a real C hook, `lua_getstack`/`lua_getinfo` for every field, `lua_getlocal`/`lua_setlocal`, `lua_getupvalue`/`lua_setupvalue`, `lua_upvalueid`/`lua_upvaluejoin` |
+| coroutines | `lua_newthread`, `lua_resume` twice, `lua_status`, `lua_isyieldable`, `lua_xmove`, `lua_resetthread` |
+| buffers | the whole API: `luaL_addstring`/`addchar`/`addlstring`/`addvalue`, `luaL_prepbuffsize`, `luaL_addsize`, `luaL_bufflen`/`buffaddr`/`buffsub`, `luaL_pushresult`, `luaL_buffinitsize`, `luaL_pushresultsize` |
+| a file handle | `luaL_checkudata(L, 1, LUA_FILEHANDLE)`, cast to `luaL_Stream` |
+| limits | `lua_setcstacklimit`, `lua_atpanic` |
+
+All 35 lines it prints are PUC-Lua 5.4.9's, kept in
+`testdata/capi/expected.txt`, and `TestCApiSurface` compares them. The
+driver is loaded under the chunk name `cext` — `testdata/capi/run.lua`
+does that for the reference interpreter — so the `cext:35` inside a
+`luaL_where` answer is the same on both sides.
+
+It found ten things, none of which any of the five published
+extensions had reached:
+
+| What it does | What was wrong |
+|---|---|
+| `luaL_requiref(L, "string", luaopen_string, 1)` | `luaopen_*` was declared in `lualib.h` but never put in the dynamic symbol table, so an extension linked into the host — or a host opening one library by hand — could not resolve the name |
+| read a value with `luaL_tolstring`, then pop it | `luaL_tolstring` answered a pointer but left nothing on the stack, which is what "tostring" means in the middle of building one. The stack came out one short and the next absolute index named the wrong value |
+| `luaL_gsub` | the same: PUC-Lua leaves the result behind, and the port took it off |
+| `luaL_buffinitsize` and `luaL_pushresultsize` | `luaL_pushresultsize` ignored the size, which is the whole point of it: the extension fills the room itself, and this is where it says how much it wrote |
+| `luaL_bufflen`, `luaL_buffaddr`, `luaL_buffsub` | macros over `n` and `b` in `<lauxlib.h>`, so they have to describe the content however it was built. What `luaL_addstring` added lived in a Go builder instead, and all three answered as if it were not there. The content now lives in one block that grows, the way PUC-Lua's does — C memory, since `luaL_prepbuffsize` hands out its address and the extension writes into it after the call has returned |
+| `luaL_ref`, then `luaL_unref`, then read the slot | the free list lived in slot 0, where 5.3 kept it; 5.4's is `LUA_RIDX_LAST + 1`, and that slot is a plain key of the table the caller handed in |
+| `lua_toclose` and `lua_closeslot` | both were stubs, so `<close>` from C never ran its `__close`. The mark now lives in the sign of the frame's `nresults`, as in C, and `luaD_poscall` closes what is pending before it moves the results |
+| `lua_newthread`, then `lua_status`, then `lua_resume` | a thread that has never run is `LUA_YIELD` here, which is what `coroutine.status` needs, but C's `lua_status` answers `LUA_OK` for it and `lua_resume` has to tell "start it" from "wake it up". A thread now carries whether it has ever been resumed |
+| `lua_resume` on a thread that yields | C takes the arguments from the coroutine's own stack, leaves the yielded values there and reports how many there are, for the caller to `lua_xmove` across. Neither was true here: the arguments came from the resumer and the values had been taken off |
+| `lua_atpanic` | answered NULL instead of the previous handler, which is the one thing an extension installing its own needs in order to put the host's back |
+
+### 5.9 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
 the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
@@ -419,7 +466,7 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
-### 5.9 Performance
+### 5.10 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
 `bench_test.go`. The table below is the same work measured end to end
@@ -493,7 +540,7 @@ The C block behind a userdata is freed when the userdata is collected: `C.malloc
 7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh`, `tanh`, `frexp` and `ldexp` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. The one place the port deliberately steps outside Go's implementations is the band in which `exp(|x|)` overflows while `sinh(x)` and `cosh(x)` do not (709.78 < |x| < 710.48): Go's `math.Sinh` answers `inf` for `math.sinh(710)`, whose true value is `exp(710) / 2` = 1.1e308 and representable, so the halving is folded into the argument there instead.
 8. **`math.randomseed()` with no arguments returns a different second seed** — PUC-Lua returns the current time and the *address of the `lua_State`* as its two seeds (lmathlib.c: `randseed`), and this port returns the same two quantities, so the first seed — the time — matches and the second is a Go heap address rather than a C one; the numbers are both host addresses and are not reproducible in either implementation. `math.randomseed(n)` and `math.randomseed(n, m)` return their arguments unchanged, and the generator itself is the same xoshiro256**-based one: for a given seed it produces the identical sequence, integer or float, which the suite pins across 20 draws of `math.random()`, `math.random(6)` and `math.random(10, 20)`.
 9. **A coroutine suspends by parking its goroutine, and a C frame that suspended is still there when it wakes** — C's `lua_yield` long-jumps to the `lua_resume` that will pick the thread up again, and everything between is discarded; this port instead hands the yielded values to the resumer through a channel and then blocks on the next resume request, so the Lua stack, the saved program counter and — for a C caller — the C stack itself all survive at the yield point. That is what lets a metamethod or a Go function yield from the middle of a call, and it is what makes continuations work (§5.6). Two consequences follow. The C-call depth a thread inherits from its resumer is refreshed at every yield rather than only at the first resume, which is what C does too, since `lua_resume` runs on every resume. And a C function that yielded does not get to notice: `lua_callk` returns to it as if the call had simply finished, so the status a `lua_callk` continuation hears is `LUA_OK` where PUC-Lua's is always `LUA_YIELD` — a constant, so nothing can depend on the difference. `lua_pcallk`'s status does vary, and that one *is* PUC-Lua's: the port counts the yields the thread has made and reports `LUA_YIELD` when the call was interrupted by one.
-10. **Two short strings that are equal may not be the same object** — PUC-Lua interns short strings for as long as they live, so `lua_topointer` answers the same address for two equal ones and a C extension can use that address as a key. Here interning is a two-generation cache (§5.9), so a string can be interned again once it has aged out of both generations, and two live strings with the same bytes may then sit at different addresses. Nothing in Lua can see it: strings compare by content, which is why `luaS_eqshrstr` compares the hash and then the bytes where C's `eqshrstr` would compare pointers, and `rawequal`, `==`, table keys and `next` all behave as before. Only `lua_topointer` — and a `lua_rawsetp` keyed on it — can tell the difference.
+10. **Two short strings that are equal may not be the same object** — PUC-Lua interns short strings for as long as they live, so `lua_topointer` answers the same address for two equal ones and a C extension can use that address as a key. Here interning is a two-generation cache (§5.10), so a string can be interned again once it has aged out of both generations, and two live strings with the same bytes may then sit at different addresses. Nothing in Lua can see it: strings compare by content, which is why `luaS_eqshrstr` compares the hash and then the bytes where C's `eqshrstr` would compare pointers, and `rawequal`, `==`, table keys and `next` all behave as before. Only `lua_topointer` — and a `lua_rawsetp` keyed on it — can tell the difference.
 
 11. **Performance** — `Instruction` is a struct rather than a packed uint32; may be re-packed after P7 benchmarks.
 

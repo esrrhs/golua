@@ -3,6 +3,7 @@ package lua
 
 import (
 	"fmt"
+	"runtime"
 	"strings"
 	"unsafe"
 )
@@ -266,24 +267,43 @@ func (L *State) Len2(idx int) int64 {
 // references
 // ---------------------------------------------------------------------
 
-// Ref creates a reference in the table at index t (luaL_ref).
+// luaLFreeList is the slot luaL_ref keeps its free list in: 'freelist'
+// in lauxlib.c, which is LUA_RIDX_LAST + 1 -- not 0, which is where 5.3
+// kept it. It is a plain key of the table the caller handed in, so an
+// extension that looks at that table sees the difference, and so does
+// one that unrefs a reference and then reads the slot.
+const luaLFreeList = 3 /* LUA_RIDX_LAST + 1 */
+
+// LUA_REFNIL and LUA_NOREF are the two predefined references (lauxlib.h).
+const (
+	LUA_NOREF  = -2
+	LUA_REFNIL = -1
+)
+
+// Ref creates a reference to the value on top of the stack in the table
+// at 't' and pops it (luaL_ref).
 func (L *State) Ref(t int) int {
 	if L.IsNil(-1) {
-		L.Pop(1)  /* remove nil */
-		return -1 /* 'nil' has a unique fixed reference */
+		L.Pop(1)          /* remove nil */
+		return LUA_REFNIL /* 'nil' has a unique fixed reference */
 	}
 	t = L.AbsIndex(t)
-	L.RawGetI(t, 0) /* get the "free list" element */
-	ref, _ := L.ToInteger(-1)
-	L.Pop(1)
-	if ref != 0 {
-		L.RawGetI(t, ref) /* remove it from the list */
-		L.RawSetI(t, 0)
-	} else { /* no free elements */
-		ref = int64(L.RawLen(t))
-		ref++
+	var ref int64
+	if L.RawGetI(t, luaLFreeList) == LUA_TNIL { /* first access? */
+		ref = 0 /* list is empty */
+		L.PushInteger(0)
+		L.RawSetI(t, luaLFreeList) /* t[freelist] = 0 */
+	} else { /* already initialized */
+		ref, _ = L.ToInteger(-1) /* ref = t[freelist] */
 	}
-	L.RawSetI(t, int64(ref))
+	L.Pop(1)      /* remove the element lua_rawgeti pushed */
+	if ref != 0 { /* any free element? */
+		L.RawGetI(t, ref)          /* remove it from the list */
+		L.RawSetI(t, luaLFreeList) /* (t[freelist] = t[ref]) */
+	} else { /* no free elements */
+		ref = int64(L.RawLen(t)) + 1 /* get a new reference */
+	}
+	L.RawSetI(t, ref)
 	return int(ref)
 }
 
@@ -291,10 +311,10 @@ func (L *State) Ref(t int) int {
 func (L *State) Unref(t, ref int) {
 	if ref >= 0 {
 		t = L.AbsIndex(t)
-		L.RawGetI(t, 0)
-		L.RawSetI(t, int64(ref)) /* t[ref] = t[0] */
+		L.RawGetI(t, luaLFreeList)
+		L.RawSetI(t, int64(ref)) /* t[ref] = t[freelist] */
 		L.PushInteger(int64(ref))
-		L.RawSetI(t, 0) /* t[0] = ref */
+		L.RawSetI(t, luaLFreeList) /* t[freelist] = ref */
 	}
 }
 
@@ -342,18 +362,56 @@ func (L *State) NewLib(l []Reg) {
 // ---------------------------------------------------------------------
 
 // Buffer is the Go counterpart of luaL_Buffer.
+//
+// The content lives in one block, the way it does in PUC-Lua: 'b' is its
+// address, 'n' how much of it is used, 'size' how much it holds, and
+// luaL_addchar is a macro in <lauxlib.h> that writes into 'b[n++]'
+// without calling anything at all. So do luaL_addsize and luaL_buffsub,
+// and so are luaL_bufflen and luaL_buffaddr macros over 'n' and 'b'.
+// An extension compiled against PUC-Lua's own header uses those macros
+// as they are, and they have to describe the content however it was
+// built -- which rules out keeping what luaL_addstring added somewhere
+// of its own: luaL_bufflen would then answer only what was written
+// through the address, and luaL_buffaddr an address with none of it in.
+//
+// The block has to be memory C may hold, because luaL_prepbuffsize hands
+// out its address and the extension writes into it long after the call
+// returned; that is what 'reallocBlock' is for, and in a build without
+// cgo -- where nothing can ask for the address -- a Go slice stands in.
 type Buffer struct {
 	L      *State
-	boxIdx int    // index of the "box" (a userdata holding the Go builder)
+	boxIdx int    // index of the "box" (a userdata marking the buffer)
 	box    *Udata // the box itself, so luaL_pushresult can be sure
-	sb     strings.Builder
 
-	// scratch is the block an extension writes through: luaL_prepbuffsize
-	// hands out its address and the extension copies into it directly, so
-	// it has to be memory C can hold -- not Go memory, which cgo forbids
-	// and the collector might move. It is freed with the buffer.
-	scratch unsafe.Pointer
-	slen    int
+	scratch unsafe.Pointer // the block, when there is one
+	slen    int            // how much it holds
+	n       int            // how much of it is used
+	buf     []byte         // the stand-in, when there is no block
+
+	// cblock is whether this buffer's content has to live in the block.
+	// Only luaL_buffinit says so: it is the one that hands the address
+	// out to C. A buffer the port itself makes -- table.concat's,
+	// utf8.char's -- never does, and it would pay for a C allocation
+	// and a finalizer on every call if it did.
+	cblock bool
+}
+
+// bufInitSize is the size of the first block: LUAL_BUFFERSIZE.
+const bufInitSize = 8192
+
+// reallocBlock replaces a buffer's block with one of 'sz' bytes, copying
+// the content across; 'old' is nil on the first call. It is set by the
+// cgo layer, which is the only place that can make memory C may hold.
+var reallocBlock func(old unsafe.Pointer, sz int) unsafe.Pointer
+
+// bufFree frees a buffer's block once the buffer is unreachable. Like
+// reallocBlock, only the cgo layer can do it.
+var bufFree func(b *Buffer)
+
+func bufFinalize(b *Buffer) {
+	if bufFree != nil {
+		bufFree(b)
+	}
 }
 
 // NewBuffer creates a new string buffer (luaL_buffinit).
@@ -368,10 +426,63 @@ func (L *State) NewBuffer() *Buffer {
 	return b
 }
 
-func (b *Buffer) AddString(s string) { b.sb.WriteString(s) }
-func (b *Buffer) AddBytes(p []byte)  { b.sb.Write(p) }
-func (b *Buffer) AddChar(c byte)     { b.sb.WriteByte(c) }
-func (b *Buffer) AddRune(r rune)     { b.sb.WriteRune(r) }
+// room answers the 'sz' bytes just past the content, making the block
+// bigger if it has to. It does not advance 'n': that is AddString's and
+// AddSize's business, because an extension that asked for room says how
+// much of it it used.
+func (b *Buffer) room(sz int) []byte {
+	need := b.n + sz
+	if !b.cblock || reallocBlock == nil {
+		/* no C memory in this build, and nothing to hand an address to */
+		if len(b.buf) < need {
+			grown := make([]byte, (len(b.buf)/2)*3)
+			if len(grown) < need {
+				grown = make([]byte, need)
+			}
+			copy(grown, b.buf[:b.n])
+			b.buf = grown
+		}
+		return b.buf[b.n:need]
+	}
+	if b.scratch != nil && need <= b.slen {
+		return unsafe.Slice((*byte)(b.scratch), b.slen)[b.n:need]
+	}
+	newsz := (b.slen / 2) * 3 /* as lauxlib.c grows it: one and a half */
+	if newsz < need {
+		newsz = need
+	}
+	if newsz < bufInitSize {
+		newsz = bufInitSize
+	}
+	p := reallocBlock(b.scratch, newsz)
+	if p == nil && newsz > 0 {
+		panic("lua: out of memory for a string buffer")
+	}
+	if b.scratch == nil && p != nil {
+		runtime.SetFinalizer(b, bufFinalize)
+	}
+	b.scratch = p
+	b.slen = newsz
+	return unsafe.Slice((*byte)(p), newsz)[b.n:need]
+}
+
+func (b *Buffer) AddString(s string) {
+	if len(s) > 0 {
+		copy(b.room(len(s)), s)
+		b.n += len(s)
+	}
+}
+func (b *Buffer) AddBytes(p []byte) {
+	if len(p) > 0 {
+		copy(b.room(len(p)), p)
+		b.n += len(p)
+	}
+}
+func (b *Buffer) AddChar(c byte) {
+	b.room(1)[0] = c
+	b.n++
+}
+func (b *Buffer) AddRune(r rune) { b.AddString(string(r)) }
 
 // AddValue adds the value on top of the stack, converted to a string
 // (luaL_addvalue).
@@ -381,20 +492,36 @@ func (b *Buffer) AddValue() {
 		b.L.Error2("cannot convert value to string")
 	}
 	b.L.Pop(1)
-	b.sb.WriteString(s)
+	b.AddString(s)
 }
 
-func (b *Buffer) Len() int { return b.sb.Len() }
+func (b *Buffer) Len() int { return b.n }
+
+// String answers what the buffer holds, without touching it.
+func (b *Buffer) String() string {
+	if b.n == 0 {
+		return ""
+	}
+	if b.scratch != nil {
+		return string(unsafe.Slice((*byte)(b.scratch), b.n))
+	}
+	return string(b.buf[:b.n])
+}
 
 // PushResult finishes the buffer and pushes the resulting string
 // (luaL_pushresult).
 func (b *Buffer) PushResult() {
-	b.L.PushString(b.sb.String())
-	b.sb.Reset()
+	b.L.PushString(b.String())
+	b.n = 0
 }
 
-// AddSize/PrepBuffer compatibility helpers.
-func (b *Buffer) AddSize(n int) {}
+// AddSize says that 'n' more bytes were written into the room
+// PrepBuffer handed out (luaL_addsize).
+func (b *Buffer) AddSize(n int) {
+	if n > 0 {
+		b.n += n
+	}
+}
 
 // ---------------------------------------------------------------------
 // traceback (lauxlib.c)

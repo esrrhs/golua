@@ -68,6 +68,7 @@ static const char *cdl_error(void) { return dlerror(); }
 import "C"
 
 import (
+	"fmt"
 	"runtime"
 	"runtime/cgo"
 	"sync"
@@ -175,10 +176,7 @@ func lua_copy(p *C.lua_State, from, to C.int) { stateOf(p).Copy(int(from), int(t
 
 //export lua_closeslot
 func lua_closeslot(p *C.lua_State, idx C.int) {
-	L := stateOf(p)
-	/* luaF_close on the given level; there is nothing to close in a
-	   frame the VM owns until to-be-closed variables reach it. */
-	L.CloseSlotAt(int(idx))
+	stateOf(p).CloseSlot(idxInt(idx))
 }
 
 //export lua_pop
@@ -734,11 +732,45 @@ func luaL_len(p *C.lua_State, idx C.int) C.lua_Integer {
 
 //export luaL_tolstring
 func luaL_tolstring(p *C.lua_State, idx C.int, l *C.size_t) *C.char {
-	s := stateOf(p).ToStringX(idxInt(idx))
-	if l != nil {
-		*l = C.size_t(len(s))
+	L := stateOf(p)
+	i := idxInt(idx)
+	/* PUC-Lua leaves the string on the stack and answers a pointer into
+	   it. That is not a detail: 'luaL_tolstring' is how an extension
+	   spells 'tostring' in the middle of building a stack, and code
+	   that pops what it pushed afterwards is the ordinary case --
+	   lauxlib's own luaL_traceback does exactly that. Answering only a
+	   pointer leaves the stack one short of what the caller expects,
+	   and the next absolute index names the wrong value. */
+	if !L.CallMeta(i, "__tostring") {
+		switch L.Type(i) {
+		case LUA_TNUMBER:
+			s := L.ToStringX(i) /* as '%I' or '%f' would print it */
+			L.PushString(s)
+		case LUA_TSTRING:
+			L.PushValue(i)
+		case LUA_TBOOLEAN:
+			if L.ToBoolean(i) {
+				L.PushString("true")
+			} else {
+				L.PushString("false")
+			}
+		case LUA_TNIL:
+			L.PushString("nil")
+		default: /* as '%s: %p', with the '__name' metafield if there is one */
+			kind := L.TypeName(i)
+			tt := L.GetMetaField(i, "__name")
+			if tt == LUA_TSTRING {
+				if s, ok := L.ToString(-1); ok {
+					kind = s
+				}
+			}
+			L.PushString(fmt.Sprintf("%s: %p", kind, lua_topointer(p, idx)))
+			if tt != LUA_TNIL {
+				L.Remove(-2) /* remove '__name' */
+			}
+		}
 	}
-	return C.CString(s)
+	return lua_tolstring(p, -1, l)
 }
 
 //export luaL_callmeta
@@ -798,6 +830,29 @@ func luaL_requiref(p *C.lua_State, name *C.char, openf C.lua_CFunction, glb C.in
 // the buffer API
 // ---------------------------------------------------------------------
 
+// The block behind a string buffer is C memory: luaL_prepbuffsize hands
+// out its address and the extension writes into it after the call has
+// returned, which rules out Go memory both by the cgo rules and because
+// the collector may move it. These two are how lauxlib.go asks for one,
+// having no C of its own.
+func init() {
+	reallocBlock = func(old unsafe.Pointer, sz int) unsafe.Pointer {
+		if sz == 0 {
+			if old != nil {
+				C.free(old)
+			}
+			return nil
+		}
+		return C.realloc(old, C.size_t(sz)) /* nil when it cannot grow */
+	}
+	bufFree = func(b *Buffer) {
+		if b.scratch != nil {
+			C.free(b.scratch)
+			b.scratch = nil
+		}
+	}
+}
+
 var (
 	cgoBufMu   sync.Mutex
 	cgoBufs    = map[int]*Buffer{}
@@ -811,20 +866,11 @@ func luaL_buffinit(p *C.lua_State, b *C.luaL_Buffer) {
 	}
 	L := stateOf(p)
 	buf := L.NewBuffer()
-	if buf.scratch == nil {
-		/* The block behind the buffer: luaL_prepbuffsize hands out its
-		   address and the extension copies into it directly, so it has
-		   to be C memory -- a pointer into Go memory is both against
-		   the cgo rules and into memory the collector may move. */
-		buf.scratch = C.malloc(C.size_t(C.CDL_BUFFERSIZE))
-		buf.slen = int(C.CDL_BUFFERSIZE)
-		runtime.SetFinalizer(buf, func(x *Buffer) {
-			if x.scratch != nil {
-				C.free(x.scratch)
-				x.scratch = nil
-			}
-		})
-	}
+	buf.cblock = true /* C is about to be handed the address */
+	/* Make sure there is a block from the start: 'b' and 'size' are the
+	   buffer as far as an extension is concerned, and luaL_addchar is a
+	   macro that writes into 'b[n]' once it has checked 'n < size'. */
+	buf.room(0)
 	cgoBufMu.Lock()
 	cgoBufNext++
 	id := cgoBufNext
@@ -837,45 +883,6 @@ func luaL_buffinit(p *C.lua_State, b *C.luaL_Buffer) {
 	*C.cdl_buf_refp(b) = C.int(id)
 }
 
-// bufFlush takes what an extension has written straight into the block
-// luaL_prepbuffsize gave it -- luaL_addchar does exactly that, and never
-// calls anything -- and adds it to the buffer in the order it was
-// written. It runs before anything else touches the buffer, so that
-// writes through the pointer and writes through luaL_addlstring come out
-// in the order the extension made them.
-func bufFlush(b *C.luaL_Buffer, buf *Buffer) {
-	if b == nil || buf.scratch == nil {
-		return
-	}
-	if n := int(b.n); n > 0 {
-		buf.AddBytes(unsafe.Slice((*byte)(buf.scratch), n))
-	}
-	b.n = 0
-}
-
-//export luaL_prepbuffsize
-func luaL_prepbuffsize(b *C.luaL_Buffer, sz C.size_t) *C.char {
-	buf := bufOf(b)
-	if buf == nil || buf.scratch == nil {
-		return nil
-	}
-	if int(b.n)+int(sz) > int(b.size) {
-		bufFlush(b, buf) /* start the block over */
-	}
-	if int(sz) > buf.slen {
-		n := int(sz) * 2
-		p := C.realloc(buf.scratch, C.size_t(n))
-		if p == nil {
-			return nil
-		}
-		buf.scratch = p
-		buf.slen = n
-		b.b = (*C.char)(p)
-		b.size = C.size_t(n)
-	}
-	return (*C.char)(unsafe.Add(buf.scratch, uintptr(b.n)))
-}
-
 func bufOf(b *C.luaL_Buffer) *Buffer {
 	if b == nil {
 		return nil
@@ -886,68 +893,118 @@ func bufOf(b *C.luaL_Buffer) *Buffer {
 	return buf
 }
 
+// bufEnter picks up what the extension did to the visible fields itself.
+// luaL_addsize and luaL_buffsub are macros over 'n', and luaL_addchar's
+// writes into 'b[n++]' without calling anything, so 'n' is not ours to
+// keep: it is read here and written back by bufLeave.
+func bufEnter(b *C.luaL_Buffer) *Buffer {
+	buf := bufOf(b)
+	if buf != nil {
+		buf.n = int(b.n)
+	}
+	return buf
+}
+
+func bufLeave(b *C.luaL_Buffer, buf *Buffer) {
+	if buf == nil {
+		return
+	}
+	b.n = C.size_t(buf.n)
+	b.b = (*C.char)(buf.scratch)
+	b.size = C.size_t(buf.slen)
+}
+
+//export luaL_prepbuffsize
+func luaL_prepbuffsize(b *C.luaL_Buffer, sz C.size_t) *C.char {
+	buf := bufEnter(b)
+	if buf == nil {
+		return nil
+	}
+	buf.room(int(sz)) /* the room, made if the block is too small */
+	bufLeave(b, buf)
+	if b.b == nil {
+		return nil
+	}
+	return (*C.char)(unsafe.Add(unsafe.Pointer(b.b), uintptr(b.n)))
+}
+
 //export luaL_addchar_
 func luaL_addchar_(b *C.luaL_Buffer, c C.char) {
-	if buf := bufOf(b); buf != nil {
-		buf.AddChar(byte(c))
+	buf := bufEnter(b)
+	if buf == nil {
+		return
 	}
+	buf.AddChar(byte(c))
+	bufLeave(b, buf)
 }
 
 //export luaL_addlstring
 func luaL_addlstring(b *C.luaL_Buffer, s *C.char, l C.size_t) {
-	if buf := bufOf(b); buf != nil {
-		bufFlush(b, buf)
-		buf.AddBytes([]byte(C.GoStringN(s, C.int(l))))
+	buf := bufEnter(b)
+	if buf == nil || s == nil || l == 0 {
+		return
 	}
+	buf.AddBytes(C.GoBytes(unsafe.Pointer(s), C.int(l)))
+	bufLeave(b, buf)
 }
 
 //export luaL_addstring
 func luaL_addstring(b *C.luaL_Buffer, s *C.char) {
-	if buf := bufOf(b); buf != nil && s != nil {
-		bufFlush(b, buf)
-		buf.AddString(C.GoString(s))
+	buf := bufEnter(b)
+	if buf == nil || s == nil {
+		return
 	}
+	buf.AddString(C.GoString(s))
+	bufLeave(b, buf)
 }
 
 //export luaL_addvalue
 func luaL_addvalue(b *C.luaL_Buffer) {
-	if buf := bufOf(b); buf != nil {
-		bufFlush(b, buf)
-		buf.AddValue()
+	buf := bufEnter(b)
+	if buf == nil {
+		return
 	}
+	buf.AddValue()
+	bufLeave(b, buf)
 }
 
 //export luaL_pushresult
 func luaL_pushresult(b *C.luaL_Buffer) {
-	buf := bufOf(b)
+	buf := bufEnter(b)
 	if buf == nil {
 		return
 	}
 	L := buf.L
-	/* PUC-Lua's luaL_buffinit leaves a placeholder on the stack, and
-	   luaL_pushresult replaces it: push the string, then remove what is
-	   now underneath it. One value appears, which is what an extension
-	   counts -- lpeg answers "1" for a substitution capture and pushes
-	   exactly one value, so anything left behind shifts the stack under
-	   the lua_call that follows. */
-	bufFlush(b, buf)
-	buf.PushResult()
-	/* PUC-Lua keeps the placeholder directly under the top and removes
-	   it from there. Not from a remembered index: an extension may
-	   lua_remove something below it -- lpeg does, discarding old
-	   dynamic captures -- and an absolute index would then be off by
-	   one, leaving the placeholder behind and the stack one deep for
-	   the lua_call that follows. Remove it only if it is still there,
-	   so that a buffer used some other way cannot lose a value. */
+	/* PUC-Lua pushes 'B->b[0 .. B->n]' and takes the buffer's box off the
+	   stack: one value appears where one value was. */
+	L.PushString(buf.String())
+	buf.n = 0
+	/* PUC-Lua keeps the box directly under the top and removes it from
+	   there. Not from a remembered index: an extension may lua_remove
+	   something below it -- lpeg does, discarding old dynamic captures
+	   -- and an absolute index would then be off by one, leaving the box
+	   behind and the stack one deep for the lua_call that follows.
+	   Remove it only if it is still there, so that a buffer used some
+	   other way cannot lose a value. */
 	if buf.box != nil && L.top >= 2 {
 		if v := &L.stack[L.top-2]; ttisfulluserdata(v) && uvalue(v) == buf.box {
 			L.Remove(-2)
 		}
 	}
+	bufLeave(b, buf)
 }
 
 //export luaL_pushresultsize
-func luaL_pushresultsize(b *C.luaL_Buffer, sz C.size_t) { luaL_pushresult(b) }
+func luaL_pushresultsize(b *C.luaL_Buffer, sz C.size_t) {
+	/* PUC-Lua's is luaL_addsize followed by luaL_pushresult, and the size
+	   is the part an extension relies on: luaL_buffinitsize hands out
+	   room, the extension fills it directly, and this is where it says
+	   how much it wrote. */
+	if b != nil {
+		b.n += sz
+	}
+	luaL_pushresult(b)
+}
 
 // ---------------------------------------------------------------------
 // lsys_load / lsys_sym: what loadlib.go calls

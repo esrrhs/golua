@@ -283,7 +283,49 @@ yield 的 `lua_pcallk`、抛错的 `lua_pcallk`、带 message handler 的、用 
 由 `TestLuaPosix` 逐行比对。它会创建文件、目录与链接，所以跑在自己的临时目录里。
 MIT 许可，随 `testdata/luaposix/LICENSE` 一并再分发。
 
-### 5.8 覆盖盘点
+### 5.8 把 C API 从头到尾走一遍
+
+LPeg、CJSON、LuaSocket、LuaFileSystem 与 luaposix 合起来调用了 C API 的很大一部分，
+但它们是「有活要干的程序」，不是普查：整组整组的函数从未被触及。于是
+`testdata/capi/capi.c` 就是那份普查。它是一个普通扩展——对着 `include/` 编译、
+由 `luaopen_capi` 打开、被 `require` 找到——按组把 C API 走一遍，并用数字、布尔
+与固定字符串作答，这正是它可被比对的原因：
+
+| 分组 | 调用了什么 |
+|---|---|
+| 栈 | `lua_rotate`、`lua_absindex`、`lua_copy`、`lua_checkstack`、`lua_remove`、`lua_insert`、`lua_replace` |
+| 算术 | 全部十四个 `LUA_OP*` 的 `lua_arith`、以及 `lua_compare`、`lua_rawequal`、`lua_concat`、`lua_len`、`lua_rawlen` |
+| 表 | 每一对 get/set——`getfield`/`setfield`、`geti`/`seti`、`rawget`/`rawset`、`rawgeti`/`rawseti`——外加 `lua_next`、`lua_createtable` 与全局表 |
+| 转换 | 带 `isnum` 出参的 `lua_tointegerx`/`lua_tonumberx`，以及对九种类型各取一个值来问 `lua_type`/`lua_typename` 与全部 `lua_is*` |
+| lauxlib | `luaL_ref`/`luaL_unref`、`luaL_newmetatable`、`luaL_getsubtable`、带 mode 的 `luaL_loadbufferx`、`luaL_fileresult`、`luaL_traceback`、`luaL_tolstring`、`luaL_gsub`、`luaL_addgsub`、`luaL_check*`/`luaL_opt*`、`luaL_argerror`、`luaL_typeerror`、`luaL_where`，以及 `luaL_requiref(L, "string", luaopen_string, 1)` |
+| userdata | 带多个 user value 的 `lua_newuserdatauv`、`lua_getiuservalue`/`lua_setiuservalue`，以及越界时的 `LUA_TNONE` |
+| to-be-closed | `lua_toclose` 与 `lua_closeslot` |
+| 调试 API | 装一个真正的 C hook 的 `lua_sethook`、取全部字段的 `lua_getstack`/`lua_getinfo`、`lua_getlocal`/`lua_setlocal`、`lua_getupvalue`/`lua_setupvalue`、`lua_upvalueid`/`lua_upvaluejoin` |
+| 协程 | `lua_newthread`、两次 `lua_resume`、`lua_status`、`lua_isyieldable`、`lua_xmove`、`lua_resetthread` |
+| 缓冲区 | 整个 API：`luaL_addstring`/`addchar`/`addlstring`/`addvalue`、`luaL_prepbuffsize`、`luaL_addsize`、`luaL_bufflen`/`buffaddr`/`buffsub`、`luaL_pushresult`、`luaL_buffinitsize`、`luaL_pushresultsize` |
+| 文件句柄 | `luaL_checkudata(L, 1, LUA_FILEHANDLE)`，再转成 `luaL_Stream` |
+| 限额 | `lua_setcstacklimit`、`lua_atpanic` |
+
+它打印的 35 行全部取自 PUC-Lua 5.4.9，存在 `testdata/capi/expected.txt`，
+由 `TestCApiSurface` 逐行比对。驱动是以 chunk 名 `cext` 加载的（参考解释器那侧由
+`testdata/capi/run.lua` 来做），所以 `luaL_where` 答案里的那个 `cext:35` 两边一样。
+
+它找出十处问题，五个已发布的扩展一个都没碰到：
+
+| 它做了什么 | 原来错在哪 |
+|---|---|
+| `luaL_requiref(L, "string", luaopen_string, 1)` | `luaopen_*` 在 `lualib.h` 里声明了，却从未进动态符号表，于是「静态链进宿主」的扩展、或想手工打开某个库的宿主，解析不到这个名字 |
+| 用 `luaL_tolstring` 读一个值，再把它弹出 | `luaL_tolstring` 只返回指针，没往栈上留东西；而「在构造栈的过程中做一次 tostring」正是它的语义。栈因此少了一个，下一个绝对索引就指错了值 |
+| `luaL_gsub` | 同样的问题：PUC-Lua 会把结果留在栈上，本实现把它弹掉了 |
+| `luaL_buffinitsize` 与 `luaL_pushresultsize` | `luaL_pushresultsize` 把长度忽略了，而这正是它的全部意义：扩展自己往那块空间里写，然后在这里告诉缓冲区写了多少 |
+| `luaL_bufflen`、`luaL_buffaddr`、`luaL_buffsub` | 它们是 `<lauxlib.h>` 里基于 `n` 和 `b` 的宏，所以无论内容是怎么攒起来的，它们都得描述它。而 `luaL_addstring` 加进去的内容原先放在一个 Go builder 里，这三个于是当它不存在。现在内容放在一整块会长大的内存里，与 PUC-Lua 一致——而且是 C 内存，因为 `luaL_prepbuffsize` 会把地址交出去，扩展在调用返回之后才往里写 |
+| `luaL_ref`，再 `luaL_unref`，再读那个槽 | 空闲链表原先放在槽 0，那是 5.3 的做法；5.4 用的是 `LUA_RIDX_LAST + 1`，而这个槽就是调用者传进来的那张表的普通键 |
+| `lua_toclose` 与 `lua_closeslot` | 两个都是空壳，于是从 C 里用 `<close>` 时 `__close` 根本不会跑。现在标记放在帧的 `nresults` 的符号位上（与 C 一致），由 `luaD_poscall` 在搬运返回值之前先把待关闭的关掉 |
+| `lua_newthread`，再 `lua_status`，再 `lua_resume` | 从未运行过的线程在这里是 `LUA_YIELD`（`coroutine.status` 需要这个），但 C 的 `lua_status` 对它回答 `LUA_OK`，而 `lua_resume` 必须能区分「启动它」和「唤醒它」。现在线程自带「是否曾被 resume 过」 |
+| 对会 yield 的线程调 `lua_resume` | C 从协程自己的栈上取参数，把 yield 出来的值留在那里，并报告有几个，好让调用者用 `lua_xmove` 搬走。这两条这里原先都不成立：参数取自恢复者，值也被弹掉了 |
+| `lua_atpanic` | 返回 NULL 而不是上一个处理函数——而「把宿主的处理函数放回去」正是安装自己的处理函数的扩展唯一需要它做的事 |
+
+### 5.9 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
 `testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
@@ -314,7 +356,7 @@ MIT 许可，随 `testdata/luaposix/LICENSE` 一并再分发。
 `<const>`、整个 debug 库、`utf8` 与字节级字符串函数、词法的转义与长字符串、
 `require` 与 `package.searchpath`、以及 `os`/`io` 的边界。
 
-### 5.9 性能
+### 5.10 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时
@@ -489,7 +531,7 @@ userdata 背后的 C 内存会在 userdata 被回收时释放：`C.malloc` 不�
 8. **数学库是 Go 的，不是平台 libm**：`math.sin`、`cos`、`tan`、`exp`、`log`、`log10`、`sqrt`、`asin`、`acos`、`atan`、`atan2`、`pow`、`sinh`、`cosh`、`tanh`、`frexp`、`ldexp` 用的是 Go 的实现，与 libc 链接的那份不同。15 位有效数字一致，最后一位或两位在一部分入参上不同：在横跨 15 个数量级的 120 个入参上实测，`sqrt` 从不出现差异，`exp`、`log` 只有个位数（小于 1 ulp），`log10`、`tanh`、`asin`、`acos`、`atan` 有几十个（约 1 ulp），`sin`、`cos`、`tan` 占四分之一到一半。超过 2^53 之后需要先做参数归约，差距会拉大——`tan` 偏 6 ulp、`sin` 偏 7 ulp——因为两边都不是正确舍入，归约方式也不同。所有算术运算、`sqrt` 与两种整数转换都是精确的。NaN 按平台 C 库的写法拼写（macOS 恒为 `"nan"`，glibc 符号位为 1 时是 `"-nan"`），因为 C 的 `printf` 就是这么做的。唯一刻意绕开 Go 实现的地方是 `exp(|x|)` 溢出而 `sinh(x)`、`cosh(x)` 尚未溢出的那条带（709.78 < |x| < 710.48）：Go 的 `math.Sinh` 对 `math.sinh(710)` 返回 `inf`，而其真值是 `exp(710)/2` = 1.1e308、完全可表示，所以那里把「减半」折进了参数里。
 9. **`math.randomseed()` 不带参数时第二个种子不同**：PUC-Lua 返回的两个种子是「当前时间」与「`lua_State` 的地址」（lmathlib.c 的 `randseed`），本移植返回的也是这两个量，所以第一个种子（时间）一致，第二个是 Go 堆地址而非 C 堆地址——两者都是宿主地址，在任一实现里都不可复现。`math.randomseed(n)` 与 `math.randomseed(n, m)` 原样返回入参；生成器本身仍是同一个基于 xoshiro256** 的实现：同一种子下产出的序列完全相同，整数与浮点都是，用例已钉住 `math.random()`、`math.random(6)`、`math.random(10, 20)` 各 20 次取值。
 10. **协程是「停住 goroutine」而不是 longjmp，挂起的 C 帧醒来时还在**：C 的 `lua_yield` 是 longjmp 到「将来会把它接起来的那个 `lua_resume`」，中间的一切都被丢弃；本实现则把 yield 的值经 channel 交给恢复者，然后阻塞在下一个 resume 请求上，于是 Lua 栈、保存的程序计数器、乃至 C 调用者自己的栈，全都活在 yield 的那个点上。这正是元方法与 Go 函数能从调用中途 yield 的原因，也是延续能成立的原因（§5.6）。随之而来两点：协程从恢复者继承的 C 调用深度是**每次 yield 都刷新**，而非只在第一次 resume 时刷新——这与 C 一致，因为 `lua_resume` 每次 resume 都跑一遍。另外 yield 过的 C 函数察觉不到这件事：`lua_callk` 会像调用正常结束那样返回它，所以 `lua_callk` 的延续听到的 status 是 `LUA_OK`，而 PUC-Lua 那里恒为 `LUA_YIELD`——是个常量，没有东西能依赖这个差别。`lua_pcallk` 的 status 是会变的，那个**与 PUC-Lua 一致**：本实现数着该线程 yield 了几次，被 yield 打断时报告 `LUA_YIELD`。
-11. **两个相等的短字符串不一定是同一个对象**：PUC-Lua 对短字符串的驻留贯穿其整个生命周期，所以 `lua_topointer` 对两个相等的串返回同一个地址，C 扩展也能拿这个地址当键。本实现的驻留是两代缓存（§5.9），一个串在两代都过期后可能被重新驻留，于是两个内容相同且都活着的串可能位于不同地址。Lua 层面看不到这件事：字符串按内容比较，所以 `luaS_eqshrstr` 是「比哈希再比字节」，而 C 那里的 `eqshrstr` 只比指针；`rawequal`、`==`、表的键与 `next` 的行为都和以前一样。只有 `lua_topointer`——以及拿它当键的 `lua_rawsetp`——能看出差别。
+11. **两个相等的短字符串不一定是同一个对象**：PUC-Lua 对短字符串的驻留贯穿其整个生命周期，所以 `lua_topointer` 对两个相等的串返回同一个地址，C 扩展也能拿这个地址当键。本实现的驻留是两代缓存（§5.10），一个串在两代都过期后可能被重新驻留，于是两个内容相同且都活着的串可能位于不同地址。Lua 层面看不到这件事：字符串按内容比较，所以 `luaS_eqshrstr` 是「比哈希再比字节」，而 C 那里的 `eqshrstr` 只比指针；`rawequal`、`==`、表的键与 `next` 的行为都和以前一样。只有 `lua_topointer`——以及拿它当键的 `lua_rawsetp`——能看出差别。
 
 12. **性能**：`Instruction` 使用结构体而非位压缩 uint32，分派有额外开销；P7 阶段做基准后再决定是否改回位编码。
 

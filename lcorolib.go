@@ -65,6 +65,7 @@ func coAuxResume(L *State, co *State, narg int) int {
 		return -1 /* error flag */
 	}
 	base := L.GetTop() - narg /* stack level below the arguments */
+	co.XMove(L, narg)         /* C's auxresume: lua_xmove(L, co, narg) */
 	status := co.Resume(L, narg)
 	if status == LUA_OK || status == LUA_YIELD {
 		nres := L.GetTop() - base /* values moved back from the coroutine */

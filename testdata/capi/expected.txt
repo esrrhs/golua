@@ -1,0 +1,35 @@
+stack	3 1 2 | 3 1 4 | 1 | 1
+stackm	a z
+arith	9 5 14 1 49.0 3.5 3 2 7 5 28 1 -2 -3 
+cmp	1 0 1 1 1 0
+catlen	a1b 3 3 2
+tab	v 9 rv ri 4
+glob	g 42
+conv	42 1 42.0 1 0 0 0 0.0 | 0 1 1
+types	nil boolean userdata number string table function userdata thread | nil bool lud num int str strnum table func cfunc ud thread none noneornil
+refs	one two 0 | 0 0
+auxlib	0 T T len=4 gsub=hell0 w0rld - - loaded 2 true verOK tb
+checks	5 2.5 dflt -1
+checks4	5 2.5 hey 9
+argerr	false	bad argument #1 to 'capi.argerr' (not what I wanted)
+typeerr	false	bad argument #1 to 'capi.typeerr' (capi thing expected, got number)
+where	cext:35: 
+muv	u3 u2 u1 TNONE
+muv0	TNONE
+toclose	true	returned	table
+closeslot	mid	after	c,b
+warn	warned
+hook	1	0
+info	named_for_info|local|Lua|63|62|1|0
+locals	aa=10 aa aa=99
+upvalues	x=5 x x=77
+join	1 1 1
+coro	first yield second ok finished y
+xmove	7
+reset	0 0 0
+buf	abcdef-valWX	14	12	true
+bufsize	0123456789
+addgsub	[a.b.c]
+stream	1 1
+limits	200 200 1
+pullstring	ABC

@@ -80,10 +80,29 @@ func lua_closethread(p *C.lua_State, from *C.lua_State) C.int {
 
 //export lua_atpanic
 func lua_atpanic(p *C.lua_State, f C.lua_CFunction) C.lua_CFunction {
-	old := stateOf(p).AtPanic(cFunc(unsafe.Pointer(f)))
-	_ = old /* C answers the previous function; there is no way to name it */
-	return nil
+	L := stateOf(p)
+	/* C answers the previous panic function, and an extension installs
+	   its own precisely so that it can put the host's back when it is
+	   done. The state holds a Go value, which C cannot name, so the
+	   pointer each state's handler came from is remembered here; when
+	   the handler did not come from C the answer is NULL, which is also
+	   what a state that never had one answers. */
+	panicMu.Lock()
+	prev := panicCPtr[L.g]
+	if unsafe.Pointer(f) != nil {
+		panicCPtr[L.g] = unsafe.Pointer(f)
+	} else {
+		delete(panicCPtr, L.g)
+	}
+	panicMu.Unlock()
+	L.AtPanic(cFunc(unsafe.Pointer(f)))
+	return C.lua_CFunction(prev)
 }
+
+var (
+	panicMu   sync.Mutex
+	panicCPtr = map[*globalState]unsafe.Pointer{}
+)
 
 //export lua_version
 func lua_version(p *C.lua_State) C.lua_Number {
@@ -300,14 +319,37 @@ func lua_resume(p *C.lua_State, from *C.lua_State, nargs C.int, nres *C.int) C.i
 		f = stateOf(from)
 	}
 	stat := L.Resume(f, int(nargs))
+	n := len(L.co.vals)
 	if nres != nil {
-		*nres = C.int(L.GetTop())
+		*nres = C.int(n)
+	}
+	if stat == LUA_YIELD && n > 0 {
+		/* C's lua_resume leaves the yielded values on the coroutine's
+		   own stack and reports how many there are; the caller moves
+		   them across with lua_xmove when it wants them, which is what
+		   auxresume does. Taking them off in (*State).Yield is what
+		   keeps a continuation's lua_gettop honest, so they go back on
+		   here for whoever asked through the API. */
+		L.checkStack(n)
+		copy(L.stack[L.top:], L.co.vals)
+		L.top += n
 	}
 	return C.int(stat)
 }
 
 //export lua_status
-func lua_status(p *C.lua_State) C.int { return C.int(stateOf(p).Status()) }
+func lua_status(p *C.lua_State) C.int {
+	L := stateOf(p)
+	/* A thread that has never been resumed is LUA_YIELD here, which is
+	   what makes coroutine.status call it "suspended" -- the same thing
+	   PUC-Lua calls it -- but C's lua_status answers LUA_OK for it, and
+	   so does lua_resetthread. An extension that asks can tell a new
+	   thread from a suspended one, so it has to be able to. */
+	if L.status == LUA_YIELD && !L.started {
+		return C.int(LUA_OK)
+	}
+	return C.int(L.Status())
+}
 
 //export lua_isyieldable
 func lua_isyieldable(p *C.lua_State) C.int { return cBool(stateOf(p).IsYieldable()) }
@@ -636,13 +678,51 @@ func luaL_gsub(p *C.lua_State, s, patt, repl *C.char) *C.char {
 	L.PushString(C.GoString(patt))
 	L.PushString(C.GoString(repl))
 	L.Call(3, 1)
-	out := L.ToStringX(-1)
-	L.Pop(2) /* the result and the 'string' table */
-	return keepCStr(out)
+	/* PUC-Lua's luaL_gsub leaves the result on the stack -- it is
+	   luaL_addgsub into a buffer followed by luaL_pushresult -- and
+	   answers a pointer into it. */
+	L.Remove(-2) /* the 'string' table is under the result */
+	return lua_tolstring(p, -1, nil)
 }
 
 //export luaL_openlibs
 func luaL_openlibs(p *C.lua_State) { stateOf(p).OpenLibs() }
+
+// The luaopen_* of the standard libraries.  They belong to the exported
+// surface for the same reason luaL_openlibs does: an extension that is
+// linked into the host instead of dlopen'd, or a host that opens one
+// library by hand with luaL_requiref, reaches them by name.  Each one
+// is the Go opener of the same library, which is what OpenLibs calls.
+//
+//export luaopen_base
+func luaopen_base(p *C.lua_State) C.int { return C.int(OpenBase(stateOf(p))) }
+
+//export luaopen_coroutine
+func luaopen_coroutine(p *C.lua_State) C.int { return C.int(OpenCoroutine(stateOf(p))) }
+
+//export luaopen_table
+func luaopen_table(p *C.lua_State) C.int { return C.int(OpenTable(stateOf(p))) }
+
+//export luaopen_io
+func luaopen_io(p *C.lua_State) C.int { return C.int(OpenIO(stateOf(p))) }
+
+//export luaopen_os
+func luaopen_os(p *C.lua_State) C.int { return C.int(OpenOS(stateOf(p))) }
+
+//export luaopen_string
+func luaopen_string(p *C.lua_State) C.int { return C.int(OpenString(stateOf(p))) }
+
+//export luaopen_utf8
+func luaopen_utf8(p *C.lua_State) C.int { return C.int(OpenUTF8(stateOf(p))) }
+
+//export luaopen_math
+func luaopen_math(p *C.lua_State) C.int { return C.int(OpenMath(stateOf(p))) }
+
+//export luaopen_debug
+func luaopen_debug(p *C.lua_State) C.int { return C.int(OpenDebug(stateOf(p))) }
+
+//export luaopen_package
+func luaopen_package(p *C.lua_State) C.int { return C.int(OpenPackage(stateOf(p))) }
 
 // ---------------------------------------------------------------------
 // the callbacks cdlbridge.c uses: the four variadic functions, once
@@ -796,7 +876,8 @@ func luaL_addgsub(b *C.luaL_Buffer, s, patt, repl *C.char) {
 	L.PushString(C.GoString(repl))
 	L.Call(3, 1)
 	L.Remove(-2) /* the 'string' table */
-	buf.AddValue()
+	bufEnter(b).AddValue()
+	bufLeave(b, buf)
 }
 
 //export luaL_buffinitsize
