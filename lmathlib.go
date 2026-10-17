@@ -185,7 +185,9 @@ func mathLog(L *State) int {
 }
 
 func mathExp(L *State) int {
-	L.PushNumber(math.Exp(L.CheckNumber(1)))
+	/* Not math.Exp on its own: see mathExpScaled -- on amd64 it answers
+	   inf for exp(709.5), which is 1.3549863193146328e+308. */
+	L.PushNumber(mathExpScaled(L.CheckNumber(1), 0))
 	return 1
 }
 
@@ -406,10 +408,10 @@ func mathSetRandFunc(L *State) {
 // that calls them cannot be run by a port that leaves them out, so
 // they are all here.
 
-// mathMaxLog is log(MaxFloat64), the argument at which exp overflows,
-// and mathMaxLog2 is log(2 * MaxFloat64), the one at which half of it
-// overflows too.
 const (
+	// mathMaxLog is log(MaxFloat64): the argument at which exp(x)
+	// overflows.  exp(x)/2 holds out for another ln 2 beyond it, up to
+	// log(2 * MaxFloat64) = 710.47586007394386.
 	mathMaxLog  = 7.09782712893383973096e+02
 	mathMaxLog2 = 7.10475860073943863429e+02
 )
@@ -421,31 +423,44 @@ const (
 	mathLn2Lo = 1.90821492927058770002e-10
 )
 
-// mathHalfExp is exp('x') / 2 for a non-negative 'x', the value both
-// 'sinh' and 'cosh' tend to as 'x' grows, worked out so that it does
-// not overflow before it has to.  Go's math.Sinh does overflow early:
-// exp(710) is 2.2e308 and twice MaxFloat64, so Go answers +Inf, but
-// sinh(710) is exp(710) / 2, which is 1.1e308 and representable, and
-// C's libm answers that.
+// mathExpScaled is exp(x) * 2^shift, worked out so that nothing
+// overflows before the answer itself has to.
 //
-// The halving cannot simply be folded into the argument as exp(x - ln
-// 2), because subtracting ln 2 from a number this large rounds, and the
-// rounding shows: that answers 9.0542048151528e+307 for sinh(709.79)
-// where C answers 9.0542048151523e+307.  The argument is reduced modulo
-// ln 2 instead, with both halves of the constant, and exp is asked
-// about the remainder, which is small enough that scaling its answer up
-// by a power of two is exact.
-func mathHalfExp(x float64) float64 {
-	switch {
-	case x < mathMaxLog: /* exp(x) does not overflow */
-		return math.Exp(x) / 2
-	case x >= mathMaxLog2: /* not even the half of it fits */
-		return math.Inf(1)
+// It cannot simply ask math.Exp, because Go's math.Exp is not one
+// function but a hand-written assembly version per architecture, and
+// they do not agree at the edge of what a float can hold: on amd64
+// math.Exp(709.5) answers +Inf, where exp(709.5) is
+// 1.3549863193146328e+308, a perfectly ordinary float, and that is what
+// arm64 answers, what C's libm answers, and what Lua programs have been
+// getting for as long as math.exp has existed.  Asking it for exp(709.5)
+// and halving therefore loses -- which is how math.sinh(709.5) came out
+// as inf on amd64 and as 6.7749315965731642e+307 everywhere else.
+//
+// So exp is only ever asked about an argument it cannot get wrong: the
+// argument is reduced modulo ln 2 first, with both halves of the
+// constant so that the remainder keeps its low bits, and the answer is
+// scaled by a power of two afterwards, which is exact.  Folding the
+// halving into the argument as exp(x - ln 2) instead would be simpler
+// and wrong: subtracting ln 2 from a number this large rounds, and the
+// rounding shows -- that answers 9.0542048151528e+307 for sinh(709.79)
+// where C answers 9.0542048151523e+307.
+func mathExpScaled(x float64, shift int) float64 {
+	if math.IsNaN(x) || math.IsInf(x, 0) {
+		return math.Exp(x) /* no amount of scaling changes these */
 	}
-	n := int(math.Round(x / math.Ln2)) /* 1024 or 1025 in this range */
+	if e := math.Exp(x); !math.IsInf(e, 1) {
+		return math.Ldexp(e, shift)
+	}
+	n := int(math.Round(x / math.Ln2))
 	r := (x - float64(n)*mathLn2Hi) - float64(n)*mathLn2Lo
-	return math.Ldexp(math.Exp(r), n-1)
+	return math.Ldexp(math.Exp(r), n+shift)
 }
+
+// mathHalfExp is exp(x) / 2 for a non-negative x: the value both 'sinh'
+// and 'cosh' tend to as x grows, and one that is representable long
+// after exp(x) itself is not.  Where even the half does not fit,
+// scaling by 2^-1 overflows and the answer is +Inf, which is right.
+func mathHalfExp(x float64) float64 { return mathExpScaled(x, -1) }
 
 func mathSinh(L *State) int {
 	x := L.CheckNumber(1)
