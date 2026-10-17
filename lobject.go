@@ -697,7 +697,20 @@ func l_str2d(s string) (float64, bool) {
 	if mode == 'n' { // reject 'inf' and 'nan'
 		return 0, false
 	}
-	t := strings.TrimSpace(s)
+	if strings.IndexByte(s, '_') >= 0 {
+		/* Go's ParseFloat accepts the underscores of a Go literal --
+		   "1_000" and "1e1_0" are numerals to it -- and C's strtod,
+		   which is what PUC-Lua asks, has never heard of them.  No Lua
+		   numeral has one, so a string that does cannot be a number. */
+		return 0, false
+	}
+	/* 'lisspace' and not strings.TrimSpace: TrimSpace also trims the
+	   Unicode spaces -- U+00A0, U+2003, U+3000 -- which C's isspace
+	   does not, so 'tonumber("\u{3000}1")' would be 1 here and nil in
+	   PUC-Lua.  Only the six bytes C calls space are skipped, and at
+	   both ends, which is what l_str2d does when it walks past the end
+	   of the conversion. */
+	t := strings.Trim(s, " \t\n\v\f\r")
 	if t == "" {
 		return 0, false
 	}
@@ -796,7 +809,10 @@ func parseHexFloat(s string) (float64, bool) {
 		}
 		r *= math.Pow(2, float64(esign*exp))
 	}
-	if len(strings.TrimSpace(s)) != 0 {
+	/* what is left has to be nothing, and "nothing" is C's isspace --
+	   see l_str2d: a Unicode space is not one, so "0x10\u{a0}" is not a
+	   numeral even though it ends in something that looks like one */
+	if len(strings.Trim(s, " \t\n\v\f\r")) != 0 {
 		return 0, false
 	}
 	if neg {

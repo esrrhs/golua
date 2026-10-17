@@ -428,13 +428,16 @@ func hexOf(b byte) string {
 // the lines still line up, both sides being equally shifted, but the
 // case named in a failure is then the wrong one.
 //
-// \ddd is decimal in Lua, so \%d round-trips any byte, including a NUL,
-// and nothing is left that could end a line early.
+// \ddd is decimal in Lua, so \%03d round-trips any byte, including a
+// NUL, and nothing is left that could end a line early.  The three
+// digits are not decoration: \ddd takes as many as it is given, so an
+// unpadded \9 followed by the byte '1' would read back as \91 -- one
+// character, '[' -- and two different values could then print alike.
 const fuzzQuote = `local function q(v)
   local t = type(v)
   if t == "string" then
     return '"' .. v:gsub("[%c\"\\]", function(c)
-      return string.format("\\%d", c:byte())
+      return string.format("\\%03d", c:byte())
     end) .. '"'
   end
   if t == "table" or t == "function" then return t end

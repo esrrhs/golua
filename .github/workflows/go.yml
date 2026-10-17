@@ -167,13 +167,14 @@ jobs:
       # The same comparison without cases anybody wrote: 37 816
       # expressions and snippets built in the test and answered by both
       # interpreters (fuzz_test.go); 174 775 pattern/subject pairs,
-      # 1 048 650 answers (patternfuzz_test.go); and 11 340 format
-      # strings against 22 values plus a missing one, 260 820 answers
-      # (formatfuzz_test.go).  All three need LUA_REF for the same
-      # reason the suite above does, so they have to run here and
-      # nowhere else.
+      # 1 048 650 answers (patternfuzz_test.go); 11 340 format strings
+      # against 22 values plus a missing one, 260 820 answers
+      # (formatfuzz_test.go); and 1 834 strings read plus 49 written,
+      # 11 053 answers (numfuzz_test.go).  All four need LUA_REF for
+      # the same reason the suite above does, so they have to run here
+      # and nowhere else.
       - name: Differential fuzz
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential' -timeout 30m .
+        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential' -timeout 30m .

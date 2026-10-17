@@ -687,6 +687,7 @@ a difference is always reproducible.
 | `fuzz_test.go` | 37 615 expressions — 43 operands against every operator, plus the calls that take a base or a format — and 201 written-out snippets for what combination cannot reach: syntax errors, metamethods, coroutines, hooks, patterns, non-string errors, stack overflow | 37 816 |
 | `patternfuzz_test.go` | 6 991 patterns — every pattern atom against every atom, plus the triples that need three pieces to mean anything — against 25 subjects | 1 048 650 |
 | `formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
+| `numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
 lines of exactly the kind of logic nobody writes down the combinations
@@ -742,6 +743,22 @@ passing them:
   compared like any other case, and `TestFormatHexFloatTieRounding`
   pins both halves against the reference.
 
+The number half is the same comparison over the other way round a number
+becomes a string and back, and it is where a Go detail had been showing
+through in three separate places. `tonumber("1_000")` answered `1000`
+here and `nil` in PUC-Lua, because Go's `strconv.ParseFloat` accepts the
+underscores of a Go literal and C's `strtod` does not.
+`tonumber("\u{3000}1")` answered `1` here and `nil` there, because
+`strings.TrimSpace` trims the Unicode spaces and C's `isspace` does not —
+and the hexadecimal path, a second parser for the numerals Go will not
+take without an exponent, had its own copy of that second trim. All
+three are fixed and pinned in `lobject_test.go`. A sixty-string probe
+found the first two, which is why the grid was built at all. What the
+number half deliberately does not ask is a *computed* value: `math.pi`
+is a constant and is fine, `math.exp(1)` is not, because Go's `math` and
+the platform's libm disagree in the last ulp (§6.7) and the fuzz would
+then be reporting the maths library rather than the conversion.
+
 It is worth saying what makes a fuzz like this worthless, because one
 round of it was. A generated chunk that does not *load* prints the same
 syntax error on both sides, and identical output is what success looks
@@ -753,7 +770,11 @@ quoted byte by byte rather than with `%q` for a related reason: `%q`
 escapes a newline as a backslash followed by a real newline, so a value
 that prints as two lines quietly breaks the one-line-per-case the
 comparison rests on — the lines still line up, both sides being equally
-shifted, but the case named in a failure is then the wrong one.
+shifted, but the case named in a failure is then the wrong one. The
+escape is written `\%03d`, padded to three digits, because Lua's `\ddd`
+takes as many digits as it is given: an unpadded `\9` followed by the
+byte `1` reads back as `\91`, one character, and two different values
+would then print alike.
 
 ---
 
