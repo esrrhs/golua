@@ -661,8 +661,8 @@ func luaV_equalobj(L *State, t1, t2 *Value) bool {
 		return pvalue(t1) == pvalue(t2)
 	case LUA_VLCF: /* light C functions: identity */
 		return ptrEqual(gcvalue(t1), gcvalue(t2))
-	case LUA_VSHRSTR: /* short strings are interned */
-		return tsvalue(t1) == tsvalue(t2)
+	case LUA_VSHRSTR:
+		return luaS_eqshrstr(tsvalue(t1), tsvalue(t2))
 	case LUA_VLNGSTR:
 		return luaS_eqlngstr(tsvalue(t1), tsvalue(t2))
 	case LUA_VUSERDATA:

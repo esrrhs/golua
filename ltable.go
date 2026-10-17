@@ -73,10 +73,33 @@ func mainpositionTV(L *State, t *Table, key *Value) int {
 
 func keyisdead(n *node) bool { return n.key.tt == LUA_TDEADKEY || n.next == deadNext }
 
-// ptrEqual compares two pointer-like interface values by identity.
+// ptrEqual compares two pointer-like interface values by identity. The
+// collectable types are handled outright: 'reflect.ValueOf' is far too
+// expensive to run on every table lookup, and it is only needed for the
+// values Go refuses to compare -- a GoFunc, for one.
 func ptrEqual(a, b any) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
+	}
+	switch x := a.(type) {
+	case *Table:
+		y, ok := b.(*Table)
+		return ok && x == y
+	case *TString:
+		y, ok := b.(*TString)
+		return ok && x == y
+	case *LClosure:
+		y, ok := b.(*LClosure)
+		return ok && x == y
+	case *CClosure:
+		y, ok := b.(*CClosure)
+		return ok && x == y
+	case *Udata:
+		y, ok := b.(*Udata)
+		return ok && x == y
+	case *State:
+		y, ok := b.(*State)
+		return ok && x == y
 	}
 	ra, rb := reflect.ValueOf(a), reflect.ValueOf(b)
 	if ra.Kind() == rb.Kind() {
@@ -106,6 +129,8 @@ func equalkey(k1 *Value, n *node, deadok bool) bool {
 		return ptrEqual(pvalue(k1), pvalue(&n.key))
 	case ctb(LUA_VLNGSTR):
 		return luaS_eqlngstr(tsvalue(k1), tsvalue(&n.key))
+	case ctb(LUA_VSHRSTR):
+		return luaS_eqshrstr(tsvalue(k1), tsvalue(&n.key))
 	default:
 		return ptrEqual(gcvalue(k1), gcvalue(&n.key))
 	}
@@ -502,7 +527,7 @@ func luaH_getshortstr(t *Table, key *TString) *Value {
 	}
 	n := hashstr(t, key)
 	for {
-		if t.nodes[n].key.tt == ctb(LUA_VSHRSTR) && tsvalue(&t.nodes[n].key) == key {
+		if t.nodes[n].key.tt == ctb(LUA_VSHRSTR) && luaS_eqshrstr(tsvalue(&t.nodes[n].key), key) {
 			return &t.nodes[n].val
 		}
 		nx := t.nodes[n].next
