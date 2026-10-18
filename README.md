@@ -682,10 +682,11 @@ thing the table half found (§5.13), the two directions of a `move` and
 its two refusals, the positions `remove` and `insert` will take, the
 kinds `concat` names when it refuses them, the 28 pairs a sort of ten
 elements compares in the order it compares them — the seventeenth of
-which is `9<9`, the pivot being compared with itself — and a userdata,
+which is `9<9`, the pivot being compared with itself — a userdata,
 which is the only kind of value that is not a table and can be asked
-for a metamethod. Every refusal is pinned with the name in front of
-it, and
+for a metamethod, and the lengths `sort` refuses, which need no array
+at all but only a `__len` answering with a number belonging to none.
+Every refusal is pinned with the name in front of it, and
 the names are not the ones the C source spells: "bad argument #3 to
 '**table.move**' (too many elements to move)" comes from
 `pushglobalfuncname` searching `package.loaded`, which is the road C
@@ -695,8 +696,8 @@ instruction to read a name out of, while "wrong number of arguments to
 in every case. A caller that is Lua code gets the short name too, and a
 position in front of the message with it.
 
-Of the 19 things this half has been broken with to see whether the
-in-process test can see them, 17 turn it red. The two that stay green
+Of the 24 things this half has been broken with to see whether the
+in-process test can see them, 22 turn it red. The two that stay green
 are the two that are §6.18's: a `tableChoosePivot` that ignores the
 random number it is handed, and a `tableRandomizePivot` that always
 answers 0, are the same thing to an array that comes out sorted either
@@ -845,7 +846,7 @@ a difference is always reproducible.
 | `packfuzz_test.go` | 3 733 questions about `string.pack`, `string.unpack` and `string.packsize` — every byte of the alphabet as a format of its own, all 256 of them and not the 26 C looks up, because a byte that is not an option is an option refused and the refusal is printed with the byte in it; every size from 0 to 17 of `i`, `I`, `s` and `c` — the sweep running past 16 in both directions, because only the sizes that are refused can say where the edge is — each with 12 values and with the three that sit on the edge of that size; every alignment `!` can ask for, over 20 things to align and then over every pair of 6; every endianness over every option; every pair of 16 options, and an `X` between every pair of 12; `unpack` at 15 positions of 12 formats; every option given 8 wrong things, and given nothing; 138 round trips; 53 written-out formats; a zero byte at every position of 9 formats; a zero byte in a value; and every size read out of 6 buffers of raw bytes | 5 337 |
 | `namefuzz_test.go` | 1 328 questions about a name with a zero byte in it — every name a script can hand to the OS, with a zero at every position of five of them (`a`, `a.txt`, `sub`, `no`, `m.lua`), asked of `io.open` in each of its 6 modes, of `io.lines`, `loadfile`, `dofile`, `os.remove`, `os.rename` (in the name moved, in the name it is moved to, and in both), `require` and `package.searchpath`, each against a file that is there, a directory, and nothing; then the same renames and removals with no zero in them, which is where a directory meets a directory; a name with a slash on the end of it, which is not a name a regular file can be given; and 62 commands with a zero in them, run by `io.popen` and `os.execute`. 1 218 names and 62 commands, each with a number of its own so that one case's file is never another case's, and both interpreters get an empty directory of their own | 1 328 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
-| `tablefuzz_test.go` | 990 questions about the six functions of the table library — every `f`, `e` and `t` of a `table.move` over a table of four, to itself and to another table; every position a `table.remove` and a `table.insert` can be given, at every size up to four, and the number of arguments they take; every kind of value in every position of a `table.concat`, every kind of separator and every pair of ends; every pair of ends of a `table.unpack` and four that are past the end of anything, and `table.pack`; 203 `table.sort`s — 52 with a comparison function that writes down every pair it is asked about in the order it is asked about them, 69 with one that claims a different element is the pivot, 45 with one that says so of an element there are two copies of, and the ones that raise, the ones that move the array while it is being sorted, and the ones that are not orders; and 142 things that behave like a table and things that do not — 64 of them userdata with each of the eight combinations of the three metamethods, in each of the six functions and as both ends of a `move`, 30 of them tables with a metatable on them, and 48 that are not tables at all | 990 |
+| `tablefuzz_test.go` | 1 005 questions about the six functions of the table library — every `f`, `e` and `t` of a `table.move` over a table of four, to itself and to another table; every position a `table.remove` and a `table.insert` can be given, at every size up to four, and the number of arguments they take; every kind of value in every position of a `table.concat`, every kind of separator and every pair of ends; every pair of ends of a `table.unpack` and four that are past the end of anything, and `table.pack`; 218 `table.sort`s — 52 with a comparison function that writes down every pair it is asked about in the order it is asked about them, 69 with one that claims a different element is the pivot, 45 with one that says so of an element there are two copies of, 15 of a `__len` that answers with a length belonging to no array — 13 of them on a table and two on a userdata — which is the only way to reach "array too big", and the ones that raise, the ones that move the array while it is being sorted, and the ones that are not orders; and 142 things that behave like a table and things that do not — 64 of them userdata with each of the eight combinations of the three metamethods, in each of the six functions and as both ends of a `move`, 30 of them tables with a metatable on them, and 48 that are not tables at all | 1 005 |
 | `datefuzz_test.go` | 2 517 questions about `os.date` and `os.time` — every conversion specifier of C99's `strftime`, all 37 of them, asked of every day of 2000 and of 2001 and of every noon of 2000, of every hour and every five minutes of one day, and of the instants at and past the ends of a `struct tm`; the 19 `E` and `O` modifiers at four instants; the nine fields of `*t`; the 51 formats that are not specifiers, 18 of them with a zero byte in them; the format that is not there at all; and 124 tables for `os.time`, two of them only on a host whose `mktime` reads `isdst` the way this port does. Every one of them asked in each of four zones — one with no summer time, one west of Greenwich, one east, and Dublin, whose standard time is the smaller of its two — because four of the specifiers are questions the zone answers | 2 517 × 4, or 2 523 × 4 where the C library is glibc's |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -1308,17 +1309,30 @@ value" in PUC-Lua, which never gets as far as the length, and was
 the package where that shape occurs, and the grid holds it now: with
 the fix out, 16 lines go red.
 
-Three things the grid does not ask. A `table.move` that would move a
-huge number of elements hangs **PUC-Lua itself** —
-`table.move({}, 1, math.maxinteger, 1)` passes both of its checks and
-then copies for the rest of time, on every machine — so there is no
-answer to compare against; what the two checks say is asked instead. A
-`table.sort` of more than `INT_MAX` elements, which is what "array too
-big" is for, is not an array a test can build. And a `table.sort` of
-more than 128 elements whose comparison function cares about the order
-it is called in is left alone for the reason in §6.18.
+Two things the grid does not ask, and it used to be three. A
+`table.move` that would move a huge number of elements hangs **PUC-Lua
+itself** — `table.move({}, 1, math.maxinteger, 1)` passes both of its
+checks and then copies for the rest of time, on every machine — so
+there is no answer to compare against; what the two checks say is asked
+instead. And a `table.sort` of more than 128 elements whose comparison
+function cares about the order it is called in is left alone for the
+reason in §6.18.
 
-Of the 33 things this half has been broken with — both directions and
+The third was "array too big", and it turned out to be askable after
+all. What the check is on is the *number*, asked for before a single
+element is looked at, so what it needs is not an array but a length,
+and a `__len` metamethod can answer with one that belongs to no array:
+`setmetatable({}, {__len = function() return math.maxinteger end})` is
+refused without anything being built. It is `<` and not `<=`, so
+`INT_MAX` itself is refused too; and the lengths that are let through
+reach whatever is there, which is nothing — `2` is "attempt to compare
+two nil values" and `1.5` is "object length is not an integer", the
+latter from the `luaL_len` behind `aux_getn` and not from the sort at
+all. Fifteen of the 1 005 cases are those lengths, two of them on a
+userdata, which `checktab` has to let through before the length is even
+looked at.
+
+Of the 38 things this half has been broken with — both directions and
 all three conditions of `table.move`, its fifth argument and its two
 refusals; the two position rules and the default position of `remove`
 and `insert` and the number of arguments they take; the kind, the
@@ -1327,7 +1341,8 @@ eagerly-evaluated default, its stack check and its ceiling, and
 `pack`'s `n`; the pivot, the initial swap, both of the two "invalid
 order function" checks, the order the comparison function is called in
 and whether its answer is turned into a boolean; and all four ways
-`checktab` can be wrong about a metamethod — 32 turn it red. The one
+`checktab` can be wrong about a metamethod, and the five ways the
+length `sort` refuses can be wrong — 37 turn it red. The one
 that stays green is the randomized pivot, and it stays green because
 the grid asks no array that could reach one: it is §6.18's.
 
@@ -1344,7 +1359,7 @@ everything is less than the pivot, but the one that walks down from
 which needs a comparison function whose answer does not depend on the
 other element — `function(a, b) return a == 4 end` — and an array that
 holds that value in two places at once, since the pivot is moved out
-of the position it was picked from. Forty-five of the 990 cases are
+of the position it was picked from. Forty-five of the 1 005 cases are
 those arrays. They are asked a second time by `TestTableInProcess`,
 which asks both of the two checks in this process and with the number
 of pairs the comparison function was asked about before it gave up —

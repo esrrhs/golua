@@ -447,6 +447,36 @@ end)`)
   table.sort(t)
   return dump(t)
 end)`)
+	/* A length that is not the length of anything.  'sort' asks for
+	   the length first and refuses it there, before it looks at a
+	   single element, and a '__len' can answer with a number that
+	   belongs to no array -- which is the only way to reach "array
+	   too big": the array itself cannot be built, but the number can
+	   be claimed.  What is asked is the refusal and, for the lengths
+	   that are small enough to be let through, whatever the sort
+	   reaches when it looks for elements that are not there.  The
+	   length of INT_MAX is refused too, because the check is '<'. */
+	for _, n := range []string{"math.maxinteger", "2147483647", "2147483648",
+		"100000000", "200000", "100000", "-1", "0", "1", "2", "3",
+		"2^70", "1.5"} {
+		emit(fmt.Sprintf("sortlen/%s", n), `C(function()
+  local t = setmetatable({}, {__len = function() return `+n+` end})
+  table.sort(t)
+  return dump(t)
+end)`)
+	}
+	// and one on a userdata, which is the kind of value 'checktab'
+	// has to be asked about before the length is even looked at
+	for _, n := range []string{"math.maxinteger", "3"} {
+		emit(fmt.Sprintf("sortlen/userdata/%s", n), `C(function()
+  local u = io.tmpfile()
+  debug.setmetatable(u, {__index = function(_, k) return k end,
+                         __newindex = function() end,
+                         __len = function() return `+n+` end})
+  table.sort(u)
+  return "ok"
+end)`)
+	}
 	nSort := took()
 
 	// 6. things that are not tables but answer the three metamethods,
@@ -844,6 +874,43 @@ func TestTableInProcess(t *testing.T) {
 		ok, e = pcall(table.move, {1,2,3}, 1, 3, 1, x)
 		assert(not ok and e ==
 		  "bad argument #5 to 'table.move' (table expected, got userdata)", e)
+
+		-- 10. A length that is not the length of anything.  'sort'
+		--     asks for the length before it looks at a single element,
+		--     and a '__len' can answer it with a number that belongs
+		--     to no array -- which is the only road to "array too
+		--     big": the array it names cannot be built, but the
+		--     number can be claimed, and the refusal is at the '<'
+		--     that stops it, so INT_MAX itself is refused too.
+		local function len(n)
+		  return setmetatable({}, {__len = function() return n end})
+		end
+		ok, e = pcall(table.sort, len(math.maxinteger))
+		assert(not ok and e ==
+		  "bad argument #1 to 'table.sort' (array too big)", e)
+		ok, e = pcall(table.sort, len(2147483647))
+		assert(not ok and e ==
+		  "bad argument #1 to 'table.sort' (array too big)", e)
+		-- the lengths that are let through reach whatever is there,
+		-- which is nothing.  One of them is a hundred thousand past
+		-- the smallest length a mutation of that refusal could draw
+		-- the line at, so that moving the line is seen.
+		ok, e = pcall(table.sort, len(2))
+		assert(not ok and e == "attempt to compare two nil values", e)
+		ok, e = pcall(table.sort, len(200000))
+		assert(not ok and e == "attempt to compare two nil values", e)
+		-- and one that is not a number of elements at all
+		ok, e = pcall(table.sort, len(1.5))
+		assert(not ok and e == "object length is not an integer", e)
+		-- the same length on a userdata, which 'checktab' has to let
+		-- through before the length is even looked at
+		local y = io.tmpfile()
+		debug.setmetatable(y, {__index = function(_, k) return k end,
+		                       __newindex = function() end,
+		                       __len = function() return math.maxinteger end})
+		ok, e = pcall(table.sort, y)
+		assert(not ok and e ==
+		  "bad argument #1 to 'table.sort' (array too big)", e)
 		return true
 	`); err != nil {
 		t.Fatal(err)
