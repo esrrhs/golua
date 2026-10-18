@@ -167,6 +167,14 @@ type State struct {
 	basehookcount int
 	hookcount     int
 	oldpc         int
+	// hookExternal is C's "hook != hookf": whether the hook was
+	// installed through the C API (lua_sethook) rather than by
+	// debug.sethook.  Go cannot compare two functions, so the
+	// distinction is recorded when the hook is installed instead of
+	// being asked of it afterwards.  'debug.gethook' answers
+	// "external hook" for one and the hook table's entry for the
+	// other.
+	hookExternal bool
 
 	top       int // first free slot in the stack
 	stack     []Value
@@ -533,11 +541,16 @@ func (L *State) NewThread() *State {
 	L1.baseCI.callstatus = CIST_C
 	L1.baseCI.nresults = 0
 	gcTrackThread(L1) /* so that the collector can clear its stale slots */
-	/* a new thread inherits the hook of the creating thread */
+	/* a new thread inherits the hook of the creating thread: C copies
+	   'hook', 'hookmask' and 'basehookcount' in 'lua_newthread', so a
+	   coroutine made while a hook is on is hooked too, and
+	   'debug.gethook(co)' answers the mask and the count it inherited
+	   even though nobody ever set a hook on that coroutine */
 	L1.hook = L.hook
 	L1.hookmask = L.hookmask
 	L1.basehookcount = L.basehookcount
 	L1.hookcount = L.basehookcount /* resethookcount(L1) */
+	L1.hookExternal = L.hookExternal
 	L1.co = &coRuntime{req: make(chan resumeReq), resp: make(chan resumeResp)}
 	go L1.coMain()
 	// the thread object goes on the stack of the creating state

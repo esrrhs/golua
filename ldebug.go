@@ -846,6 +846,18 @@ func luaV_objlen(L *State, ra int, rb *Value) {
 // calls; 'mask' is a combination of dbMaskCall, dbMaskRet, dbMaskLine and
 // dbMaskCount; 'count' is the instruction count between count hooks.
 func (L *State) SetHook(hook func(L *State, ar *dbAr), mask, count int) {
+	L.installHook(hook, mask, count, true)
+}
+
+// setHook is the unexported counterpart used by the debug library: the
+// hook it installs is the debug library's own, so 'debug.gethook' names
+// the function in the hook table for it instead of saying "external
+// hook".
+func (L *State) setHook(hook func(L *State, ar *dbAr), mask, count int) {
+	L.installHook(hook, mask, count, false)
+}
+
+func (L *State) installHook(hook func(L *State, ar *dbAr), mask, count int, external bool) {
 	if hook == nil || mask == 0 { /* turn off hooks? */
 		mask = 0
 		hook = nil
@@ -854,15 +866,16 @@ func (L *State) SetHook(hook func(L *State, ar *dbAr), mask, count int) {
 	L.basehookcount = count
 	L.hookcount = count /* resethookcount(L) */
 	L.hookmask = byte(mask)
+	L.hookExternal = external && hook != nil
 	if mask != 0 {
 		setTraps(L) /* to trace inside 'luaV_execute' */
 	}
 }
 
-// setHook is the unexported counterpart used by the debug library.
-func (L *State) setHook(hook func(L *State, ar *dbAr), mask, count int) {
-	L.SetHook(hook, mask, count)
-}
+// HookExternal reports whether the current hook was installed through
+// the C API (lua_sethook) rather than by 'debug.sethook' -- C's
+// "hook != hookf".
+func (L *State) HookExternal() bool { return L.hookExternal }
 
 // GetHook returns the current hook function (lua_gethook).
 func (L *State) GetHook() func(L *State, ar *dbAr) { return L.hook }

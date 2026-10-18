@@ -71,11 +71,18 @@ func pmainDriver(argv []string) int {
 	L.PushInteger(0)                /* 2nd argument: argv (a pointer in C) */
 	status := L.PCall(2, 1, 0)
 	result := L.ToBoolean(-1) /* get result */
-	L.Pop(1)
+	/* 'report' is what removes the error object, as in C: it reads the
+	   message off the top of the stack and pops it.  Popping it here
+	   first -- which is what this used to do, before deciding whether
+	   there was anything to report -- leaves 'report' holding whatever
+	   happened to be underneath, so an error that escaped 'pmain'
+	   printed as "lua: " with nothing after it.  The order in lua.c is
+	   'toboolean' (a read), then 'report' (the pop). */
 	if status != lua.LUA_OK {
 		report(lastError()) /* an error outside 'pmain': report it too */
 		return 1
 	}
+	L.Pop(1)
 	/* 'pmain' returns false when a chunk it ran failed: the message has
 	   already been reported, only the exit status is left to decide. */
 	if !result {

@@ -622,6 +622,15 @@ protocol, the bitwise library, recursion depth and the two overflow errors,
 string functions, the lexer's escapes and long strings, `require` and
 `package.searchpath`, and `os`/`io` at their edges.
 
+Two things the inventory cannot show about the debug library are worth
+saying here, because they are the reason it has a fuzz of its own
+(§5.13). Four of its 43 functions — `debug.upvalueid`,
+`debug.upvaluejoin`, `debug.setuservalue` and the helper they share —
+had never been entered by any test in this repository, and they are
+entered now. And an error raised in a hook escapes every `pcall` there
+is, which is PUC-Lua's behaviour too and not a place this port could
+have been right about on its own.
+
 ### 5.11 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
@@ -761,6 +770,7 @@ a difference is always reproducible.
 | `forfuzz_test.go` | 16 277 numeric `for` loops — 25 values in each of the three positions: zeroes of both signs, integers and floats, both ends of the integer range, the floats just outside it, the point where a float stops counting by ones, and the three values that are not comparable at all — each asked with the step written out and with it left to default to 1, plus each of 9 values that are not numbers in each of the three positions | 16 277 |
 | `codegenfuzz_test.go` | 101 356 snippets — every literal, every operator against every shape of operand, every statement form both bare and inside a function, every shape a closure can capture, 40 things that must not compile, and then every expression of depth two over 20 atoms and 18 operators plus a seventh of depth three, each in 22 statement positions — plus all 122 sources in `testdata` — official, ours, and the five third-party libraries of §5.12. What is compared is not what they print but **what they compile to**: 17 109 752 bytes of byte code | 17 109 752 |
 | `iofuzz_test.go` | 3 166 things the `io` library can be asked — every mode of length 0 to 3 over `r w a + b t x` against a file that exists, one that does not and a directory; every format `read` takes (each letter of the alphabet in both cases, the four C asks for, their `* ` spellings, and the counts and the values that are not formats) against 10 fixtures, and the same three at a time; what `write` puts in the file, byte for byte, for each kind of value and for two of them; `seek` from each of 8 whence by each of 17 offsets, before and after a read; `setvbuf`; `lines` and `f:lines`; 13 kinds of handle — the three standard ones, a file opened each way round, a closed one, `tmpfile`, both ends of a `popen` — used 17 ways each; `io.input` and `io.output`; and the errors, `<close>`, and dropping a handle without closing it. Both interpreters get an identical copy of the fixtures in a directory of their own | 3 166 |
+| `debugfuzz_test.go` | 1 333 questions about the debug library — every option string of length 0 to 2 over the eight letters `getinfo` recognises and the one it does not, asked about each of 8 kinds of function; every stack level from each of 7 shapes of stack, which is the only way to reach a `name`, a `namewhat`, a `currentline` that moves and an `istailcall`; a coroutine in each of 5 states; the same function called 10 ways, asked about itself and about its caller; every local index in every shape of frame, on the main thread and on a coroutine, and `setlocal` for each; every upvalue got, set, identified and joined — including the 25 ways two closures can be joined and the 8 ways two upvalues can be the same one; 56 hook masks, 6 counts, `gethook` on the main thread, on a coroutine, and on a coroutine made before or after the hook was set; every `traceback` message at every level, from every depth; every metatable, the registry, and every user value — plus every debug function asked the wrong thing. And 12 hook errors, each in a process of its own, because an error in a hook escapes every `pcall` and ends the run | 1 333 + 12 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -946,6 +956,40 @@ all — not after one cycle, not after ten. The pointer back is weak
 now, which turns the cycle into a tree, and the grid asks it: a handle
 dropped inside a `do ... end` writes its bytes out.
 
+The debug half is the newest and it found the two things below, one in
+the library and one outside it — in the interpreter's own 'main', which
+is the one place a fuzz is not expected to reach. `ldblib.go` had four
+of its 43 functions that no test had ever entered — `debug.upvalueid`,
+`debug.upvaluejoin`, `debug.setuservalue` and the helper they share —
+and a probe of 258 cases over the whole library went red in one place.
+
+* **A coroutine made while a hook is on inherits it.** `lua_newthread`
+  copies `hook`, `hookmask` and `basehookcount` into the new thread, so
+  `debug.sethook(f, "crl", 2)` and then
+  `debug.gethook(coroutine.create(...))` answers `nil, "crl", 2` — the
+  mask and the count of a hook nobody ever set on that coroutine. The
+  port kept the mask and the count in a map of its own, keyed by the
+  thread, and a coroutine that had never been given one was not in it.
+  The map was also a leak C's design does not have: its keys were
+  strong, so every coroutine that ever had a hook stayed reachable for
+  as long as the process did, while C's hook table is weak
+  (`__mode = "k"`). All three are on the thread now.
+* **An error that escapes `pmain` printed as `lua: ` with nothing after
+  it.** `lua.c`'s `main` reads the result with `lua_toboolean` — which
+  is a *read* — and then calls `report`, and `report` is what removes
+  the error object. This port popped it first and then reported, so
+  `report` was holding whatever sat underneath. Only a hook can make an
+  error reach that far: a `return` hook fires on the return of `pmain`
+  itself, which is outside every protected call the interpreter makes,
+  so the raise escapes that one too and `main` reports it a second
+  time, bare. Which is why this is also the one way to see a property
+  of hooks that is easy to get wrong: **an error raised in a hook
+  escapes every `pcall`, every `xpcall` and `coroutine.resume` alike.**
+  PUC-Lua does the same, so `TestDebugHookErrors` asks those twelve in
+  twelve processes and compares the exit status as well as the output —
+  they cannot be lines in the grid, because one of them would be the
+  last thing the run ever printed.
+
 The codegen half is the only one that does not ask what a program
 prints. It compiles every snippet and every source in `testdata` on
 both sides and compares the **bytes**. Byte code is a far stricter
@@ -1051,7 +1095,8 @@ string conversions are decided by the representation. Measured against
 12. **A subnormal number is written normalised, which is what Apple's library does and what glibc does not** — of a normalised float the leading hexadecimal digit of `%a` is 1; of one too small to have a 1 — below 2.2250738585072014e-308 — C leaves it unspecified, because there is nothing to normalise to. glibc keeps the exponent of the smallest normal float and writes the raw 52-bit fraction after the point, so `string.format("%a", 5e-324)` is `0x0.0000000000001p-1022`; Apple's library normalises it, and so does this port, for which it is `0x1p-1074` — what Go's own hexadecimal conversion writes, and one number rather than two spellings of one. Unlike the tie above, this one the standard allows both ways, so neither is the more correct. It reaches further than `%a`: `%q` writes a float the same way, and that is the conversion a program uses to write a number back out. Both spellings are numerals Lua reads, so a value written by one side is read by the other either way. The fuzz asks the reference which library it was built against, and on a reference that answers `0x0.0000000000001p-1022` the grid cases that turn on it are not asked on either side.
 
 13. **`file:setvbuf(mode, size)` with a negative size always succeeds** — C hands `size` to `setvbuf` as a `size_t`, so `-1` is `SIZE_MAX` there, and what the library does with that is the library's business: Apple's asks the allocator for a buffer that large, fails, and leaves `errno` alone, so PUC-Lua answers `nil, "(no extra info)", 0`; glibc pays no attention to the size when it is given no buffer of its own and answers `true`. No portable answer exists, so the port answers `true` and the grid does not ask the case (§5.13). Every other size — including 0, which glibc's `setvbuf` treats as "no buffer asked for" — is PUC-Lua's.
-14. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
+14. **The registry has no `_UBOX*` key.** `lauxlib.c` holds a `luaL_Buffer` in a userdata on the Lua stack once the buffer grows past `LUAL_BUFFERSIZE`, and it makes the metatable for that userdata the first time it happens: `string.rep("x", 9000)` is enough, and the key `"_UBOX*"` is then in `debug.getregistry()` for the rest of the run. This port's buffers are Go slices and are never stack objects, so there is no moment at which such a key would be created. Every other key is PUC-Lua's and is compared — the main thread, `_LOADED`, `_PRELOAD`, `_CLIBS`, `_IO_input`, `_IO_output`, `FILE*` and `_HOOKKEY` — and the grid leaves this one out (§5.13).
+15. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
 
 ---
 

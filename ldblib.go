@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
 )
 
 // dbHookKey is the registry key of the hook table (HOOKKEY).
@@ -666,20 +665,21 @@ func dbUpValueJoin(L *State) int {
 // hooks
 // ---------------------------------------------------------------------
 
-// dbHookInfo remembers the mask and the count given to 'sethook'.
+// Nothing is remembered about a hook outside the thread it was set on.
 //
-// The mask and the count also live on the state itself (as in C); this
-// table is only used to answer 'gethook' for a thread whose state is not
-// reachable from the hook function.
-type dbHookInfo struct {
-	mask  int
-	count int
-}
-
-var dbHooks = struct {
-	sync.Mutex
-	m map[*State]dbHookInfo
-}{m: make(map[*State]dbHookInfo)}
+// C keeps the whole of it in three fields of the lua_State -- 'hook',
+// 'hookmask' and 'basehookcount' -- and 'db_gethook' reads those, for
+// the thread the question was asked about.  It has to be that way for
+// one reason a map of its own cannot reproduce: 'lua_newthread' copies
+// all three into the new thread, so a coroutine made while a hook is
+// running inherits it, and 'debug.gethook(co)' then answers the main
+// thread's mask and count -- for a coroutine whose own hook was never
+// set.
+//
+// A map keyed by the thread, which is how this used to be done, gets
+// that case wrong (it answers nil for a coroutine that does have a
+// hook) and pins every thread that ever had one in memory besides,
+// since the map's keys are strong while C's hook table is weak ("k").
 
 // dbHookNames are the event names passed to the hook function (ldblib.c).
 var dbHookNames = []string{"call", "return", "line", "count", "tail call"}
@@ -778,14 +778,8 @@ func dbSetHook(L *State) int {
 	   mask with no recognised character in it -- 'debug.sethook(f, "z")'
 	   -- is such an empty mask, so the function is stored in the hook
 	   table but the hook itself is off, and 'debug.gethook()' answers
-	   nil rather than the function. */
-	dbHooks.Lock()
-	if L1.hook == nil {
-		delete(dbHooks.m, L1)
-	} else {
-		dbHooks.m[L1] = dbHookInfo{mask: mask, count: count}
-	}
-	dbHooks.Unlock()
+	   nil rather than the function.  Nothing else needs recording: the
+	   mask and the count are on the thread, as in C. */
 	dbCreateHookTable(L)
 	dbCheckStack(L, L1, 1)
 	L1.PushThread()      /* key (thread) */
@@ -798,22 +792,22 @@ func dbSetHook(L *State) int {
 func dbGetHook(L *State) int {
 	arg := 0
 	L1 := dbGetThread(L, &arg)
-	dbHooks.Lock()
-	info, ok := dbHooks.m[L1]
-	dbHooks.Unlock()
-	if !ok { /* no hook? */
+	mask := int(L1.hookmask) /* lua_gethookmask(L1) */
+	if L1.hook == nil {      /* no hook? */
 		L.PushNil()
 		return 1
+	} else if L1.hookExternal { /* external hook (C: hook != hookf) */
+		L.PushString("external hook")
+	} else { /* hook table must exist */
+		L.GetField(LUA_REGISTRYINDEX, dbHookKey)
+		dbCheckStack(L, L1, 1)
+		L1.PushThread()
+		L.XMove(L1, 1)
+		L.RawGet(-2) /* 1st result = hooktable[L1] */
+		L.Remove(-2) /* remove hook table */
 	}
-	/* hook table must exist */
-	L.GetField(LUA_REGISTRYINDEX, dbHookKey)
-	dbCheckStack(L, L1, 1)
-	L1.PushThread()
-	L.XMove(L1, 1)
-	L.RawGet(-2)                          /* 1st result = hooktable[L1] */
-	L.Remove(-2)                          /* remove hook table */
-	L.PushString(dbUnmakeMask(info.mask)) /* 2nd result = mask */
-	L.PushInteger(int64(info.count))      /* 3rd result = count */
+	L.PushString(dbUnmakeMask(mask))       /* 2nd result = mask */
+	L.PushInteger(int64(L1.basehookcount)) /* 3rd result = count */
 	return 3
 }
 
