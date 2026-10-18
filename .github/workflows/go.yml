@@ -181,13 +181,15 @@ jobs:
       # against 22 values plus a missing one, 260 820 answers
       # (formatfuzz_test.go); 1 834 strings read plus 49 written,
       # 11 053 answers (numfuzz_test.go); 3 733 questions about
-      # 'string.pack' over 5 337 answers (packfuzz_test.go); and 1 328
+      # 'string.pack' over 5 337 answers (packfuzz_test.go); 1 328
       # questions about a name with a zero byte in it, 1 280 of them a
-      # name and the rest a command (namefuzz_test.go).  Every one of
-      # them needs LUA_REF for the same reason the suite above does, so
-      # they have to run here and nowhere else.
+      # name and the rest a command (namefuzz_test.go); and 2 517
+      # questions about 'os.date' and 'os.time', asked in each of four
+      # zones (datefuzz_test.go).  Every one of them needs LUA_REF for
+      # the same reason the suite above does, so they have to run here
+      # and nowhere else.
       - name: Differential fuzz
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential' -timeout 30m .
+        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential|TestDateFuzzDifferential' -timeout 30m .

@@ -152,8 +152,43 @@ func osCheckOption(L *State, conv string) (string, int) {
 	if len(conv) >= 1 && strings.IndexByte(osStrftimeOptions, conv[0]) >= 0 {
 		return conv[:1], 1
 	}
-	L.ArgError(1, fmt.Sprintf("invalid conversion specifier '%%%s'", conv))
+	/* C's message is built with 'lua_pushfstring', whose '%s' is
+	   'strlen', and 'conv' is a pointer into the middle of the format:
+	   what is written out is the bytes up to the first zero and not
+	   the rest of the format behind them.  'os.date("%\0Y")' is
+	   "invalid conversion specifier '%'" in PUC-Lua and was
+	   "invalid conversion specifier '%\0Y'" here. */
+	L.ArgError(1, fmt.Sprintf("invalid conversion specifier '%%%s'",
+		luaCStr(conv)))
 	return "", 0
+}
+
+// osFormatYear4 renders a year the way C's '%Y' does, which is four
+// characters wide and not four digits wide: the sign is a character of
+// the width, so the year -101 is "-101" and the year 1 is "0001".  Go's
+// layout pads the digits and leaves the sign outside them, which is
+// "-0101" for the first of those.
+func osFormatYear4(year int) string {
+	return fmt.Sprintf("%04d", year)
+}
+
+// osFormatYear2 renders a year as two digits the way C's '%y' and '%g'
+// do, which is not the way its '%Y' and '%C' do.  Those two keep the
+// sign of a year before the Common Era: C writes -21474817 for the
+// century of -2147481748.  But '%y' is the remainder of a signed
+// division by a hundred and it is written two digits wide, and C takes
+// the absolute value of the remainder before it writes it, so the same
+// year is 48 and not -48.  Go's '%y' is the year modulo a hundred with
+// the sign left on it.  (Which two digits a year before the Common Era
+// gets is then the C library's to say as well -- see §6 -- and this is
+// the one Apple's spells.  It is the one the differential tests are run
+// against.)
+func osFormatYear2(year int) string {
+	r := year % 100
+	if r < 0 {
+		r = -r
+	}
+	return fmt.Sprintf("%02d", r)
 }
 
 // osFormatSpec formats one conversion specifier of a strftime string.
@@ -208,10 +243,16 @@ func osFormatSpec(t time.Time, spec string) string {
 	case 'X':
 		return t.Format("15:04:05")
 	case 'y':
-		return t.Format("06")
+		return osFormatYear2(t.Year())
 	case 'Y':
-		return t.Format("2006")
+		return osFormatYear4(t.Year())
 	case 'z':
+		/* The offset of the instant, which is what Go's layout asks
+		   for.  Under '!' the instant has been moved to UTC, so this
+		   is +0000: the same answer glibc's '%z' gives, because
+		   its 'gmtime' leaves 'tm_gmtoff' at zero.  What the other
+		   C libraries answer instead, and why it is not asked
+		   about, is written up in §6. */
 		return t.Format("-0700")
 	case 'Z':
 		return t.Format("MST")
@@ -222,8 +263,6 @@ func osFormatSpec(t time.Time, spec string) string {
 		return fmt.Sprintf("%02d", t.Year()/100)
 	case 'j':
 		return fmt.Sprintf("%03d", t.YearDay())
-	case 's':
-		return fmt.Sprintf("%d", t.Unix())
 	case 'u':
 		w := int(t.Weekday())
 		if w == 0 {
@@ -253,7 +292,7 @@ func osFormatSpec(t time.Time, spec string) string {
 		return fmt.Sprintf("%04d", year)
 	case 'g':
 		year, _ := t.ISOWeek()
-		return fmt.Sprintf("%02d", year%100)
+		return osFormatYear2(year)
 	}
 	return ""
 }
@@ -403,7 +442,13 @@ func osDate(L *State) int {
 	if y := tm.Year(); y-1900 > math.MaxInt32 || y-1900 < math.MinInt32 {
 		return L.Error2("date result cannot be represented in this installation")
 	}
-	if s == "*t" {
+	/* 'strcmp(s, "*t")', which is a C string comparison and not a
+	   comparison of the whole format: 'os.date("*t\0junk", t)' is the
+	   table in PUC-Lua, because what 'strcmp' sees is "*t".  The
+	   format itself is walked by length and not by a zero, so a zero
+	   that is not there is kept -- the two are separate rules and
+	   both have to be right. */
+	if luaCStr(s) == "*t" {
 		L.CreateTable(0, 9) /* 9 = number of fields */
 		osSetAllFields(L, tm)
 	} else {
