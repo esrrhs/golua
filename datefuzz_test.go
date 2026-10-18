@@ -55,7 +55,7 @@ import (
 //   the reference prints, and the wrong answer was wrong against both
 //   C libraries.
 //
-// Four things it does not ask, and they are all things the C library
+// Six things it does not ask, and they are all things the C library
 // decides rather than PUC-Lua, which is why they are left out and not
 // fixed (§6).  Each one is a case where the two C libraries this
 // project is measured against answer differently, so no port could
@@ -83,6 +83,37 @@ import (
 //   1, '%Y' is "0001" to Apple's and "1" to glibc's, and for the year
 //   -27, '%y' is "27" to one and "73" to the other.  Every instant in
 //   this grid is in a year of four digits or more.
+//
+//   The year at the very top of what a 'struct tm' can hold.  The
+//   instant 67768036191676799 is one second short of the last one,
+//   and its year is the largest 'int' there is: 2147483647.  That is
+//   not the largest year 'strftime' can print, because what it prints
+//   is 'tm_year + TM_YEAR_BASE', and that addition is done in 'int',
+//   so it overflows: glibc's '%Y' answers -2147481749 there and its
+//   '%C' answers -21474818, which is what an 'int' century of an
+//   'int' year is.  Apple's answers 2147485547 and 21474855.  The two
+//   instants at the top are still asked for the table they break
+//   down into, because PUC-Lua writes that table itself and its
+//   'setfield' casts to 'lua_Integer' before it adds the 1900 --
+//   'loslib.c': 'lua_pushinteger(L, (lua_Integer)value + delta)' --
+//   which is 64-bit arithmetic and does not overflow.  The two are
+//   the same answer on both C libraries, and they are in the grid.
+//
+//   'isdst' in a table for 'os.time'.  What 'mktime' does when it is
+//   told the wall clock is a summer-time one is its own business,
+//   and the two C libraries do it by opposite rules.  glibc's goes
+//   looking through the timezone database for a nearby instant whose
+//   'tm_isdst' is the one it was told and borrows its offset, so in
+//   Dublin in 1970 it borrows 1972's, which is the same offset
+//   Dublin kept the whole year round in 1970 and so moves nothing;
+//   and when it finds no summer time anywhere near, in a zone that
+//   has none at all like UTC, it gives up the search and assumes an
+//   hour ('t += 60 * 60 * dst_difference', which is the last thing
+//   'mktime.c' does).  macOS's steps by an hour in any zone that has
+//   summer time and does nothing in one that has none.  The two
+//   answer 0 and -3600 in UTC, and -7200 and -3600 in Dublin.  This
+//   port steps by an hour, the way macOS's does, and the two
+//   questions it turns on are asked only where the two agree.
 //
 //   A year before 1900 in a table for 'os.time'.  macOS's 'mktime'
 //   refuses one and answers -1, and glibc's does not.  The reference
@@ -114,6 +145,14 @@ var dateZones = []string{"UTC", "America/New_York", "Europe/Dublin",
 var dateEnds = []int64{67768036191676799, 67768036191676800, 2147483647,
 	2147483648, 253402300799, 253402300800, 0, 1, -1, -2147483648,
 	-2147483649, 1 << 40}
+
+// dateExtreme are the two instants at the very top of a 'struct tm',
+// whose year is the largest 'int' there is.  A C library that adds the
+// 1900 in 'int' prints their year negative, and the formats it prints
+// it in are left out on a host that has one.  The table they break
+// down into is asked there too, because that one does not overflow
+// (see the note at the top of this file).
+var dateExtreme = map[int64]bool{67768036191676799: true, 67768036191676800: true}
 
 // dateChunk is the harness.  Every case prints one line, and a case
 // that raises is a line like any other rather than the end of the run.
@@ -207,9 +246,11 @@ func TestDateFuzzDifferential(t *testing.T) {
 	if ref == "" {
 		t.Skip("no LUA_REF: point it at a reference interpreter to run the date fuzz")
 	}
-	/* The one question that has to be asked before the comparison can
-	   be made: see the note at the top. */
+	/* The three questions that have to be asked before the comparison
+	   can be made: see the note at the top. */
 	oldYears := dateRefRefusesOldYears(t, ref)
+	overflows := dateRefOverflowsYear(t, ref)
+	shifts := dateRefShiftsIsdstInUTC(t, ref)
 
 	var b strings.Builder
 	/* The lists go in front of the functions, because a 'local' after
@@ -281,12 +322,17 @@ func TestDateFuzzDifferential(t *testing.T) {
 	}
 
 	// 4. the ends of what a 'struct tm' holds, and one past each of
-	// them.  The top is exactly the 'int' boundary.
+	// them.  The top is exactly the 'int' boundary.  The two at the
+	// very top are broken down into a table on every host, but asked
+	// to format a string only on one whose C library keeps the year
+	// in 64 bits: see the note at the top.
 	for _, t0 := range dateEnds {
-		emit("edge/"+strconv.FormatInt(t0, 10), "ALLE("+
-			strconv.FormatInt(t0, 10)+")")
-		emit("edge!/"+strconv.FormatInt(t0, 10), "UT("+
-			strconv.FormatInt(t0, 10)+")")
+		if !(dateExtreme[t0] && overflows) {
+			emit("edge/"+strconv.FormatInt(t0, 10), "ALLE("+
+				strconv.FormatInt(t0, 10)+")")
+			emit("edge!/"+strconv.FormatInt(t0, 10), "UT("+
+				strconv.FormatInt(t0, 10)+")")
+		}
 		emit("edge-t/"+strconv.FormatInt(t0, 10), "star("+
 			strconv.FormatInt(t0, 10)+", false)")
 		emit("edge-t!/"+strconv.FormatInt(t0, 10), "star("+
@@ -328,7 +374,9 @@ func TestDateFuzzDifferential(t *testing.T) {
 
 	// 7. 'os.time', over a spread of tables and over the ones that are
 	// not a date.  A year before 1900 is left out on a host that
-	// refuses it: see the note at the top.
+	// refuses it, and an 'isdst' on one whose 'mktime' reads it the
+	// other way: see the note at the top.
+	ntab := 0
 	years := []int{1970, 1999, 2000, 2001, 2024, 2038, 1900, 1899, 1969}
 	for _, y := range years {
 		if oldYears && y < 1900 {
@@ -339,6 +387,7 @@ func TestDateFuzzDifferential(t *testing.T) {
 				emit(fmt.Sprintf("time/%04d-%02d-%02d", y, mo, d),
 					"tm({year="+strconv.Itoa(y)+",month="+
 						strconv.Itoa(mo)+",day="+strconv.Itoa(d)+"})")
+				ntab++
 			}
 		}
 	}
@@ -364,7 +413,11 @@ func TestDateFuzzDifferential(t *testing.T) {
 		"{year=2000,month=1,day=1,yday=100}",
 		"{year=2000,month=1,day=1,wday=3}",
 	} {
+		if shifts && strings.Contains(s, "isdst=true") {
+			continue
+		}
 		emit("time "+s, "tm("+s+")")
+		ntab++
 	}
 
 	cases := n
@@ -432,7 +485,7 @@ func TestDateFuzzDifferential(t *testing.T) {
 		"minutes, the %d modifiers, %d tables for 'os.time', the ends "+
 		"of a 'struct tm' and the formats that are not specifiers: "+
 		"%d cases in each of %d zones, all of them PUC-Lua's",
-		24, 12, len(dateMods), 9*12+25, cases, len(dateZones))
+		24, 12, len(dateMods), ntab, cases, len(dateZones))
 }
 
 func dateList(ss []string) string {
@@ -483,6 +536,78 @@ func dateRefRefusesOldYears(t *testing.T, ref string) bool {
 			"1899, which is neither a refusal nor a number; whether its "+
 			"'mktime' takes a year before 1900 has to be known before "+
 			"the grid can be compared", string(out))
+		return false
+	}
+}
+
+// dateRefOverflowsYear asks the reference whether its 'strftime' writes
+// the year of the last instant a 'struct tm' can hold by adding the
+// 1900 in 'int', which is what glibc's does ('DO_NUMBER (1,
+// tp->tm_year + TM_YEAR_BASE)' in strftime_l.c, and its '%C' then divides
+// an 'int' that has already wrapped).  The year of 67768036191676799 is
+// the largest 'int' there is, so the sum overflows and the year comes
+// out negative: -2147481749, where Apple's answers 2147485547.  Which
+// of the two a runner has is not something a port can be right or wrong
+// about (§6).
+func dateRefOverflowsYear(t *testing.T, ref string) bool {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "yearprobe.lua")
+	src := "print(os.date(\"!%Y\", 67768036191676799))\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := &exec.Cmd{Path: ref, Args: []string{"lua", "yearprobe.lua"},
+		Dir: dir, Env: append(os.Environ(), "TZ=UTC")}
+	out, _ := cmd.CombinedOutput()
+	switch {
+	case strings.HasPrefix(strings.TrimSpace(string(out)), "-"):
+		return true
+	case strings.TrimSpace(string(out)) == "2147485547":
+		return false
+	default:
+		t.Fatalf("the reference answered %q to 'os.date' of the year of "+
+			"the last instant in a 'struct tm', which is neither "+
+			"2147485547 nor a number that has overflowed; whether "+
+			"its 'strftime' adds the 1900 in 'int' has to be known "+
+			"before the grid can be compared", string(out))
+		return false
+	}
+}
+
+// dateRefShiftsIsdstInUTC asks the reference whether its 'mktime', told
+// the wall clock is a summer-time one in a zone that has no summer time
+// at all, still moves the instant by an hour.  glibc's does: when the
+// search through the timezone database finds nothing to borrow an offset
+// from, it gives up and assumes one hour ('t += 60 * 60 *
+// dst_difference', the last thing mktime.c does), so 'os.time' of the
+// first second of 1970 in UTC answers -3600.  macOS's answers 0.  Which
+// of the two a runner has is not something a port can be right or wrong
+// about (§6): this one steps by an hour only where the zone has a rule,
+// which is the macOS answer, and would be wrong on Linux if it did the
+// other thing.
+func dateRefShiftsIsdstInUTC(t *testing.T, ref string) bool {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "isdstprobe.lua")
+	src := "print(os.time({year=1970,month=1,day=1,hour=0,min=0,sec=0," +
+		"isdst=true}))\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := &exec.Cmd{Path: ref, Args: []string{"lua", "isdstprobe.lua"},
+		Dir: dir, Env: append(os.Environ(), "TZ=UTC")}
+	out, _ := cmd.CombinedOutput()
+	switch strings.TrimSpace(string(out)) {
+	case "-3600":
+		return true
+	case "0":
+		return false
+	default:
+		t.Fatalf("the reference answered %q to 'os.time' of a date it is "+
+			"told is a summer-time one in UTC, which is neither 0 nor "+
+			"-3600; what its 'mktime' does with 'isdst' has to be "+
+			"known before the grid can be compared", string(out))
 		return false
 	}
 }

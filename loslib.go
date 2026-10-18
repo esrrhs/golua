@@ -482,11 +482,24 @@ func osTime(L *State) int {
 	   the wall clock stays where it was -- that is why a winter
 	   'isdst = true' in New York answers with 11 o'clock and not 12,
 	   and why the fields written back into the table say 11 too.  Every
-	   zone in general use steps by an hour.  A zone with no
-	   daylight-saving rule at all has nothing to disagree about and
-	   ignores the field -- which is why 'isdst = true' changes nothing
-	   in UTC but shifts by an hour in Shanghai, whose rules still hold
-	   the daylight-saving time China kept in the late 1980s. */
+	   zone in general use steps by an hour, and that is the step taken
+	   here.  A zone with no daylight-saving rule at all has nothing to
+	   disagree about and the field is ignored -- which is why 'isdst =
+	   true' changes nothing in UTC but shifts by an hour in Shanghai,
+	   whose rules still hold the daylight-saving time China kept in the
+	   late 1980s.
+	   That is what macOS's 'mktime' does.  glibc's goes about it the
+	   other way: it looks through the timezone database for a nearby
+	   instant whose 'tm_isdst' is the one it was told and borrows its
+	   offset, and only when it finds none anywhere near does it assume
+	   an hour.  For 1970 in Dublin it borrows an offset from 1972,
+	   which is the offset Dublin kept the whole year round in 1970, so
+	   the instant does not move at all; in UTC, where nothing has a
+	   summer time, it assumes the hour and the instant moves.  The two
+	   libraries answer -7200 and -3600 to one question and 0 and -3600
+	   to the other, and a port can follow only one of them: it follows
+	   the macOS one, and the two questions are asked only where the
+	   two agree (§6.16). */
 	if isdst >= 0 && tHasDSTRules(t) {
 		switch {
 		case isdst > 0 && !tIsDST(t):
