@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -49,19 +50,37 @@ const (
 // casts a file handle to a luaL_Stream -- LuaFileSystem's setmode does --
 // finds what it expects instead of a zeroed block or, worse, nothing.
 type ioStream struct {
-	u       *Udata         // the userdata behind this handle
-	cfp     unsafe.Pointer // the FILE* in it, nil if there is none
-	f       *os.File       // the file; nil for a popen handle
-	rd      io.ReadCloser  // popen: the child's standard output
-	wr      io.WriteCloser // popen: the child's standard input
-	cmd     *exec.Cmd      // popen: the child process
-	tmpname string         // io.tmpfile: removed when the handle is closed
-	vbuf    string         // file:setvbuf mode (informational)
-	closef  GoFunc         // close function; nil marks a closed handle
-	buf     *bufio.Reader  // read buffer (Go files are unbuffered)
-	wbuf    *bufio.Writer  // write buffer: a FILE has one, and so must we
-	nobuf   bool           // a standard stream: see writer()
-	rderr   error          // the error flag of the FILE ('ferror')
+	/* 'u' is weak, and that is the whole of it.
+
+	   Go's collector never finalises an object that is part of a
+	   cycle.  Two objects that point at each other, one of them with
+	   a finalizer, are never collected at all -- not after one
+	   cycle, not after ten (checked on go1.27, where the pair below
+	   prints nothing:
+
+	       a.b = b; b.a = a; runtime.SetFinalizer(a, ...); a, b = nil
+
+	   ).  A handle that pointed back at its userdata strongly would
+	   therefore be exactly such a pair: 'u.val' is this stream and
+	   this stream's 'u' is the userdata.  '__gc' would never run for
+	   a file, and a handle dropped with bytes still in its buffer
+	   would lose them instead of flushing them the way 'fclose'
+	   does.  Weak is what makes the cycle a tree. */
+	uw      weak.Pointer[Udata] // the userdata behind this handle
+	cfp     unsafe.Pointer      // the FILE* in it, nil if there is none
+	f       *os.File            // the file; nil for a popen handle
+	rd      io.ReadCloser       // popen: the child's standard output
+	wr      io.WriteCloser      // popen: the child's standard input
+	cmd     *exec.Cmd           // popen: the child process
+	tmpname string              // io.tmpfile: removed when the handle is closed
+	vbuf    string              // file:setvbuf mode (informational)
+	canR    bool                // C's __SRD: the FILE was opened for reading
+	canW    bool                // C's __SWR: the FILE was opened for writing
+	closef  GoFunc              // close function; nil marks a closed handle
+	buf     *bufio.Reader       // read buffer (Go files are unbuffered)
+	wbuf    *bufio.Writer       // write buffer: a FILE has one, and so must we
+	nobuf   bool                // a standard stream: see writer()
+	rderr   error               // the error flag of the FILE ('ferror')
 }
 
 // ---------------------------------------------------------------------
@@ -70,7 +89,20 @@ type ioStream struct {
 
 func (s *ioStream) isClosed() bool { return s.closef == nil }
 
+// ioBadFdReader is a FILE that was not opened for reading.  C's
+// 'cantread' fails before a byte moves and leaves EBADF behind, so the
+// read errors out the way a read error does -- through the error flag
+// of the FILE -- rather than reaching the descriptor, which for a
+// 'popen' handle writing to a child is a pipe that would answer
+// something else entirely.
+type ioBadFdReader struct{}
+
+func (ioBadFdReader) Read(p []byte) (int, error) { return 0, ioErrBadFd }
+
 func (s *ioStream) reader() io.Reader {
+	if !s.canR {
+		return ioBadFdReader{}
+	}
 	if s.f != nil {
 		return s.f
 	}
@@ -119,6 +151,13 @@ func (s *ioStream) flush() error {
 
 // writeString writes a piece of text to the stream.
 func (s *ioStream) writeString(str string) error {
+	/* 'cantwrite(f)' first: the FILE knows it was not opened for
+	   writing, so 'io.open("x", "rb"):write("y")' fails at once with
+	   EBADF.  A Go file only fails at the system call, and the write
+	   buffer swallows a short piece before it gets there. */
+	if !s.canW {
+		return ioErrBadFd
+	}
 	w := s.writer()
 	if w == nil {
 		return ioWriteError
@@ -231,10 +270,29 @@ func ioFileError(what, fname string, err error) string {
 	return "cannot " + what + " " + fname + ": " + ioStrError(err)
 }
 
+// ioCErrno is an error that carries the errno C would have set, for the
+// failures that a C library raises itself and a Go one never reaches.
+type ioCErrno struct {
+	en  int64
+	msg string
+}
+
+func (e ioCErrno) Error() string { return e.msg }
+
+// ioErrBadFd is what a FILE answers when it is used the wrong way
+// round: 'cantwrite' and 'cantread' fail before a single byte moves, and
+// both leave EBADF behind.  The number is 9 on every platform we build
+// for, and 'strerror' spells it the same way too.
+var ioErrBadFd = ioCErrno{en: 9, msg: "bad file descriptor"}
+
 func ioErrno(err error) int64 {
 	var en syscall.Errno
 	if errors.As(err, &en) {
 		return int64(en)
+	}
+	var ce ioCErrno
+	if errors.As(err, &ce) {
+		return ce.en
 	}
 	return 0
 }
@@ -465,10 +523,14 @@ func ioFlushAll() {
 
 // ioNewPreFile creates a closed file handle (newprefile).
 func ioNewPreFile(L *State) *ioStream {
-	s := &ioStream{}
+	/* Both ways round until the mode says otherwise: a handle an
+	   extension hands over carries a real FILE*, and what that FILE
+	   was opened for is not ours to guess. */
+	s := &ioStream{canR: true, canW: true}
 	ioTrackStream(s)
 	L.NewUserData(s, 0)
-	s.u = uvalue(&L.stack[L.top-1]) /* the handle C will be handed */
+	/* weak: see the note on the field */
+	s.uw = weak.Make(uvalue(&L.stack[L.top-1])) /* the handle C is handed */
 	ioSetMetaTableByName(L, ioFileHandle)
 	return s
 }
@@ -481,7 +543,13 @@ func ioNewFile(L *State) *ioStream {
 	return s
 }
 
-// ioCheckMode checks whether mode matches '[rwa]%+?[bt]*' (l_checkmode).
+// ioCheckMode checks whether mode matches '[rwa]%+?b*' (l_checkmode).
+//
+// The only extension C accepts is 'b' (L_MODEEXT): "rt" and "r+t" are
+// refused with "invalid mode" even though every C library takes them,
+// because 'l_checkmode' does not ask the library, it spells the grammar
+// out.  It is what makes 'io.open(f, "rt")' fail here the way it fails
+// in PUC-Lua rather than succeeding the way it would in C.
 func ioCheckMode(mode string) bool {
 	if len(mode) == 0 {
 		return false
@@ -496,11 +564,31 @@ func ioCheckMode(mode string) bool {
 		rest = rest[1:]
 	}
 	for i := 0; i < len(rest); i++ { /* extensions */
-		if rest[i] != 'b' && rest[i] != 't' {
+		if rest[i] != 'b' {
 			return false
 		}
 	}
 	return true
+}
+
+// ioCStr cuts a string at its first zero byte, which is where a C
+// string ends.  'io.open("a\0b", "w")' makes a file called "a" in
+// PUC-Lua, because 'fopen' is handed no more than that; a whole
+// 'filename' would reach Go, which refuses the zero byte with
+// "Invalid argument".  A mode is the same: 'l_checkmode' stops at the
+// end of the string, so "r\0b" is a valid mode.
+func ioCStr(s string) string {
+	if i := strings.IndexByte(s, 0); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// ioSetDirection records what a FILE was opened for, the way 'fopen'
+// sets __SRD and __SWR (ioSetFlags is given the flags of ioFlags).
+func ioSetDirection(s *ioStream, flag int) {
+	s.canR = flag&os.O_RDWR != 0 || flag&os.O_WRONLY == 0
+	s.canW = flag&(os.O_RDWR|os.O_WRONLY) != 0
 }
 
 // ioCheckModeP checks a mode for 'popen': only "r" or "w" are valid.
@@ -534,7 +622,29 @@ func ioFlags(mode string) int {
 
 // ioOpenFile opens a file honouring the Lua mode string.
 func ioOpenFile(fname, mode string) (*os.File, error) {
-	return os.OpenFile(fname, ioFlags(mode), 0666)
+	f, err := os.OpenFile(fname, ioFlags(mode), 0666)
+	if err != nil {
+		return nil, err
+	}
+	/* 'fopen' with "a" or "a+" leaves the file position at the end
+	   (C17 7.21.5.3: "the file position indicator ... is positioned
+	   at end-of-file"), which O_APPEND does not do -- O_APPEND only
+	   decides where a write goes, and leaves the position at zero.
+	   It is what makes 'io.open(f, "a+"):read("a")' answer nothing
+	   at all rather than the whole of f, and 'io.open(f, "ab"):seek()'
+	   answer the size of f rather than zero. */
+	if ioIsAppend(mode) {
+		if _, err := f.Seek(0, io.SeekEnd); err != nil {
+			f.Close()
+			return nil, err
+		}
+	}
+	return f, nil
+}
+
+// ioIsAppend says whether a mode is one of the two that append.
+func ioIsAppend(mode string) bool {
+	return len(mode) > 0 && mode[0] == 'a'
 }
 
 // ioOpenCheck opens a file, raising an error when it fails (opencheck).
@@ -815,6 +925,7 @@ func ioFRead(L *State) int {
 func ioGWrite(L *State, s *ioStream, arg int) int {
 	nargs := L.GetTop() - arg
 	status := true
+	var werr error
 	for ; nargs > 0; nargs-- {
 		var str string
 		if L.Type(arg) == LUA_TNUMBER {
@@ -829,13 +940,16 @@ func ioGWrite(L *State, s *ioStream, arg int) int {
 			str = L.CheckString(arg)
 		}
 		err := s.writeString(str)
+		if err != nil && werr == nil {
+			werr = err /* C reports the errno of the first failure */
+		}
 		status = status && err == nil
 		arg++
 	}
 	if status {
 		return 1 /* file handle already on stack top */
 	}
-	return ioFileResult(L, false, nil, ioWriteError)
+	return ioFileResult(L, false, nil, werr)
 }
 
 var ioWriteError = errors.New("error writing to file")
@@ -877,7 +991,7 @@ func ioGetIOFile(L *State, findex string) *ioStream {
 func ioGIOFile(L *State, f, mode string) int {
 	if !L.IsNoneOrNil(1) {
 		if filename, ok := L.ToString(1); ok {
-			ioOpenCheck(L, filename, mode)
+			ioOpenCheck(L, ioCStr(filename), mode)
 		} else {
 			ioToFile(L) /* check that it's a valid file handle */
 			L.PushValue(1)
@@ -976,8 +1090,8 @@ func ioNoClose(L *State) int {
 }
 
 func ioOpen(L *State) int {
-	filename := L.CheckString(1)
-	mode := L.OptString(2, "r")
+	filename := ioCStr(L.CheckString(1))
+	mode := ioCStr(L.OptString(2, "r"))
 	L.ArgCheck(ioCheckMode(mode), 2, "invalid mode")
 	s := ioNewFile(L)
 	f, err := ioOpenFile(filename, mode)
@@ -985,6 +1099,7 @@ func ioOpen(L *State) int {
 		return ioFileResult(L, false, &filename, err)
 	}
 	s.f = f
+	ioSetDirection(s, ioFlags(mode))
 	return 1
 }
 
@@ -998,10 +1113,12 @@ func ioPOpen(L *State) int {
 	if mode == "r" {
 		s.rd, err = cmd.StdoutPipe()
 		cmd.Stderr = os.Stderr
+		s.canW = false /* a pipe to the child's output: read only */
 	} else {
 		s.wr, err = cmd.StdinPipe()
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		s.canR = false /* a pipe to the child's input: write only */
 	}
 	if err == nil {
 		err = cmd.Start()
@@ -1030,6 +1147,9 @@ func ioTmpFile(L *State) int {
 	}
 	s.f = f
 	s.tmpname = f.Name()
+	/* os.CreateTemp opens for reading and writing, which is what
+	   'tmpfile' does ("w+b"). */
+	s.canR, s.canW = true, true
 	return 1
 }
 
@@ -1074,7 +1194,7 @@ func ioLines(L *State) int {
 		L.Replace(1)                              /* put it at index 1 */
 		ioToFile(L)                               /* check that it's a valid file handle */
 	} else { /* open a new file */
-		filename := L.CheckString(1)
+		filename := ioCStr(L.CheckString(1))
 		ioOpenCheck(L, filename, "r")
 		L.Replace(1)   /* put file at index 1 */
 		toclose = true /* close it after iteration */
@@ -1128,7 +1248,10 @@ func ioFSeek(L *State) int {
 	op := L.CheckOption(2, "cur", modenames)
 	offset := L.OptInteger(3, 0)
 	if s.f == nil {
-		return ioFileResult(L, false, nil, errors.New("not a seekable file"))
+		/* A pipe: 'fseek' asks the descriptor, which answers ESPIPE
+		   ("Illegal seek", 29) -- the same on every platform. */
+		return ioFileResult(L, false, nil,
+			ioCErrno{en: 29, msg: "illegal seek"})
 	}
 	pos, err := s.seek(offset, op)
 	if err != nil {
@@ -1149,19 +1272,36 @@ func (s *ioStream) seek(offset int64, op int) (int64, error) {
 	if err := s.flush(); err != nil { /* 'fseek' writes out the buffer first */
 		return 0, err
 	}
-	if s.buf != nil {
-		buffered := int64(s.buf.Buffered())
-		s.buf = nil /* 'fseek' discards whatever has been buffered */
-		if op == 1 {
-			pos, err := s.f.Seek(0, io.SeekCurrent)
-			if err != nil {
-				return 0, err
-			}
-			offset += pos - buffered
-			whence = io.SeekStart
+	/* A read that went through the buffer has left the descriptor
+	   ahead of the file position the Lua program is at, by however
+	   much is still in the buffer: 'f:read("l"); f:seek("cur", 0)'
+	   answers the position after the line, not after what the
+	   descriptor has read.  Asking the descriptor to move by less
+	   is how the two are brought back together. */
+	if n := s.buffered(); n > 0 && op == 1 {
+		if adj := offset - n; adj <= offset {
+			offset = adj
+		} else { /* 'math.mininteger', which would wrap */
+			offset = math.MinInt64 /* C answers EINVAL for it as well */
 		}
 	}
-	return s.f.Seek(offset, whence)
+	n, err := s.f.Seek(offset, whence)
+	if err != nil {
+		/* A seek that fails changes nothing, and the buffer is part
+		   of what it does not change: 'f:read("l"); f:seek("set", -1)'
+		   fails and the rest of the file is still there to read. */
+		return n, err
+	}
+	s.buf = nil /* 'fseek' discards whatever has been buffered */
+	return n, nil
+}
+
+// buffered is how much of the file the read buffer is holding.
+func (s *ioStream) buffered() int64 {
+	if s.buf == nil {
+		return 0
+	}
+	return int64(s.buf.Buffered())
 }
 
 func ioFSetVBuf(L *State) int {
@@ -1236,6 +1376,9 @@ func ioCreateStdFile(L *State, f *os.File, k, fname string) {
 	s.closef = ioNoClose
 	if f == os.Stdout || f == os.Stderr {
 		s.nobuf = true /* see writer() */
+		s.canR = false /* __SWR only, as C's stdout and stderr are */
+	} else {
+		s.canW = false /* __SRD only, as C's stdin is */
 	}
 	if k != "" {
 		L.PushValue(-1)

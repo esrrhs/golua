@@ -177,4 +177,4 @@ jobs:
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential' -timeout 30m .
+        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential' -timeout 30m .

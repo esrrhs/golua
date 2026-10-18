@@ -690,6 +690,7 @@ a difference is always reproducible.
 | `numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
 | `forfuzz_test.go` | 16 277 numeric `for` loops — 25 values in each of the three positions: zeroes of both signs, integers and floats, both ends of the integer range, the floats just outside it, the point where a float stops counting by ones, and the three values that are not comparable at all — each asked with the step written out and with it left to default to 1, plus each of 9 values that are not numbers in each of the three positions | 16 277 |
 | `codegenfuzz_test.go` | 101 356 snippets — every literal, every operator against every shape of operand, every statement form both bare and inside a function, every shape a closure can capture, 40 things that must not compile, and then every expression of depth two over 20 atoms and 18 operators plus a seventh of depth three, each in 22 statement positions — plus all 116 sources in `testdata`, official and ours. What is compared is not what they print but **what they compile to**: 17 109 752 bytes of byte code | 17 109 752 |
+| `iofuzz_test.go` | 3 166 things the `io` library can be asked — every mode of length 0 to 3 over `r w a + b t x` against a file that exists, one that does not and a directory; every format `read` takes (each letter of the alphabet in both cases, the four C asks for, their `* ` spellings, and the counts and the values that are not formats) against 10 fixtures, and the same three at a time; what `write` puts in the file, byte for byte, for each kind of value and for two of them; `seek` from each of 8 whence by each of 17 offsets, before and after a read; `setvbuf`; `lines` and `f:lines`; 13 kinds of handle — the three standard ones, a file opened each way round, a closed one, `tmpfile`, both ends of a `popen` — used 17 ways each; `io.input` and `io.output`; and the errors, `<close>`, and dropping a handle without closing it. Both interpreters get an identical copy of the fixtures in a directory of their own | 3 166 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -818,6 +819,58 @@ because a NaN *limit* with an integer start and step is not the float
 path at all: `forlimit` cannot coerce it and truncates it to
 `mininteger`, or skips the loop, depending on the step's sign.
 
+The io half was written last and found the most. It was written because
+`liolib.go` was the one file whose coverage stayed under 55% — 79
+functions, 28 of them never entered — and it went red six times, all
+six in the same way: C asks the FILE a question, and the port asked the
+descriptor behind it.
+
+* **`io.open` with a mode C's grammar refuses.** `l_checkmode` is
+  `[rwa]%+?b*` — `L_MODEEXT` is `"b"` and nothing else — so `"rt"`,
+  `"wt"`, `"at"` and `"r+t"` are "invalid mode" in PUC-Lua however
+  willing every C library is to take them. The port accepted `t`.
+* **Writing to a handle that was not opened for writing.** C's
+  `cantwrite` reads the flags `fopen` set in the FILE and fails with
+  EBADF before a byte moves, so `io.open(f, "rb"):write("x")` answers
+  `nil, "Bad file descriptor", 9`. A Go file fails only at the system
+  call, and the write buffer swallows a short piece on its way there.
+  `cantread` is the same the other way round: `io.popen(cmd, "w"):read("a")`
+  is not the empty string and `io.stdin:write("z")` is not a write.
+* **A failed write reported the wrong errno.** `g_write` threw the real
+  error away and handed `luaL_fileresult` a made-up one, so every
+  failure answered "(no extra info)" with an errno of 0 — including the
+  one above, which was therefore invisible.
+* **A name with a zero byte in it.** `fopen` is handed a C string, so
+  `io.open("a\0b", "w")` makes a file called `a`; the port passed the
+  whole name to Go, which answers "Invalid argument" for it.
+* **A mode that appends.** `fopen` with `"a"` or `"a+"` leaves the file
+  position at the end, which `O_APPEND` does not — it decides where a
+  *write* goes and leaves the position at zero — so `io.open(f, "a+"):read("a")`
+  answered the whole of `f` where PUC-Lua answers nothing, and
+  `io.open(f, "ab"):seek()` answered 0 instead of the size of `f`.
+* **`fseek` that fails, and `fseek` that wraps.** A seek that fails
+  changes nothing, and the read-ahead sitting in the buffer is part of
+  what it does not change: `f:read("l"); f:seek("set", -1)` fails, and
+  the rest of the file is still there to read. A `"cur"` offset of
+  `math.maxinteger` is handed to `lseek` as it stands, so the kernel is
+  what answers EOVERFLOW — the port added the buffer's read-ahead to
+  it first, wrapped to a negative number and answered EINVAL. And a
+  pipe is ESPIPE ("Illegal seek", 29), not a made-up error whose errno
+  is 0.
+
+The one that is not about a question C asks the FILE is the one that
+cost the most to find, and it is the one worth remembering: **a handle
+that was never closed**. `f:close` was the only thing that closed a
+file, so a handle that was dropped kept whatever was still in its write
+buffer, and those bytes were lost. `__gc` was never running for a
+file, and the reason is Go's: `runtime.SetFinalizer` does not fire for
+an object in a reference cycle, and the stream behind a handle pointed
+back at its userdata, which made the pair one. Two objects that point
+at each other, one of them with a finalizer, are never collected at
+all — not after one cycle, not after ten. The pointer back is weak
+now, which turns the cycle into a tree, and the grid asks it: a handle
+dropped inside a `do ... end` writes its bytes out.
+
 The codegen half is the only one that does not ask what a program
 prints. It compiles every snippet and every source in `testdata` on
 both sides and compares the **bytes**. Byte code is a far stricter
@@ -881,6 +934,8 @@ The C block behind a userdata is freed when the userdata is collected: `C.malloc
 
 Three tests of the official suite — `coroutine`, `gengc`, `locals` — assert precisely that a collection happened right after a `collectgarbage`, and all three are byte-identical. An object with a `__gc` is held between cycles so that Go cannot finalise it at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not.
 
+One thing Go's finalizers will not do at all is fire for an object in a reference cycle: two objects that point at each other, one of them with a finalizer, are never collected — not after one cycle, not after ten. A `__gc` that seems never to run is worth checking for a pointer back before anything else (§5.12: the stream behind a file handle had one, and every dropped handle was keeping its buffer).
+
    What a cycle here cannot answer is only what measures an allocator that is not there — `gc.lua` — the one file of the official suite that is a test *of* a collector — asks how much memory a collection freed and in what order it ran the finalizers of a long list, which is a question about PUC-Lua's own tri-color marking and not about Go's.
 
 Inside a `__gc` the collector counts as stopped, exactly as in C: `collectgarbage` answers `nil` for every option there (`lua_gc` returns -1, and `lbaselib.c`'s `checkvalres` turns that into a fail), and an allocation in a finalizer drives no cycle, so finalizers do not nest. A `__gc` that closes the state — `os.exit(0, true)` — has the rest of them run from that close, which is `main.lua`'s finalizer-order case and now matches PUC-Lua line for line.
@@ -920,7 +975,8 @@ string conversions are decided by the representation. Measured against
 
 12. **A subnormal number is written normalised, which is what Apple's library does and what glibc does not** — of a normalised float the leading hexadecimal digit of `%a` is 1; of one too small to have a 1 — below 2.2250738585072014e-308 — C leaves it unspecified, because there is nothing to normalise to. glibc keeps the exponent of the smallest normal float and writes the raw 52-bit fraction after the point, so `string.format("%a", 5e-324)` is `0x0.0000000000001p-1022`; Apple's library normalises it, and so does this port, for which it is `0x1p-1074` — what Go's own hexadecimal conversion writes, and one number rather than two spellings of one. Unlike the tie above, this one the standard allows both ways, so neither is the more correct. It reaches further than `%a`: `%q` writes a float the same way, and that is the conversion a program uses to write a number back out. Both spellings are numerals Lua reads, so a value written by one side is read by the other either way. The fuzz asks the reference which library it was built against, and on a reference that answers `0x0.0000000000001p-1022` the grid cases that turn on it are not asked on either side.
 
-13. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
+13. **`file:setvbuf(mode, size)` with a negative size always succeeds** — C hands `size` to `setvbuf` as a `size_t`, so `-1` is `SIZE_MAX` there, and what the library does with that is the library's business: Apple's asks the allocator for a buffer that large, fails, and leaves `errno` alone, so PUC-Lua answers `nil, "(no extra info)", 0`; glibc pays no attention to the size when it is given no buffer of its own and answers `true`. No portable answer exists, so the port answers `true` and the grid does not ask the case (§5.12). Every other size — including 0, which glibc's `setvbuf` treats as "no buffer asked for" — is PUC-Lua's.
+14. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
 
 ---
 

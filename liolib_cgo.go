@@ -40,8 +40,11 @@ func init() {
 		if s.cfp == nil {
 			return
 		}
-		if s.u != nil && s.u.cblock != nil {
-			C.cdl_stream_clear(s.u.cblock)
+		/* The block belongs to the userdata, which a '__gc'-driven
+		   close has already let go of: 'runFinalizers' frees it once
+		   the metamethod is done, so there is nothing to clear. */
+		if u := s.uw.Value(); u != nil && u.cblock != nil {
+			C.cdl_stream_clear(u.cblock)
 		}
 		C.cdl_stream_close((*C.FILE)(s.cfp))
 		s.cfp = nil
