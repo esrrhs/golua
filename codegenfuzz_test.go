@@ -27,6 +27,14 @@ import (
 // A probe of 419 snippets over this corpus, and of the 116 sources in
 // testdata on their own, was byte-identical before this test existed;
 // it is here so that it stays that way.
+//
+// The total in the log is not a constant.  A dump holds the chunk's
+// source name, which for a file is the path it was loaded from, so the
+// same corpus compiles to 17 110 787 bytes under /Users/runner and
+// 17 110 672 under /home/runner: one character, times the 115 sources
+// that loaded -- the 116th does not compile, and contributes nothing.
+// What is compared is one side against the other on one machine, so
+// the total moving with the checkout is how it should be.
 
 // codegenLits is every literal the lexer has to read: integers in
 // decimal and hexadecimal, floats in both, the two ends of the integer
