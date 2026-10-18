@@ -1766,6 +1766,25 @@ func strInitHeader(L *State, h *strHeader) {
 
 func strIsDigitChar(c byte) bool { return c >= '0' && c <= '9' }
 
+// strFmtOpts is a format string as C sees it, which is the bytes up to
+// its first zero rather than all of them.
+//
+// 'str_pack', 'str_packsize' and 'str_unpack' walk a format with
+// 'while (*fmt != '\0')', so what they answer is decided by where the
+// first zero byte is: 'string.packsize("i4\0i4")' is 4 and not 8, and
+// 'string.packsize("\0")' is 0 rather than a complaint about a format
+// option that is the zero byte.  ('string.format' is not like this --
+// C walks its format with 'strfrmt < strfrmt_end', the end being the
+// length -- so that one keeps its zero bytes.)  A Go string is a
+// length and some bytes, so the cut C's 'luaL_checkstring' makes for
+// free has to be made here.
+func strFmtOpts(s string) string {
+	if k := strings.IndexByte(s, 0); k >= 0 {
+		return s[:k]
+	}
+	return s
+}
+
 // strGetNum reads an integer numeral from the format string (getnum).
 func strGetNum(fmt string, i *int, df int) int {
 	if *i >= len(fmt) || !strIsDigitChar(fmt[*i]) { /* no number? */
@@ -2021,8 +2040,8 @@ func strUnpackBits(data string, pos, n int, islittle bool) uint64 {
 }
 
 func strPack(L *State) int {
-	fmtstr := L.CheckString(1) /* format string */
-	arg := 1                   /* current argument to pack */
+	fmtstr := strFmtOpts(L.CheckString(1)) /* format string */
+	arg := 1                               /* current argument to pack */
 	h := strHeader{}
 	strInitHeader(L, &h)
 	/* C pushes a nil here to separate the arguments from the string
@@ -2090,7 +2109,7 @@ func strPack(L *State) int {
 }
 
 func strPackSize(L *State) int {
-	fmtstr := L.CheckString(1) /* format string */
+	fmtstr := strFmtOpts(L.CheckString(1)) /* format string */
 	h := strHeader{}
 	strInitHeader(L, &h)
 	totalsize := 0 /* accumulate total size of result */
@@ -2107,7 +2126,7 @@ func strPackSize(L *State) int {
 }
 
 func strUnpack(L *State) int {
-	fmtstr := L.CheckString(1)
+	fmtstr := strFmtOpts(L.CheckString(1))
 	data := L.CheckString(2)
 	ld := len(data)
 	pos := strPosRelatI(L.OptInteger(3, 1), ld) - 1
@@ -2135,10 +2154,18 @@ func strUnpack(L *State) int {
 		case strKchar:
 			L.PushString(data[pos : pos+size])
 		case strKstring:
-			len2 := int(strUnpackInt(L, data, pos, h.islittle, size, 0))
-			L.ArgCheck(len2 <= ld-pos-size, 2, "data string too short")
-			L.PushString(data[pos+size : pos+size+len2])
-			pos += len2 /* skip string */
+			/* C keeps this length in a 'size_t' and compares it as
+			   one: 'size_t len = (size_t)unpackint(...)', and then
+			   'len <= ld - pos - size'.  A length read as eight
+			   bytes of 0xff is 2^64-1 there and -1 here, and -1 is
+			   less than whatever is left of the string -- so the
+			   comparison was the wrong way round and the slice
+			   below it went out of range.  It is unsigned, which
+			   is what C's 'size_t' is. */
+			len2 := uint64(strUnpackInt(L, data, pos, h.islittle, size, 0))
+			L.ArgCheck(len2 <= uint64(ld-pos-size), 2, "data string too short")
+			L.PushString(data[pos+size : pos+size+int(len2)])
+			pos += int(len2) /* skip string */
 		case strKzstr:
 			end := strings.IndexByte(data[pos:], 0)
 			if end < 0 {

@@ -631,6 +631,17 @@ entered now. And an error raised in a hook escapes every `pcall` there
 is, which is PUC-Lua's behaviour too and not a place this port could
 have been right about on its own.
 
+The same is true of `string.pack`, and it is the same four-plus-seven
+functions: `str_pack`, `str_unpack`, `str_packsize` and the seven
+helpers behind them — `strGetOption`, `strGetDetails`, `strPackInt`,
+`strUnpackInt`, `strPackBits`, `strUnpackBits` and the one that cuts a
+format at its zero byte — were all at 0%, the last of `lstrlib.go` no
+test had ever reached. A fuzz cannot change that, because it runs the
+two interpreters as subprocesses and a subprocess does not answer
+`go test -cover`; `TestPackInProcess` is what does, driving the same
+functions through the API in this process. They are between 92% and
+100% now, and the two things the grid found are pinned in it.
+
 ### 5.11 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
@@ -771,6 +782,7 @@ a difference is always reproducible.
 | `codegenfuzz_test.go` | 101 356 snippets — every literal, every operator against every shape of operand, every statement form both bare and inside a function, every shape a closure can capture, 40 things that must not compile, and then every expression of depth two over 20 atoms and 18 operators plus a seventh of depth three, each in 22 statement positions — plus all 122 sources in `testdata` — official, ours, and the five third-party libraries of §5.12. What is compared is not what they print but **what they compile to**: 17 109 752 bytes of byte code | 17 109 752 |
 | `iofuzz_test.go` | 3 166 things the `io` library can be asked — every mode of length 0 to 3 over `r w a + b t x` against a file that exists, one that does not and a directory; every format `read` takes (each letter of the alphabet in both cases, the four C asks for, their `* ` spellings, and the counts and the values that are not formats) against 10 fixtures, and the same three at a time; what `write` puts in the file, byte for byte, for each kind of value and for two of them; `seek` from each of 8 whence by each of 17 offsets, before and after a read; `setvbuf`; `lines` and `f:lines`; 13 kinds of handle — the three standard ones, a file opened each way round, a closed one, `tmpfile`, both ends of a `popen` — used 17 ways each; `io.input` and `io.output`; and the errors, `<close>`, and dropping a handle without closing it. Both interpreters get an identical copy of the fixtures in a directory of their own | 3 166 |
 | `debugfuzz_test.go` | 1 333 questions about the debug library — every option string of length 0 to 2 over the eight letters `getinfo` recognises and the one it does not, asked about each of 8 kinds of function; every stack level from each of 7 shapes of stack, which is the only way to reach a `name`, a `namewhat`, a `currentline` that moves and an `istailcall`; a coroutine in each of 5 states; the same function called 10 ways, asked about itself and about its caller; every local index in every shape of frame, on the main thread and on a coroutine, and `setlocal` for each; every upvalue got, set, identified and joined — including the 25 ways two closures can be joined and the 8 ways two upvalues can be the same one; 56 hook masks, 6 counts, `gethook` on the main thread, on a coroutine, and on a coroutine made before or after the hook was set; every `traceback` message at every level, from every depth; every metatable, the registry, and every user value — plus every debug function asked the wrong thing. And 12 hook errors, each in a process of its own, because an error in a hook escapes every `pcall` and ends the run | 1 333 + 12 |
+| `packfuzz_test.go` | 3 733 questions about `string.pack`, `string.unpack` and `string.packsize` — every byte of the alphabet as a format of its own, all 256 of them and not the 26 C looks up, because a byte that is not an option is an option refused and the refusal is printed with the byte in it; every size from 0 to 17 of `i`, `I`, `s` and `c` — the sweep running past 16 in both directions, because only the sizes that are refused can say where the edge is — each with 12 values and with the three that sit on the edge of that size; every alignment `!` can ask for, over 20 things to align and then over every pair of 6; every endianness over every option; every pair of 16 options, and an `X` between every pair of 12; `unpack` at 15 positions of 12 formats; every option given 8 wrong things, and given nothing; 138 round trips; 53 written-out formats; a zero byte at every position of 9 formats; a zero byte in a value; and every size read out of 6 buffers of raw bytes | 5 337 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -956,7 +968,7 @@ all — not after one cycle, not after ten. The pointer back is weak
 now, which turns the cycle into a tree, and the grid asks it: a handle
 dropped inside a `do ... end` writes its bytes out.
 
-The debug half is the newest and it found the two things below, one in
+The debug half found the two things below, one in
 the library and one outside it — in the interpreter's own 'main', which
 is the one place a fuzz is not expected to reach. `ldblib.go` had four
 of its 43 functions that no test had ever entered — `debug.upvalueid`,
@@ -989,6 +1001,48 @@ and a probe of 258 cases over the whole library went red in one place.
   twelve processes and compares the exit status as well as the output —
   they cannot be lines in the grid, because one of them would be the
   last thing the run ever printed.
+
+The pack half is the newest, and it is over `string.pack`,
+`string.unpack` and `string.packsize` — the last C mini-language in the
+standard library without a grid of its own. A format string is a program
+in sizes, alignments, endianness and options, and `lstrlib.c` is an
+interpreter for it. A probe of 907 hand-chosen cases over the three went
+**0 lines red**, and by the rule of this project that is not yet an
+answer, so the same corpus was asked twice with `lstrlib.go` broken on
+purpose and it saw the break both times: the sign extension in `packint`
+taken out, 36 lines red; `*ntoalign` in `getdetails` forced to 0, 4
+lines red. Four lines out of 907 is what a hand-picked probe misses, and
+the grid is what was built for them. It found two.
+
+* **A format ends at its first zero byte, not at the end of the string.**
+  `str_pack`, `str_packsize` and `str_unpack` walk a format with
+  `while (*fmt != '\0')`, so `string.packsize("i4\0i4")` is 4 and
+  `string.packsize("\0i4")` is 0, and a zero byte on its own is an empty
+  format rather than a refused one. A Go string is a length and some
+  bytes, so this port walked past the zero into the bytes after it and
+  found a format option that is the zero byte, which is not one.
+  `string.format` is not like this — C walks *its* format with
+  `strfrmt < strfrmt_end`, the end being the length — so that one keeps
+  its zero bytes, and the difference between the two is now one line in
+  one place.
+* **A length read out of the data is compared as a `size_t`.**
+  `str_unpack`'s `Kstring` case is
+  `size_t len = (size_t)unpackint(...)` and then
+  `len <= ld - pos - size`, all three of them unsigned. Read out of
+  eight bytes of `0xff` that length is 2^64−1 there and −1 here, and −1
+  is less than whatever is left of the string: the comparison was the
+  wrong way round, and the slice behind it went out of range.
+  `string.unpack("s", ("\xff"):rep(16))` is refused with "data string
+  too short" in PUC-Lua and was a Go runtime panic in this port.
+
+The second of those is also the lesson of the half, and it is the one
+the third-party corpus had already taught once. The grid only ever
+unpacked what it had just packed, and what `pack` writes is always
+well-formed: the bytes it puts above the eighth are the sign extension,
+so the check that there is one can never fail. Deleting that check
+turned the grid **0 lines red** — not because the check is invisible but
+because nothing had asked. A group that reads every size from 9 to 16
+out of six buffers of raw bytes took it to 56.
 
 The codegen half is the only one that does not ask what a program
 prints. It compiles every snippet and every source in `testdata` on
