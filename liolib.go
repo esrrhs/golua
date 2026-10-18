@@ -626,14 +626,10 @@ func ioOpenFile(fname, mode string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	/* 'fopen' with "a" or "a+" leaves the file position at the end
-	   (C17 7.21.5.3: "the file position indicator ... is positioned
-	   at end-of-file"), which O_APPEND does not do -- O_APPEND only
-	   decides where a write goes, and leaves the position at zero.
-	   It is what makes 'io.open(f, "a+"):read("a")' answer nothing
-	   at all rather than the whole of f, and 'io.open(f, "ab"):seek()'
-	   answer the size of f rather than zero. */
-	if ioIsAppend(mode) {
+	/* Where an append mode leaves the file position is the C
+	   library's business, and it is not the same for the two of them:
+	   see ioAppendAtEnd. */
+	if ioAppendAtEnd(mode) {
 		if _, err := f.Seek(0, io.SeekEnd); err != nil {
 			f.Close()
 			return nil, err
@@ -642,9 +638,30 @@ func ioOpenFile(fname, mode string) (*os.File, error) {
 	return f, nil
 }
 
-// ioIsAppend says whether a mode is one of the two that append.
-func ioIsAppend(mode string) bool {
-	return len(mode) > 0 && mode[0] == 'a'
+// ioAppendAtEnd says whether opening a file in this mode leaves the
+// file position at the end, which 'O_APPEND' never does -- it decides
+// where a *write* goes and leaves the position at zero.
+//
+// "a" both libraries answer the same way: at the end, so
+// 'io.open(f, "ab"):seek()' is the size of f.
+//
+// "a+" they do not agree on, and C asks only that a write land at the
+// end -- where the position sits *before* anything has been written is
+// the library's own business. Apple's puts it at the end, so
+// 'io.open(f, "a+"):read("a")' answers nothing at all; glibc leaves it
+// at zero, and the same line answers the whole of f. Which of the two
+// this port answers is therefore the host's, exactly as PUC-Lua's is,
+// and the grid -- which asks the reference on the machine it runs on --
+// is answered alike on both. Only the platforms that have been
+// measured are named; the rest are left at zero, which is glibc's.
+func ioAppendAtEnd(mode string) bool {
+	if len(mode) == 0 || mode[0] != 'a' {
+		return false
+	}
+	if len(mode) > 1 && mode[1] == '+' {
+		return runtime.GOOS == "darwin"
+	}
+	return true
 }
 
 // ioOpenCheck opens a file, raising an error when it fails (opencheck).

@@ -843,11 +843,16 @@ descriptor behind it.
 * **A name with a zero byte in it.** `fopen` is handed a C string, so
   `io.open("a\0b", "w")` makes a file called `a`; the port passed the
   whole name to Go, which answers "Invalid argument" for it.
-* **A mode that appends.** `fopen` with `"a"` or `"a+"` leaves the file
-  position at the end, which `O_APPEND` does not — it decides where a
-  *write* goes and leaves the position at zero — so `io.open(f, "a+"):read("a")`
-  answered the whole of `f` where PUC-Lua answers nothing, and
-  `io.open(f, "ab"):seek()` answered 0 instead of the size of `f`.
+* **A mode that appends.** `fopen` with `"a"` leaves the file position
+  at the end, which `O_APPEND` does not — it decides where a *write*
+  goes and leaves the position at zero — so `io.open(f, "ab"):seek()`
+  is the size of `f`. With `"a+"` the two C libraries disagree, and C
+  asks only that a write land at the end: Apple's puts the position
+  there too, so `io.open(f, "a+"):read("a")` answers nothing at all,
+  while glibc leaves it at zero and answers the whole of `f`. The port
+  follows the host's library, which is what PUC-Lua on that host does,
+  and the grid — which asks the reference on the machine it runs on —
+  is answered alike on both.
 * **`fseek` that fails, and `fseek` that wraps.** A seek that fails
   changes nothing, and the read-ahead sitting in the buffer is part of
   what it does not change: `f:read("l"); f:seek("set", -1)` fails, and
