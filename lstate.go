@@ -610,7 +610,7 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 					st = LUA_OK
 				}
 				L.status = LUA_OK /* so that it can run the metamethods */
-				st = luaD_closeprotected(L, 1, st)
+				st = luaD_closeprotected(L, 1, st, false)
 				if st != LUA_OK {
 					status = st
 					luaD_seterrorobj(L, st, 1)
@@ -676,7 +676,7 @@ func (L *State) resetThreadStatus(status int) int {
 	}
 	L.status = LUA_OK /* so it can run __close metamethods */
 	L.errfunc = 0     /* stack unwind can "throw away" the error function */
-	status = luaD_closeprotected(L, 1, status)
+	status = luaD_closeprotected(L, 1, status, false)
 	if status != LUA_OK { /* errors? */
 		luaD_seterrorobj(L, status, 1)
 	} else {

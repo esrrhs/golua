@@ -362,12 +362,28 @@ type closeP struct {
 // to the enclosing protected call. Closing unprotected instead makes an
 // 'error' inside '__close' bypass the 'pcall' around the function that
 // declared the variable.
-func luaD_closeprotected(L *State, level, status int) int {
+//
+// 'yy' is the one C's own 'closepaux' does not take: it passes 0, and
+// that is the half this function is named for -- a '__close' run from
+// here may not suspend.  It is what 'luaE_resetthread' asks, and so what
+// 'coroutine.close' asks: with a pending to-be-closed variable whose
+// '__close' yields, 'coroutine.close' answers
+// false, "attempt to yield across a C-call boundary", and not the value
+// the metamethod yielded.
+//
+// The other half is C's 'finishpcallk', which runs '__close' with 'yy' 1,
+// and it is the half an ordinary 'pcall' in a yieldable thread takes:
+// 'locals.lua' suspends three times inside the '__close' of a function
+// that raised, and that is meant to work.  C tells the two apart by
+// which function does the closing -- 'closepaux' or 'finishpcallk' --
+// and this port, whose 'pcall' is one function either way, takes it as an
+// argument instead.
+func luaD_closeprotected(L *State, level, status int, yy bool) int {
 	oldCI := L.ci
 	oldAllowHooks := L.allowhook
 	for { /* keep closing upvalues until no more errors */
 		pcl := &closeP{level: level, status: status}
-		st := L.rawRunProtected(func() { luaF_close(L, pcl.level, pcl.status, true) })
+		st := L.rawRunProtected(func() { luaF_close(L, pcl.level, pcl.status, yy) })
 		if st == LUA_OK { /* no more errors? */
 			return pcl.status
 		}
@@ -398,7 +414,13 @@ func luaD_seterrorobj(L *State, errcode, oldtop int) {
 }
 
 // luaD_pcall runs f in protected mode (ldo.c).
-func luaD_pcall(L *State, f func(), oldTop, ef int) int {
+//
+// 'yy' is the 'yy' of the 'luaF_close' it may have to do -- see
+// luaD_closeprotected.  C's 'lua_pcallk' with a continuation in a
+// yieldable thread does not come through here at all: it is recovered by
+// 'finishpcallk', whose 'yy' is 1.  This port's yieldable 'pcall' does
+// come through here, so it has to say which of the two it is being.
+func luaD_pcall(L *State, f func(), oldTop, ef int, yy bool) int {
 	oldCI := L.ci
 	oldAllowHooks := L.allowhook
 	oldErrFunc := L.errfunc
@@ -407,7 +429,7 @@ func luaD_pcall(L *State, f func(), oldTop, ef int) int {
 	if status != LUA_OK { /* an error occurred? */
 		L.ci = oldCI
 		L.allowhook = oldAllowHooks
-		status = luaD_closeprotected(L, oldTop, status)
+		status = luaD_closeprotected(L, oldTop, status, yy)
 		luaD_seterrorobj(L, status, oldTop)
 		L.shrinkStack()
 	}

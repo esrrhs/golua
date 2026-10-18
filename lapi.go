@@ -897,13 +897,21 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 		ef = L.indexToAbs(msgh)
 	}
 	if k && yieldable(L) {
+		/* C's lua_pcallk takes the yieldable path: the call is made
+		   with CIST_YPCALL set and, should it fail, the to-be-closed
+		   variables are closed by 'finishpcallk', whose 'yy' is 1, so a
+		   '__close' there may suspend -- which is what makes
+		   'coroutine.yield' inside the '__close' of a function that
+		   raised work (locals.lua does it three times). */
 		return luaD_pcall(L, func() {
 			luaD_call(L, funcIdx, nresults)
-		}, funcIdx, ef)
+		}, funcIdx, ef, true)
 	}
+	/* the conventional call: C's f_call goes through luaD_pcall, whose
+	   'closepaux' hands 'luaF_close' a 'yy' of 0 */
 	return luaD_pcall(L, func() {
 		luaD_callnoyield(L, funcIdx, nresults)
-	}, funcIdx, ef)
+	}, funcIdx, ef, false)
 }
 
 // LoadBytes compiles a chunk, pushing the resulting function on the stack

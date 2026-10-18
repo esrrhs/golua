@@ -267,7 +267,7 @@ func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 			   error object where the callee's results would have been,
 			   so that the continuation sees it. */
 			L.ci = ci
-			status = luaD_closeprotected(L, funcIdx, status)
+			status = luaD_closeprotected(L, funcIdx, status, true)
 			luaD_seterrorobj(L, status, funcIdx)
 			L.shrinkStack()
 		} else {

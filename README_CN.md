@@ -614,6 +614,7 @@ cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
 | `patternfuzz_test.go` | 6 991 个模式（每个模式原子 × 每个原子，外加必须三片才有意义的三元组）× 25 个主题串 | 1 048 650 |
 | `formatfuzz_test.go` | 11 340 个格式串（每个标志 × 每个宽度、精度、转换）× 22 个值，外加每个格式串一次"不给值" | 260 820 |
 | `numfuzz_test.go` | 1 834 个待读的字符串（符号 × 整数部分 × 小数部分 × 指数的全部组合，再加十六进制同样一遍，再各自套九种"空格"），以及 49 个值被 `tostring`、`%q`、`math.tointeger`、`%g`、`%e` 写回 | 11 053 |
+| `corofuzz_test.go` | 396 个协程：协程能做的六件事（挂起、出错、结束、先挂起再二者之一、挂起两次）× 能做的 22 个位置——裸调用、一层与两层 `pcall`、`xpcall`、Lua 自己调用的每一个元方法、`for` 迭代器、`table.sort` 与 `string.gsub` 的回调、`load` 要的 reader、自己的子协程，以及"尚有待关闭变量"——每个再用三种方式驱动：连续 resume 四次、经 `coroutine.wrap`、用 `coroutine.close` 关闭 | 396 |
 
 模式这一半存在的理由：`lstrlib.c` 的 `match` 是两百行"没人会把组合写下来"的
 逻辑——frontier 后面跟一个集合、位置捕获上加量词、`%b` 的定界符本身又是魔法字符。

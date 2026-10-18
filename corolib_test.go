@@ -304,6 +304,57 @@ func TestCoroutineCloseSuspended(t *testing.T) {
 	}
 }
 
+// TestCoroutineCloseMayNotYield pins the one thing the coroutine fuzz
+// found, and the other half of it, so that fixing one half cannot hide
+// behind the other.
+//
+// C runs a pending '__close' from 'closepaux', whose 'yy' is 0, so a
+// metamethod closed by 'coroutine.close' is not allowed to suspend:
+// 'coroutine.close' answers false, "attempt to yield across a C-call
+// boundary", and not the value the metamethod yielded, which is what this
+// port answered.  The same variable closed the ordinary way -- the end of
+// its block -- is 'luaF_close' with 'yy' 1, and there suspending is
+// allowed: the coroutine yields from inside its own '__close' and the
+// next resume carries on.
+func TestCoroutineCloseMayNotYield(t *testing.T) {
+	L := coNew(t)
+	coRun(t, L, `
+		local co = coroutine.create(function()
+			local x <close> = setmetatable({}, {
+				__close = function(_, err) return coroutine.yield("from __close") end
+			})
+			coroutine.yield("body")
+		end)
+		coroutine.resume(co)
+		-- 'x' is still pending: 'coroutine.close' is what closes it
+		local ok, err = coroutine.close(co)
+		out = tostring(ok) .. "," .. tostring(err) .. "," .. coroutine.status(co)
+
+		local co2 = coroutine.create(function()
+			local y <close> = setmetatable({}, {
+				__close = function(_, err) coroutine.yield("closing") return "ignored" end
+			})
+			return "body"
+		end)
+		-- 'y' is closed by the end of the coroutine, which may suspend
+		local ok1, v1 = coroutine.resume(co2)
+		local ok2, v2 = coroutine.resume(co2)
+		out2 = tostring(ok1) .. "," .. tostring(v1) ..
+		       "|" .. tostring(ok2) .. "," .. tostring(v2) ..
+		       "|" .. coroutine.status(co2)
+	`)
+	if got, want := coGlobal(t, L, "out"),
+		"false,attempt to yield across a C-call boundary,dead"; got != want {
+		t.Errorf("closed by coroutine.close: out = %q, want %q", got, want)
+	}
+	if got, want := coGlobal(t, L, "out2"), "true,closing|true,body|dead"; got != want {
+		t.Errorf("closed by the end of the block: out2 = %q, want %q", got, want)
+	}
+	if L.GetTop() != 0 {
+		t.Errorf("stack not empty: %d", L.GetTop())
+	}
+}
+
 func TestCoroutineCloseRunning(t *testing.T) {
 	L := coNew(t)
 	coRun(t, L, `

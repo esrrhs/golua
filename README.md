@@ -688,6 +688,7 @@ a difference is always reproducible.
 | `patternfuzz_test.go` | 6 991 patterns — every pattern atom against every atom, plus the triples that need three pieces to mean anything — against 25 subjects | 1 048 650 |
 | `formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
 | `numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
+| `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
 lines of exactly the kind of logic nobody writes down the combinations
