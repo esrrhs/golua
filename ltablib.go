@@ -178,7 +178,23 @@ func tablePack(L *State) int {
 
 func tableUnpack(L *State) int {
 	i := L.OptInteger(2, 1)
-	e := L.OptInteger(3, L.Len2(1))
+	/* Not 'L.OptInteger(3, L.Len2(1))', although that is what
+	   'luaL_opt(L, luaL_checkinteger, 3, luaL_len(L, 1))' looks like.
+	   'luaL_opt' is a macro and its default is an expression that is
+	   evaluated only in the branch that uses it; a Go call evaluates
+	   every argument before it is entered, so the length is asked for
+	   even when the third argument is there.  The two are different
+	   programs: 'table.unpack(nil, 1, 3)' is "attempt to index a nil
+	   value" in PUC-Lua, because it never gets as far as the length,
+	   and was "attempt to get length of a nil value" here.  An absent
+	   third argument is what 'lua_isnoneornil' says it is, which is
+	   an explicit nil as well as nothing at all. */
+	var e int64
+	if L.IsNoneOrNil(3) {
+		e = L.Len2(1)
+	} else {
+		e = L.CheckInteger(3)
+	}
 	if i > e {
 		return 0 /* empty range */
 	}

@@ -665,6 +665,43 @@ two letters in front of a format being the part the C library decides
 instead: `os.date("!%Y", -65307340800)`, which PUC-Lua answers `-100`,
 is a line in it, and it is a line the grid does not have.
 
+The same was true of four functions of `ltablib.go`, and it is four
+this time because the table library has more small helpers than the
+others do: `tableCheckField`, `tableIncr`, `tableRandomizePivot` and
+`tableChoosePivot` were all at 0%, and `tableCheckTab` at 20%, every
+case that entered them being a case in another process.
+`TestTableInProcess` asks them in this process, and every function of
+`ltablib.go` is at 100% now. It is not a second copy of the grid: the
+two things it asks that the grid cannot ask outside a subprocess are
+the two places `partition` says the comparison function is not an
+order, and since both of them say the same thing, what tells them
+apart is how many pairs the comparison function was asked about before
+it gave up — ten for the one that walks up from `lo`, twenty-six for
+the one that walks down from `up`. What it holds besides those is the
+thing the table half found (§5.13), the two directions of a `move` and
+its two refusals, the positions `remove` and `insert` will take, the
+kinds `concat` names when it refuses them, the 28 pairs a sort of ten
+elements compares in the order it compares them — the seventeenth of
+which is `9<9`, the pivot being compared with itself — and a userdata,
+which is the only kind of value that is not a table and can be asked
+for a metamethod. Every refusal is pinned with the name in front of
+it, and
+the names are not the ones the C source spells: "bad argument #3 to
+'**table.move**' (too many elements to move)" comes from
+`pushglobalfuncname` searching `package.loaded`, which is the road C
+takes when the caller is a C function and there is no calling
+instruction to read a name out of, while "wrong number of arguments to
+'**insert**'" is a literal in `ltablib.c` and is spelled the short way
+in every case. A caller that is Lua code gets the short name too, and a
+position in front of the message with it.
+
+Of the 19 things this half has been broken with to see whether the
+in-process test can see them, 17 turn it red. The two that stay green
+are the two that are §6.18's: a `tableChoosePivot` that ignores the
+random number it is handed, and a `tableRandomizePivot` that always
+answers 0, are the same thing to an array that comes out sorted either
+way, and the two functions are only asked so that they are entered.
+
 ### 5.11 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
@@ -808,6 +845,7 @@ a difference is always reproducible.
 | `packfuzz_test.go` | 3 733 questions about `string.pack`, `string.unpack` and `string.packsize` — every byte of the alphabet as a format of its own, all 256 of them and not the 26 C looks up, because a byte that is not an option is an option refused and the refusal is printed with the byte in it; every size from 0 to 17 of `i`, `I`, `s` and `c` — the sweep running past 16 in both directions, because only the sizes that are refused can say where the edge is — each with 12 values and with the three that sit on the edge of that size; every alignment `!` can ask for, over 20 things to align and then over every pair of 6; every endianness over every option; every pair of 16 options, and an `X` between every pair of 12; `unpack` at 15 positions of 12 formats; every option given 8 wrong things, and given nothing; 138 round trips; 53 written-out formats; a zero byte at every position of 9 formats; a zero byte in a value; and every size read out of 6 buffers of raw bytes | 5 337 |
 | `namefuzz_test.go` | 1 328 questions about a name with a zero byte in it — every name a script can hand to the OS, with a zero at every position of five of them (`a`, `a.txt`, `sub`, `no`, `m.lua`), asked of `io.open` in each of its 6 modes, of `io.lines`, `loadfile`, `dofile`, `os.remove`, `os.rename` (in the name moved, in the name it is moved to, and in both), `require` and `package.searchpath`, each against a file that is there, a directory, and nothing; then the same renames and removals with no zero in them, which is where a directory meets a directory; a name with a slash on the end of it, which is not a name a regular file can be given; and 62 commands with a zero in them, run by `io.popen` and `os.execute`. 1 218 names and 62 commands, each with a number of its own so that one case's file is never another case's, and both interpreters get an empty directory of their own | 1 328 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
+| `tablefuzz_test.go` | 990 questions about the six functions of the table library — every `f`, `e` and `t` of a `table.move` over a table of four, to itself and to another table; every position a `table.remove` and a `table.insert` can be given, at every size up to four, and the number of arguments they take; every kind of value in every position of a `table.concat`, every kind of separator and every pair of ends; every pair of ends of a `table.unpack` and four that are past the end of anything, and `table.pack`; 203 `table.sort`s — 52 with a comparison function that writes down every pair it is asked about in the order it is asked about them, 69 with one that claims a different element is the pivot, 45 with one that says so of an element there are two copies of, and the ones that raise, the ones that move the array while it is being sorted, and the ones that are not orders; and 142 things that behave like a table and things that do not — 64 of them userdata with each of the eight combinations of the three metamethods, in each of the six functions and as both ends of a `move`, 30 of them tables with a metatable on them, and 48 that are not tables at all | 990 |
 | `datefuzz_test.go` | 2 517 questions about `os.date` and `os.time` — every conversion specifier of C99's `strftime`, all 37 of them, asked of every day of 2000 and of 2001 and of every noon of 2000, of every hour and every five minutes of one day, and of the instants at and past the ends of a `struct tm`; the 19 `E` and `O` modifiers at four instants; the nine fields of `*t`; the 51 formats that are not specifiers, 18 of them with a zero byte in them; the format that is not there at all; and 124 tables for `os.time`, two of them only on a host whose `mktime` reads `isdst` the way this port does. Every one of them asked in each of four zones — one with no summer time, one west of Greenwich, one east, and Dublin, whose standard time is the smaller of its two — because four of the specifiers are questions the zone answers | 2 517 × 4, or 2 523 × 4 where the C library is glibc's |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -1245,6 +1283,74 @@ the four it can hold it at, and `%C` is not held by anything — it is
 `%02d`, which is what the C library this project is developed against
 prints, and it is the one thing in this repository no test covers.
 
+The table half is newer still, and it is over the six functions of
+`ltablib.c` — the one standard library that every program uses and
+nobody thinks about. They are small enough to hold in your head, which
+is exactly how a port gets one of them wrong without a test noticing:
+`table.move` copies a range in one of two directions and only one of
+them is right when the range overlaps the place it is going;
+`table.remove` and `table.insert` keep the same rule about which
+positions are in bounds, and the one thing they disagree about is an
+argument they were not asked for — `remove` ignores it and `insert`
+refuses it, in the only message that spells a name the short way;
+`table.concat` names the type of the value it refuses; and
+`table.sort` is a quicksort whose pivot and whose order of comparisons
+a caller can watch, with a comparison function that keeps a tally.
+
+A probe of 209 hand-picked cases went **1 line red**, and that one is a
+Go habit that is not a C habit: `tunpack` reads its last argument with
+the macro `luaL_opt(L, luaL_checkinteger, 3, luaL_len(L, 1))`, whose
+default is an expression that is evaluated only in the branch that
+needs it, while a Go call evaluates every argument before it is
+entered. `table.unpack(nil, 1, 3)` is therefore "attempt to index a nil
+value" in PUC-Lua, which never gets as far as the length, and was
+"attempt to get length of a nil value" here. It is the only place in
+the package where that shape occurs, and the grid holds it now: with
+the fix out, 16 lines go red.
+
+Three things the grid does not ask. A `table.move` that would move a
+huge number of elements hangs **PUC-Lua itself** —
+`table.move({}, 1, math.maxinteger, 1)` passes both of its checks and
+then copies for the rest of time, on every machine — so there is no
+answer to compare against; what the two checks say is asked instead. A
+`table.sort` of more than `INT_MAX` elements, which is what "array too
+big" is for, is not an array a test can build. And a `table.sort` of
+more than 128 elements whose comparison function cares about the order
+it is called in is left alone for the reason in §6.18.
+
+Of the 33 things this half has been broken with — both directions and
+all three conditions of `table.move`, its fifth argument and its two
+refusals; the two position rules and the default position of `remove`
+and `insert` and the number of arguments they take; the kind, the
+index, the separator and the last field of `concat`; `unpack`'s
+eagerly-evaluated default, its stack check and its ceiling, and
+`pack`'s `n`; the pivot, the initial swap, both of the two "invalid
+order function" checks, the order the comparison function is called in
+and whether its answer is turned into a boolean; and all four ways
+`checktab` can be wrong about a metamethod — 32 turn it red. The one
+that stays green is the randomized pivot, and it stays green because
+the grid asks no array that could reach one: it is §6.18's.
+
+Two of them are worth naming, because they are what the corpus was
+built around after the mutation test said the grid could not see them.
+The things that behave like a table have to be **userdata**: a table
+with a metatable on it is a table, and `checktab` asks it nothing, so
+the 48 cases that were meant to exercise it were asking 48 questions
+that never reached it. And the two "invalid order function" checks are
+two different checks, and only one of them is easy to reach: the one
+that walks up from `lo` fires on a comparison function that says
+everything is less than the pivot, but the one that walks down from
+`up` needs the pivot to say it is less than *every* element it meets,
+which needs a comparison function whose answer does not depend on the
+other element — `function(a, b) return a == 4 end` — and an array that
+holds that value in two places at once, since the pivot is moved out
+of the position it was picked from. Forty-five of the 990 cases are
+those arrays. They are asked a second time by `TestTableInProcess`,
+which asks both of the two checks in this process and with the number
+of pairs the comparison function was asked about before it gave up —
+ten and twenty-six — because both of them say the same thing and only
+the count can tell them apart (§5.10).
+
 It is worth saying what makes a fuzz like this worthless, because one
 round of it was. A generated chunk that does not *load* prints the same
 syntax error on both sides, and identical output is what success looks
@@ -1338,6 +1444,8 @@ string conversions are decided by the representation. Measured against
     The one instant on which they agree about a year before the Common Era is a year that divides by a hundred, and there this port agrees with both — which is where `TestDateInProcess` holds `%y` and `%Y`, since the grid cannot.
 
 17. **What `os.time` does with `isdst` is what the C library's `mktime` does, and the two libraries do it by opposite rules** — `mktime` reads `tm_isdst` as an instruction: 1 is "read the wall clock as a summer-time one", 0 is "read it as a standard-time one", and -1, which is the field absent, is "work it out". When the instruction and the zone disagree, the two part company. glibc's `mktime` goes looking through the timezone database for a nearby instant whose `tm_isdst` is the one it was told, and borrows its offset: for 1970 in Dublin it borrows 1972's, which is the offset Dublin kept the whole year round in 1970, so the instant does not move at all. When it finds nothing anywhere near — in UTC, where nothing is ever summer time — it gives up the search and assumes an hour, which is the last thing `mktime.c` does: `t += 60 * 60 * dst_difference`. macOS's steps by an hour in any zone that has a summer time and does nothing in one that has none. The two answer `-3600` and `0` to `os.time{year=1970,month=1,day=1,hour=0,min=0,sec=0,isdst=true}` in UTC, and `-3600` and `-7200` in Dublin. This port steps by an hour and ignores the field in a zone with no summer-time rule, which is the macOS answer; the two tables that turn on it are asked on macOS and not on Linux (§5.13). Everything else about `os.time` is PUC-Lua's: the bounds on each field, the missing and non-integer ones, the result of exactly -1, the twelve fields written back, and the month, day, hour, minute and second that were out of range and came back in it.
+
+18. **The pivot `table.sort` picks is a random one, once the array is big enough to have a badly balanced partition, and the randomness comes from `clock()` and `time(NULL)`** — `ltablib.c` starts its quicksort with a randomization of 0, which its `choosePivot` is not asked to use, so the pivot is the middle element. It reaches for a real one only after a partition lands badly, which is what `if ((up - lo) / 128 > n)` says, where `n` is the smaller of the two intervals the partition left; and what it reaches for is `l_randomizePivot`, which copies `clock()` and `time(NULL)` into an array of `unsigned int` and adds them up. Since `up - lo` is one less than the size of the interval, an interval of 128 or fewer elements can never set it: 127 / 128 is 0, and 0 is not more than anything. So an array of 128 or fewer elements sorts by a fixed route and compares a fixed sequence of pairs, and a bigger one may not, from one second to the next. The array it ends up with is the same either way — only the pairs it compares can differ, and only a comparison function that notices the order it is called in can see them. The table fuzz asks such a function of arrays of up to 100 elements and of nothing bigger (§5.13), and this port carries the same randomization for the arrays that can reach it.
 
 ---
 
