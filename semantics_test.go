@@ -266,7 +266,7 @@ func TestMetamethods(t *testing.T) {
 // stops at a NUL -- so the constant in '"a\0b" & 1' is named 'a' and
 // nothing after it.  A Lua string can hold a NUL: only the message
 // cannot.  The port was printing the whole thing, NUL and all, which is
-// the one difference the differential fuzz found in 37 615 expressions.
+// the one difference the differential fuzz found in 72 463 expressions.
 //
 // It is here rather than only in testdata/diff because the fuzz needs a
 // reference interpreter beside it, and this does not.

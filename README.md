@@ -684,7 +684,7 @@ a difference is always reproducible.
 
 | | Built | Answers compared |
 |---|---|---|
-| `fuzz_test.go` | 37 615 expressions — 43 operands against every operator, plus the calls that take a base or a format — and 201 written-out snippets for what combination cannot reach: syntax errors, metamethods, coroutines, hooks, patterns, non-string errors, stack overflow | 37 816 |
+| `fuzz_test.go` | 72 463 expressions — 43 operands against every operator, and each of those again in a form the VM has to run at runtime instead of folding while it compiles, plus the calls that take a base or a format — and 201 written-out snippets for what combination cannot reach: syntax errors, metamethods, coroutines, hooks, patterns, non-string errors, stack overflow | 72 664 |
 | `patternfuzz_test.go` | 6 991 patterns — every pattern atom against every atom, plus the triples that need three pieces to mean anything — against 25 subjects | 1 048 650 |
 | `formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
 | `numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
@@ -767,11 +767,29 @@ is a constant and is fine, `math.exp(1)` is not, because Go's `math` and
 the platform's libm disagree in the last ulp (§6.7) and the fuzz would
 then be reporting the maths library rather than the conversion.
 
+The expression half asks every operation twice, and the second form is
+the one that matters. `A op B` where both operands are numerals is not
+a runtime operation at all: `lcode.c`'s `constfolding` folds it while it
+compiles, so what runs is a constant, and `OP_ADD`, `OP_IDIV` and their
+neighbours are never reached. The second form —
+
+```lua
+(function() local a, b = A, B return a op b end)()
+```
+
+— is the same operation arrived at with two values in registers, which
+is where a string is coerced to a number, where an integer division by
+zero raises, and where the two would answer differently if only one of
+them were right. A grid of one is a grid of the compiler. This half was
+probed on its own first, over 30 258 runtime expressions, and did not
+differ; it is in the grid so that it stays that way.
+
 It is worth saying what makes a fuzz like this worthless, because one
 round of it was. A generated chunk that does not *load* prints the same
 syntax error on both sides, and identical output is what success looks
-like — 37 615 expressions were being compared without a single one of
-them running. Both halves now assert that the chunk ran to the end
+like — all 37 615 expressions of the first round were being compared
+without a single one of them running. Both halves now assert that the
+chunk ran to the end
 (`count` answered) before anything is compared, and each is checked by
 breaking something on purpose and watching it go red. The values are
 quoted byte by byte rather than with `%q` for a related reason: `%q`

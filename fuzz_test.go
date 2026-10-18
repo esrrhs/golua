@@ -84,11 +84,29 @@ func fuzzExprs() []string {
 	var e []string
 	add := func(s string) { e = append(e, s) }
 
-	/* every operand, with every operator, against every operand */
+	/* every operand, with every operator, against every operand --
+	   twice, because there are two code paths and only one of them
+	   was being asked.
+
+	   'A op B' with two numerals is not a runtime operation at all:
+	   lcode.c's 'constfolding' folds it while it compiles, so what
+	   runs is a constant.  '(function() local a, b = A, B return
+	   a op b end)()' is the same operation asked of the VM, through
+	   OP_ADD and its neighbours, with the operands in registers --
+	   which is where a string is coerced to a number, where an
+	   integer division by zero raises, and where the two answer
+	   differently if only one of them is right.  A grid of one is a
+	   grid of the compiler.
+
+	   (The runtime half was probed on its own first, over 30 258
+	   expressions, and did not differ; it is here so that it stays
+	   that way.) */
 	for _, a := range fuzzVals {
 		for _, b := range fuzzVals {
 			for _, op := range fuzzOps {
 				add(a + " " + op + " " + b)
+				add("(function() local a, b = " + a + ", " + b +
+					" return a " + op + " b end)()")
 			}
 		}
 	}
