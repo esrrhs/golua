@@ -689,6 +689,7 @@ a difference is always reproducible.
 | `formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
 | `numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
 | `forfuzz_test.go` | 16 277 numeric `for` loops — 25 values in each of the three positions: zeroes of both signs, integers and floats, both ends of the integer range, the floats just outside it, the point where a float stops counting by ones, and the three values that are not comparable at all — each asked with the step written out and with it left to default to 1, plus each of 9 values that are not numbers in each of the three positions | 16 277 |
+| `codegenfuzz_test.go` | 419 snippets — every literal, every operator against every shape of operand, every statement form both bare and inside a function, every shape a closure can capture, and 40 things that must not compile — plus all 116 sources in `testdata`, official and ours. What is compared is not what they print but **what they compile to**: 1 000 214 bytes of byte code | 1 000 214 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -816,6 +817,20 @@ mean its negation is true. Both are fixed and pinned in
 because a NaN *limit* with an integer start and step is not the float
 path at all: `forlimit` cannot coerce it and truncates it to
 `mininteger`, or skips the loop, depending on the step's sign.
+
+The codegen half is the only one that does not ask what a program
+prints. It compiles every snippet and every source in `testdata` on
+both sides and compares the **bytes**. Byte code is a far stricter
+answer than output: a difference in register allocation, in whether a
+jump is threaded, in whether two constants are folded, in the order of
+the constant table, in the line info, or in an upvalue's index changes
+the bytes while leaving what the program prints exactly the same — and
+each of those is somewhere a translation can be wrong and still look
+right. Where a snippet does not compile at all, the complaint is
+compared instead, which covers the lexer's and the parser's error
+messages over the same grid. It is also the cheapest of the seven: one
+process per side, 1.4 seconds, for a million bytes. A failure names
+which snippet's bytes part and where.
 
 It is worth saying what makes a fuzz like this worthless, because one
 round of it was. A generated chunk that does not *load* prints the same
