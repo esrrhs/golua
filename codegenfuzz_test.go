@@ -203,8 +203,128 @@ var codegenSnippets = func() []string {
 	}
 	s = append(s, codegenUpvalues...)
 	s = append(s, codegenBad...)
+	s = append(s, codegenCombos()...)
 	return s
 }()
+
+// ---- the combinatorial half -------------------------------------------
+//
+// Every expression of depth two over these atoms and operators, each
+// inside a function so that '...', 'a' and 't' are legal; then a sample
+// of depth three; then a sample of them again in each of the statement
+// positions that can hold an expression.  A hundred thousand snippets,
+// which is a hundred thousand chances for the compiler to disagree.
+
+var codegenAtoms = []string{
+	"1", "2", "2.5", "-1", "0.0", `"s"`, `"1"`, "nil", "true", "false",
+	"a", "b", "t", "t.x", "t[1]", "f()", "{}", "...", "-a", "#t",
+}
+
+// codegenNums is which of those are numerals.  It matters for exactly
+// one operator: two numerals are what constfolding needs, and '^' is
+// the one folded operation whose answer is not decided by IEEE
+// arithmetic -- it is pow, and Go's and libc's pow differ in the last
+// ulp for a quarter of the arguments.  So '2 ^ 2.5' is left out, and
+// 'a ^ 2.5', which is an instruction rather than a constant, is not.
+var codegenNums = map[string]bool{
+	"1": true, "2": true, "2.5": true, "-1": true, "0.0": true, `"1"`: true,
+}
+
+var codegenStmts = []string{
+	"return %s",
+	"local x = %s return x",
+	"local x, y = %s, 1 return y",
+	"if %s then end",
+	"if %s then else end",
+	"while %s do break end",
+	"repeat until %s",
+	"for i = 1, %s do break end",
+	"local t = {} t[1] = %s return t",
+	"local t = {} t.k = %s return t",
+	"return f(%s)",
+	"return f(%s, 1)",
+	"return f(1, %s)",
+	"return {%s}",
+	"return {%s, 1}",
+	"return {k = %s}",
+	"return (%s)",
+	"return not %s",
+	"do local x = %s end",
+	"for k, v in %s do end",
+	"return %s and 1 or 2",
+	"return 1 and %s",
+}
+
+func codegenCombos() []string {
+	seen := map[string]bool{}
+	var s []string
+	add := func(x string) {
+		if strings.ContainsAny(x, "\n\r") {
+			panic("a snippet with a newline in it: " + strconv.Quote(x))
+		}
+		if !seen[x] {
+			seen[x] = true
+			s = append(s, x)
+		}
+	}
+	wrap := func(e string) string {
+		return "local function g(a, b, t, ...) " + e + " end return g"
+	}
+
+	var depth2 []string
+	for _, x := range codegenAtoms {
+		for _, op := range codegenOps {
+			for _, y := range codegenAtoms {
+				if op == "^" && codegenNums[x] && codegenNums[y] {
+					continue /* a folded pow is not exactly determined */
+				}
+				depth2 = append(depth2, x+" "+op+" "+y)
+			}
+		}
+	}
+	for _, op := range codegenUnOps {
+		for _, x := range codegenAtoms {
+			depth2 = append(depth2, op+x)
+		}
+		for _, e := range depth2[:200] {
+			depth2 = append(depth2, op+"("+e+")")
+		}
+	}
+	/* Depth three in full is 20*18*20*18*20, so every seventh
+	   expression is taken instead.  They go into their own slice: the
+	   loop is reading depth2. */
+	var depth3 []string
+	for i, e := range depth2 {
+		if i%7 != 0 {
+			continue
+		}
+		for _, op := range codegenOps {
+			if op == "^" {
+				continue
+			}
+			depth3 = append(depth3, "("+e+") "+op+" 1")
+			depth3 = append(depth3, "1 "+op+" ("+e+")")
+		}
+		for _, op := range codegenUnOps {
+			depth3 = append(depth3, op+"("+e+")")
+		}
+	}
+	for _, e := range depth2 {
+		add(wrap("return " + e))
+	}
+	for _, e := range depth3 {
+		add(wrap("return " + e))
+	}
+	for i, e := range depth2 {
+		if i%4 != 0 {
+			continue
+		}
+		for _, f := range codegenStmts {
+			add(wrap(fmt.Sprintf(f, e)))
+		}
+	}
+	return s
+}
 
 // codegenChunk is the harness.  It answers one line per case --
 // number, source, where in the binary its bytes start, how many there
