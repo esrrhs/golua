@@ -186,11 +186,12 @@ jobs:
       # name and the rest a command (namefuzz_test.go); and 2 517
       # questions about 'os.date' and 'os.time' -- 2 523 where the C
       # library is glibc's -- asked in each of four zones
-      # (datefuzz_test.go).  Every one of them needs LUA_REF for
-      # the same reason the suite above does, so they have to run here
-      # and nowhere else.
+      # (datefuzz_test.go); and 990 questions about the six functions
+      # of the table library (tablefuzz_test.go).  Every one of them
+      # needs LUA_REF for the same reason the suite above does, so
+      # they have to run here and nowhere else.
       - name: Differential fuzz
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential|TestDateFuzzDifferential' -timeout 30m .
+        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential|TestDateFuzzDifferential|TestTableFuzzDifferential' -timeout 30m .
