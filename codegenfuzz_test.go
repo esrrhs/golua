@@ -398,9 +398,18 @@ func TestCodegenFuzzDifferential(t *testing.T) {
 	/* Every Lua source in the repository, official and ours.  The paths
 	   have to be absolute: the interpreters run with the temp
 	   directory as their working directory, so that what an error
-	   message names is the same on both sides. */
+	   message names is the same on both sides.
+
+	   testdata/third adds the five third-party libraries: they are
+	   real code somebody else wrote, so their bytecode is a question
+	   about the parser and the code generator that no case written
+	   for this port would have thought to ask. */
 	var list []string
-	for _, pattern := range []string{"testdata/official/*.lua", "testdata/diff/*.lua"} {
+	for _, pattern := range []string{
+		"testdata/official/*.lua",
+		"testdata/diff/*.lua",
+		"testdata/third/*.lua",
+	} {
 		m, err := filepath.Glob(pattern)
 		if err != nil {
 			t.Fatal(err)

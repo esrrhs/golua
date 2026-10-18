@@ -164,6 +164,16 @@ jobs:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
         run: go test -v -run TestDifferentialSuite -timeout 20m .
 
+      # Five single-file Lua libraries nobody wrote for this port, 2 759
+      # lines of them, asked 264 questions (testdata/third).  It needs
+      # LUA_REF for the same reason the suite above does: the golden is
+      # captured from the reference seconds before it is compared.
+      - name: Third-party corpus
+        shell: bash
+        env:
+          LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
+        run: go test -v -run TestThirdPartySuite -timeout 20m .
+
       # The same comparison without cases anybody wrote: 37 816
       # expressions and snippets built in the test and answered by both
       # interpreters (fuzz_test.go); 174 775 pattern/subject pairs,

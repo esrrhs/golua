@@ -673,7 +673,77 @@ about the Go runtime rather than about Lua:
 `Value` is 32 bytes rather than 40 for the same reason C's `TValue` is a
 union: a float shares the integer's field, stored as its IEEE bits.
 
-### 5.12 The differential fuzz
+### 5.12 The third-party corpus
+
+Everything above is a case somebody wrote — somebody who was, in every
+instance, thinking about one thing. `testdata/third` is the other kind:
+five single-file Lua libraries nobody wrote for this port, 2 759 lines
+between them, run unmodified and asked to print.
+
+| | Lines | What it is |
+|---|---|---|
+| `dkjson.lua` | 714 | a JSON encoder and decoder built out of `string.find` and a position |
+| `fun.lua` (Lua Fun) | 1 087 | 60 iterators, every one of them a coroutine |
+| `json.lua` (rxi) | 388 | a smaller JSON library, asked the same questions |
+| `inspect.lua` | 377 | a pretty-printer, which is a table walked and printed |
+| `middleclass.lua` | 193 | object orientation, which is metatables all the way down |
+
+What is under test is not any of them. It is the machine they run on,
+asked the way a real program asks it: a scanner that keeps a position
+and `find`s the next token, a string escaped through `gsub` and a table
+of replacements, a metatable chain three deep with `__index` on every
+level, an iterator chain that is five coroutines suspended inside one
+another. A bug that needs three features to line up before it shows is
+the kind neither a per-function case nor a fuzz over one library's
+arguments is looking for. `drive.lua` (517 lines) asks 264 questions and
+prints the answers; `TestThirdPartySuite` compares them line for line
+against PUC-Lua, golden captured from `LUA_REF` as everywhere else.
+
+Two things had to be taken out before any of that was comparable, and
+both are the sort of thing only a real library brings out:
+
+* **A table is printed with its keys sorted.** PUC-Lua seeds its string
+  hashes from the time and an address, so `pairs` hands out the keys of
+  the same table in a different order on every run — of the reference
+  as much as of this port. Three runs of the reference over `{a..f}`
+  answered `cdefab`, `fedcba`, `afdebc`; three of this port answered
+  `badcfe`, `fabcde`, `facbed`. A JSON encoder and a pretty-printer
+  *are* a loop over `pairs`, so without this the corpus would be
+  comparing the seed.
+* **A function is reported by `type`, not `tostring`.** The address a
+  function prints with is the host's, and differs between the two
+  binaries by gigabytes. `inspect` prints `<function 1>` — a counter
+  per process — so that one is fine, but `dkjson.use_lpeg` printed a
+  raw address and had to be asked differently.
+
+The answer it gives today is: **no difference**, in all 264. That is
+worth less than it sounds unless the corpus can be shown to be able to
+say otherwise, so it was checked the way every fuzz here is checked, by
+breaking something on purpose and watching it go red:
+
+* `fmtFloat`'s `%.14g` cut to `%.13g` — 40 lines red, naming
+  `dkjson/encode 0.33333333333333`.
+* `%q`'s special case for `\n` removed from `addquoted` — 86 lines red,
+  starting at the case whose subject contains a newline.
+
+The first of those is also a small lesson in how to read a green run.
+The corpus as first written — 228 cases, none of them a number with
+more than three significant digits — did **not** go red under that
+mutation. It was not evidence that number-to-string is right; it was
+evidence that nothing had asked. Twelve long values (`1/3`, `math.pi`,
+`0.1`, `2^53`, `1e-15`, `12345678901234`, …) went in because of it, and
+the corpus has been sensitive to that digit ever since. "No difference
+found" is only as strong as the questions that were asked.
+
+The five libraries are also in the codegen fuzz's source list, so what
+is compared is not only what they print but what they compile to: 122
+sources, 17 197 581 bytes of byte code, PUC-Lua's on both sides.
+
+All five are MIT, and each one's license is checked in beside it
+(`LICENSE_*.txt`). None of them is vendored into the library itself —
+they live under `testdata` and nothing outside the tests can see them.
+
+### 5.13 The differential fuzz
 
 Everything above is a case somebody wrote. This is the other kind: cases
 built in the test, none of them chosen, run through the reference
@@ -689,7 +759,7 @@ a difference is always reproducible.
 | `formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
 | `numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
 | `forfuzz_test.go` | 16 277 numeric `for` loops — 25 values in each of the three positions: zeroes of both signs, integers and floats, both ends of the integer range, the floats just outside it, the point where a float stops counting by ones, and the three values that are not comparable at all — each asked with the step written out and with it left to default to 1, plus each of 9 values that are not numbers in each of the three positions | 16 277 |
-| `codegenfuzz_test.go` | 101 356 snippets — every literal, every operator against every shape of operand, every statement form both bare and inside a function, every shape a closure can capture, 40 things that must not compile, and then every expression of depth two over 20 atoms and 18 operators plus a seventh of depth three, each in 22 statement positions — plus all 116 sources in `testdata`, official and ours. What is compared is not what they print but **what they compile to**: 17 109 752 bytes of byte code | 17 109 752 |
+| `codegenfuzz_test.go` | 101 356 snippets — every literal, every operator against every shape of operand, every statement form both bare and inside a function, every shape a closure can capture, 40 things that must not compile, and then every expression of depth two over 20 atoms and 18 operators plus a seventh of depth three, each in 22 statement positions — plus all 122 sources in `testdata` — official, ours, and the five third-party libraries of §5.12. What is compared is not what they print but **what they compile to**: 17 109 752 bytes of byte code | 17 109 752 |
 | `iofuzz_test.go` | 3 166 things the `io` library can be asked — every mode of length 0 to 3 over `r w a + b t x` against a file that exists, one that does not and a directory; every format `read` takes (each letter of the alphabet in both cases, the four C asks for, their `* ` spellings, and the counts and the values that are not formats) against 10 fixtures, and the same three at a time; what `write` puts in the file, byte for byte, for each kind of value and for two of them; `seek` from each of 8 whence by each of 17 offsets, before and after a read; `setvbuf`; `lines` and `f:lines`; 13 kinds of handle — the three standard ones, a file opened each way round, a closed one, `tmpfile`, both ends of a `popen` — used 17 ways each; `io.input` and `io.output`; and the errors, `<close>`, and dropping a handle without closing it. Both interpreters get an identical copy of the fixtures in a directory of their own | 3 166 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 
@@ -939,7 +1009,7 @@ The C block behind a userdata is freed when the userdata is collected: `C.malloc
 
 Three tests of the official suite — `coroutine`, `gengc`, `locals` — assert precisely that a collection happened right after a `collectgarbage`, and all three are byte-identical. An object with a `__gc` is held between cycles so that Go cannot finalise it at a moment of its own choosing, and the metamethod of every object that still has one runs when the state closes, reachable or not.
 
-One thing Go's finalizers will not do at all is fire for an object in a reference cycle: two objects that point at each other, one of them with a finalizer, are never collected — not after one cycle, not after ten. A `__gc` that seems never to run is worth checking for a pointer back before anything else (§5.12: the stream behind a file handle had one, and every dropped handle was keeping its buffer).
+One thing Go's finalizers will not do at all is fire for an object in a reference cycle: two objects that point at each other, one of them with a finalizer, are never collected — not after one cycle, not after ten. A `__gc` that seems never to run is worth checking for a pointer back before anything else (§5.13: the stream behind a file handle had one, and every dropped handle was keeping its buffer).
 
    What a cycle here cannot answer is only what measures an allocator that is not there — `gc.lua` — the one file of the official suite that is a test *of* a collector — asks how much memory a collection freed and in what order it ran the finalizers of a long list, which is a question about PUC-Lua's own tri-color marking and not about Go's.
 
@@ -965,7 +1035,7 @@ does not merely make `2^2.5` print wrong, it makes it a *constant in
 the byte code*: `0x1.6a09e667f3bcdp+2` under C, `0x1.6a09e667f3bccp+2`
 here. It is the only way two identical programs can compile to
 different bytes, and it was the single difference in the 103 786-snippet
-probe the codegen fuzz grew out of (§5.12). Every other operator that
+probe the codegen fuzz grew out of (§5.13). Every other operator that
 folds is exact: the arithmetic ones are IEEE, `//` and `%` are exactly
 defined and both libraries answer identically, and the integer and
 string conversions are decided by the representation. Measured against
@@ -976,11 +1046,11 @@ string conversions are decided by the representation. Measured against
 9. **A coroutine suspends by parking its goroutine, and a C frame that suspended is still there when it wakes** — C's `lua_yield` long-jumps to the `lua_resume` that will pick the thread up again, and everything between is discarded; this port instead hands the yielded values to the resumer through a channel and then blocks on the next resume request, so the Lua stack, the saved program counter and — for a C caller — the C stack itself all survive at the yield point. That is what lets a metamethod or a Go function yield from the middle of a call, and it is what makes continuations work (§5.6). Two consequences follow. The C-call depth a thread inherits from its resumer is refreshed at every yield rather than only at the first resume, which is what C does too, since `lua_resume` runs on every resume. And a C function that yielded does not get to notice: `lua_callk` returns to it as if the call had simply finished, so the status a `lua_callk` continuation hears is `LUA_OK` where PUC-Lua's is always `LUA_YIELD` — a constant, so nothing can depend on the difference. `lua_pcallk`'s status does vary, and that one *is* PUC-Lua's: the port counts the yields the thread has made and reports `LUA_YIELD` when the call was interrupted by one.
 10. **Two short strings that are equal may not be the same object** — PUC-Lua interns short strings for as long as they live, so `lua_topointer` answers the same address for two equal ones and a C extension can use that address as a key. Here interning is a two-generation cache (§5.11), so a string can be interned again once it has aged out of both generations, and two live strings with the same bytes may then sit at different addresses. Nothing in Lua can see it: strings compare by content, which is why `luaS_eqshrstr` compares the hash and then the bytes where C's `eqshrstr` would compare pointers, and `rawequal`, `==`, table keys and `next` all behave as before. Only `lua_topointer` — and a `lua_rawsetp` keyed on it — can tell the difference.
 
-11. **A `%a` tie on an odd digit rounds to even, which is what glibc does and what Apple's library does not** — PUC-Lua hands every conversion to the platform's `sprintf`, so what `string.format("%.0A", 1.5)` answers is what that library answers, and the libraries do not agree: `1.5` is `0x1.8p+0`, so a precision of zero drops exactly half of the last digit kept. glibc's `__printf_fp` hands the digit being kept to `round_away`, which leaves an even digit alone and steps an odd one, and answers `0X2P+0`; Apple's library rounds a tie *down* whatever that digit is, and answers `0X1P+0`. This port answers `0X2P+0`: it is what the C library's own `%f` answers on every platform (`%.0f` of `1.5` is `2`, in both libraries), and it is what makes `%a` agree with `%f` inside a single call. So on a host whose library is Apple's, `%.0a` of `1.5` is `0x2p+0` here and `0x1p+0` under PUC-Lua — the only case in the whole library where a difference is the C library's rather than this port's. A tie on an *even* digit is where both rules land anyway, so nothing differs there; the fuzz asks the reference which library it was built against and leaves the rest out (§5.12).
+11. **A `%a` tie on an odd digit rounds to even, which is what glibc does and what Apple's library does not** — PUC-Lua hands every conversion to the platform's `sprintf`, so what `string.format("%.0A", 1.5)` answers is what that library answers, and the libraries do not agree: `1.5` is `0x1.8p+0`, so a precision of zero drops exactly half of the last digit kept. glibc's `__printf_fp` hands the digit being kept to `round_away`, which leaves an even digit alone and steps an odd one, and answers `0X2P+0`; Apple's library rounds a tie *down* whatever that digit is, and answers `0X1P+0`. This port answers `0X2P+0`: it is what the C library's own `%f` answers on every platform (`%.0f` of `1.5` is `2`, in both libraries), and it is what makes `%a` agree with `%f` inside a single call. So on a host whose library is Apple's, `%.0a` of `1.5` is `0x2p+0` here and `0x1p+0` under PUC-Lua — the only case in the whole library where a difference is the C library's rather than this port's. A tie on an *even* digit is where both rules land anyway, so nothing differs there; the fuzz asks the reference which library it was built against and leaves the rest out (§5.13).
 
 12. **A subnormal number is written normalised, which is what Apple's library does and what glibc does not** — of a normalised float the leading hexadecimal digit of `%a` is 1; of one too small to have a 1 — below 2.2250738585072014e-308 — C leaves it unspecified, because there is nothing to normalise to. glibc keeps the exponent of the smallest normal float and writes the raw 52-bit fraction after the point, so `string.format("%a", 5e-324)` is `0x0.0000000000001p-1022`; Apple's library normalises it, and so does this port, for which it is `0x1p-1074` — what Go's own hexadecimal conversion writes, and one number rather than two spellings of one. Unlike the tie above, this one the standard allows both ways, so neither is the more correct. It reaches further than `%a`: `%q` writes a float the same way, and that is the conversion a program uses to write a number back out. Both spellings are numerals Lua reads, so a value written by one side is read by the other either way. The fuzz asks the reference which library it was built against, and on a reference that answers `0x0.0000000000001p-1022` the grid cases that turn on it are not asked on either side.
 
-13. **`file:setvbuf(mode, size)` with a negative size always succeeds** — C hands `size` to `setvbuf` as a `size_t`, so `-1` is `SIZE_MAX` there, and what the library does with that is the library's business: Apple's asks the allocator for a buffer that large, fails, and leaves `errno` alone, so PUC-Lua answers `nil, "(no extra info)", 0`; glibc pays no attention to the size when it is given no buffer of its own and answers `true`. No portable answer exists, so the port answers `true` and the grid does not ask the case (§5.12). Every other size — including 0, which glibc's `setvbuf` treats as "no buffer asked for" — is PUC-Lua's.
+13. **`file:setvbuf(mode, size)` with a negative size always succeeds** — C hands `size` to `setvbuf` as a `size_t`, so `-1` is `SIZE_MAX` there, and what the library does with that is the library's business: Apple's asks the allocator for a buffer that large, fails, and leaves `errno` alone, so PUC-Lua answers `nil, "(no extra info)", 0`; glibc pays no attention to the size when it is given no buffer of its own and answers `true`. No portable answer exists, so the port answers `true` and the grid does not ask the case (§5.13). Every other size — including 0, which glibc's `setvbuf` treats as "no buffer asked for" — is PUC-Lua's.
 14. **Performance** — the port is slower than C by a constant factor that depends on the workload: 1.4× to 3.6× for ordinary code (§5.11), and 6.0× for coroutines, where a yield/resume pair is two goroutine switches rather than a swap of stack pointers. This is a difference in kind from PUC-Lua but not one in behaviour: no program answers differently because of it. The one place it can be observed is a script that is also a deadline — a workload timed out on one side and finished on the other — which is why the official suite's `heavy` test is a known difference.
 
 ---
@@ -1011,7 +1081,7 @@ CI runs the whole matrix on Linux, macOS and Windows
 |---|---|---|
 | **build** | 3 OS × `oldstable` + `stable` | `go vet`, `go build`, `go test`; `go test -race` on Linux and macOS (the race detector needs cgo); a `gofmt` check and one pass over the benchmarks on Linux |
 | **nocgo** | 3 OS | `CGO_ENABLED=0` build and test, plus cross-compiles for five targets — this is what keeps the pure-Go promise true |
-| **PUC-Lua suites** | Linux + macOS | downloads Lua 5.4.9 from lua.org, builds a reference interpreter from source, and runs both suites with `LUA_REF` pointed at it: `TestOfficialSuite` (Lua's own 33 files, in `testdata/official`) and `TestDifferentialSuite` (this port's 82 cases, in `testdata/diff`). Goldens are captured fresh for that platform and then compared byte for byte. That makes both suites real gates everywhere and stops the checked-in darwin goldens from rotting unnoticed. (No Windows: Lua's own makefile is a Unix one.) |
+| **PUC-Lua suites** | Linux + macOS | downloads Lua 5.4.9 from lua.org, builds a reference interpreter from source, and runs both suites with `LUA_REF` pointed at it: `TestOfficialSuite` (Lua's own 33 files, in `testdata/official`) and `TestDifferentialSuite` (this port's 82 cases, in `testdata/diff`) and `TestThirdPartySuite` (§5.12's five third-party libraries). Goldens are captured fresh for that platform and then compared byte for byte. That makes both suites real gates everywhere and stops the checked-in darwin goldens from rotting unnoticed. (No Windows: Lua's own makefile is a Unix one.) |
 
 Reference sources for review (not vendored): `lua-5.4.9`, <https://www.lua.org/ftp/lua-5.4.9.tar.gz>.
 

@@ -1,0 +1,303 @@
+1	dkjson/decode "[1,2,3]"	"{[1]=1, [2]=2, [3]=3}"	8	nil
+2	dkjson/decode-null "[1,2,3]"	"{[1]=1, [2]=2, [3]=3}"	8	nil
+3	dkjson/decode "{\"a\":1,\"b\":2}"	"{[\"a\"]=1, [\"b\"]=2}"	14	nil
+4	dkjson/decode-null "{\"a\":1,\"b\":2}"	"{[\"a\"]=1, [\"b\"]=2}"	14	nil
+5	dkjson/decode "{\"a\":[1,2,{\"b\":null}],\"c\":true,\"d\":false}"	"{[\"a\"]={[1]=1, [2]=2, [3]={}}, [\"c\"]=true, [\"d\"]=false}"	42	nil
+6	dkjson/decode-null "{\"a\":[1,2,{\"b\":null}],\"c\":true,\"d\":false}"	"{[\"a\"]={[1]=1, [2]=2, [3]={[\"b\"]={}}}, [\"c\"]=true, [\"d\"]=false}"	42	nil
+7	dkjson/decode "{\"a\":1.5e10,\"b\":-0.0,\"c\":1e-10}"	"{[\"a\"]=15000000000.0, [\"b\"]=-0.0, [\"c\"]=1e-10}"	32	nil
+8	dkjson/decode-null "{\"a\":1.5e10,\"b\":-0.0,\"c\":1e-10}"	"{[\"a\"]=15000000000.0, [\"b\"]=-0.0, [\"c\"]=1e-10}"	32	nil
+9	dkjson/decode "\"a\\u00e9\\/b\\\\c\\\"d\""	"\"aé/b\\\\c\\\"d\""	19	nil
+10	dkjson/decode-null "\"a\\u00e9\\/b\\\\c\\\"d\""	"\"aé/b\\\\c\\\"d\""	19	nil
+11	dkjson/decode "{\"a\":\"\\ud83d\\ude00\"}"	"{[\"a\"]=\"😀\"}"	21	nil
+12	dkjson/decode-null "{\"a\":\"\\ud83d\\ude00\"}"	"{[\"a\"]=\"😀\"}"	21	nil
+13	dkjson/decode "[ ]"	"{}"	4	nil
+14	dkjson/decode-null "[ ]"	"{}"	4	nil
+15	dkjson/decode "{}"	"{}"	3	nil
+16	dkjson/decode-null "{}"	"{}"	3	nil
+17	dkjson/decode "null"	"nil"	5	nil
+18	dkjson/decode-null "null"	"{}"	5	nil
+19	dkjson/decode "  \
+\9[1,\
+ 2 ]  "	"{[1]=1, [2]=2}"	13	nil
+20	dkjson/decode-null "  \
+\9[1,\
+ 2 ]  "	"{[1]=1, [2]=2}"	13	nil
+21	dkjson/decode "{\"a\":1} trailing"	"{[\"a\"]=1}"	8	nil
+22	dkjson/decode-null "{\"a\":1} trailing"	"{[\"a\"]=1}"	8	nil
+23	dkjson/decode "[1,2,]"	"{[1]=1, [2]=2}"	7	nil
+24	dkjson/decode-null "[1,2,]"	"{[1]=1, [2]=2}"	7	nil
+25	dkjson/decode "{\"a\":}"	"nil"	6	"no valid JSON value at line 1, column 6"
+26	dkjson/decode-null "{\"a\":}"	"nil"	6	"no valid JSON value at line 1, column 6"
+27	dkjson/decode "{\"a\" 1}"	"{[1]=\"a\", [2]=1}"	8	nil
+28	dkjson/decode-null "{\"a\" 1}"	"{[1]=\"a\", [2]=1}"	8	nil
+29	dkjson/decode "nope"	"nil"	1	"no valid JSON value at line 1, column 1"
+30	dkjson/decode-null "nope"	"nil"	1	"no valid JSON value at line 1, column 1"
+31	dkjson/decode ""	"nil"	1	"no valid JSON value (reached the end)"
+32	dkjson/decode-null ""	"nil"	1	"no valid JSON value (reached the end)"
+33	dkjson/decode "[1,2"	"nil"	5	"unterminated array at line 1, column 1"
+34	dkjson/decode-null "[1,2"	"nil"	5	"unterminated array at line 1, column 1"
+35	dkjson/decode "{\"a\":1,\"a\":2}"	"{[\"a\"]=2}"	14	nil
+36	dkjson/decode-null "{\"a\":1,\"a\":2}"	"{[\"a\"]=2}"	14	nil
+37	dkjson/decode "[[[[1]]]]"	"{[1]={[1]={[1]={[1]=1}}}}"	10	nil
+38	dkjson/decode-null "[[[[1]]]]"	"{[1]={[1]={[1]={[1]=1}}}}"	10	nil
+39	dkjson/decode "{\"\":1}"	"{[\"\"]=1}"	7	nil
+40	dkjson/decode-null "{\"\":1}"	"{[\"\"]=1}"	7	nil
+41	dkjson/decode "{\"\\u00e9\":1}"	"{[\"é\"]=1}"	13	nil
+42	dkjson/decode-null "{\"\\u00e9\":1}"	"{[\"é\"]=1}"	13	nil
+43	dkjson/decode "\"unterminated"	"nil"	14	"unterminated string at line 1, column 1"
+44	dkjson/decode-null "\"unterminated"	"nil"	14	"unterminated string at line 1, column 1"
+45	dkjson/decode "{\"a\":01}"	"{[\"a\"]=1}"	9	nil
+46	dkjson/decode-null "{\"a\":01}"	"{[\"a\"]=1}"	9	nil
+47	dkjson/decode "[1e400]"	"{[1]=inf}"	8	nil
+48	dkjson/decode-null "[1e400]"	"{[1]=inf}"	8	nil
+49	dkjson/decode "-"	"nil"	1	"no valid JSON value at line 1, column 1"
+50	dkjson/decode-null "-"	"nil"	1	"no valid JSON value at line 1, column 1"
+51	dkjson/decode "+1"	"nil"	1	"no valid JSON value at line 1, column 1"
+52	dkjson/decode-null "+1"	"nil"	1	"no valid JSON value at line 1, column 1"
+53	dkjson/decode/pos	"{[1]=1, [2]=2, [3]=3}"	8	nil
+54	dkjson/decode/from	"{[1]=7}"	8	nil
+55	dkjson/depth	nil	"drive.lua:34: attempt to index a number value (local 'seen')"	nil
+56	dkjson/encode {[1]=1, [2]=2, [3]=3}	"[1,2,3]"	nil	nil
+57	dkjson/encode-indent {[1]=1, [2]=2, [3]=3}	"[1,2,3]"	nil	nil
+58	dkjson/encode {[1]="a", [2]="b"}	"[\"a\",\"b\"]"	nil	nil
+59	dkjson/encode-indent {[1]="a", [2]="b"}	"[\"a\",\"b\"]"	nil	nil
+60	dkjson/encode {[1]=1, [2]=1.5, [3]=-0.0, [4]=1e+300, [5]=-1e-300}	"[1,1.5,-0.0,1e+300,-1e-300]"	nil	nil
+61	dkjson/encode-indent {[1]=1, [2]=1.5, [3]=-0.0, [4]=1e+300, [5]=-1e-300}	"[1,1.5,-0.0,1e+300,-1e-300]"	nil	nil
+62	dkjson/encode {[1]=true, [2]=false}	"[true,false]"	nil	nil
+63	dkjson/encode-indent {[1]=true, [2]=false}	"[true,false]"	nil	nil
+64	dkjson/encode {[1]={[1]=1, [2]=2}, [2]={[1]=3, [2]={[1]=4, [2]=5}}}	"[[1,2],[3,[4,5]]]"	nil	nil
+65	dkjson/encode-indent {[1]={[1]=1, [2]=2}, [2]={[1]=3, [2]={[1]=4, [2]=5}}}	"[[1,2],[3,[4,5]]]"	nil	nil
+66	dkjson/encode {["a"]=1}	"{\"a\":1}"	nil	nil
+67	dkjson/encode-indent {["a"]=1}	"{\
+  \"a\":1\
+}"	nil	nil
+68	dkjson/encode {[""]=1}	"{\"\":1}"	nil	nil
+69	dkjson/encode-indent {[""]=1}	"{\
+  \"\":1\
+}"	nil	nil
+70	dkjson/encode {["a"]={["b"]={["c"]=1}}}	"{\"a\":{\"b\":{\"c\":1}}}"	nil	nil
+71	dkjson/encode-indent {["a"]={["b"]={["c"]=1}}}	"{\
+  \"a\":{\
+    \"b\":{\
+      \"c\":1\
+    }\
+  }\
+}"	nil	nil
+72	dkjson/encode "plain"	"\"plain\""	nil	nil
+73	dkjson/encode-indent "plain"	"\"plain\""	nil	nil
+74	dkjson/encode "a\0b"	"\"a\\u0000b\""	nil	nil
+75	dkjson/encode-indent "a\0b"	"\"a\\u0000b\""	nil	nil
+76	dkjson/encode "a\"b\\c"	"\"a\\\"b\\\\c\""	nil	nil
+77	dkjson/encode-indent "a\"b\\c"	"\"a\\\"b\\\\c\""	nil	nil
+78	dkjson/encode "a\
+b\9c"	"\"a\\nb\\tc\""	nil	nil
+79	dkjson/encode-indent "a\
+b\9c"	"\"a\\nb\\tc\""	nil	nil
+80	dkjson/encode "é中😀"	"\"é中😀\""	nil	nil
+81	dkjson/encode-indent "é中😀"	"\"é中😀\""	nil	nil
+82	dkjson/encode "\13\12\8"	"\"\\r\\f\\b\""	nil	nil
+83	dkjson/encode-indent "\13\12\8"	"\"\\r\\f\\b\""	nil	nil
+84	dkjson/encode 42	"42"	nil	nil
+85	dkjson/encode-indent 42	"42"	nil	nil
+86	dkjson/encode 0	"0"	nil	nil
+87	dkjson/encode-indent 0	"0"	nil	nil
+88	dkjson/encode -0.0	"-0.0"	nil	nil
+89	dkjson/encode-indent -0.0	"-0.0"	nil	nil
+90	dkjson/encode 0.5	"0.5"	nil	nil
+91	dkjson/encode-indent 0.5	"0.5"	nil	nil
+92	dkjson/encode true	"true"	nil	nil
+93	dkjson/encode-indent true	"true"	nil	nil
+94	dkjson/encode false	"false"	nil	nil
+95	dkjson/encode-indent false	"false"	nil	nil
+96	dkjson/encode 0.33333333333333	"0.33333333333333"	nil	nil
+97	dkjson/encode-indent 0.33333333333333	"0.33333333333333"	nil	nil
+98	dkjson/encode 3.1415926535898	"3.1415926535898"	nil	nil
+99	dkjson/encode-indent 3.1415926535898	"3.1415926535898"	nil	nil
+100	dkjson/encode 0.1	"0.1"	nil	nil
+101	dkjson/encode-indent 0.1	"0.1"	nil	nil
+102	dkjson/encode 0.14285714285714	"0.14285714285714"	nil	nil
+103	dkjson/encode-indent 0.14285714285714	"0.14285714285714"	nil	nil
+104	dkjson/encode 9.007199254741e+15	"9.007199254741e+15"	nil	nil
+105	dkjson/encode-indent 9.007199254741e+15	"9.007199254741e+15"	nil	nil
+106	dkjson/encode 9.007199254741e+15	"9.007199254741e+15"	nil	nil
+107	dkjson/encode-indent 9.007199254741e+15	"9.007199254741e+15"	nil	nil
+108	dkjson/encode 123.456	"123.456"	nil	nil
+109	dkjson/encode-indent 123.456	"123.456"	nil	nil
+110	dkjson/encode 1e+15	"1e+15"	nil	nil
+111	dkjson/encode-indent 1e+15	"1e+15"	nil	nil
+112	dkjson/encode 1e+16	"1e+16"	nil	nil
+113	dkjson/encode-indent 1e+16	"1e+16"	nil	nil
+114	dkjson/encode 1e-15	"1e-15"	nil	nil
+115	dkjson/encode-indent 1e-15	"1e-15"	nil	nil
+116	dkjson/encode 12345678901234	"12345678901234"	nil	nil
+117	dkjson/encode-indent 12345678901234	"12345678901234"	nil	nil
+118	dkjson/encode -1.7976931348623e+308	"-1.7976931348623e+308"	nil	nil
+119	dkjson/encode-indent -1.7976931348623e+308	"-1.7976931348623e+308"	nil	nil
+120	dkjson/encode/nan	"null"	nil	nil
+121	dkjson/encode/inf	"null"	nil	nil
+122	dkjson/encode/fn	nil	"type 'function' is not supported by JSON."	nil
+123	dkjson/encode/mixed	"{\"1\":1,\"a\":2}"	nil	nil
+124	dkjson/encode/cycle	nil	"reference cycle"	nil
+125	dkjson/encode/keyorder	"{\"b\":2,\"a\":1}"	nil	nil
+126	dkjson/encode/null	"[null]"	nil	nil
+127	dkjson/pack	"{\"__jsontype\":\"array\"}"	nil	nil
+128	dkjson/use_lpeg	"function"	"nil"	nil
+129	dkjson/big	1963	1964	nil
+130	dkjson/deep	362	nil	"table"
+131	dkjson/numbers	nil	"drive.lua:34: attempt to index a number value (local 'seen')"	nil
+132	dkjson/uescape	"\"\\0\\31\\127￿😀\""	"\"���\""	"\"uZZZZ\""
+133	dkjson/encode-limits	"[9.007199254741e+15,-9.007199254741e+15,9.2233720368548e+18,9223372036854775807,-9223372036854775808,4.9406564584125e-324,1.7976931348623e+308]"	nil	nil
+134	dkjson/encode-utf8	"\"é中😀\""	"\"\\u007f�\""	"\"a�b\""
+135	dkjson/decode-pos-past	"nil"	nil	nil
+136	dkjson/decode-pos-zero	nil	"drive.lua:34: attempt to index a number value (local 'seen')"	nil
+137	rxi/decode "[1,2,3]"	"{[1]=1, [2]=2, [3]=3}"	nil	nil
+138	rxi/decode "{\"a\":1,\"b\":2}"	"{[\"a\"]=1, [\"b\"]=2}"	nil	nil
+139	rxi/decode "{\"a\":[1,2,{\"b\":null}],\"c\":true,\"d\":false}"	"{[\"a\"]={[1]=1, [2]=2, [3]={}}, [\"c\"]=true, [\"d\"]=false}"	nil	nil
+140	rxi/decode "{\"a\":1.5e10,\"b\":-0.0,\"c\":1e-10}"	"{[\"a\"]=15000000000.0, [\"b\"]=-0.0, [\"c\"]=1e-10}"	nil	nil
+141	rxi/decode "\"a\\u00e9\\/b\\\\c\\\"d\""	"\"aé/b\\\\c\\\"d\""	nil	nil
+142	rxi/decode "{\"a\":\"\\ud83d\\ude00\"}"	"{[\"a\"]=\"😀\"}"	nil	nil
+143	rxi/decode "[ ]"	"{}"	nil	nil
+144	rxi/decode "{}"	"{}"	nil	nil
+145	rxi/decode "null"	"nil"	nil	nil
+146	rxi/decode "  \
+\9[1,\
+ 2 ]  "	"{[1]=1, [2]=2}"	nil	nil
+147	rxi/decode "{\"a\":1} trailing"	nil	"./json.lua:185: trailing garbage at line 1 col 9"	nil
+148	rxi/decode "[1,2,]"	"{[1]=1, [2]=2}"	nil	nil
+149	rxi/decode "{\"a\":}"	nil	"./json.lua:185: unexpected character '}' at line 1 col 6"	nil
+150	rxi/decode "{\"a\" 1}"	nil	"./json.lua:185: expected ':' after key at line 1 col 6"	nil
+151	rxi/decode "nope"	nil	"./json.lua:185: invalid literal 'nope' at line 1 col 1"	nil
+152	rxi/decode ""	nil	"./json.lua:185: unexpected character '' at line 1 col 1"	nil
+153	rxi/decode "[1,2"	nil	"./json.lua:185: expected ']' or ',' at line 1 col 6"	nil
+154	rxi/decode "{\"a\":1,\"a\":2}"	"{[\"a\"]=2}"	nil	nil
+155	rxi/decode "[[[[1]]]]"	"{[1]={[1]={[1]={[1]=1}}}}"	nil	nil
+156	rxi/decode "{\"\":1}"	"{[\"\"]=1}"	nil	nil
+157	rxi/decode "{\"\\u00e9\":1}"	"{[\"é\"]=1}"	nil	nil
+158	rxi/decode "\"unterminated"	nil	"./json.lua:185: expected closing quote for string at line 1 col 1"	nil
+159	rxi/decode "{\"a\":01}"	"{[\"a\"]=1}"	nil	nil
+160	rxi/decode "[1e400]"	"{[1]=inf}"	nil	nil
+161	rxi/decode "-"	nil	"./json.lua:185: invalid number '-' at line 1 col 1"	nil
+162	rxi/decode "+1"	nil	"./json.lua:185: unexpected character '+' at line 1 col 1"	nil
+163	rxi/encode {[1]=1, [2]=2, [3]=3}	"[1,2,3]"	nil	nil
+164	rxi/encode {[1]="a", [2]="b"}	"[\"a\",\"b\"]"	nil	nil
+165	rxi/encode {[1]=1, [2]=1.5, [3]=-0.0, [4]=1e+300, [5]=-1e-300}	"[1,1.5,-0,1e+300,-1e-300]"	nil	nil
+166	rxi/encode {[1]=true, [2]=false}	"[true,false]"	nil	nil
+167	rxi/encode {[1]={[1]=1, [2]=2}, [2]={[1]=3, [2]={[1]=4, [2]=5}}}	"[[1,2],[3,[4,5]]]"	nil	nil
+168	rxi/encode {["a"]=1}	"{\"a\":1}"	nil	nil
+169	rxi/encode {[""]=1}	"{\"\":1}"	nil	nil
+170	rxi/encode {["a"]={["b"]={["c"]=1}}}	"{\"a\":{\"b\":{\"c\":1}}}"	nil	nil
+171	rxi/encode "plain"	"\"plain\""	nil	nil
+172	rxi/encode "a\0b"	"\"a\\u0000b\""	nil	nil
+173	rxi/encode "a\"b\\c"	"\"a\\\"b\\\\c\""	nil	nil
+174	rxi/encode "a\
+b\9c"	"\"a\\nb\\tc\""	nil	nil
+175	rxi/encode "é中😀"	"\"é中😀\""	nil	nil
+176	rxi/encode "\13\12\8"	"\"\\r\\f\\b\""	nil	nil
+177	rxi/encode 42	"42"	nil	nil
+178	rxi/encode 0	"0"	nil	nil
+179	rxi/encode -0.0	"-0"	nil	nil
+180	rxi/encode 0.5	"0.5"	nil	nil
+181	rxi/encode true	"true"	nil	nil
+182	rxi/encode false	"false"	nil	nil
+183	rxi/encode 0.33333333333333	"0.33333333333333"	nil	nil
+184	rxi/encode 3.1415926535898	"3.1415926535898"	nil	nil
+185	rxi/encode 0.1	"0.1"	nil	nil
+186	rxi/encode 0.14285714285714	"0.14285714285714"	nil	nil
+187	rxi/encode 9.007199254741e+15	"9.007199254741e+15"	nil	nil
+188	rxi/encode 9.007199254741e+15	"9.007199254741e+15"	nil	nil
+189	rxi/encode 123.456	"123.456"	nil	nil
+190	rxi/encode 1e+15	"1e+15"	nil	nil
+191	rxi/encode 1e+16	"1e+16"	nil	nil
+192	rxi/encode 1e-15	"1e-15"	nil	nil
+193	rxi/encode 12345678901234	"12345678901234"	nil	nil
+194	rxi/encode -1.7976931348623e+308	"-1.7976931348623e+308"	nil	nil
+195	rxi/encode/nan	nil	"./json.lua:109: unexpected number value 'nan'"	nil
+196	rxi/encode/inf	nil	"./json.lua:109: unexpected number value 'inf'"	nil
+197	rxi/encode/fn	nil	"./json.lua:130: unexpected type 'function'"	nil
+198	rxi/encode/cycle	nil	"./json.lua:64: circular reference"	nil
+199	rxi/encode/empty	"[]"	nil	nil
+200	rxi/roundtrip	"{[1]=1, [2]=\"two\", [3]={[\"three\"]=3}}"	nil	nil
+201	mc/class	"A1"	1	false
+202	mc/inherit	"BA"	true	false
+203	mc/tostring	"I am A"	"I am A"	"class A"
+204	mc/metamethods	"{[1]=4, [2]=6}"	false	true
+205	mc/include	"hi"	1	1
+206	mc/static	true	true	nil
+207	mc/nilmethod	nil	"drive.lua:307: attempt to call a nil value (method 'nope')"	nil
+208	mc/nilfield	nil	nil	nil
+209	mc/subclass-root	nil	"drive.lua:315: attempt to index a nil value (global 'Object')"	nil
+210	mc/allocate	true	true	"nil"
+211	mc/anonymous	nil	"./middleclass.lua:187: A name (string) is needed for the new class"	nil
+212	mc/gc	"1,2,3"	nil	nil
+213	mc/super-method	"hi x?!"	nil	nil
+214	mc/included-hook	"speak"	"A"	nil
+215	mc/index-override	"index:anything"	"index:x"	nil
+216	mc/subclass-many	true	true	false
+217	mc/error-new	nil	nil	nil
+218	mc/tostring-err	nil	"drive.lua:375: no"	nil
+219	mc/classtype	"table"	"table"	"table"
+220	fun/range	"{[1]=1, [2]=2, [3]=3, [4]=4, [5]=5, [6]=6}"	nil	nil
+221	fun/range-step	"{[1]=1, [2]=4, [3]=7, [4]=10}"	nil	nil
+222	fun/range-down	"{[1]=5, [2]=3, [3]=1}"	nil	nil
+223	fun/iter	"{[1]=1, [2]=2, [3]=3, [4]=4}"	nil	nil
+224	fun/map	"{[1]=2, [2]=4, [3]=6, [4]=8, [5]=10}"	nil	nil
+225	fun/map2	nil	"drive.lua:401: attempt to perform arithmetic on a nil value (local 'y')"	nil
+226	fun/filter	"{[1]=2, [2]=4, [3]=6, [4]=8, [5]=10}"	nil	nil
+227	fun/reduce	55	nil	nil
+228	fun/sum	55	1	nil
+229	fun/minmax	1	7	0
+230	fun/take-skip	nil	"drive.lua:415: attempt to call a nil value (field 'skip')"	nil
+231	fun/zip	"{[1]=1, [2]=2, [3]=3}"	nil	nil
+232	fun/chain	"{[1]=1, [2]=2, [3]=1, [4]=2}"	nil	nil
+233	fun/enumerate	"{[1]=1, [2]=2}"	nil	nil
+234	fun/all-any	true	true	false
+235	fun/length	5	2	nil
+236	fun/nth	3	nil	nil
+237	fun/partition	"{[1]=2, [2]=4, [3]=6}"	"{[1]=1, [2]=3, [3]=5}"	nil
+238	fun/span	"{[1]=1, [2]=2, [3]=3}"	"{[1]=4, [2]=5, [3]=6, [4]=7, [5]=8}"	nil
+239	fun/take_while	"{[1]=1, [2]=2, [3]=3}"	nil	nil
+240	fun/drop_while	"{[1]=4, [2]=5, [3]=6, [4]=7, [5]=8}"	nil	nil
+241	fun/flatten	nil	"drive.lua:448: attempt to call a nil value (field 'flatten')"	nil
+242	fun/intersperse	"{[1]=1, [2]=0, [3]=2, [4]=0, [5]=3, [6]=0, [7]=4, [8]=0}"	nil	nil
+243	fun/chunks	nil	"drive.lua:454: attempt to call a nil value (field 'chunks')"	nil
+244	fun/cycle	"{[1]=1, [2]=2, [3]=1, [4]=2, [5]=1}"	nil	nil
+245	fun/duplicate	"{[1]=\"x\", [2]=\"x\", [3]=\"x\"}"	nil	nil
+246	fun/tabulate	"{[1]=0, [2]=1, [3]=4, [4]=9}"	nil	nil
+247	fun/foreach	"1,2,3"	nil	nil
+248	fun/method-chain	"{[1]=9, [2]=36, [3]=81}"	nil	nil
+249	fun/stateful-twice	"{[1]=1, [2]=2, [3]=3}"	"{[1]=1, [2]=2, [3]=3}"	nil
+250	fun/empty	"{}"	0	nil
+251	fun/strings	"{[1]=\"b\", [2]=\"a\", [3]=\"c\"}"	"A"	nil
+252	fun/sort	nil	"drive.lua:486: attempt to call a nil value (field 'sort')"	nil
+253	inspect 1	"1"	nil	nil
+254	inspect two	"\"two\""	nil	nil
+255	inspect 3.5	"3.5"	nil	nil
+256	inspect true	"true"	nil	nil
+257	inspect/flat-table	"{\
+  x = 1,\
+  y = \"two\"\
+}"	nil	nil
+258	inspect/array	"{ 1, 2, 3 }"	nil	nil
+259	inspect/nested	"{\
+  a = {\
+    b = {\
+      c = 1\
+    }\
+  }\
+}"	nil	nil
+260	inspect/empty	"{}"	nil	nil
+261	inspect/fn	"<function 1>"	nil	nil
+262	inspect/options	"1.0"	"{...}"	"{\
+  x = 1\
+}"
+263	inspect/metatable	"{\
+  <metatable> = {\
+    __tostring = <function 1>\
+  }\
+}"	nil	nil
+264	inspect/keysorted	"{ 2,\
+  [2.5] = 4,\
+  [true] = 3,\
+  [\"1\"] = 1\
+}"	nil	nil
+264	cases
