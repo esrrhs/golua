@@ -184,7 +184,7 @@ jobs:
       # 'string.pack' over 5 337 answers (packfuzz_test.go); 1 328
       # questions about a name with a zero byte in it, 1 280 of them a
       # name and the rest a command (namefuzz_test.go); and 2 517
-      # questions about 'os.date' and 'os.time' -- 2 511 where the C
+      # questions about 'os.date' and 'os.time' -- 2 523 where the C
       # library is glibc's -- asked in each of four zones
       # (datefuzz_test.go).  Every one of them needs LUA_REF for
       # the same reason the suite above does, so they have to run here
