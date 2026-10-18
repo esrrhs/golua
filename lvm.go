@@ -344,7 +344,19 @@ func forprep(L *State, ra int) bool {
 		luaG_runerror(L, "'for' step is zero")
 		return true
 	}
-	if (step > 0 && limit < init) || (step <= 0 && init < limit) {
+	/* Written the way C writes it -- '0 < step ? limit < init
+	   : init < limit' -- and not as the pair of conjunctions that
+	   reads the same, because the two stop being the same when step
+	   is a NaN: a NaN is neither greater nor less than zero, so C
+	   takes the *else* branch and 'for i = 0, 1, 0/0' does not run,
+	   while 'step <= 0' takes neither branch and runs it once. */
+	skip := false
+	if step > 0 {
+		skip = limit < init
+	} else {
+		skip = init < limit
+	}
+	if skip {
 		return true /* skip the loop */
 	}
 	setfltvalue(plimit, limit)
@@ -360,7 +372,15 @@ func floatforloop(L *State, ra int) bool {
 	limit := fltvalue(&L.stack[ra+1])
 	idx := fltvalue(&L.stack[ra])
 	idx += step
-	if (step > 0 && idx <= limit) || (step <= 0 && limit <= idx) {
+	/* The same ternary as 'forprep', for the same reason: with a NaN
+	   step, C asks 'limit <= idx' and not 'idx <= limit'. */
+	goon := false
+	if step > 0 {
+		goon = idx <= limit
+	} else {
+		goon = limit <= idx
+	}
+	if goon {
 		chgfltvalue(&L.stack[ra], idx)
 		setfltvalue(&L.stack[ra+3], idx)
 		return true /* jump back */

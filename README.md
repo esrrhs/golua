@@ -688,6 +688,7 @@ a difference is always reproducible.
 | `patternfuzz_test.go` | 6 991 patterns — every pattern atom against every atom, plus the triples that need three pieces to mean anything — against 25 subjects | 1 048 650 |
 | `formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
 | `numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
+| `forfuzz_test.go` | 16 277 numeric `for` loops — 25 values in each of the three positions: zeroes of both signs, integers and floats, both ends of the integer range, the floats just outside it, the point where a float stops counting by ones, and the three values that are not comparable at all — each asked with the step written out and with it left to default to 1, plus each of 9 values that are not numbers in each of the three positions | 16 277 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -783,6 +784,38 @@ zero raises, and where the two would answer differently if only one of
 them were right. A grid of one is a grid of the compiler. This half was
 probed on its own first, over 30 258 runtime expressions, and did not
 differ; it is in the grid so that it stays that way.
+
+The `for` half is the same comparison over the one loop Lua decides
+before it runs. `OP_FORPREP` and `OP_FORLOOP` say whether a loop runs at
+all, what its control variable is, and when it stops — in integers,
+where the counter can wrap past `maxinteger`, and in floats, where a
+step can round the index past the limit — and nothing about that is
+written down anywhere but in `lvm.c`. A probe of 16 250 loops found one
+case in 60 where the two disagreed:
+
+```lua
+for i = 0, 1, 0/0   -- PUC-Lua does not run it; this port ran it once
+```
+
+C decides whether to skip the loop with
+`luai_numlt(0, step) ? luai_numlt(limit, init) : luai_numlt(init, limit)`,
+which is a **ternary**, and this port had written it as the pair of
+conjunctions that reads the same — `(step > 0 && limit < init) ||
+(step <= 0 && init < limit)`. They are the same only while `step` is a
+number comparable with zero. A NaN is neither greater nor less than
+zero, so C takes the *else* branch and asks `init < limit`: `0 < 1`,
+and the loop is skipped. `step <= 0` is false too, so the port took
+neither branch and ran it. `floatforloop` had the same rewrite of the
+same ternary.
+
+It is not a rule about NaNs so much as a rule about *translating*: a
+ternary whose condition is a comparison is not the same as the
+conjunction it looks like, because a comparison that is false does not
+mean its negation is true. Both are fixed and pinned in
+`TestForNaNStepPinsTheTernary` — twelve answers, not all one number,
+because a NaN *limit* with an integer start and step is not the float
+path at all: `forlimit` cannot coerce it and truncates it to
+`mininteger`, or skips the loop, depending on the step's sign.
 
 It is worth saying what makes a fuzz like this worthless, because one
 round of it was. A generated chunk that does not *load* prints the same

@@ -1,6 +1,9 @@
 package lua
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func semRun(t *testing.T, src string) *State {
 	t.Helper()
@@ -303,5 +306,87 @@ test:14: attempt to perform bitwise operation on a string value (constant '')
 test:15: attempt to perform bitwise operation on a string value (constant 'abc')`
 	if got != want {
 		t.Errorf("the constant in an error message:\n%s", sideBySide(want, got))
+	}
+}
+
+// TestForNaNStepPinsTheTernary pins the one case the 'for' fuzz found
+// in 16 277 loops.
+//
+// Whether a numeric 'for' runs at all is decided by
+//
+//	luai_numlt(0, step) ? luai_numlt(limit, init) : luai_numlt(init, limit)
+//
+// in lvm.c, which is a ternary: when step is a NaN -- neither greater
+// nor less than zero -- C takes the *else* branch and asks 'init <
+// limit'.  Written instead as the pair of conjunctions that reads the
+// same, '(step > 0 && limit < init) || (step <= 0 && init < limit)',
+// neither branch is taken, the loop is not skipped, and 'for i = 0, 1,
+// 0/0' runs its body once.
+//
+// The answers below are the reference interpreter's, and they are not
+// all one number: which way a NaN falls depends on where it is.  A NaN
+// *step* takes the else branch, so 'init < limit' decides it -- skipped
+// for '0, 1' and run once for '0, -1'.  A NaN *limit* with an integer
+// start and an integer step is not the float path at all: 'forlimit'
+// cannot coerce it, finds it is not positive, and truncates it to
+// 'mininteger' or skips the loop depending on the step's sign.
+//
+// This is here rather than only in the fuzz because the fuzz needs a
+// reference interpreter beside it, and this does not.
+func TestForNaNStepPinsTheTernary(t *testing.T) {
+	got := runChunk(t, `
+	local out = {}
+	local function say(a, b, s)
+		local n, first = 0, "none"
+		local ok, e = pcall(function()
+			for i = a, b, s do
+				n = n + 1
+				if n == 1 then first = i end
+				if n >= 5 then break end
+			end
+		end)
+		if not ok then
+			out[#out + 1] = "error"
+		else
+			out[#out + 1] = n .. " " .. tostring(first)
+		end
+	end
+	local nan = 0 / 0
+	say(0, 1, nan)    -- init < limit, so the else branch skips it
+	say(0, -1, nan)   -- init > limit, so it runs -- and stops at once
+	say(1, 1, nan)
+	say(1, 0, nan)
+	say(0, 0, nan)
+	say(-1, 1, nan)   -- init < limit again
+	say(0, 1, 0)      -- a zero step is an error, not a loop
+	say(0, nan, 1)    -- a NaN limit with a positive step: truncated away
+	say(0, nan, -1)   -- ... with a negative one: truncated to mininteger
+	say(nan, 1, 1)    -- a NaN start runs once, then the index is a NaN
+	say(0, 1, 1)      -- and one that is not a NaN at all, for contrast
+	say(1, 3, nan)
+	return table.concat(out, "\n")
+	`)
+	want := `0 none
+1 0.0
+1 1.0
+1 1.0
+1 0.0
+0 none
+error
+0 none
+5 0
+1 nan
+2 0
+0 none`
+	/* Only the tenth line depends on the platform: a NaN prints as
+	   "nan" here and as "-nan" under glibc.  What is being pinned is
+	   that the body ran once, not how the NaN spells itself. */
+	lines := strings.Split(got, "\n")
+	if len(lines) == 12 && strings.HasSuffix(lines[9], "nan") {
+		lines[9] = "1 nan"
+		got = strings.Join(lines, "\n")
+	}
+	if got != want {
+		t.Errorf("a NaN in a numeric 'for':\n%s", sideBySide(want, got))
 	}
 }
