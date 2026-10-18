@@ -1778,12 +1778,7 @@ func strIsDigitChar(c byte) bool { return c >= '0' && c <= '9' }
 // length -- so that one keeps its zero bytes.)  A Go string is a
 // length and some bytes, so the cut C's 'luaL_checkstring' makes for
 // free has to be made here.
-func strFmtOpts(s string) string {
-	if k := strings.IndexByte(s, 0); k >= 0 {
-		return s[:k]
-	}
-	return s
-}
+func strFmtOpts(s string) string { return luaCStr(s) }
 
 // strGetNum reads an integer numeral from the format string (getnum).
 func strGetNum(fmt string, i *int, df int) int {

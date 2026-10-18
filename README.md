@@ -642,6 +642,16 @@ two interpreters as subprocesses and a subprocess does not answer
 functions through the API in this process. They are between 92% and
 100% now, and the two things the grid found are pinned in it.
 
+The same was true of the eleven functions that take a name (§5.13):
+`osRename` and the `ioRename` behind it were both at 0%, and
+`ioStrError` at 54%, for the same reason — a grid cannot reach them
+from outside the process. `TestNameInProcess` drives them in this
+process, and the two things the name half found are pinned in it: the
+`os.rename` onto a directory, and the ENOTEMPTY whose spelling Go's
+`errors.Is` had been grouping with EEXIST. `osRename` and `ioStrError`
+are at 100% now; `ioRename` is at 67%, its uncovered branch being the
+one for Windows, where `rename(2)` is not what a move is.
+
 ### 5.11 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
@@ -783,6 +793,7 @@ a difference is always reproducible.
 | `iofuzz_test.go` | 3 166 things the `io` library can be asked — every mode of length 0 to 3 over `r w a + b t x` against a file that exists, one that does not and a directory; every format `read` takes (each letter of the alphabet in both cases, the four C asks for, their `* ` spellings, and the counts and the values that are not formats) against 10 fixtures, and the same three at a time; what `write` puts in the file, byte for byte, for each kind of value and for two of them; `seek` from each of 8 whence by each of 17 offsets, before and after a read; `setvbuf`; `lines` and `f:lines`; 13 kinds of handle — the three standard ones, a file opened each way round, a closed one, `tmpfile`, both ends of a `popen` — used 17 ways each; `io.input` and `io.output`; and the errors, `<close>`, and dropping a handle without closing it. Both interpreters get an identical copy of the fixtures in a directory of their own | 3 166 |
 | `debugfuzz_test.go` | 1 333 questions about the debug library — every option string of length 0 to 2 over the eight letters `getinfo` recognises and the one it does not, asked about each of 8 kinds of function; every stack level from each of 7 shapes of stack, which is the only way to reach a `name`, a `namewhat`, a `currentline` that moves and an `istailcall`; a coroutine in each of 5 states; the same function called 10 ways, asked about itself and about its caller; every local index in every shape of frame, on the main thread and on a coroutine, and `setlocal` for each; every upvalue got, set, identified and joined — including the 25 ways two closures can be joined and the 8 ways two upvalues can be the same one; 56 hook masks, 6 counts, `gethook` on the main thread, on a coroutine, and on a coroutine made before or after the hook was set; every `traceback` message at every level, from every depth; every metatable, the registry, and every user value — plus every debug function asked the wrong thing. And 12 hook errors, each in a process of its own, because an error in a hook escapes every `pcall` and ends the run | 1 333 + 12 |
 | `packfuzz_test.go` | 3 733 questions about `string.pack`, `string.unpack` and `string.packsize` — every byte of the alphabet as a format of its own, all 256 of them and not the 26 C looks up, because a byte that is not an option is an option refused and the refusal is printed with the byte in it; every size from 0 to 17 of `i`, `I`, `s` and `c` — the sweep running past 16 in both directions, because only the sizes that are refused can say where the edge is — each with 12 values and with the three that sit on the edge of that size; every alignment `!` can ask for, over 20 things to align and then over every pair of 6; every endianness over every option; every pair of 16 options, and an `X` between every pair of 12; `unpack` at 15 positions of 12 formats; every option given 8 wrong things, and given nothing; 138 round trips; 53 written-out formats; a zero byte at every position of 9 formats; a zero byte in a value; and every size read out of 6 buffers of raw bytes | 5 337 |
+| `namefuzz_test.go` | 1 328 questions about a name with a zero byte in it — every name a script can hand to the OS, with a zero at every position of five of them (`a`, `a.txt`, `sub`, `no`, `m.lua`), asked of `io.open` in each of its 6 modes, of `io.lines`, `loadfile`, `dofile`, `os.remove`, `os.rename` (in the name moved, in the name it is moved to, and in both), `require` and `package.searchpath`, each against a file that is there, a directory, and nothing; then the same renames and removals with no zero in them, which is where a directory meets a directory; a name with a slash on the end of it, which is not a name a regular file can be given; and 62 commands with a zero in them, run by `io.popen` and `os.execute`. 1 218 names and 62 commands, each with a number of its own so that one case's file is never another case's, and both interpreters get an empty directory of their own | 1 328 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -1002,9 +1013,10 @@ and a probe of 258 cases over the whole library went red in one place.
   they cannot be lines in the grid, because one of them would be the
   last thing the run ever printed.
 
-The pack half is the newest, and it is over `string.pack`,
-`string.unpack` and `string.packsize` — the last C mini-language in the
-standard library without a grid of its own. A format string is a program
+The pack half is over `string.pack`, `string.unpack` and
+`string.packsize` — the last C mini-language in the standard library
+without a grid of its own — and it found the two things below. A format
+string is a program
 in sizes, alignments, endianness and options, and `lstrlib.c` is an
 interpreter for it. A probe of 907 hand-chosen cases over the three went
 **0 lines red**, and by the rule of this project that is not yet an
@@ -1043,6 +1055,64 @@ so the check that there is one can never fail. Deleting that check
 turned the grid **0 lines red** — not because the check is invisible but
 because nothing had asked. A group that reads every size from 9 to 16
 out of six buffers of raw bytes took it to 56.
+
+The name half is the newest, and it is over the one thing every one of
+those functions has in common: a name a script hands to the OS. A C
+string ends at its first zero byte, and every one of these names is a C
+string by the time it reaches anything — `fopen`, `open`, `remove`,
+`rename`, `system` and `popen` are C functions, and the strings
+`require` and `package.searchpath` put together are built with
+`luaL_addgsub` and `luaL_addstring`, which are `strlen`. So
+`io.open("a\0b", "w")` makes a file called "a" and `os.remove("a\0b")`
+removes it and says so, the name in the message being "a" because `%s`
+is `strlen` too.
+
+A Go string has no such end, and what this port used to hand the whole
+thing to does not truncate it — it refuses it. Every path through
+`syscall` runs through `BytePtrFromString`, which is EINVAL for a
+string with a zero in it, so the port answered "Invalid argument" for
+every one of them while PUC-Lua went on and did what the truncated
+name asked for. A probe of 165 cases went red in seven of the eleven
+functions; `io.open` and `io.lines` were already right, the io half
+having found the same thing in the eighth fuzz. The grid found two
+more, and neither of them has a zero byte in it.
+
+* **`os.rename` onto a directory.** Go's `os.Rename` asks whether the
+  name it was given is free before it calls `rename(2)` at all, so a
+  directory it is told to move onto a directory that is there answers
+  EEXIST — and, worse, the rename does not happen. C's `rename` is
+  asked nothing and answers EISDIR, or ENOTDIR, or ENOTEMPTY. `ioRename`
+  in `liolib.go` calls `syscall.Rename`, which is `rename(2)`.
+* **The spelling of an errno Go groups with another one.** `ioStrError`
+  used `errors.Is(err, fs.ErrExist)`, and `Errno.Is` answers that
+  ENOTEMPTY *is* `fs.ErrExist`: true of what a Go program is asking,
+  false of what `strerror` says. A rename of one directory onto another
+  that is not empty, and a `remove` of a directory with something in
+  it, both answered "File exists" where PUC-Lua answers "Directory not
+  empty". The same grouping says EPERM is `fs.ErrPermission`, so a
+  permission failure would have been "Permission denied" where C says
+  "Operation not permitted". Go spells every errno exactly as C does
+  with the first letter in lower case, so the errno's own text, raised
+  by that one letter, is what `ioStrError` answers now.
+
+Two things the half does not do, and says so rather than quietly
+passing them. It does not ask `io.popen` or `os.execute` to run a
+command that says anything on the standard error: C's standard output
+is a FILE with a buffer of its own and this port writes straight to the
+descriptor, so the two would differ in the interleaving alone. Every
+command is run as `exec 2>/dev/null; ...`, which swallows the "command
+not found" most truncated commands produce, and the exit status still
+tells the truncated names apart — "" is 0, "t" is 127, "tr" is 1,
+"tru" is 127 and "true" is 0 — which is the whole point of the cases.
+And it does not ask `os.rename` to move a name onto one the grid has
+not made, because a rename that succeeds is one the next case would
+otherwise see.
+
+Every one of the twelve things the half fixed has been taken back out
+and the grid asked again, and it saw all twelve: the shared cut, 1 280
+lines; `ioCStr`, 483; `ioStrError`'s errno, 364; `pkSearchPath`, 231;
+`osRename`, 126; `baseLoadFile`, 105; `baseDoFile`, 105; `pkRequire`,
+66; `osRemove`, 63; `ioPOpen`, 44; `osExecute`, 18; `ioRename`, 8.
 
 The codegen half is the only one that does not ask what a program
 prints. It compiles every snippet and every source in `testdata` on

@@ -494,7 +494,10 @@ func baseLoadFile(L *State) int {
 	   argument means, not the empty string -- 'loadfile("")' really does
 	   try to open a file with no name, and fails. */
 	stdin := L.IsNoneOrNil(1)
-	fname := L.OptString(1, "")
+	/* 'luaL_loadfilex' hands the name to 'fopen', which is a C
+	   function: it is the bytes before the first zero that are opened,
+	   and the message names those and no more. */
+	fname := luaCStr(L.OptString(1, ""))
 	/* 'luaL_optstring(L, 2, NULL)': C gives 'lua_load' a NULL mode when
 	   the argument is absent, and 'checkmode' does nothing then.  "bt"
 	   allows the same two kinds of chunk, so it stands in for NULL. */
@@ -611,7 +614,7 @@ func baseLoad(L *State) int {
 
 func baseDoFile(L *State) int {
 	stdin := L.IsNoneOrNil(1) /* see baseLoadFile */
-	fname := L.OptString(1, "")
+	fname := luaCStr(L.OptString(1, ""))
 	L.SetTop(1)
 	var err error
 	if stdin {

@@ -285,7 +285,9 @@ func osExecute(L *State) int {
 		L.PushBoolean(true) /* true if there is a shell */
 		return 1
 	}
-	cmd := ioShellCommand(L.CheckString(1))
+	/* 'system' takes a C string, so the command ends where its first
+	   zero byte is: 'os.execute("true\0x")' runs "true". */
+	cmd := ioShellCommand(luaCStr(L.CheckString(1)))
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -294,15 +296,22 @@ func osExecute(L *State) int {
 }
 
 func osRemove(L *State) int {
-	filename := L.CheckString(1)
+	/* 'remove' is a C function, so it is the bytes before the first
+	   zero that are removed -- and it is those that the message names,
+	   because 'luaL_fileresult' writes the name with a %s. */
+	filename := luaCStr(L.CheckString(1))
 	err := os.Remove(filename)
 	return ioFileResult(L, err == nil, &filename, err)
 }
 
 func osRename(L *State) int {
-	fromname := L.CheckString(1)
-	toname := L.CheckString(2)
-	err := os.Rename(fromname, toname)
+	/* C asks no name in the message here: 'fileresult' is called with
+	   NULL, so a failing 'os.rename' answers 'strerror' alone, which is
+	   "No such file or directory" and not "rename a b: no such file or
+	   directory". */
+	fromname := luaCStr(L.CheckString(1))
+	toname := luaCStr(L.CheckString(2))
+	err := ioRename(fromname, toname)
 	return ioFileResult(L, err == nil, nil, err)
 }
 

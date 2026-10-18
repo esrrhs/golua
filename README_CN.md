@@ -488,6 +488,13 @@ print(f)
 `TestPackInProcess` 才是，它在本进程里经 API 驱动同样的函数。它们现在在 92% 与
 100% 之间，网格找到的那两处也钉在里面。
 
+那十一个接受名字的函数（§5.13）也是同样的问题：`osRename` 与它背后的 `ioRename`
+都是 0%、`ioStrError` 是 54%，理由一样——网格从进程外到不了它们。`TestNameInProcess`
+在本进程里驱动它们，name 那一半找到的两处也钉在里面：改到目录上的 `os.rename`，
+以及被 Go 的 `errors.Is` 归到 EEXIST 上的那个 ENOTEMPTY 的拼写。现在 `osRename` 与
+`ioStrError` 是 100%；`ioRename` 是 67%，没被走到的那一支是给 Windows 的——在
+那里一次移动不是 `rename(2)`。
+
 ### 5.11 性能
 
 `go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
@@ -688,6 +695,7 @@ cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
 | `iofuzz_test.go` | 3 166 件 `io` 库能被问到的事——`r w a + b t x` 上长度 0 到 3 的**每一种**模式，各问一个已存在的文件、一个不存在的文件和一个目录；`read` 能接的每一种格式（大小写各 26 个字母、C 认的四个及其 `* ` 写法、以及根本不是格式的计数与值）× 10 个样本文件，还有三个一组的组合；`write` 对每种值与两种值的组合真正写进文件的字节；`seek` 的 8 种 whence × 17 种偏移（读之前与读过一行之后各一遍）；`setvbuf`；`lines` 与 `f:lines`；13 种句柄——三个标准流、每种方式打开的文件、已关闭的、`tmpfile`、`popen` 的两端——各用 17 种方式；`io.input` 与 `io.output`；以及报错、`<close>`，和「丢掉一个句柄而不关闭它」。两边的样本文件各自一份、内容完全相同 | 3 166 |
 | `debugfuzz_test.go` | 1 333 个关于 debug 库的问题——长度 0 到 2 的**每一种** `getinfo` 选项串（八个 C 认的字母与一个它不认的）× 8 种函数；每种栈深度下的每个层次，那是唯一能拿到 `name`、`namewhat`、会动的 `currentline` 和 `istailcall` 的路径；5 种状态下的协程；同一个函数用 10 种方式被调用，各问一遍自己与调用者；每种栈帧形态下的每个局部变量下标（主线程上与协程上），以及各自的 `setlocal`；每个 upvalue 的取、设、取标识与接合——包括两个闭包接合的 25 种方式、两个 upvalue 是同一个的 8 种问法；56 种钩子掩码、6 种计数，以及对主线程、对协程、对「在设钩子之前 / 之后造出来的协程」各问一遍 `gethook`；每种 `traceback` 消息 × 每个层次 × 每种嵌套深度；每种元表、注册表、每种 user value——外加每个 debug 函数被问错的样子。另有 12 个钩子报错，各自开一个进程问，因为钩子里的错误会挣脱每一个 `pcall` 并结束整个进程 | 1 333 + 12 |
 | `packfuzz_test.go` | 3 733 个关于 `string.pack`、`string.unpack` 与 `string.packsize` 的问题——字母表里**每一个字节**单独当格式串，是全部 256 个而不是 C 认的那 26 个，因为一个不是选项的字节就是一个被拒绝的选项，而拒绝消息里就带着那个字节；`i`、`I`、`s`、`c` 的每一个尺寸 0 到 17——要越过 16 两侧都扫，因为只有被拒绝的那些尺寸能说出边界在哪——每个尺寸 12 个值，外加正落在它边界上的 3 个；`!` 能要的每一种对齐，配 20 种被对齐的对象，再配 6 种对象两两配对的全部 36 种；每一种字节序配每一种选项；16 种选项两两配对的 256 种，以及在 12 种两两配对中间插一个 `X` 的 144 种；12 种格式 × 15 个位置上的 `unpack`；每种选项被给 8 个错的东西，以及什么都不给；138 次往返；53 个写出来的格式串；9 个格式串里每个位置上的零字节；值里的零字节；以及 6 个原始字节缓冲区里读出来的每种尺寸 | 5 337 |
+| `namefuzz_test.go` | 1 328 个关于「带零字节的名字」的问题——脚本能交给操作系统的每一个名字，在五个（`a`、`a.txt`、`sub`、`no`、`m.lua`）的每一个位置上插一个零，去问 `io.open` 的 6 种模式、`io.lines`、`loadfile`、`dofile`、`os.remove`、`os.rename`（在被挪的名字里、在挪到的名字里、两个都有）、`require` 与 `package.searchpath`，每个都对着一个存在的文件、一个目录、以及什么都没有；然后是没有零字节的同样的改名与删除——目录与目录相撞的地方；末尾带斜杠的名字，那不是普通文件能有的名字；以及 62 条带零字节的命令，交给 `io.popen` 与 `os.execute` 去跑。1 218 个名字与 62 条命令，各自带一个自己的编号，于是一个用例的文件永远不会是另一个用例的，两边各拿到一个自己的空目录 | 1 328 |
 | `corofuzz_test.go` | 396 个协程：协程能做的六件事（挂起、出错、结束、先挂起再二者之一、挂起两次）× 能做的 22 个位置——裸调用、一层与两层 `pcall`、`xpcall`、Lua 自己调用的每一个元方法、`for` 迭代器、`table.sort` 与 `string.gsub` 的回调、`load` 要的 reader、自己的子协程，以及"尚有待关闭变量"——每个再用三种方式驱动：连续 resume 四次、经 `coroutine.wrap`、用 `coroutine.close` 关闭 | 396 |
 
 模式这一半存在的理由：`lstrlib.c` 的 `match` 是两百行"没人会把组合写下来"的
@@ -838,8 +846,8 @@ debug 这一半找到的两件事，一件在库里，一件在库外——在�
   所以 `TestDebugHookErrors` 把那 12 个用例各自开一个进程来问，并且连退出码一起比对——
   它们不能成为网格里的行，因为其中任何一个都会是这次运行打印的最后一样东西。
 
-pack 这一半最新，问的是 `string.pack`、`string.unpack` 与 `string.packsize`——标准库里
-最后一套没有自己网格的 C 小语言。格式串是尺寸、对齐、字节序与选项构成的一段程序，
+pack 这一半问的是 `string.pack`、`string.unpack` 与 `string.packsize`——标准库里
+最后一套没有自己网格的 C 小语言，它找到的就在下面两处。格式串是尺寸、对齐、字节序与选项构成的一段程序，
 `lstrlib.c` 就是它的解释器。一份 907 例的手选探针在三者之上**一行没红**，而按本项目的
 规矩，那还不是答案：于是把 `lstrlib.go` 故意弄坏两遍，用同一份语料各问一次——两遍都
 看见了——去掉 `packint` 里的符号扩展，红 36 行；把 `getdetails` 里的 `*ntoalign` 强行
@@ -865,6 +873,48 @@ pack 这一半最新，问的是 `string.pack`、`string.unpack` 与 `string.pac
 就是符号扩展，所以「那里有一个符号扩展」这个检查永远不会失败。把那个检查删掉，网格
 **一行没红**——不是因为它看不见，而是因为没有任何问题问到它。新增的一组「把 9 到 16
 的每种尺寸从 6 个原始字节缓冲区里读出来」把它推到了 56 行。
+
+name 这一半最新，问的是上面每一族共有的那一样东西：**脚本交给操作系统的那个名字**。
+C 字符串在第一个零字节处结束，而这些名字到了任何地方之前都已经是 C 字符串——
+`fopen`、`open`、`remove`、`rename`、`system`、`popen` 都是 C 函数，而 `require` 与
+`package.searchpath` 拼出来的那些串是用 `luaL_addgsub` 与 `luaL_addstring` 攒的，
+两个都是 `strlen`。所以 `io.open("a\0b", "w")` 建的是一个叫 "a" 的文件，
+`os.remove("a\0b")` 删掉的也是它——并且是这么说的：消息里的名字是 "a"，因为 `%s`
+同样是 `strlen`。
+
+Go 的字符串没有这样的结尾，而移植版过去把整个串交出去的东西也不截断它——它**拒绝**
+它。`syscall` 的每一条路都经过 `BytePtrFromString`，而它对一个带零字节的串就是
+EINVAL：于是移植版对每一条都答「Invalid argument」，而 PUC-Lua 继续去做那个被截断
+的名字要求的事。一份 165 例的探针在十一个函数里的七个上变红；`io.open` 与
+`io.lines` 本来就是对的，io 那一半在第八次 fuzz 里已经抓住了同一件事。网格又找到
+两处，而这两处里都没有零字节。
+
+* **`os.rename` 改到目录上。**Go 的 `os.Rename` 在调用 `rename(2)` 之前先问一句
+  「给我的这个名字是不是空的」，于是让它把一个目录挪到一个已经存在的目录上去，它
+  答 EEXIST——更糟的是，这次改名根本没发生。C 的 `rename` 不会被问任何问题，它答
+  EISDIR、ENOTDIR 或 ENOTEMPTY。`liolib.go` 里的 `ioRename` 直接调用
+  `syscall.Rename`，那就是 `rename(2)`。
+* **一个被 Go 归到另一个 errno 上的 errno 的拼写。**`ioStrError` 用的是
+  `errors.Is(err, fs.ErrExist)`，而 `Errno.Is` 会说 ENOTEMPTY **就是**
+  `fs.ErrExist`——对一个 Go 程序在问什么而言这没错，对 `strerror` 说什么而言这是
+  错的。把一个目录改到另一个非空的目录上去，以及 `remove` 一个里面有东西的目录，
+  移植版都答「File exists」，而 PUC-Lua 答「Directory not empty」。同一个归类还会说
+  EPERM 是 `fs.ErrPermission`，于是一次权限失败会是「Permission denied」，而 C 说
+  的是「Operation not permitted」。Go 拼写每个 errno 的方式和 C 一模一样，只是首
+  字母小写，所以现在 `ioStrError` 答的是 errno 自己的文本——把那一个字母抬起来。
+
+有两件事这一半不做，并且明说而不悄悄放过。**它不让 `io.popen` 或 `os.execute` 去
+跑一个会往标准错误上说点什么的命令**：C 的标准输出是一个自带缓冲区的 FILE，而移植版
+直接写描述符，两者光在交错次序上就会不同。每条命令都以 `exec 2>/dev/null; ...` 的
+形式跑，把多数被截断的命令会产生的「command not found」吞掉；而退出码照样能把被
+截断的名字区分开——"" 是 0，"t" 是 127，"tr" 是 1，"tru" 是 127，"true" 是 0——
+这正是这些用例的全部用意。**它也不让 `os.rename` 把一个名字改到网格没造过的名字
+上**：一次成功的改名，就是下一个用例否则会看见的那个文件。
+
+这一半修好的十二样东西，每一样都被撤回来、让网格再问一遍，十二样它全看见了：
+共用的截断 1 280 行、`ioCStr` 483、`ioStrError` 的 errno 364、
+`pkSearchPath` 231、`osRename` 126、`baseLoadFile` 105、`baseDoFile` 105、
+`pkRequire` 66、`osRemove` 63、`ioPOpen` 44、`osExecute` 18、`ioRename` 8。
 
 codegen 这一半是唯一**不问程序打印什么**的。它把每个片段和 `testdata` 下每个源文件
 在两边各编译一遍，比对**字节**。字节码是比输出严格得多的答案：寄存器分配的差异、

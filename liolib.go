@@ -316,15 +316,60 @@ func ioStrError(err error) string {
 	if errors.As(err, &pe) {
 		err = pe.Err
 	}
-	switch {
-	case errors.Is(err, fs.ErrNotExist):
-		return "No such file or directory"
-	case errors.Is(err, fs.ErrPermission):
-		return "Permission denied"
-	case errors.Is(err, fs.ErrExist):
-		return "File exists"
+	/* The errno's own spelling first, because it is the only one that
+	   is right for the errnos Go groups together.  'Errno.Is' answers
+	   that ENOTEMPTY *is* fs.ErrExist and that EPERM *is*
+	   fs.ErrPermission, which is true of what a Go program is asking
+	   and false of what 'strerror' says:
+	     strerror(ENOTEMPTY)  "Directory not empty"
+	     strerror(EPERM)     "Operation not permitted"
+	   A rename of one directory onto another that is not empty, or a
+	   'remove' of a directory with something in it, and the port used
+	   to answer "File exists" for both.
+
+	   Go spells an errno exactly as C does, with the first letter in
+	   lower case, so raising that one letter is all it takes. */
+	var en syscall.Errno
+	if errors.As(err, &en) {
+		return ioCapitalise(en.Error())
 	}
+	/* An error with no errno in it.  That is EBADF, which a FILE
+	   answers on its own for a handle used the wrong way round and
+	   which comes with its spelling already.  It used to be asked
+	   with 'errors.Is' against 'fs.ErrNotExist' and the other two,
+	   and those three were also the ones that could never be
+	   reached: an error that satisfied any of them had an errno
+	   inside it, and the branch above had already answered. */
 	return ioCapitalise(err.Error())
+}
+
+// ioRename is C's 'rename' (loslib.c's os_rename), not Go's os.Rename.
+//
+// Go's os.Rename answers EEXIST for a rename whose new name is a
+// directory *before* it ever calls rename(2): it stats the new name,
+// sees a directory, and gives up (os/file_unix.go, and deliberately --
+// "if ofi, err := Lstat(oldname); err != nil ... else if newname ==
+// oldname || !SameFile(fi, ofi) { return &LinkError{... EEXIST} }").
+// Three answers of PUC-Lua's depend on the call it decided not to
+// make, and two of them are not errors at all:
+//
+//	os.rename("f", "d")    PUC-Lua: nil, "Is a directory", 21
+//	                       (Go:     nil, "File exists", 17)
+//	os.rename("d1", "d2")  PUC-Lua: true -- the empty d2 is replaced
+//	                       (Go:     nil, "File exists", 17)
+//	os.rename("d1", "d1")  PUC-Lua: true
+//
+// The last is the case-only rename the short-circuit exists for, and it
+// is why the call has to be made here rather than answered: what the
+// two do about a rename onto a directory is not a difference in a
+// number, it is a difference in whether the file moved.
+func ioRename(oldpath, newpath string) error {
+	if runtime.GOOS == "windows" {
+		/* no rename(2) there: MoveFileEx is what a move is, and this
+		   port keeps Go's, which does replace the target. */
+		return os.Rename(oldpath, newpath)
+	}
+	return syscall.Rename(oldpath, newpath)
 }
 
 // ioFileResult is luaL_fileresult: true, or nil + message + errno.
@@ -571,18 +616,11 @@ func ioCheckMode(mode string) bool {
 	return true
 }
 
-// ioCStr cuts a string at its first zero byte, which is where a C
-// string ends.  'io.open("a\0b", "w")' makes a file called "a" in
-// PUC-Lua, because 'fopen' is handed no more than that; a whole
-// 'filename' would reach Go, which refuses the zero byte with
-// "Invalid argument".  A mode is the same: 'l_checkmode' stops at the
-// end of the string, so "r\0b" is a valid mode.
-func ioCStr(s string) string {
-	if i := strings.IndexByte(s, 0); i >= 0 {
-		return s[:i]
-	}
-	return s
-}
+// ioCStr is luaCStr: a name or a mode is handed to 'fopen', which is a
+// C function and so sees no more than the bytes before the first zero.
+// A mode is the same: 'l_checkmode' stops at the end of the string, so
+// "r\0b" is a valid mode.
+func ioCStr(s string) string { return luaCStr(s) }
 
 // ioSetDirection records what a FILE was opened for, the way 'fopen'
 // sets __SRD and __SWR (ioSetFlags is given the flags of ioFlags).
@@ -1121,7 +1159,9 @@ func ioOpen(L *State) int {
 }
 
 func ioPOpen(L *State) int {
-	filename := L.CheckString(1)
+	/* 'popen' takes a C string, so it is the bytes before the first
+	   zero that are handed to the shell. */
+	filename := luaCStr(L.CheckString(1))
 	mode := L.OptString(2, "r")
 	L.ArgCheck(ioCheckModeP(mode), 2, "invalid mode")
 	s := ioNewPreFile(L)

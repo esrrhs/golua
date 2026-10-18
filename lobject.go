@@ -567,6 +567,41 @@ func fmtFloat(f float64) string {
 	return strconv.FormatFloat(f, 'g', 14, 64)
 }
 
+// luaCStr is a Lua string as C sees it, which is the bytes up to the
+// first zero rather than all of them.
+//
+// A C string is a pointer, and where it ends is the first byte that is
+// zero.  A Go string is a length and some bytes, so wherever a Lua
+// string reaches a C function -- or reaches the operating system,
+// which C reaches for it -- the cut has to be made here, and only
+// here.  This is the one place the whole rule lives:
+//
+//	io.open("a\0b", "w")          makes a file called "a"
+//	os.remove("a\0b")             removes "a", and says so
+//	io.popen("true a\0b")         runs "true a"
+//	require("a\0b")               looks for module "a"
+//	string.packsize("i4\0i4")     is 4
+//	string.format("%s", "a\0b")   is none of those: C's str_format
+//	                              walks a format with strfrmt <
+//	                              strfrmt_end, the end being the
+//	                              length, and %s of a string is
+//	                              luaL_tolstring's, which has a
+//	                              length too.  So string.format keeps
+//	                              its zero bytes and this is not
+//	                              applied to it.
+//
+// The one that is least obvious is the last-but-one: 'luaO_pushvfstring'
+// writes %s with 'strlen', so a name that appears *inside a message* is
+// cut too -- "module 'a' not found" is what PUC-Lua answers for
+// require("a\0b"), and it is what the message of a failing os.remove
+// says about the file it failed to remove.
+func luaCStr(s string) string {
+	if i := strings.IndexByte(s, 0); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
 // luaO_tostring converts a number object into a string, in place.
 func luaO_tostring(L *State, obj *Value) {
 	setsvalue(obj, luaS_newlstr(L, tostringbuff(obj)))

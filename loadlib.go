@@ -254,6 +254,12 @@ func pkPushErrorNotFound(L *State, path string) {
 // walks it with getnextfilename; Go strings are immutable, so the list
 // is split with strings.Split, which yields the same names.
 func pkSearchPath(L *State, name, path, sep, dirsep string) bool {
+	/* 'luaL_addgsub' inserts the name with 'luaL_addstring', which is
+	   'strlen', so a name longer than the bytes before its first zero
+	   is not inserted: 'package.searchpath("a\0b", "?.lua")' looks for
+	   "a.lua" and says so.  Every other use of the name here is a use
+	   of what it has become. */
+	name = luaCStr(name)
 	/* separator is non-empty and appears in 'name'? */
 	if sep != "" && strings.Contains(name, sep) {
 		name = strings.ReplaceAll(name, sep, dirsep) /* replace it by 'dirsep' */
@@ -433,15 +439,26 @@ func pkFindLoader(L *State, name string) {
 // pkRequire is ll_require: the global 'require'.
 func pkRequire(L *State) int {
 	name := L.CheckString(1)
+	/* Every use of the name here but one is a C use, and a C string
+	   ends at its first zero byte: 'lua_getfield' and 'lua_setfield'
+	   both look the name up with 'luaS_new', which is 'strlen', and
+	   'findloader' hands it to the searchers with 'lua_pushstring',
+	   which is 'strlen' too.  The one that is not is the name the
+	   *loader* is given -- that one is 'lua_pushvalue(L, 1)', a copy
+	   of the string as it stands, so a loader is handed all three
+	   bytes of 'require("a\0b")' while every searcher is handed one.
+	   The message names the short one, because 'luaL_error' writes
+	   %s with strlen. */
+	cname := luaCStr(name)
 	L.SetTop(1) /* LOADED table will be at index 2 */
 	L.GetField(LUA_REGISTRYINDEX, pkLoadedTable)
-	L.GetField(2, name)  /* LOADED[name] */
+	L.GetField(2, cname) /* LOADED[cname] */
 	if L.ToBoolean(-1) { /* is it there? */
 		return 1 /* package is already loaded */
 	}
 	/* else must load package */
 	L.Pop(1) /* remove 'getfield' result */
-	pkFindLoader(L, name)
+	pkFindLoader(L, cname)
 	/* stack: name; LOADED; searchers; loader data; loader function */
 	L.Rotate(L.AbsIndex(-2), 1) /* function <-> loader data */
 	L.PushValue(1)              /* name is 1st argument to module loader */
@@ -450,14 +467,14 @@ func pkRequire(L *State) int {
 	L.Call(2, 1) /* run loader to load module */
 	/* stack: ...; loader data; result from loader */
 	if !L.IsNil(-1) { /* non-nil return? */
-		L.SetField(2, name) /* LOADED[name] = returned value */
+		L.SetField(2, cname) /* LOADED[cname] = returned value */
 	} else {
 		L.Pop(1) /* pop nil */
 	}
-	if L.GetField(2, name) == LUA_TNIL { /* module set no value? */
-		L.PushBoolean(true) /* use true as result */
-		L.Copy(-1, -2)      /* replace loader result */
-		L.SetField(2, name) /* LOADED[name] = true */
+	if L.GetField(2, cname) == LUA_TNIL { /* module set no value? */
+		L.PushBoolean(true)  /* use true as result */
+		L.Copy(-1, -2)       /* replace loader result */
+		L.SetField(2, cname) /* LOADED[cname] = true */
 	}
 	L.Rotate(L.AbsIndex(-2), 1) /* loader data <-> module result */
 	return 2                    /* return module result and loader data */
