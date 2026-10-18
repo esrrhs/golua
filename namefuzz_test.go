@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -577,6 +578,16 @@ func TestNameFuzzDifferential(t *testing.T) {
 // is only that they are entered at all, plus the two things the grid
 // found, pinned where no reference interpreter is needed to see them.
 func TestNameInProcess(t *testing.T) {
+	/* What it pins is what a 'rename(2)' answers and what a Go
+	   'os.Rename' answers for itself, and neither is the same on
+	   Windows: a move there is MoveFileEx, the errnos are not the
+	   C ones, and the grid that says which is right runs where the
+	   reference interpreter is (§5.13), which is not here. */
+	if ioIsWindows() {
+		t.Skip("the answer a rename of a directory gets is not the " +
+			"same on Windows, and the grid that says which one " +
+			"is PUC-Lua's runs on unix")
+	}
 	dir := t.TempDir()
 	/* The fixtures.  A directory needs 'mkdir', which is a shell on
 	   some platforms and not on others, so they are made here and not
@@ -620,6 +631,11 @@ func TestNameInProcess(t *testing.T) {
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()
+	/* The errno the platform spells a thing with, which is what the
+	   reference answers too: ENOTEMPTY is 66 on macOS and 39 on
+	   Linux.  The message is what is being pinned, and that is
+	   written out. */
+	eno := func(e syscall.Errno) string { return strconv.Itoa(int(e)) }
 	var b strings.Builder
 	b.WriteString(`local function T(...)
   local t = {}
@@ -632,17 +648,24 @@ end
 
 -- 1. the two things the grid found, neither of which has a zero byte
 --    in it: 'os.rename' onto a directory, and the spelling of an errno
---    that Go groups with another one
+--    that Go groups with another one.  The numbers come from the
+--    platform and not from the source -- ENOTEMPTY is 66 on macOS and
+--    39 on Linux -- and it is the message that is the answer.
 mk("f1")
-assert(T(os.rename("f1", "d1")) == "nil|Is a directory|21")
+assert(T(os.rename("f1", "d1")) ==
+  "nil|Is a directory|` + eno(syscall.EISDIR) + `")
 mk("f2")
-assert(T(os.rename("f2", "d2")) == "nil|Is a directory|21")
+assert(T(os.rename("f2", "d2")) ==
+  "nil|Is a directory|` + eno(syscall.EISDIR) + `")
 assert(T(os.rename("d3", "d1")) == "true")
-assert(T(os.rename("d6", "d1")) == "nil|Directory not empty|66")
+assert(T(os.rename("d6", "d1")) ==
+  "nil|Directory not empty|` + eno(syscall.ENOTEMPTY) + `")
 mk("g1")
-assert(T(os.rename("d6", "g1")) == "nil|Not a directory|20")
+assert(T(os.rename("d6", "g1")) ==
+  "nil|Not a directory|` + eno(syscall.ENOTDIR) + `")
 assert(T(os.remove("d2")) == "true")
-assert(T(os.remove("d6")) == "nil|d6: Directory not empty|66")
+assert(T(os.remove("d6")) ==
+  "nil|d6: Directory not empty|` + eno(syscall.ENOTEMPTY) + `")
 
 -- 2. the family the two belong to: a name with a zero at every kind of
 --    position in it, handed to each of the eleven functions
@@ -669,23 +692,14 @@ assert(e:find("no field package.preload['zz']", 1, true), e)
 assert(e:find("no file './zz.lua'", 1, true), e)
 assert(T(pcall(require, "k")) == "true|7|./k.lua")
 `)
-	if ioIsWindows() {
-		b.WriteString(`-- the two that are a shell, which is not the same one
--- everywhere: 'cmd' has no 'exec 2>/dev/null' to hide behind
-local f = assert(io.popen("cmd /c exit 127\0x", "r"))
-assert(T(f:close()) == "nil|exit|127")
-assert(T(os.execute("cmd /c exit 127\0x")) == "nil|exit|127")
-`)
-	} else {
-		b.WriteString(`-- the two that are a shell.  'exec 2>/dev/null' is what
--- keeps a truncated command from saying anything.
-local f = assert(io.popen("exec 2>/dev/null; tru\0e", "r"))
-assert(T(f:close()) == "nil|exit|127")
+	b.WriteString(`-- 3. the two that are a shell.  'exec 2>/dev/null' is what keeps a
+--    truncated command from saying anything on the standard error.
+local p = assert(io.popen("exec 2>/dev/null; tru\0e", "r"))
+assert(T(p.close(p)) == "nil|exit|127")
 assert(T(os.execute("exec 2>/dev/null; tru\0e")) == "nil|exit|127")
 assert(T(os.execute("exec 2>/dev/null; true\0e")) == "true|exit|0")
+return true
 `)
-	}
-	b.WriteString("return true\n")
 	if err := runLua(t, L, b.String()); err != nil {
 		t.Fatal(err)
 	}
