@@ -62,7 +62,8 @@ import (
 // five functions §6.7 used to list with the library's are asked here
 // after all, and §6.7 says so.
 //
-// Four things the fuzz does not hold, and three of them nobody can:
+// Three answers it does not ask, and one it asks and then settles.
+// None of the three is anybody's to give:
 //
 //   'math.randomseed()' with no arguments.  PUC-Lua takes its seed
 //   from 'time(NULL)' and the address of a local, so what it answers
@@ -75,22 +76,18 @@ import (
 //   right to fifteen, and a grid that asked it would be a grid that
 //   is red on one machine and green on another.
 //
-//   A thirty-first digit of pi.  'mathPI' is 37 digits of it, and a
-//   mutant that drops the last six of them changes nothing: C parses
-//   the literal as a double and so does Go, and both round the same
-//   37 digits to the same one of the 2^64 there are.  It is the one
-//   mutant here that is not a mutation, and it is kept because a grid
-//   that caught it would be a grid that had over-fitted to the
-//   constant.
-//
 //   Which position 'math.fmod' complains about when it is handed
 //   nothing at all.  It is the one place in the whole of PUC-Lua
 //   where two argument checkers sit in the same argument list — the
 //   two 'luaL_checknumber's of 'l_mathop(fmod)(...)' — and C leaves
-//   the order they are evaluated in to the compiler.  clang answers
-//   "#1" and gcc answers "#2", from the same source on the same day,
-//   and this port answers "#1" on both: §6.20.  It asks one argument
-//   instead, which is the one answer there that is not the compiler's.
+//   the order they are evaluated in to the compiler: §6.20.  clang
+//   answers "#1" and gcc answers "#2", from the same source on the
+//   same day, and this port answers "#1" on both, which is what the
+//   reference it was written against answers.  So the grid asks
+//   'math.fmod(1)', the one question there with only one position
+//   that can be wrong, and not 'math.fmod()'.
+//
+// And the one it asks and then makes one thing of:
 //
 //   Which of the two names 'atan' and 'atan2' an error message says.
 //   They are one function -- 'atan2' is the name 'LUA_COMPAT_MATHLIB'
@@ -101,11 +98,25 @@ import (
 //   and a heap address, so it is a different one in every process.
 //   PUC-Lua answered 'math.atan' 8 times in 12 and 'math.atan2' the
 //   other 4; this port answered 7 and 5.  Two processes pick
-//   independently and disagree half the time -- the fourth thing in
-//   this library that is not Lua's to give, and the only one that is
-//   nobody's: it is not the C library's, not the clock's alone and
-//   not a port's.  So the ten messages that could say either are
-//   asked, and then made to say one; see mathSettleName below.
+//   independently and disagree half the time -- not the C library's,
+//   not the clock's alone and not a port's.  So the ten messages
+//   that could say either are asked, and then made to say one; see
+//   mathSettle below.
+//
+// Four ways, then, that an answer this library does not own can be
+// kept out of a corpus, and this half uses all four: leave the
+// question out (the clock's seed and the fourteen's answers), take
+// the part that is not anybody's out of the answer (the two names of
+// 'atan'), ask a different question with one fewer thing to decide
+// (the position 'fmod' complains about), and ask the question and
+// hold only what is reproducible (the shape of 'randomseed()').  The
+// fifth is the one the mutation test found and this file does not
+// use: a thirty-first digit of pi.  'mathPI' is 37 digits of it, and
+// dropping the last six changes nothing, because C parses the literal
+// as a double and so does Go, and both round the same 37 digits to
+// the same one of the 2^64 there are.  It is the one mutant here that
+// is not a mutation, and it is kept, because a corpus that caught it
+// would be one over-fitted to a constant.
 
 // mathVal is one value the library can be handed, with the tag that
 // names it in a case.  The tag matters because the answer is a number
