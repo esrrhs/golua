@@ -62,7 +62,7 @@ import (
 // five functions §6.7 used to list with the library's are asked here
 // after all, and §6.7 says so.
 //
-// Three things the fuzz does not ask, and two of them nobody can:
+// Four things the fuzz does not hold, and three of them nobody can:
 //
 //   'math.randomseed()' with no arguments.  PUC-Lua takes its seed
 //   from 'time(NULL)' and the address of a local, so what it answers
@@ -82,6 +82,15 @@ import (
 //   mutant here that is not a mutation, and it is kept because a grid
 //   that caught it would be a grid that had over-fitted to the
 //   constant.
+//
+//   Which position 'math.fmod' complains about when it is handed
+//   nothing at all.  It is the one place in the whole of PUC-Lua
+//   where two argument checkers sit in the same argument list — the
+//   two 'luaL_checknumber's of 'l_mathop(fmod)(...)' — and C leaves
+//   the order they are evaluated in to the compiler.  clang answers
+//   "#1" and gcc answers "#2", from the same source on the same day,
+//   and this port answers "#1" on both: §6.20.  It asks one argument
+//   instead, which is the one answer there that is not the compiler's.
 //
 //   Which of the two names 'atan' and 'atan2' an error message says.
 //   They are one function -- 'atan2' is the name 'LUA_COMPAT_MATHLIB'
@@ -462,11 +471,22 @@ func TestMathFuzzDifferential(t *testing.T) {
 			}
 		}
 	}
-	// and with no arguments at all, which is the one thing every
-	// function has to say about being handed nothing
+	/* and with no arguments at all, which is the one thing every
+	   function has to say about being handed nothing.
+
+	   'fmod' is the one that is left out, and it is left out because
+	   it is the only function in the library with two checkers in one
+	   argument list: which of them C reaches first is the compiler's
+	   business, so what it says then is "bad argument #1" under clang
+	   and "#2" under gcc (§6.20).  What is asked instead is one
+	   argument, which is a question with one position in it. */
 	for _, fn := range mathFns {
 		if fn.name == "random" || fn.name == "randomseed" {
 			/* what they answer then is the clock's */
+			continue
+		}
+		if fn.name == "fmod" {
+			emit("onearg/fmod", "C(math.fmod, 1)")
 			continue
 		}
 		emit("noargs/"+fn.name, "C(math."+fn.name+")")
