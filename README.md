@@ -46,7 +46,7 @@ loading C dynamic libraries (replaced by Go-side module registration).
 |---|---|---|---|
 | `lobject.h/.c` | `lobject.go` | ⬜ | `TValue`, `Table`, `Proto`, arithmetic/compare primitives |
 | `lstate.h/.c` | `lstate.go` | ⬜ | `lua_State` / `global_State` / `CallInfo`, GC fields removed |
-| `lstring.c` | `lstring.go` | ✅ | string interning (Go map; short strings interned for the life of the state, as in C) |
+| `lstring.c` | `lstring.go` | ✅ | string interning (weak Go map; short strings interned while referenced, as in C) |
 | `ltable.c` | `ltable.go` | ⬜ | array part + open-addressing hash; `luaH_next` needs stable order, cannot use Go map |
 | `lfunc.c` | `lfunc.go` | ⬜ | `Proto` / `UpVal` / `CClosure` / `LClosure` |
 | `ltm.c` | `ltm.go` | ⬜ | metamethod names, `luaT_gettm` |
@@ -770,14 +770,13 @@ about the Go runtime rather than about Lua:
   the switch rather than moved to a helper, because a helper that can
   raise (`%` and `//`) is over the compiler's inline budget and the call
   costs about as much as the operation.
-* **short strings are interned permanently, like C's.** The string
-  table holds every short string the state has interned for its whole
-  life, so two equal short strings are the same object and
+* **short strings are interned weakly, like C's.** The string table
+  holds a short string only while something else references it, so two
+  equal short strings alive at the same time are the same object and
   `lua_topointer` answers the same address for both — which is what
-  PUC-Lua does and what lets a short string be a `lua_rawsetp` key. The
-  price is that interned strings are not collected until the state
-  closes, the same price PUC-Lua pays; Go's collector does not sweep
-  the table because it holds a strong reference to every entry.
+  PUC-Lua does and what lets a short string be a `lua_rawsetp` key.
+  An unreferenced short string is collected and interned afresh on its
+  next use, again exactly as C's own sweep does; nothing accumulates.
 
 `Value` is 32 bytes rather than 40 for the same reason C's `TValue` is a
 union: a float shares the integer's field, stored as its IEEE bits.

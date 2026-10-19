@@ -1,45 +1,73 @@
 // Translation of lstring.h / lstring.c (PUC-Lua 5.4).
 //
-// Short strings are interned in a Go map that holds them for the whole
-// life of the state, exactly as C's string table does: two short strings
-// that compare equal are the same object, so 'lua_topointer' answers the
-// same address for both and a short string can be used as a key with
-// 'lua_rawsetp'. C's collector sweeps the table; here Go's collector
-// does not, because the map holds a strong reference to every interned
-// string -- which is the price of pointer identity, and the same price
-// PUC-Lua pays.
+// Short strings are interned through a Go weak map: an entry disappears
+// once nothing else refers to the string, and a sweep drops the dead
+// entries. That is exactly what C's string table does under its own
+// collector -- a short string lives while something references it and is
+// interned afresh otherwise -- and it keeps the guarantee C extensions
+// rely on: of the short strings alive at any moment, equal ones are the
+// same object, so 'lua_topointer' answers the same address for both and
+// a short string can be a 'lua_rawsetp' key.
 package lua
 
 import (
 	"strings"
+	"weak"
 )
 
 const (
 	LUAI_MAXSHORTLEN = 40
 	LUAI_HASHLIMIT   = 5
+	maxInternedShort = 1 << 16
 )
 
-// stringTable replaces Lua's hash table of strings. It holds every short
-// string the state has interned, for the whole life of the state: a
-// lookup always answers the same *TString for the same bytes.
+// stringTable replaces Lua's hash table of strings. The entries are weak:
+// Go's collector drops the unreachable ones and 'sweep' takes them out of
+// the map, the way C's own sweep takes dead strings out of 'strt'.
 type stringTable struct {
-	entries map[string]*TString
+	short map[string]weak.Pointer[TString]
+	nuse  int
+	limit int
 }
 
 func newStringTable() *stringTable {
 	return &stringTable{
-		entries: make(map[string]*TString, 1024),
+		short: make(map[string]weak.Pointer[TString], 1024),
+		limit: maxInternedShort,
+	}
+}
+
+// sweep removes the entries whose string is no longer reachable. It is
+// O(len(short)) and so must not run on every insertion; the next one is
+// deferred until the table has grown again.
+func (tb *stringTable) sweep() {
+	for k, wp := range tb.short {
+		if wp.Value() == nil {
+			delete(tb.short, k)
+		}
+	}
+	tb.nuse = len(tb.short)
+	tb.limit = 2 * tb.nuse
+	if tb.limit < maxInternedShort {
+		tb.limit = maxInternedShort
 	}
 }
 
 // get returns the interned string with these bytes, or nil.
 func (tb *stringTable) get(s string) *TString {
-	return tb.entries[s]
+	if wp, ok := tb.short[s]; ok {
+		return wp.Value()
+	}
+	return nil
 }
 
 // put interns a string.
 func (tb *stringTable) put(s string, ts *TString) {
-	tb.entries[s] = ts
+	tb.short[s] = weak.Make(ts)
+	tb.nuse++
+	if tb.nuse > tb.limit {
+		tb.sweep()
+	}
 }
 
 // luaS_hash computes the hash of a string (lstring.c).
@@ -67,9 +95,10 @@ func luaS_eqlngstr(a, b *TString) bool {
 	return a == b || (len(a.val) == len(b.val) && a.val == b.val)
 }
 
-// luaS_eqshrstr compares two short strings. Short strings are interned
-// for the life of the state, so equal short strings are the same object
-// and a pointer comparison is enough -- exactly C's 'eqshrstr'.
+// luaS_eqshrstr compares two short strings. Weak interning still
+// guarantees that the strings alive at any moment are one object each --
+// a second object is only made when the first is already gone -- so a
+// pointer comparison is enough, exactly C's 'eqshrstr'.
 func luaS_eqshrstr(a, b *TString) bool {
 	return a == b
 }
