@@ -114,7 +114,9 @@ func luaT_objtypename(L *State, o *Value) string {
 	if mt != nil {
 		name := luaH_getshortstr(mt, luaS_new(L, "__name"))
 		if ttisstring(name) {
-			return tsvalue(name).val
+			/* C hands the name back as a 'const char *' for whoever
+			   asked to format it with '%s', which stops at the zero. */
+			return luaCStr(tsvalue(name).val)
 		}
 	}
 	switch ttype(o) {

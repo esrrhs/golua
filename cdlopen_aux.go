@@ -171,7 +171,9 @@ func (L *State) CloseSlot(idx int) {
 func (L *State) TypeError(arg int, tname string) int {
 	var typearg string
 	if L.GetMetaField(arg, "__name") == LUA_TSTRING {
-		typearg = L.ToStringX(-1)
+		/* 'luaL_typeerror' reads the name as a 'const char *' for '%s',
+		   which is where a __name with a zero byte in it is cut short. */
+		typearg = luaCStr(L.ToStringX(-1))
 	} else if L.Type(arg) == LUA_TLIGHTUSERDATA {
 		typearg = "light userdata"
 	} else {

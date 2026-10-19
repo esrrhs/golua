@@ -1,23 +1,13 @@
 // Translation of lstring.h / lstring.c (PUC-Lua 5.4).
 //
-// Short strings are interned in a Go map. C's collector sweeps that table;
-// the obvious translation is to let Go's collector do it, by holding the
-// strings weakly -- and it is what this file did at first. It costs half the
-// time of a string-key table workload: every interned string then carries a
-// weak handle, and the handles are exactly what the collector has to walk
-// during a cycle, one per special, and a short string is the most allocated
-// object in a Lua program.
-//
-// So the table is now a cache with two generations. New strings go into
-// 'cur'; when 'cur' fills up it becomes 'old' and a fresh 'cur' takes over,
-// and when 'cur' fills up again 'old' is dropped whole. A string therefore
-// survives at least one full generation, the table holds at most two
-// generations' worth, and no handle is ever registered with the runtime.
-//
-// What that gives up is interning being permanent: two live strings can now
-// hold the same bytes. Nothing may compare short strings by pointer;
-// 'luaS_eqshrstr' compares the hash and then the bytes, and that is what the
-// table code and 'luaV_equalobj' use.
+// Short strings are interned in a Go map that holds them for the whole
+// life of the state, exactly as C's string table does: two short strings
+// that compare equal are the same object, so 'lua_topointer' answers the
+// same address for both and a short string can be used as a key with
+// 'lua_rawsetp'. C's collector sweeps the table; here Go's collector
+// does not, because the map holds a strong reference to every interned
+// string -- which is the price of pointer identity, and the same price
+// PUC-Lua pays.
 package lua
 
 import (
@@ -27,44 +17,29 @@ import (
 const (
 	LUAI_MAXSHORTLEN = 40
 	LUAI_HASHLIMIT   = 5
-	maxInternedShort = 1 << 14
 )
 
-// stringTable replaces Lua's hash table of strings. See the comment at the
-// top of the file: it is a two-generation cache, not a table the collector
-// sweeps.
+// stringTable replaces Lua's hash table of strings. It holds every short
+// string the state has interned, for the whole life of the state: a
+// lookup always answers the same *TString for the same bytes.
 type stringTable struct {
-	cur   map[string]*TString
-	old   map[string]*TString
-	limit int /* a generation this size is full */
+	entries map[string]*TString
 }
 
 func newStringTable() *stringTable {
 	return &stringTable{
-		cur:   make(map[string]*TString, 1024),
-		limit: maxInternedShort,
+		entries: make(map[string]*TString, 1024),
 	}
 }
 
 // get returns the interned string with these bytes, or nil.
 func (tb *stringTable) get(s string) *TString {
-	if ts, ok := tb.cur[s]; ok {
-		return ts
-	}
-	if ts, ok := tb.old[s]; ok {
-		tb.cur[s] = ts /* still in use: give it another generation */
-		return ts
-	}
-	return nil
+	return tb.entries[s]
 }
 
-// put interns a string, rotating the generations when 'cur' is full.
+// put interns a string.
 func (tb *stringTable) put(s string, ts *TString) {
-	tb.cur[s] = ts
-	if len(tb.cur) >= tb.limit {
-		tb.old = tb.cur
-		tb.cur = make(map[string]*TString, tb.limit)
-	}
+	tb.entries[s] = ts
 }
 
 // luaS_hash computes the hash of a string (lstring.c).
@@ -92,12 +67,11 @@ func luaS_eqlngstr(a, b *TString) bool {
 	return a == b || (len(a.val) == len(b.val) && a.val == b.val)
 }
 
-// luaS_eqshrstr compares two short strings. C's 'eqshrstr' is a pointer
-// comparison, which interning makes enough there; here interning is a
-// cache (see stringTable), so the hash is compared first and the bytes
-// only when the hashes agree.
+// luaS_eqshrstr compares two short strings. Short strings are interned
+// for the life of the state, so equal short strings are the same object
+// and a pointer comparison is enough -- exactly C's 'eqshrstr'.
 func luaS_eqshrstr(a, b *TString) bool {
-	return a == b || (a.hash == b.hash && a.val == b.val)
+	return a == b
 }
 
 func (L *State) internShort(s string) *TString {

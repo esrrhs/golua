@@ -189,7 +189,9 @@ jobs:
       # (datefuzz_test.go); 1 005 questions about the six functions
       # of the table library (tablefuzz_test.go); and 4 615 questions
       # about the maths library, the fourteen functions whose answer is
-      # the C library's asked only about a table (mathfuzz_test.go).
+      # the C library's asked only about a table (mathfuzz_test.go); and
+      # 1 585 questions about the twenty-two functions of the base
+      # library (basefuzz_test.go).
       # Every one of them
       # needs LUA_REF for the same reason the suite above does, so
       # they have to run here and nowhere else.
@@ -197,4 +199,4 @@ jobs:
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential|TestDateFuzzDifferential|TestTableFuzzDifferential|TestMathFuzzDifferential' -timeout 30m .
+        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential|TestDateFuzzDifferential|TestTableFuzzDifferential|TestMathFuzzDifferential|TestBaseFuzzDifferential' -timeout 30m .

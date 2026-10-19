@@ -947,10 +947,17 @@ func (L *State) rawRunProtected(f func()) (status int) {
 // warnings (lstate.c)
 // ---------------------------------------------------------------------
 
+// luaE_warning emits one piece of a warning (luaE_warning).
+//
+// The piece is a C string in PUC-Lua: 'lua_warning' takes a
+// 'const char *', and where a warning ends up is a '%s' or a 'strcmp'
+// inside one of the three functions below.  Both stop at the first
+// zero, so 'warn("a\0b")' warns "a" and 'warn("@on\0x")' turns the
+// warnings on — the control is compared as a C string too.
 func luaE_warning(L *State, msg string, tocont bool) {
 	g := L.g
 	if g.warnf != nil {
-		g.warnf(L, msg, tocont)
+		g.warnf(L, luaCStr(msg), tocont)
 	}
 }
 

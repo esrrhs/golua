@@ -1541,7 +1541,7 @@ func strToLString(L *State, idx int) string {
 		default:
 			kind := ""
 			if L.GetMetaField(idx, "__name") == LUA_TSTRING {
-				kind = L.ToStringX(-1)
+				kind = luaCStr(L.ToStringX(-1))
 				L.PushString(fmt.Sprintf("%s: 0x%x", kind, uint64(L.ToPointer(idx))))
 				L.Remove(-2)
 			} else {

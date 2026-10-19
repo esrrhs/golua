@@ -581,6 +581,11 @@ func fmtFloat(f float64) string {
 //	io.popen("true a\0b")         runs "true a"
 //	require("a\0b")               looks for module "a"
 //	string.packsize("i4\0i4")     is 4
+//	tostring(t) where t's         is "a: 0x...", because
+//	  metatable has a __name      'luaL_tolstring' formats
+//	  of "a\0b"                   it with '%s', and so does
+//	                              every message that names
+//	                              a type by its __name
 //	string.format("%s", "a\0b")   is none of those: C's str_format
 //	                              walks a format with strfrmt <
 //	                              strfrmt_end, the end being the

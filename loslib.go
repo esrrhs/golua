@@ -548,7 +548,7 @@ func osSetLocale(L *State) int {
 		return 1
 	}
 	name, _ := L.ToString(1)
-	if got, ok := setLocale(localeCatOf(cat), name); ok {
+	if got, ok := setLocale(cat, name); ok {
 		L.PushString(got)
 		return 1
 	}

@@ -182,8 +182,10 @@ func (L *State) typeError(arg int, tname string) {
 	named := false
 	if L.GetMetaField(arg, "__name") == LUA_TSTRING {
 		/* C's luaL_getmetafield leaves the value pushed only when it
-		   finds one, and luaL_typeerror then reads it from there. */
-		typearg = L.ToStringX(-1)
+		   finds one, and luaL_typeerror then reads it from there as a
+		   'const char *', which is where a __name with a zero byte in
+		   it is cut short. */
+		typearg = luaCStr(L.ToStringX(-1))
 		named = true
 	} else if L.Type(arg) == LUA_TLIGHTUSERDATA {
 		typearg = "light userdata"

@@ -808,7 +808,7 @@ func luaL_tolstring(p *C.lua_State, idx C.int, l *C.size_t) *C.char {
 			tt := L.GetMetaField(i, "__name")
 			if tt == LUA_TSTRING {
 				if s, ok := L.ToString(-1); ok {
-					kind = s
+					kind = luaCStr(s) /* '%s' stops at the zero */
 				}
 			}
 			L.PushString(fmt.Sprintf("%s: %p", kind, lua_topointer(p, idx)))

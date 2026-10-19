@@ -79,7 +79,8 @@ var officialKnownDiffBuild = map[string]struct {
 }{
 	"attrib":   {[]string{"dlopen", "clibs"}, "loads the C libraries of libs/ through package.loadlib and require"},
 	"main":     {[]string{"dlopen", "clibs"}, "runs 'lua -l lib2-v2' as a subprocess, and the module has to be there"},
-	"literals": {[]string{"locale"}, "tests the decimal point of the pt_BR locale; without cgo os.setlocale answers nil"},
+	"literals": {[]string{"locale"}, "tests the decimal point of the pt_BR locale; without cgo the decimal point is decided from the language, not the C library"},
+	"strings":  {[]string{"clocale"}, "asks which locales are installed; without the C library's setlocale every name is accepted"},
 }
 
 // officialNoT are the files that match but assert nothing, because the
@@ -259,16 +260,16 @@ func officialBuildLibs(t *testing.T, dir string) bool {
 func officialProbe(t *testing.T, bin string) map[string]bool {
 	t.Helper()
 	script := `local _, _, when = package.loadlib("donotexist", "x")
-print(when == "open", os.setlocale("pt_BR") ~= nil)`
+print(when == "open", os.setlocale("pt_BR") ~= nil, os.setlocale("zz_ZZ.NOPE") == nil)`
 	out, err := exec.Command(bin, "-e", script).CombinedOutput()
 	if err != nil {
 		t.Fatalf("probing %s: %v\n%s", bin, err, out)
 	}
 	f := strings.Fields(string(out))
-	if len(f) < 2 {
+	if len(f) < 3 {
 		t.Fatalf("probing %s: unexpected answer %q", bin, out)
 	}
-	return map[string]bool{"dlopen": f[0] == "true", "locale": f[1] == "true"}
+	return map[string]bool{"dlopen": f[0] == "true", "locale": f[1] == "true", "clocale": f[2] == "true"}
 }
 
 // officialRun runs one file through a binary the way the reference
