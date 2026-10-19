@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"unsafe"
 )
 
 // ---------------------------------------------------------------------
@@ -372,7 +373,7 @@ func (L *State) ToPointer(idx int) uintptr {
 	case LUA_TLIGHTUSERDATA:
 		return ptrID(pvalue(v))
 	case LUA_TSTRING:
-		return ptrID(tsvalue(v))
+		return ptrID(unsafe.Pointer(tsvalue(v)))
 	}
 	return 0
 }
@@ -422,7 +423,7 @@ func (L *State) PushBoolean(b bool) {
 	L.top++
 }
 
-func (L *State) PushLightUserData(p any) {
+func (L *State) PushLightUserData(p unsafe.Pointer) {
 	L.checkStack(1)
 	setpvalue(&L.stack[L.top], p)
 	L.top++
@@ -559,7 +560,7 @@ func (L *State) RawGetI(idx int, n int64) int {
 }
 
 // RawGetP pushes t[p] for a light userdata key (lua_rawgetp).
-func (L *State) RawGetP(idx int, p any) int {
+func (L *State) RawGetP(idx int, p unsafe.Pointer) int {
 	t := index2value(L, idx)
 	if !ttistable(t) {
 		panic("table expected")
@@ -722,7 +723,7 @@ func (L *State) RawSetI(idx int, n int64) {
 }
 
 // RawSetP does t[p] = v for a light userdata key (lua_rawsetp).
-func (L *State) RawSetP(idx int, p any) {
+func (L *State) RawSetP(idx int, p unsafe.Pointer) {
 	t := index2value(L, idx)
 	if !ttistable(t) {
 		panic("table expected")
@@ -816,7 +817,7 @@ func (L *State) SetGlobal(name string) {
 }
 
 func (L *State) rawGetRegistryGlobals() *Table {
-	reg := L.g.registry.p.(*Table)
+	reg := hvalue(&L.g.registry)
 	slot := luaH_getint(reg, LUA_RIDX_GLOBALS)
 	if !ttistable(slot) {
 		panic("globals table missing")

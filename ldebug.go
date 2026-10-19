@@ -667,7 +667,7 @@ func luaV_equalobj(L *State, t1, t2 *Value) bool {
 	case LUA_VLIGHTUSERDATA:
 		return pvalue(t1) == pvalue(t2)
 	case LUA_VLCF: /* light C functions: identity */
-		return ptrEqual(gcvalue(t1), gcvalue(t2))
+		return gcvalue(t1) == gcvalue(t2)
 	case LUA_VSHRSTR:
 		return luaS_eqshrstr(tsvalue(t1), tsvalue(t2))
 	case LUA_VLNGSTR:

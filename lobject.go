@@ -9,7 +9,6 @@ package lua
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -72,9 +71,10 @@ const (
 	BIT_ISCOLLECTABLE = 1 << 6
 )
 
-// makevariant / ctb / novariant, exactly as lobject.h.
+// makevariant / ctb / novariant, exactly as lobject.h. 'ctb' answers a
+// byte because that is the type a tag has inside a Value.
 func makevariant(t, v int) int { return t | (v << 4) }
-func ctb(t int) int            { return t | BIT_ISCOLLECTABLE }
+func ctb(t int) uint8          { return uint8(t) | BIT_ISCOLLECTABLE }
 func novariant(t int) int      { return t & 0x0F }
 
 // Variant tags (lobject.h). The values are 'makevariant(t, v)', written
@@ -135,25 +135,32 @@ const (
 
 // Value is the translation of TValue: a tag plus the value itself.
 //
-// C's TValue is a tagged union, and so is this, with one deliberate
-// difference: where C overlays an integer, a float and a pointer in the
-// same bytes, this has two fields, 'i' for the integer (or a boolean),
-// and 'p' for every collectable. A float shares 'i', stored as its IEEE
-// bits -- which is what C's union does anyway, and what keeps Value at
-// 32 bytes instead of 40. Reading it costs nothing: 'Float64frombits'
-// compiles to a single move between register files.
+// C's TValue is a tagged union, and so is this, with two deliberate
+// differences.  Where C overlays an integer, a float and a pointer in
+// the same bytes, this has two fields, 'i' for the integer (or a
+// boolean, or the bits of a float -- which is what C's union does
+// anyway) and 'p' for every collectable.  And where C keeps an int
+// tag, this keeps a byte: 24 bytes in all instead of C's 16, which is
+// as small as a tagged value can be while the Go collector can still
+// see the pointer.  (NaN-boxing would hide it; an interface would
+// cost a second word.)
+//
+// 'p' is a real pointer the GC scans, never a hidden one.  A light C
+// function is stored as its closure pointer: a Go func value *is* a
+// pointer to a funcval, so the round trip through unsafe.Pointer
+// loses nothing and keeps the closure alive.
 type Value struct {
-	tt int
-	i  int64 // an integer, or the bits of a float
-	p  any
+	i  int64          // an integer, or the bits of a float
+	p  unsafe.Pointer // a collectable object, light userdata, or a funcval
+	tt uint8
 }
 
 // ---------------------------------------------------------------------
 // tag tests (lobject.h macros)
 // ---------------------------------------------------------------------
 
-func ttype(v *Value) int    { return novariant(v.tt) }
-func ttypetag(v *Value) int { return v.tt & 0x3F }
+func ttype(v *Value) int    { return novariant(int(v.tt)) }
+func ttypetag(v *Value) int { return int(v.tt) & 0x3F }
 
 func ttisnil(v *Value) bool       { return ttype(v) == LUA_TNIL }
 func ttisstrictnil(v *Value) bool { return v.tt == LUA_VNIL }
@@ -202,15 +209,15 @@ func nvalue(v *Value) float64 {
 	}
 	return fltvalue(v)
 }
-func tsvalue(v *Value) *TString   { return v.p.(*TString) }
-func hvalue(v *Value) *Table      { return v.p.(*Table) }
-func clLvalue(v *Value) *LClosure { return v.p.(*LClosure) }
-func clCvalue(v *Value) *CClosure { return v.p.(*CClosure) }
-func fvalue(v *Value) GoFunc      { return v.p.(GoFunc) }
-func uvalue(v *Value) *Udata      { return v.p.(*Udata) }
-func pvalue(v *Value) any         { return v.p }
-func thvalue(v *Value) *State     { return v.p.(*State) }
-func gcvalue(v *Value) any        { return v.p }
+func tsvalue(v *Value) *TString       { return (*TString)(v.p) }
+func hvalue(v *Value) *Table          { return (*Table)(v.p) }
+func clLvalue(v *Value) *LClosure     { return (*LClosure)(v.p) }
+func clCvalue(v *Value) *CClosure     { return (*CClosure)(v.p) }
+func fvalue(v *Value) GoFunc          { return *(*GoFunc)(unsafe.Pointer(&v.p)) }
+func uvalue(v *Value) *Udata          { return (*Udata)(v.p) }
+func pvalue(v *Value) unsafe.Pointer  { return v.p }
+func thvalue(v *Value) *State         { return (*State)(v.p) }
+func gcvalue(v *Value) unsafe.Pointer { return v.p }
 
 func iscollectable(v *Value) bool { return v.tt&BIT_ISCOLLECTABLE != 0 }
 
@@ -231,19 +238,24 @@ func setbvalue(v *Value, b bool) {
 		setbfvalue(v)
 	}
 }
-func setivalue(v *Value, i int64)     { *v = Value{tt: LUA_VNUMINT, i: i} }
-func setfltvalue(v *Value, f float64) { *v = Value{tt: LUA_VNUMFLT, i: int64(math.Float64bits(f))} }
-func chgfltvalue(v *Value, f float64) { v.i = int64(math.Float64bits(f)) }
-func chgivalue(v *Value, i int64)     { v.i = i }
-func setpvalue(v *Value, p any)       { *v = Value{tt: LUA_VLIGHTUSERDATA, p: p} }
-func setfvalue(v *Value, f GoFunc)    { *v = Value{tt: LUA_VLCF, p: f} }
+func setivalue(v *Value, i int64)          { *v = Value{tt: LUA_VNUMINT, i: i} }
+func setfltvalue(v *Value, f float64)      { *v = Value{tt: LUA_VNUMFLT, i: int64(math.Float64bits(f))} }
+func chgfltvalue(v *Value, f float64)      { v.i = int64(math.Float64bits(f)) }
+func chgivalue(v *Value, i int64)          { v.i = i }
+func setpvalue(v *Value, p unsafe.Pointer) { *v = Value{tt: LUA_VLIGHTUSERDATA, p: p} }
+func setfvalue(v *Value, f GoFunc)         { *v = Value{tt: LUA_VLCF, p: funcptr(f)} }
 
-func setsvalue(v *Value, ts *TString)    { *v = Value{tt: ctb(ts.tt), p: ts} }
-func sethvalue(v *Value, t *Table)       { *v = Value{tt: ctb(LUA_VTABLE), p: t} }
-func setuvalue(v *Value, u *Udata)       { *v = Value{tt: ctb(LUA_VUSERDATA), p: u} }
-func setthvalue(v *Value, th *State)     { *v = Value{tt: ctb(LUA_VTHREAD), p: th} }
-func setclLvalue(v *Value, cl *LClosure) { *v = Value{tt: ctb(LUA_VLCL), p: cl} }
-func setclCvalue(v *Value, cl *CClosure) { *v = Value{tt: ctb(LUA_VCCL), p: cl} }
+// funcptr is the pointer a light C function is stored as: the closure
+// behind the Go func value.  It is what 'lua_topointer' answers for a
+// light C function, and two copies of the same func value share it.
+func funcptr(f GoFunc) unsafe.Pointer { return *(*unsafe.Pointer)(unsafe.Pointer(&f)) }
+
+func setsvalue(v *Value, ts *TString)    { *v = Value{tt: ctb(ts.tt), p: unsafe.Pointer(ts)} }
+func sethvalue(v *Value, t *Table)       { *v = Value{tt: ctb(LUA_VTABLE), p: unsafe.Pointer(t)} }
+func setuvalue(v *Value, u *Udata)       { *v = Value{tt: ctb(LUA_VUSERDATA), p: unsafe.Pointer(u)} }
+func setthvalue(v *Value, th *State)     { *v = Value{tt: ctb(LUA_VTHREAD), p: unsafe.Pointer(th)} }
+func setclLvalue(v *Value, cl *LClosure) { *v = Value{tt: ctb(LUA_VLCL), p: unsafe.Pointer(cl)} }
+func setclCvalue(v *Value, cl *CClosure) { *v = Value{tt: ctb(LUA_VCCL), p: unsafe.Pointer(cl)} }
 
 func setobj(v1, v2 *Value) { *v1 = *v2 }
 
@@ -270,14 +282,38 @@ func getstr(ts *TString) string   { return ts.val }
 
 const BITRAS = 1 << 7
 
-// node is a hash-table entry: a key/value pair plus a chain offset.
+// node is a hash-table entry, laid out the way lobject.h's union Node
+// is: the value first (a full TValue), then the key's tag and the chain
+// offset sharing a word, then the key's value.  The key carries no tag
+// of its own -- 'keytt' is it -- which is what keeps the node at 48
+// bytes where a naive pair of Values would cost 56.
+//
 // next == 0 ends the chain; a negative offset points backwards, which is
 // the usual case for a key that had to be placed below its main position.
 type node struct {
-	key  Value
-	val  Value
-	next int
+	val   Value
+	keytt uint8
+	next  int32
+	kp    unsafe.Pointer // the key: a collectable object or light userdata
+	ki    int64          // the key: an integer, or the bits of a float
 }
+
+// setnodekey copies a value into a key (lobject.h).
+func setnodekey(n *node, k *Value) {
+	n.kp = k.p
+	n.ki = k.i
+	n.keytt = k.tt
+}
+
+// getnodekey copies a value from a key (lobject.h).
+func getnodekey(dst *Value, n *node) {
+	dst.p = n.kp
+	dst.i = n.ki
+	dst.tt = n.keytt
+}
+
+// setnilkey empties a node's key, as 'setnilvalue(L, gkey(n))' does.
+func setnilkey(n *node) { n.keytt = LUA_VNIL; n.kp = nil; n.ki = 0 }
 
 // Table is a Lua table: an array part plus an open-addressing hash part.
 type Table struct {
@@ -995,37 +1031,30 @@ func toIntAny(a any) int64 {
 	return 0
 }
 
-// ptrID returns a stable identity for a pointer-like value, used by
+// ptrID returns a stable identity for a collectable object, used by
 // lua_topointer and tostring(). (The C implementation uses the address;
 // here we use the Go pointer value, which is stable because the Go GC
 // does not move heap objects.)
-func ptrID(v any) uintptr {
-	rv := reflect.ValueOf(v)
-	switch rv.Kind() {
-	case reflect.Ptr, reflect.UnsafePointer, reflect.Map, reflect.Slice,
-		reflect.Chan, reflect.Func, reflect.Interface:
-		if rv.IsNil() {
-			return 0
-		}
-		return rv.Pointer()
-	}
-	return 0
-}
+func ptrID(p unsafe.Pointer) uintptr { return uintptr(p) }
 
+// toPtrAny is ptrID for the '%p' option of 'luaO_pushfstring', whose
+// argument arrives as an 'any'.
 func toPtrAny(a any) uintptr {
 	switch v := a.(type) {
 	case *Table:
-		return ptrID(v)
+		return uintptr(unsafe.Pointer(v))
 	case *TString:
-		return ptrID(v)
+		return uintptr(unsafe.Pointer(v))
 	case *LClosure:
-		return ptrID(v)
+		return uintptr(unsafe.Pointer(v))
 	case *CClosure:
-		return ptrID(v)
+		return uintptr(unsafe.Pointer(v))
 	case *Udata:
-		return ptrID(v)
+		return uintptr(unsafe.Pointer(v))
 	case *State:
-		return ptrID(v)
+		return uintptr(unsafe.Pointer(v))
+	case unsafe.Pointer:
+		return uintptr(v)
 	}
 	return 0
 }

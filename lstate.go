@@ -491,11 +491,11 @@ func NewState() *State {
 	// registry[1] = main thread, registry[2] = globals table
 	var th Value
 	setthvalue(&th, L)
-	luaH_setint(L, g.registry.p.(*Table), 1, &th)
+	luaH_setint(L, hvalue(&g.registry), 1, &th)
 	var gl Value
 	gt := luaH_new(L)
 	sethvalue(&gl, gt)
-	luaH_setint(L, g.registry.p.(*Table), 2, &gl)
+	luaH_setint(L, hvalue(&g.registry), 2, &gl)
 	/* luaL_newstate's last act: the default warning function keeps the
 	   warning system off until 'warn("@on")' or the '-W' option. */
 	g.setWarnf(warnfOff)

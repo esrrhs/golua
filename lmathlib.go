@@ -9,6 +9,7 @@ package lua
 import (
 	"math"
 	"time"
+	"unsafe"
 )
 
 const mathPI = 3.141592653589793238462643383279502884
@@ -374,7 +375,7 @@ func mathSetSeed(L *State, state *[4]uint64, n1, n2 uint64) {
  */
 func mathRandSeed(L *State, state *mathRanState) {
 	seed1 := uint64(time.Now().Unix())
-	seed2 := uint64(ptrID(L))
+	seed2 := uint64(ptrID(unsafe.Pointer(L)))
 	mathSetSeed(L, &state.s, seed1, seed2)
 }
 

@@ -158,12 +158,12 @@ func lua_stringtonumber(p *C.lua_State, s *C.char) C.size_t {
 
 //export lua_rawgetp
 func lua_rawgetp(p *C.lua_State, idx C.int, k unsafe.Pointer) C.int {
-	return C.int(stateOf(p).RawGetP(idxInt(idx), ptrKey(k)))
+	return C.int(stateOf(p).RawGetP(idxInt(idx), k))
 }
 
 //export lua_rawsetp
 func lua_rawsetp(p *C.lua_State, idx C.int, k unsafe.Pointer) {
-	stateOf(p).RawSetP(idxInt(idx), ptrKey(k))
+	stateOf(p).RawSetP(idxInt(idx), k)
 }
 
 //export lua_getiuservalue
@@ -178,15 +178,6 @@ func lua_setiuservalue(p *C.lua_State, idx, n C.int) C.int {
 
 //export lua_pushthread
 func lua_pushthread(p *C.lua_State) C.int { return cBool(stateOf(p).PushThread()) }
-
-// ptrKey answers the value a C pointer is used as a table key: the
-// pointer itself, so that the same address is the same key.
-func ptrKey(k unsafe.Pointer) any {
-	if k == nil {
-		return nil
-	}
-	return k
-}
 
 // ---------------------------------------------------------------------
 // calls, coroutines, dumps

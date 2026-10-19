@@ -7,7 +7,7 @@ package lua
 
 import (
 	"math"
-	"reflect"
+	"unsafe"
 )
 
 const (
@@ -27,7 +27,9 @@ func hashmod(t *Table, n uint32) int  { return int(n % uint32((sizenode(t)-1)|1)
 
 func hashstr(t *Table, ts *TString) int  { return hashpow2(t, ts.hash) }
 func hashboolean(t *Table, p uint32) int { return hashpow2(t, p) }
-func hashpointer(t *Table, p any) int    { return hashmod(t, uint32(ptrID(p))) }
+func hashpointer(t *Table, p unsafe.Pointer) int {
+	return hashmod(t, uint32(uintptr(p)))
+}
 
 // hashint is the hash for integer keys (ltable.c).
 func hashint(t *Table, i int64) int { return hashmod(t, uint32(uint64(i))) }
@@ -83,68 +85,28 @@ func mainpositionTV(L *State, t *Table, key *Value) int {
 // then compared a key of one type against a node holding another -- a
 // closure against a long string, for one -- which is a Go panic inside
 // 'next'.
-func keyisdead(n *node) bool { return n.key.tt == LUA_TDEADKEY }
-
-// ptrEqual compares two pointer-like interface values by identity. The
-// collectable types are handled outright: 'reflect.ValueOf' is far too
-// expensive to run on every table lookup, and it is only needed for the
-// values Go refuses to compare -- a GoFunc, for one.
-func ptrEqual(a, b any) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	switch x := a.(type) {
-	case *Table:
-		y, ok := b.(*Table)
-		return ok && x == y
-	case *TString:
-		y, ok := b.(*TString)
-		return ok && x == y
-	case *LClosure:
-		y, ok := b.(*LClosure)
-		return ok && x == y
-	case *CClosure:
-		y, ok := b.(*CClosure)
-		return ok && x == y
-	case *Udata:
-		y, ok := b.(*Udata)
-		return ok && x == y
-	case *State:
-		y, ok := b.(*State)
-		return ok && x == y
-	}
-	ra, rb := reflect.ValueOf(a), reflect.ValueOf(b)
-	if ra.Kind() == rb.Kind() {
-		switch ra.Kind() {
-		case reflect.Ptr, reflect.UnsafePointer, reflect.Chan, reflect.Map,
-			reflect.Func, reflect.Slice:
-			return ra.Pointer() == rb.Pointer()
-		}
-	}
-	defer func() { _ = recover() }()
-	return a == b
-}
+func keyisdead(n *node) bool { return n.keytt == LUA_TDEADKEY }
 
 // equalkey reports whether k1 equals the key stored in node n.
 func equalkey(k1 *Value, n *node, deadok bool) bool {
-	if (k1.tt != n.key.tt) && !(deadok && keyisdead(n) && iscollectable(k1)) {
+	if (k1.tt != n.keytt) && !(deadok && keyisdead(n) && iscollectable(k1)) {
 		return false /* cannot be same key */
 	}
-	switch n.key.tt {
+	switch n.keytt {
 	case LUA_VNIL, LUA_VFALSE, LUA_VTRUE:
 		return true
 	case LUA_VNUMINT:
-		return ivalue(k1) == ivalue(&n.key)
+		return ivalue(k1) == n.ki
 	case LUA_VNUMFLT:
-		return fltvalue(k1) == fltvalue(&n.key)
+		return fltvalue(k1) == math.Float64frombits(uint64(n.ki))
 	case LUA_VLIGHTUSERDATA:
-		return ptrEqual(pvalue(k1), pvalue(&n.key))
+		return pvalue(k1) == n.kp
 	case ctb(LUA_VLNGSTR):
-		return luaS_eqlngstr(tsvalue(k1), tsvalue(&n.key))
+		return luaS_eqlngstr(tsvalue(k1), (*TString)(n.kp))
 	case ctb(LUA_VSHRSTR):
-		return luaS_eqshrstr(tsvalue(k1), tsvalue(&n.key))
+		return luaS_eqshrstr(tsvalue(k1), (*TString)(n.kp))
 	default:
-		return ptrEqual(gcvalue(k1), gcvalue(&n.key))
+		return gcvalue(k1) == n.kp
 	}
 }
 
@@ -187,7 +149,7 @@ func getGenericNode(L *State, t *Table, key *Value, deadok bool) int {
 		if nx == 0 {
 			return -1
 		}
-		i += nx
+		i += int(nx)
 	}
 }
 
@@ -221,7 +183,7 @@ func luaH_next(L *State, t *Table, keyIdx int) bool {
 	}
 	for j := int(i) - int(asize); j < sizenode(t); j++ {
 		if !isempty(&t.nodes[j].val) {
-			L.stack[keyIdx] = t.nodes[j].key
+			getnodekey(&L.stack[keyIdx], &t.nodes[j])
 			L.stack[keyIdx+1] = t.nodes[j].val
 			return true
 		}
@@ -251,7 +213,7 @@ func findIndex(L *State, t *Table, key *Value, asize uint32) uint32 {
 // dummyNode is the counterpart of PUC-Lua's static 'dummynode': a one-slot
 // hash part shared by every table that has no hash entries, so that the
 // search loops can always touch at least one node.
-var dummyNode = []node{{key: Value{tt: LUA_VNIL}, val: Value{tt: LUA_VEMPTY}, next: 0}}
+var dummyNode = []node{{keytt: LUA_VNIL, val: Value{tt: LUA_VEMPTY}, next: 0}}
 
 // isdummy reports whether the table is using the shared dummy node. PUC-Lua
 // signals this with 'lastfree == NULL'.
@@ -273,7 +235,7 @@ func setnodevector(L *State, t *Table, size uint32) {
 		t.nodes = make([]node, size)
 		for i := range t.nodes {
 			t.nodes[i].next = 0
-			setnilvalue(&t.nodes[i].key)
+			setnilkey(&t.nodes[i])
 			setempty(&t.nodes[i].val)
 		}
 		t.lsizenode = byte(lsize)
@@ -286,7 +248,7 @@ func getfreepos(t *Table) int {
 	if !isdummy(t) { /* is there a real node array? */
 		for t.lastfree > 0 {
 			t.lastfree--
-			if ttisnil(&t.nodes[t.lastfree].key) {
+			if t.nodes[t.lastfree].keytt == LUA_VNIL {
 				return t.lastfree
 			}
 		}
@@ -361,7 +323,8 @@ func luaH_resize(L *State, t *Table, newasize uint32, nhsize uint32) {
 func reinsert(L *State, ot, t *Table) {
 	for i := range ot.nodes {
 		if !isempty(&ot.nodes[i].val) {
-			k := ot.nodes[i].key
+			var k Value
+			getnodekey(&k, &ot.nodes[i])
 			v := ot.nodes[i].val
 			luaH_set(L, t, &k, &v)
 		}
@@ -428,8 +391,8 @@ func numusehash(t *Table, nums *[MAXABITS + 1]uint32, pna *uint32) int {
 	for i := len(t.nodes) - 1; i >= 0; i-- {
 		n := &t.nodes[i]
 		if !isempty(&n.val) {
-			if n.key.tt == LUA_VNUMINT {
-				ause += countint(ivalue(&n.key), nums)
+			if n.keytt == LUA_VNUMINT {
+				ause += countint(n.ki, nums)
 			}
 			totaluse++
 		}
@@ -482,28 +445,30 @@ func luaH_newkey(L *State, t *Table, key, value *Value) {
 			luaH_set(L, t, key, value)
 			return
 		}
-		othern := mainpositionTV(L, t, &t.nodes[mp].key)
+		var mpk Value
+		getnodekey(&mpk, &t.nodes[mp])
+		othern := mainpositionTV(L, t, &mpk)
 		if othern != mp { /* is colliding node out of its main position? */
 			/* yes; move colliding node into free position */
-			for othern+t.nodes[othern].next != mp {
-				othern += t.nodes[othern].next /* find previous */
+			for othern+int(t.nodes[othern].next) != mp {
+				othern += int(t.nodes[othern].next) /* find previous */
 			}
-			t.nodes[othern].next = f - othern /* rechain to point to 'f' */
-			t.nodes[f] = t.nodes[mp]          /* copy colliding node into free pos. */
+			t.nodes[othern].next = int32(f - othern) /* rechain to point to 'f' */
+			t.nodes[f] = t.nodes[mp]                 /* copy colliding node into free pos. */
 			if t.nodes[mp].next != 0 {
-				t.nodes[f].next += mp - f /* correct 'next' */
-				t.nodes[mp].next = 0      /* now 'mp' is free */
+				t.nodes[f].next += int32(mp - f) /* correct 'next' */
+				t.nodes[mp].next = 0             /* now 'mp' is free */
 			}
 			setempty(&t.nodes[mp].val)
 		} else { /* colliding node is in its own main position */
 			if t.nodes[mp].next != 0 {
-				t.nodes[f].next = (mp + t.nodes[mp].next) - f /* chain new position */
+				t.nodes[f].next = int32((mp + int(t.nodes[mp].next)) - f) /* chain new position */
 			}
-			t.nodes[mp].next = f - mp
+			t.nodes[mp].next = int32(f - mp)
 			mp = f
 		}
 	}
-	t.nodes[mp].key = *key
+	setnodekey(&t.nodes[mp], key)
 	t.nodes[mp].val = *value
 }
 
@@ -521,14 +486,14 @@ func luaH_getint(t *Table, key int64) *Value {
 	/* key is not in the array part; check the hash */
 	n := hashint(t, key)
 	for {
-		if t.nodes[n].key.tt == LUA_VNUMINT && ivalue(&t.nodes[n].key) == key {
+		if t.nodes[n].keytt == LUA_VNUMINT && t.nodes[n].ki == key {
 			return &t.nodes[n].val
 		}
 		nx := t.nodes[n].next
 		if nx == 0 {
 			return &absentKey
 		}
-		n += nx
+		n += int(nx)
 	}
 }
 
@@ -539,14 +504,14 @@ func luaH_getshortstr(t *Table, key *TString) *Value {
 	}
 	n := hashstr(t, key)
 	for {
-		if t.nodes[n].key.tt == ctb(LUA_VSHRSTR) && luaS_eqshrstr(tsvalue(&t.nodes[n].key), key) {
+		if t.nodes[n].keytt == ctb(LUA_VSHRSTR) && luaS_eqshrstr((*TString)(t.nodes[n].kp), key) {
 			return &t.nodes[n].val
 		}
 		nx := t.nodes[n].next
 		if nx == 0 {
 			return &absentKey
 		}
-		n += nx
+		n += int(nx)
 	}
 }
 
@@ -569,21 +534,21 @@ func luaH_getstrkey(L *State, t *Table, key *TString) *TString {
 	if key.tt == LUA_VSHRSTR {
 		n := hashstr(t, key)
 		for {
-			if t.nodes[n].key.tt == ctb(LUA_VSHRSTR) &&
-				luaS_eqshrstr(tsvalue(&t.nodes[n].key), key) {
-				return tsvalue(&t.nodes[n].key)
+			if t.nodes[n].keytt == ctb(LUA_VSHRSTR) &&
+				luaS_eqshrstr((*TString)(t.nodes[n].kp), key) {
+				return (*TString)(t.nodes[n].kp)
 			}
 			nx := t.nodes[n].next
 			if nx == 0 {
 				return nil
 			}
-			n += nx
+			n += int(nx)
 		}
 	}
 	var ko Value
 	setsvalue(&ko, key)
 	if i := getGenericNode(L, t, &ko, false); i >= 0 {
-		return tsvalue(&t.nodes[i].key)
+		return (*TString)(t.nodes[i].kp)
 	}
 	return nil
 }

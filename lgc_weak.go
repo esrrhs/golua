@@ -136,12 +136,15 @@ func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
 }
 
 // weakSlot is one weak reference taken out of a table for the duration of
-// a sweep: the node it lives in, the value it holds, and the weak
-// pointer that will say whether the object survived.
+// a sweep: the node it lives in, the slot to put a survivor back into,
+// and the weak pointer that will say whether the object survived.  A key
+// slot has no 'v': a node's key is not a full Value, so a survivor is
+// put back with 'setnodekey' instead.
 type weakSlot struct {
-	n *node // nil for a slot of the array part
-	v *Value
-	w weakRef
+	n     *node // nil for a slot of the array part
+	v     *Value
+	isKey bool
+	w     weakRef
 }
 
 // gcSweepWeak is 'cleartable' (lgc.c): it drops the entries of the weak
@@ -179,14 +182,16 @@ func (L *State) gcSweepWeak() {
 				continue
 			}
 			if mode&weakKey != 0 {
-				if w := makeWeakRef(&nd.key); w != nil {
-					slots = append(slots, weakSlot{nd, &nd.key, w})
-					setnilvalue(&nd.key)
+				var kv Value
+				getnodekey(&kv, nd)
+				if w := makeWeakRef(&kv); w != nil {
+					slots = append(slots, weakSlot{n: nd, isKey: true, w: w})
+					setnilkey(nd)
 				}
 			}
 			if mode&weakVal != 0 {
 				if w := makeWeakRef(&nd.val); w != nil {
-					slots = append(slots, weakSlot{nd, &nd.val, w})
+					slots = append(slots, weakSlot{n: nd, v: &nd.val, w: w})
 					setnilvalue(&nd.val)
 				}
 			}
@@ -196,7 +201,7 @@ func (L *State) gcSweepWeak() {
 		if mode&weakVal != 0 {
 			for i := range t.array {
 				if w := makeWeakRef(&t.array[i]); w != nil {
-					slots = append(slots, weakSlot{nil, &t.array[i], w})
+					slots = append(slots, weakSlot{v: &t.array[i], w: w})
 					setnilvalue(&t.array[i])
 				}
 			}
@@ -214,7 +219,12 @@ func (L *State) gcSweepWeak() {
 	for i := range slots {
 		s := &slots[i]
 		if !s.w.dead() { /* still reachable from somewhere: put it back */
-			*s.v = s.w.value()
+			sv := s.w.value()
+			if s.isKey {
+				setnodekey(s.n, &sv)
+			} else {
+				*s.v = sv
+			}
 			continue
 		}
 		if s.n == nil { /* the array part: the entry simply goes */
@@ -225,10 +235,11 @@ func (L *State) gcSweepWeak() {
 		   the value goes, and the key is marked dead so that 'next'
 		   steps over the hole without losing the collision chain */
 		setnilvalue(&s.n.val)
-		s.n.key = deadKeyValue
+		setdeadkey(s.n)
 	}
 }
 
-// deadKeyValue is a dead key: 'removeentry' leaves one behind so that
-// 'next' can step over the hole while the collision chain stays intact.
-var deadKeyValue = Value{tt: LUA_TDEADKEY}
+// setdeadkey marks a node's key as dead: 'removeentry' leaves one behind
+// so that 'next' can step over the hole while the collision chain stays
+// intact.
+func setdeadkey(n *node) { n.keytt = LUA_TDEADKEY; n.kp = nil; n.ki = 0 }

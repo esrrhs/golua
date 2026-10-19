@@ -119,7 +119,7 @@ func (D *DumpState) dumpConstants(f *Proto) {
 		case LUA_VNUMINT:
 			D.dumpInteger(o.i)
 		case LUA_VSHRSTR, LUA_VLNGSTR:
-			D.dumpString(o.p.(*TString))
+			D.dumpString(tsvalue(o))
 		}
 	}
 }

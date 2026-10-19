@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"unsafe"
 )
 
 // dbHookKey is the registry key of the hook table (HOOKKEY).
@@ -368,7 +369,7 @@ func dbSetUpvalue(L *State, idx, n int) (string, bool) {
 
 // dbUpvalueID is lua_upvalueid: it returns an identity for an upvalue
 // (a light userdata in C, any pointer here).
-func dbUpvalueID(L *State, idx, n int) any {
+func dbUpvalueID(L *State, idx, n int) unsafe.Pointer {
 	fv := index2value(L, idx)
 	switch {
 	case ttisCclosure(fv):
@@ -376,13 +377,13 @@ func dbUpvalueID(L *State, idx, n int) any {
 		if n < 1 || n > f.nupvalues {
 			return nil
 		}
-		return &f.upvalue[n-1]
+		return unsafe.Pointer(&f.upvalue[n-1])
 	case ttisLclosure(fv):
 		f := clLvalue(fv)
 		if n < 1 || n > f.nupvalues {
 			return nil
 		}
-		return f.upvals[n-1]
+		return unsafe.Pointer(f.upvals[n-1])
 	}
 	return nil
 }
@@ -628,7 +629,7 @@ func dbSetUpValueFunc(L *State) int { L.CheckAny(3); return dbAuxUpValue(L, fals
 
 // dbCheckUpVal checks whether an upvalue exists and returns its index
 // (checkupval); 'id' is nil when the index is invalid.
-func dbCheckUpVal(L *State, argf, argnup int, pnup *int) any {
+func dbCheckUpVal(L *State, argf, argnup int, pnup *int) unsafe.Pointer {
 	n := int(L.CheckInteger(argnup)) /* upvalue index */
 	L.CheckType(argf, LUA_TFUNCTION) /* closure */
 	id := dbUpvalueID(L, argf, n)
