@@ -703,6 +703,35 @@ random number it is handed, and a `tableRandomizePivot` that always
 answers 0, are the same thing to an array that comes out sorted either
 way, and the two functions are only asked so that they are entered.
 
+It was true four times over of `lmathlib.go`, and there the reason is
+that the grid asks its questions in a subprocess for the excellent
+reason that the reference interpreter *is* one. `mathFrexp`,
+`mathLdexp`, `mathPow` and `mathTanh` were at 0% and a dozen more were
+half covered. `TestMathInProcess` asks all 31 names of the library in
+this process and every function of `lmathlib.go` is at 100% but one,
+and the one is `mathI2d`'s correction for a two's-complement negative:
+it is a line of `lmathlib.c` that exists for a `lua_Number` wider than
+64 bits, and since this port's is 64, `x >> 11` has 53 bits and `sx` is
+never negative — as C says, "a good compiler will remove the
+correction". It is kept, and it is the only statement in the package
+that is uncovered on purpose.
+
+What the in-process test holds that the grid cannot is the two things
+in §5.13: the draws of a generator seeded by the clock, of which only
+the shape can be asked — two integers, and the first of them at least
+as new as `os.time()` — and the six draws from a seeded one written to
+seventeen digits, which is more than `tostring` uses and one more than
+a fifty-second bit would survive. What it holds besides is what the
+grid would hold too if the grid were not a question about a subprocess:
+the shortcut in `floor` and `ceil`, which 2^53+1 is the whole point
+of; the two signs a square root keeps, -0.0 having one and a NaN
+having neither, seen as the reciprocal of the one and as `x ~= x` of
+the other; the four rules of `fmod`, the third of which is that a
+divisor of 0.0 is not one; the two positions of `log`'s base; `ldexp`
+with an exponent of 2^31, which C cannot hold and so wraps to -2^31;
+and `random` with three arguments, the one arity error in the library
+whose message names nothing at all.
+
 ### 5.11 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
@@ -847,6 +876,7 @@ a difference is always reproducible.
 | `namefuzz_test.go` | 1 328 questions about a name with a zero byte in it — every name a script can hand to the OS, with a zero at every position of five of them (`a`, `a.txt`, `sub`, `no`, `m.lua`), asked of `io.open` in each of its 6 modes, of `io.lines`, `loadfile`, `dofile`, `os.remove`, `os.rename` (in the name moved, in the name it is moved to, and in both), `require` and `package.searchpath`, each against a file that is there, a directory, and nothing; then the same renames and removals with no zero in them, which is where a directory meets a directory; a name with a slash on the end of it, which is not a name a regular file can be given; and 62 commands with a zero in them, run by `io.popen` and `os.execute`. 1 218 names and 62 commands, each with a number of its own so that one case's file is never another case's, and both interpreters get an empty directory of their own | 1 328 |
 | `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
 | `tablefuzz_test.go` | 1 005 questions about the six functions of the table library — every `f`, `e` and `t` of a `table.move` over a table of four, to itself and to another table; every position a `table.remove` and a `table.insert` can be given, at every size up to four, and the number of arguments they take; every kind of value in every position of a `table.concat`, every kind of separator and every pair of ends; every pair of ends of a `table.unpack` and four that are past the end of anything, and `table.pack`; 218 `table.sort`s — 52 with a comparison function that writes down every pair it is asked about in the order it is asked about them, 69 with one that claims a different element is the pivot, 45 with one that says so of an element there are two copies of, 15 of a `__len` that answers with a length belonging to no array — 13 of them on a table and two on a userdata — which is the only way to reach "array too big", and the ones that raise, the ones that move the array while it is being sorted, and the ones that are not orders; and 142 things that behave like a table and things that do not — 64 of them userdata with each of the eight combinations of the three metamethods, in each of the six functions and as both ends of a `move`, 30 of them tables with a metatable on them, and 48 that are not tables at all | 1 005 |
+| `mathfuzz_test.go` | 4 787 questions about the maths library — every one of 41 values there is a name for, the 31 numbers and the 9 strings that read as them: both zeroes, the two ends of the integers, the three sizes at which a float stops counting by ones, both infinities, the NaN and π — through each of `abs`, `floor`, `ceil`, `sqrt`, `tointeger` and `type`; every pair of 15 dividends and 15 divisors of a `fmod`; every pair of the 41 through each of `max` and `min`, and every triple of three near 1 through each; every pair of 8 through `ult`; every one of the 41 through `modf`, and through `frexp` besides the 18 powers of two that are asked of it on their own; every one of the 41 through each of `deg` and `rad`; 18 mantissas through `ldexp` with each of 18 exponents, the last four of which do not fit in the `int` C truncates to; 151 draws from a generator seeded with two integers, in each of 15 shapes and after each of 5 single-integer seeds; every form of `randomseed` and a draw after each of 7; 160 things that are not numbers — a nil, a boolean, a string, a table and a function — asked of every one of the 31 names in the library, and of `log` in both of its positions; and 29 of those names given nothing at all | 4 787 |
 | `datefuzz_test.go` | 2 517 questions about `os.date` and `os.time` — every conversion specifier of C99's `strftime`, all 37 of them, asked of every day of 2000 and of 2001 and of every noon of 2000, of every hour and every five minutes of one day, and of the instants at and past the ends of a `struct tm`; the 19 `E` and `O` modifiers at four instants; the nine fields of `*t`; the 51 formats that are not specifiers, 18 of them with a zero byte in them; the format that is not there at all; and 124 tables for `os.time`, two of them only on a host whose `mktime` reads `isdst` the way this port does. Every one of them asked in each of four zones — one with no summer time, one west of Greenwich, one east, and Dublin, whose standard time is the smaller of its two — because four of the specifiers are questions the zone answers | 2 517 × 4, or 2 523 × 4 where the C library is glibc's |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
@@ -1366,6 +1396,103 @@ of pairs the comparison function was asked about before it gave up —
 ten and twenty-six — because both of them say the same thing and only
 the count can tell them apart (§5.10).
 
+The maths half is the newest, and it is the one that can be wrong in
+two different ways at once. Half of `lmathlib.c` is arithmetic a port
+writes for itself — `floor` and `ceil` have to answer an *integer* for a
+float that fits in one, which is what the shortcut at the top of each of
+them is for, since `floor(2^53+1)` would otherwise be `2^53`; `fmod`
+keeps a rule of its own for a divisor of -1 and refuses a divisor of 0
+only when both arguments are integers, so `math.fmod(7.5, 0.0)` is a NaN
+and nothing is said; and `abs` of the smallest integer is the smallest
+integer. The other half is a pseudo-random generator: `random` is
+xoshiro256\*\* seeded by two integers, so the sequence it gives is a
+thing two programs can be asked about and either agree on or not.
+
+The first thing the half had to settle was which functions are in which
+half, and two probes did it. The first asked 4 173 questions — every
+function over every value there is a name for — and **10** answers came
+back different, all of them in the last bit of a transcendental. The
+second asked 44 478 over the five that were left — every power of two
+from 2^-1074 to 2^1023, the subnormals, both infinities and the NaN,
+into `frexp`, `ldexp`, `modf`, `deg` and `rad` — and **not one** did.
+
+That second probe is worth more than it looks, because it moved five
+functions out of §6.7's column. They are arithmetic, not the C
+library's: `frexp` and `ldexp` are a shift, `modf` subtracts the part it
+has just taken, and `deg` and `rad` multiply by 180/π, a constant
+written into both libraries in the same 37 digits. One rounding each,
+and two implementations that follow IEEE 754 do it the same way. So the
+five are asked 470 times over in the grid, and §6.7 says so. The
+fourteen that are left — `sin`, `cos`, `tan`, `asin`, `acos`, `atan`,
+`atan2`, `exp`, `log`, `log10`, `cosh`, `sinh`, `tanh` and `pow` — are
+asked only what they say about a table, a boolean and nothing at all,
+which is theirs and not the library's whatever they say about 0.5; their
+answers to a number, and the three places in which this port had to
+leave Go's implementations, are pinned in `lmathlib_test.go`.
+
+Three things the half does not ask, and two of them nobody can:
+
+* `math.randomseed()` with no arguments. PUC-Lua takes its seed from
+  `time(NULL)` and the address of a local, so what it answers is two
+  numbers no two runs share: §6.8. There is nothing to compare. Every
+  other form of `randomseed` is asked, and so is every draw that follows
+  one. What this one answers *is* two integers and the first is the
+  time, which is what `TestMathInProcess` asks of it instead.
+* The answer of any of the fourteen to a number. It is a thing this port
+  gets right to fourteen digits and cannot get right to fifteen, and a
+  grid that asked it would be red on one machine and green on another.
+* Which of the two names `atan` and `atan2` an error message says:
+  §6.19. They are one function, and the name is not the one the source
+  spells but the one `findfield` walks into first, which the hash seed
+  decides. Both sides answer it at random and disagree half the time, so
+  the ten messages that could say either are asked, and then made to say
+  one.
+
+Of the 43 things this half has been broken with — both halves of `abs`,
+`floor` and `ceil`, the shortcut at the top of each of the last two, and
+the float that does not fit in an integer they exist for; `sqrt` reached
+by way of `pow`, which loses the sign of -0.0 and answers `inf` where
+the answer is a NaN; `tointeger` at the smallest integer and the
+integer-or-float of what it pushes; both halves of `type`; all four
+rules of `fmod`; the direction of `max` and of `min`, the tie that keeps
+the first of two equal values, and the check that a value was given at
+all; `ult` read as signed; the sign, the infinity and the integer of
+`modf`; the order and the reduction of `frexp`; `ldexp` by way of `pow`
+and `ldexp` without the truncation to an `int` that puts 2^31 at -2^31;
+both of `deg` and `rad` and the digits of the constant they share; the
+four constants and the two shifts and the two multiplications of
+xoshiro256\*\*, the 16 draws its seed discards and the word in it that
+avoids a zero state; the default second seed; `random(0)`; the width of
+the interval and the projection into it, the Mersenne mask and the draw
+that follows a value outside it; `random` with three arguments; and
+`randomseed` that forgets to answer, or that is given nothing and does
+not ask the clock for a seed — 40 turn the grid red and 42 turn
+`TestMathInProcess` red, and 42 of the 43 turn one or the other.
+
+The two the grid misses, the in-process test catches. A float in [0,1)
+built from 52 bits instead of 53 differs from the right one by 2^-53,
+which `tostring`'s fourteen digits hide; so the in-process test writes
+its six draws to seventeen instead. And `randomseed` that answers
+`randomseed()`, which the grid cannot ask at all, is caught there —
+because the mutated one raises "number expected, got no value" instead
+of answering two integers. The one that stays green in both is a
+thirty-first digit of π: C parses the literal as a double and so does
+Go, and both round the same 37 digits to the same one of the 2^64 there
+are. It is the one mutant here that is not a mutation, and it is kept,
+because a grid that caught it would be a grid over-fitted to a
+constant.
+
+Two of them are worth naming, because they are what the corpus grew
+after the mutation test said the grid could not see them. The shortcut
+in `floor` and `ceil` exists for an integer a float cannot hold, and
+2^53+1 is the first of those; it was not in the value list. And the
+sixteen hundred and eighty pairs of `max` and `min` are what makes the
+tie worth asking: `math.max(1.0, 1)` is `1.0` and `math.max(1, 1.0)` is
+`1`, which are the same number and two different values, and which one
+comes back is which one went in first — the loop only moves when the
+extreme is not the first argument, so `min` is asked the one order in
+which it does move.
+
 It is worth saying what makes a fuzz like this worthless, because one
 round of it was. A generated chunk that does not *load* prints the same
 syntax error on both sides, and identical output is what success looks
@@ -1421,7 +1548,7 @@ so "after which allocation" has no answer. Strings, numbers and
 booleans are never weakened, exactly as in PUC-Lua.
 5. **`os.setlocale` asks the C library, so it needs cgo** — the decimal point is the one part of a locale Lua observes, and it is observed in three places: `tostring` of a number, `string.format`'s `%f`/`%e`/`%g` (but not `%a` or `%q`, which is what lets `%q` round-trip), and `tonumber`, which accepts either separator while a source literal always uses `.`. Which locales are installed is the host's business, exactly as in PUC-Lua, and a name the C library refuses answers `nil`. Built with `CGO_ENABLED=0` there is no C library to ask, so every name but `"C"` answers `nil` and the decimal point stays `.`.
 6. **`os.date` refuses a slightly different range of times, `os.time` accepts dates the host's `mktime` refuses, and `os.date("!%z")` answers the UTC offset rather than the local one** — `struct tm` keeps the year in an `int`, and the host's `gmtime`/`localtime` answer NULL once it no longer fits, which is where PUC-Lua's "date result cannot be represented in this installation" comes from. This port asks the same question against `tm_year` and reproduces the top of the range exactly — 67768036191676799 is the last representable second (year 2147485547, `tm_year` `INT_MAX`) and one more is refused — but the bottom of the host's range stops a little short of `INT_MIN`, so a window of some 2×10¹⁴ seconds at the far negative end is answered here and refused there; no second beyond that is answered by either. For `os.time`, PUC-Lua builds a time with the C library's `mktime` and reports "time result cannot be represented in this installation" when it answers -1; which dates those are is up to the C library (on macOS, anything that normalises to a year before 1900; glibc accepts those). Go's `time.Date` has no such limit, so this port answers a number. Everything PUC-Lua itself decides is reproduced — the bounds each field must satisfy before it reaches `struct tm` ("field 'year' is out-of-bound"), the missing and non-integer fields, a result of exactly -1, and every other specifier of `os.date`. Six of the thirty-seven conversion specifiers are not theirs in every place they could be asked — `%Z`, `%z`, `%Y`, `%y`, `%C` and `%G`, and the `%F` and `%g` that are spelled out of the year. They ask the C library, and where the two C libraries disagree they are in §6.16.
-7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh`, `tanh`, `frexp` and `ldexp` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently — and an ulp is a small absolute error when the answer itself is near zero, which is why `cos` of a large argument can read as tens of ulp away while the two agree to within one rounding of the reduced argument. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. There are three places where the port deliberately steps outside Go's implementations. The first is the band in which `exp(|x|)` approaches the largest float: `math.exp`, `math.sinh` and `math.cosh` are computed there by reducing the argument modulo ln 2 and scaling the answer by a power of two (`mathExpScaled`) rather than by asking `math.Exp` itself, because `math.Exp` is not one function but a hand-written assembly version per architecture and the copies disagree at that edge. On amd64 `math.Exp(709.5)` answers `inf`, where `exp(709.5)` is 1.3549863193146328e+308 — an ordinary float, and what arm64, the generic Go implementation and C's libm all answer — because `exp_amd64.s` truncates its overflow constant to `7.09782712893384e+02` instead of `7.09782712893383973096e+02`. The same threshold makes Go's `math.Sinh(710)` an `inf` whose true value, `exp(710) / 2` = 1.1e308, is representable. 25 answers across that border — 709, 709.5, 709.78, 709.79, 710, 710.5, 800 and their negatives — are pinned against PUC-Lua in `lmathlib_test.go`. The second is the other end of the same range: `log_amd64.s` loses several digits on a **subnormal** argument, and `1e-308` is one — the smallest normal float is 2.2250738585072014e-308 — answering `-708.71839997088` where `log(1e-308)` is `-709.19620864217`. So `math.log` and `math.log10` scale a subnormal up into the normal range first, by a power of two, which is exact, and take the exponent back off afterwards (`mathLogScaled`): `math.log10(1e-308)` is `-308` again. Fourteen answers down there — `1e-308`, `1e-320`, `5e-324` and the smallest normal, in every base — are pinned in the same file. The third is `math.log(x, 2)`, which asks C for `log2(x)` and not for `math.log(x)/math.log(2)`: Go's `math.Log2` splits the argument with `Frexp` and adds the exponent back afterwards, so an answer that is near zero — which is what the log of a number near 1 is — is left made of the roundings of two numbers a million times bigger than it is. `math.log(1.0000000000000002, 2)` is 3.2034265038149e-16 to C's `log2` and 3.6816598061451e-16 to `math.Log2`: fifteen per cent, and unlike anything else on this list. So in the band `[sqrt(2)/2, sqrt(2))`, where `math.Log` has no exponent to add back and keeps those bits, `mathLog2Scaled` asks `math.Log` and divides by ln 2; outside it — and for every power of two, where `math.Log2` is exact — it asks `math.Log2`, whose error does not grow with the exponent the way a quotient's does. 26 answers across that border, from `1 + 2^-52` to `5e-324`, are pinned in the same file.
+7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh` and `tanh` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Five functions that used to be on that list are not on it: `frexp`, `ldexp`, `modf`, `deg` and `rad` are arithmetic and not the library's, and a probe of 44 478 answers over them — every power of two from 2^-1074 to 2^1023, the subnormals, both infinities and the NaN — found **not one** that differs, which is why they are 457 cases of the maths half of the fuzz (§5.13). Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently — and an ulp is a small absolute error when the answer itself is near zero, which is why `cos` of a large argument can read as tens of ulp away while the two agree to within one rounding of the reduced argument. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. There are three places where the port deliberately steps outside Go's implementations. The first is the band in which `exp(|x|)` approaches the largest float: `math.exp`, `math.sinh` and `math.cosh` are computed there by reducing the argument modulo ln 2 and scaling the answer by a power of two (`mathExpScaled`) rather than by asking `math.Exp` itself, because `math.Exp` is not one function but a hand-written assembly version per architecture and the copies disagree at that edge. On amd64 `math.Exp(709.5)` answers `inf`, where `exp(709.5)` is 1.3549863193146328e+308 — an ordinary float, and what arm64, the generic Go implementation and C's libm all answer — because `exp_amd64.s` truncates its overflow constant to `7.09782712893384e+02` instead of `7.09782712893383973096e+02`. The same threshold makes Go's `math.Sinh(710)` an `inf` whose true value, `exp(710) / 2` = 1.1e308, is representable. 25 answers across that border — 709, 709.5, 709.78, 709.79, 710, 710.5, 800 and their negatives — are pinned against PUC-Lua in `lmathlib_test.go`. The second is the other end of the same range: `log_amd64.s` loses several digits on a **subnormal** argument, and `1e-308` is one — the smallest normal float is 2.2250738585072014e-308 — answering `-708.71839997088` where `log(1e-308)` is `-709.19620864217`. So `math.log` and `math.log10` scale a subnormal up into the normal range first, by a power of two, which is exact, and take the exponent back off afterwards (`mathLogScaled`): `math.log10(1e-308)` is `-308` again. Fourteen answers down there — `1e-308`, `1e-320`, `5e-324` and the smallest normal, in every base — are pinned in the same file. The third is `math.log(x, 2)`, which asks C for `log2(x)` and not for `math.log(x)/math.log(2)`: Go's `math.Log2` splits the argument with `Frexp` and adds the exponent back afterwards, so an answer that is near zero — which is what the log of a number near 1 is — is left made of the roundings of two numbers a million times bigger than it is. `math.log(1.0000000000000002, 2)` is 3.2034265038149e-16 to C's `log2` and 3.6816598061451e-16 to `math.Log2`: fifteen per cent, and unlike anything else on this list. So in the band `[sqrt(2)/2, sqrt(2))`, where `math.Log` has no exponent to add back and keeps those bits, `mathLog2Scaled` asks `math.Log` and divides by ln 2; outside it — and for every power of two, where `math.Log2` is exact — it asks `math.Log2`, whose error does not grow with the exponent the way a quotient's does. 26 answers across that border, from `1 + 2^-52` to `5e-324`, are pinned in the same file.
 
 One consequence is worth naming, because it reaches further than a
 number that is off by one rounding. `A op B` with two numerals is
@@ -1462,6 +1589,7 @@ string conversions are decided by the representation. Measured against
 
 18. **The pivot `table.sort` picks is a random one, once the array is big enough to have a badly balanced partition, and the randomness comes from `clock()` and `time(NULL)`** — `ltablib.c` starts its quicksort with a randomization of 0, which its `choosePivot` is not asked to use, so the pivot is the middle element. It reaches for a real one only after a partition lands badly, which is what `if ((up - lo) / 128 > n)` says, where `n` is the smaller of the two intervals the partition left; and what it reaches for is `l_randomizePivot`, which copies `clock()` and `time(NULL)` into an array of `unsigned int` and adds them up. Since `up - lo` is one less than the size of the interval, an interval of 128 or fewer elements can never set it: 127 / 128 is 0, and 0 is not more than anything. So an array of 128 or fewer elements sorts by a fixed route and compares a fixed sequence of pairs, and a bigger one may not, from one second to the next. The array it ends up with is the same either way — only the pairs it compares can differ, and only a comparison function that notices the order it is called in can see them. The table fuzz asks such a function of arrays of up to 100 elements and of nothing bigger (§5.13), and this port carries the same randomization for the arrays that can reach it.
 
+19. **Which of the two names `math.atan` and `math.atan2` an error message says is nobody's to decide** — they are one function, `atan2` being the name `LUA_COMPAT_MATHLIB` adds for it, and an error message does not name a C function as the source spells it but as `pushglobalfuncname` found it, which is `findfield` walking `package.loaded.math` with `next` and taking the first key whose value is that function. Which key that is depends on the order of the table's hash part, and the order depends on the seed every state makes for its string hashes, which is the clock and a heap address. So the name is drawn at random in every process, and two processes draw independently: PUC-Lua answered `math.atan` in 8 of 12 runs and `math.atan2` in the other 4, and this port answered 7 and 5. There is no answer a port could give that would be right, because there is no answer PUC-Lua itself will repeat — it is not the C library's, not the clock's alone and not a translation's. The maths fuzz asks the ten messages that could say either and then makes them say one (§5.13), which is the third way a difference here is kept out of a corpus: not by leaving the case out, but by taking the part of the answer that was not anybody's out of it. Every other name in the library is unique, so every other message is one thing — including the one that says `'insert'` and `'remove'` the short way, which is a literal in `ltablib.c` and not a name anybody searched for.
 ---
 
 ## 7. Build & test

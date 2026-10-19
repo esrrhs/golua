@@ -277,6 +277,15 @@ func mathNextRand(state *[4]uint64) uint64 {
 ** Convert bits from a random integer into a float in the interval
 ** [0,1), getting the higher 'mathFigs' bits from the random unsigned
 ** integer and converting that to a float.
+**
+** The correction below is for a 'lua_Number' wider than 64 bits, which
+** is the case the C source wrote it for: with FIGS == 64 the shift
+** moves nothing and 'sx' can be negative.  Here FIGS is 53, so
+** 'x >> 11' has 53 bits and 'sx' is never negative -- as the C says,
+** "a good compiler will remove the correction".  It is kept because it
+** is a line of lmathlib.c and not a line of this file's own, and it is
+** the one statement of this library that 'go test -cover' will never
+** report as covered.
  */
 func mathI2d(x uint64) float64 {
 	sx := int64(x >> (64 - mathFigs))
