@@ -1,16 +1,15 @@
-# fakescript_go → Lua 5.4 in pure Go (line-by-line port of PUC-Lua, GC removed)
+# golua — Lua 5.4 in pure Go (line-by-line port of PUC-Lua, GC removed)
 
-[![License](https://img.shields.io/github/license/esrrhs/fakescript_go)](https://github.com/esrrhs/fakescript_go)
-[![Language](https://img.shields.io/github/languages/top/esrrhs/fakescript_go)](https://github.com/esrrhs/fakescript_go)
-[![Release](https://img.shields.io/github/v/release/esrrhs/fakescript_go)](https://github.com/esrrhs/fakescript_go/releases)
+[![License](https://img.shields.io/github/license/esrrhs/golua)](https://github.com/esrrhs/golua)
+[![Language](https://img.shields.io/github/languages/top/esrrhs/golua)](https://github.com/esrrhs/golua)
+[![Release](https://img.shields.io/github/v/release/esrrhs/golua)](https://github.com/esrrhs/golua/releases)
 
-> **This repository is being rewritten.** It used to host *fakescript*, a self-designed scripting
-> language. It is now a **pure-Go implementation of Lua 5.4**, produced by **translating the
-> PUC-Lua 5.4.9 C sources file by file into Go**. The only substantial deletion is
-> **`lgc.c` (1748 lines of garbage collector)** — object lifetime is entirely delegated to Go's
-> concurrent GC.
->
-> [中文](./README_CN.md)
+A **pure-Go implementation of Lua 5.4**, produced by **translating the
+PUC-Lua 5.4.9 C sources file by file into Go**. The only substantial deletion is
+**`lgc.c` (1748 lines of garbage collector)** — object lifetime is entirely delegated to Go's
+concurrent GC.
+
+[中文](./README_CN.md)
 
 ---
 
@@ -42,32 +41,35 @@ loading C dynamic libraries (replaced by Go-side module registration).
 
 ### 2.2 Source map
 
+All implementation files live under `internal/core/`; the top level keeps only a
+single `golua.go` that re-exports the public API via type aliases.
+
 | C file | Go file | Status | Note |
 |---|---|---|---|
-| `lobject.h/.c` | `lobject.go` | ⬜ | `TValue`, `Table`, `Proto`, arithmetic/compare primitives |
-| `lstate.h/.c` | `lstate.go` | ⬜ | `lua_State` / `global_State` / `CallInfo`, GC fields removed |
-| `lstring.c` | `lstring.go` | ✅ | string interning (weak Go map; short strings interned while referenced, as in C) |
-| `ltable.c` | `ltable.go` | ⬜ | array part + open-addressing hash; `luaH_next` needs stable order, cannot use Go map |
-| `lfunc.c` | `lfunc.go` | ⬜ | `Proto` / `UpVal` / `CClosure` / `LClosure` |
-| `ltm.c` | `ltm.go` | ⬜ | metamethod names, `luaT_gettm` |
-| `lopcodes.h/.c` | `lopcodes.go` | ⬜ | opcode set, encode/decode |
-| `ldo.c` | `ldo.go` | ⬜ | calls, protected calls, stack growth |
-| `lvm.c` | `lvm.go` | ⬜ | `luaV_execute` main loop |
-| `ldebug.c` | `ldebug.go` | ⬜ | line info, tracebacks, `luaG_*` messages |
-| `lapi.c` | `lapi.go` | ⬜ | public `lua_*` API |
-| `lauxlib.c` | `lauxlib.go` | ⬜ | `luaL_*` helpers |
-| `llex.c` / `lparser.c` / `lcode.c` | same names `.go` | ⬜ | lexer, recursive-descent parser, codegen |
-| `ldump.c` / `lundump.c` | same names `.go` | ⬜ | self-consistent binary format |
-| `lbaselib` `lcorolib` `ltablib` `lmathlib` `lstrlib` `lutf8lib` `liolib` `loslib` `ldblib` `loadlib` `linit` | same names `.go` | ⬜ | standard libraries |
-| `lua.c` | `cmd/lua/main.go` | ⬜ | CLI + REPL |
-| `luac.c` | `luac.go` + `cmd/luac/main.go` | ⬜ | the standalone compiler: dump, strip, parse-only, listing |
+| `lobject.h/.c` | `internal/core/lobject.go` | ✅ | `TValue`, `Table`, `Proto`, arithmetic/compare primitives |
+| `lstate.h/.c` | `internal/core/lstate.go` | ✅ | `lua_State` / `global_State` / `CallInfo`, GC fields removed |
+| `lstring.c` | `internal/core/lstring.go` | ✅ | string interning (weak Go map; short strings interned while referenced, as in C) |
+| `ltable.c` | `internal/core/ltable.go` | ✅ | array part + open-addressing hash; `luaH_next` needs stable order, cannot use Go map |
+| `lfunc.c` | `internal/core/lfunc.go` | ✅ | `Proto` / `UpVal` / `CClosure` / `LClosure` |
+| `ltm.c` | `internal/core/ltm.go` | ✅ | metamethod names, `luaT_gettm` |
+| `lopcodes.h/.c` | `internal/core/lopcodes.go` | ✅ | opcode set, encode/decode |
+| `ldo.c` | `internal/core/ldo.go` | ✅ | calls, protected calls, stack growth |
+| `lvm.c` | `internal/core/lvm.go` | ✅ | `luaV_execute` main loop |
+| `ldebug.c` | `internal/core/ldebug.go` | ✅ | line info, tracebacks, `luaG_*` messages |
+| `lapi.c` | `internal/core/lapi.go` | ✅ | public `lua_*` API |
+| `lauxlib.c` | `internal/core/lauxlib.go` | ✅ | `luaL_*` helpers |
+| `llex.c` / `lparser.c` / `lcode.c` | `internal/core/` same names `.go` | ✅ | lexer, recursive-descent parser, codegen |
+| `ldump.c` / `lundump.c` | `internal/core/` same names `.go` | ✅ | self-consistent binary format |
+| `lbaselib` `lcorolib` `ltablib` `lmathlib` `lstrlib` `lutf8lib` `liolib` `loslib` `ldblib` `loadlib` `linit` | `internal/core/` same names `.go` | ✅ | standard libraries |
+| `lua.c` | `cmd/lua/main.go` | ✅ | CLI + REPL |
+| `luac.c` | `internal/core/luac.go` + `cmd/luac/main.go` | ✅ | the standalone compiler: dump, strip, parse-only, listing |
 | **`lgc.c/.h`** | **(deleted)** | ✅ | **replaced by Go's concurrent GC** |
 
 ### 2.3 Type mapping
 
 | C | Go |
 |---|---|
-| `TValue` (tagged union) | `type Value struct { tt int; i int64; n float64; p any }` |
+| `TValue` (tagged union) | `type Value struct { i int64; p unsafe.Pointer; tt uint8 }` (24 B) |
 | `GCObject *` / `CommonHeader` | removed; `*Table`, `*LClosure`, `*TString`, `*UserData`, `*State` |
 | `lua_State *` | `*State` (a coroutine is another `*State`) |
 | `StkId` | `int` stack index |
@@ -97,14 +99,14 @@ loading C dynamic libraries (replaced by Go-side module registration).
 
 ---
 
-## 4. Usage (target shape, available after P4)
+## 4. Usage
 
 ```go
 package main
 
 import (
 	"fmt"
-	lua "github.com/esrrhs/fakescript_go"
+	lua "github.com/esrrhs/golua"
 )
 
 func main() {
@@ -166,10 +168,10 @@ int luaopen_myext (lua_State *L) {
 
 ```bash
 # macOS: let the lua_* names stay unresolved until load time
-cc -shared -fPIC -I/path/to/fakescript_go/include \
+cc -shared -fPIC -I/path/to/golua/include \
    -undefined dynamic_lookup -o myext.so myext.c
 # Linux: the host's symbols come from the executable's dynamic table
-cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
+cc -shared -fPIC -I/path/to/golua/include -o myext.so myext.c
 
 ./lua -e 'print(require("myext").add(3, 4))'   # 7
 ```
@@ -184,7 +186,7 @@ build needs and what the bridge does not cover yet.
 
 | Phase | Work | Status |
 |---|---|---|
-| **P0** | Docs; wipe old fakescript sources (kept in git history) | ✅ |
+| **P0** | Docs; repository initialised | ✅ |
 | **P1** | Core objects: `lobject` `lstate` `lstring` `ltable` `lfunc` `ltm` `lopcodes` | ✅ |
 | **P2** | Execution engine: `ldo` `lvm` `ldebug` | ✅ |
 | **P3** | Front end: `llex` `lparser` `lcode` | ✅ |
@@ -232,15 +234,15 @@ other object's metamethod after all of that — `creating 1 / creating 2 / 2
 never finalized at all, the state being already on its way out.
 
 **The 33 official files are in the repository and are first-class `go
-test` cases.** `testdata/official/` holds all of `testes/` (redistributed
+test` cases.** `internal/core/testdata/official/` holds all of `testes/` (redistributed
 under the same MIT licence as Lua itself) beside a
 `<name>.<goos>.expected`: what the reference interpreter, built from
-source, printed for that file. `official_test.go` runs one side and then
+source, printed for that file. `internal/core/official_test.go` runs one side and then
 the other, normalises, and compares — so `go test ./...` now carries 30
 identical / 2 known differences / 1 not run. A few things about it are
 deliberate:
 
-- `testdata/official/libs/*.c` — the five C libraries Lua's own makefile
+- `internal/core/testdata/official/libs/*.c` — the five C libraries Lua's own makefile
   builds — are compiled into that copy, so `attrib.lua` and `main.lua`
   exercise the C half of the suite for real: versioned module names
   (`lib2-v2`), `luaopen_` chains, and a library that borrows a symbol
@@ -249,7 +251,7 @@ deliberate:
 
 - The files run in a copy made in `t.TempDir()`. `attrib.lua` writes a
   dozen chunks under `libs/` and requires them; `main.lua` spawns
-  subprocesses. Nothing may be written into `testdata/`, a checkout is
+  subprocesses. Nothing may be written into `internal/core/testdata/`, a checkout is
   often read-only, and a leftover file would change the next run's answer.
 - The exit status is not part of the comparison: several of these files
   *end* in a failed assert, which is the point of them.
@@ -265,7 +267,7 @@ deliberate:
   passes too.
 - To re-capture after a Lua release, or on a platform that has no golden
   yet: `LUA_REF=/path/to/lua go test -run TestOfficialSuite` (and
-  `-run TestDifferentialSuite` for `testdata/diff`). The
+  `-run TestDifferentialSuite` for `internal/core/testdata/diff`). The
   reference has to be built the way CI builds it — `make posix` with
   `-DLUA_USE_DLOPEN`, on macOS with `SYSLIBS=` — because `posix` is the
   one target that is the same everywhere *and* leaves readline out, and
@@ -290,13 +292,13 @@ deliberate:
   collector's own state (`T.gcstate`, `T.gccolor`), none of which exists
   here. It is the same situation as `gc.lua`, not a gap that can be
   closed; the C API is covered by §5.6–5.8, by the five real C
-  extensions, and by `capi_test.go`.
+  extensions, and by `internal/core/capi_test.go`.
 
 ### 5.2 A real C extension: LPeg
 
 `go test` also builds [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/) 1.1.0
 — six translation units, published and used far away from here — from its
-own sources in `testdata/lpeg/`, and runs LPeg's own test suite to
+own sources in `internal/core/testdata/lpeg/`, and runs LPeg's own test suite to
 completion. That is worth more than another extension written for the
 test, because LPeg reaches for the parts of the C API a small extension
 never touches, and found four real bugs that nothing else had:
@@ -309,9 +311,9 @@ never touches, and found four real bugs that nothing else had:
 | `lua_tostring`, to tell a rule named by a string from one named by a table | an empty string where PUC-Lua answers NULL, so LPeg took the wrong branch |
 
 Every line its suite prints is PUC-Lua 5.4.9's, kept in
-`testdata/lpeg/expected.txt`, so the test needs neither the reference
+`internal/core/testdata/lpeg/expected.txt`, so the test needs neither the reference
 interpreter nor the network. Both are MIT-licensed and redistributed
-under `testdata/lpeg/LICENSE`.
+under `internal/core/testdata/lpeg/LICENSE`.
 
 #### A shared object built for PUC-Lua loads as it is
 
@@ -336,7 +338,7 @@ the ABI, not the text.
 ### 5.3 A second one: Lua CJSON, which found the locale
 
 [Lua CJSON](https://kyne.com.au/~mark/software/lua-cjson.php) 2.1.0.10 is
-built the same way from `testdata/cjson/` — three translation units — and
+built the same way from `internal/core/testdata/cjson/` — three translation units — and
 runs its own 105-case suite, all of which pass. Where LPeg exercises
 patterns, userdata and the buffer API, CJSON exercises the other half of
 what an extension does: walking tables with `lua_next`, converting numbers
@@ -386,8 +388,8 @@ connect, send and receive (including a 100 KB chunk that takes several
 UDP, `getaddrinfo`, and both of mime's filters — base64 and
 quoted-printable — through `ltn12`. One loopback round trip of our own,
 `socket_e2e.lua`, ties them together. Every line is PUC-Lua 5.4.9's, kept
-in `testdata/luasocket/expected.txt`. MIT-licensed, redistributed under
-`testdata/luasocket/LICENSE`.
+in `internal/core/testdata/luasocket/expected.txt`. MIT-licensed, redistributed under
+`internal/core/testdata/luasocket/LICENSE`.
 
 ### 5.5 A fourth one: LuaFileSystem, which reaches into a file handle
 
@@ -411,8 +413,8 @@ now.
 
 Its suite makes files, links and directories, so it runs in a temporary
 directory of its own. Every line it prints is PUC-Lua 5.4.9's, kept in
-`testdata/luafilesystem/expected.txt`. MIT-licensed, redistributed under
-`testdata/luafilesystem/LICENSE`.
+`internal/core/testdata/luafilesystem/expected.txt`. MIT-licensed, redistributed under
+`internal/core/testdata/luafilesystem/LICENSE`.
 
 ### 5.6 Continuations: the last part of the C API
 
@@ -430,7 +432,7 @@ calls the continuation on resume and answers how many values it pushed,
 and `lua_pcallk` recovers an error raised below it the way `ldo.c`'s
 `findpcall` + `finishpcallk` do.
 
-`testdata/continuation/k.c` is a C extension built to exercise every
+`internal/core/testdata/continuation/k.c` is a C extension built to exercise every
 path — a `lua_yieldk` with and without a continuation, a `lua_callk`
 whose callee yields, a `lua_callk` with no continuation (which must
 *not* be yieldable), a `lua_pcallk` that yields, one that raises, one
@@ -440,7 +442,7 @@ with a message handler, a continuation that counts the results with
 function that suspends three times in a row through a single
 continuation, a yield of no values, and `coroutine.close` on a coroutine
 parked inside a C yield. All 31 lines it prints are PUC-Lua 5.4.9's,
-kept in `testdata/continuation/expected.txt`, and `TestContinuation`
+kept in `internal/core/testdata/continuation/expected.txt`, and `TestContinuation`
 compares them. Written for this port; MIT, like the rest of the
 testdata.
 
@@ -469,17 +471,17 @@ PUC-Lua spells as a macro and this port as a function (`lua_call`,
 `lua_pcall`, `lua_yield`, the eight `lua_is*`) behave the same either way.
 
 All 30 lines the suite prints are PUC-Lua 5.4.9's, kept in
-`testdata/luaposix/expected.txt`, and `TestLuaPosix` compares them. It
+`internal/core/testdata/luaposix/expected.txt`, and `TestLuaPosix` compares them. It
 makes files, a directory and a link, so it runs in a temporary directory
 of its own. MIT-licensed, redistributed under
-`testdata/luaposix/LICENSE`.
+`internal/core/testdata/luaposix/LICENSE`.
 
 ### 5.8 The C API, end to end
 
 LPeg, CJSON, LuaSocket, LuaFileSystem and luaposix between them call a
 great deal of the C API, but they are programs with a job to do, not a
 survey of it: whole groups of functions are never reached. So
-`testdata/capi/capi.c` is the survey. It is an ordinary extension —
+`internal/core/testdata/capi/capi.c` is the survey. It is an ordinary extension —
 compiled against `include/`, opened by `luaopen_capi`, found by `require`
 — that walks the API group by group and answers with numbers, booleans
 and fixed strings, which is what makes it comparable:
@@ -500,8 +502,8 @@ and fixed strings, which is what makes it comparable:
 | limits | `lua_setcstacklimit`, `lua_atpanic` |
 
 All 35 lines it prints are PUC-Lua 5.4.9's, kept in
-`testdata/capi/expected.txt`, and `TestCApiSurface` compares them. The
-driver is loaded under the chunk name `cext` — `testdata/capi/run.lua`
+`internal/core/testdata/capi/expected.txt`, and `TestCApiSurface` compares them. The
+driver is loaded under the chunk name `cext` — `internal/core/testdata/capi/run.lua`
 does that for the reference interpreter — so the `cext:35` inside a
 `luaL_where` answer is the same on both sides.
 
@@ -562,7 +564,7 @@ never showed it — but the constant indices are part of the bytecode, so
 the bytes `string.dump` writes were not always PUC-Lua's. The table is
 now the scanner's, and the occasional duplicate constant is reproduced.
 
-`testdata/luac/` pins it: three sources, their 683-line combined listing
+`internal/core/testdata/luac/` pins it: three sources, their 683-line combined listing
 (`expected.txt`, taken from PUC-Lua 5.4.9 with the prototype addresses
 blanked out, since those cannot match across processes), and the two
 binary chunks `luac -o` writes for them, compared byte for byte and then
@@ -581,12 +583,12 @@ a literal that has already been a constant a fresh object, so two equal
 long literals in one chunk stop being the same string, which is what
 PUC-Lua's own `literals.lua` and `verybig.lua` assert. Both of those
 regressed the moment constants started sharing the scanner's table, and
-both are green again; `testdata/diff/80_strid.lua` pins it.
+both are green again; `internal/core/testdata/diff/80_strid.lua` pins it.
 
 ### 5.10 Coverage inventory
 
 Conformance is measured by comparing outputs, but it is also worth asking
-the blunter question: is *everything there*? `testdata/diff/79_inventory.lua`
+the blunter question: is *everything there*? `internal/core/testdata/diff/79_inventory.lua`
 enumerates every name the reference interpreter exposes — `_G` and the nine
 standard libraries, all thirty metamethods, all ten `collectgarbage` options,
 and the version-visible constants — and prints them sorted, so that the
@@ -607,7 +609,7 @@ All thirty metamethods are recognised, including `__close`, `__gc`, `__mode`,
 `__name`, `__pairs`, `__ipairs` and `__metatable`.
 
 The behaviour that a name list cannot show is pinned by
-`testdata/diff/78_new54.lua`: `warn` and its `@on`/`@off` control messages,
+`internal/core/testdata/diff/78_new54.lua`: `warn` and its `@on`/`@off` control messages,
 `debug.setcstacklimit` and the depth it actually buys, integer `math.random`
 (and that a given seed produces the identical sequence), the new `%q`,
 the mode argument of `load`, `table.pack`/`unpack` at their boundaries, and
@@ -635,7 +637,7 @@ The same is true of `string.pack`, and it is the same four-plus-seven
 functions: `str_pack`, `str_unpack`, `str_packsize` and the seven
 helpers behind them — `strGetOption`, `strGetDetails`, `strPackInt`,
 `strUnpackInt`, `strPackBits`, `strUnpackBits` and the one that cuts a
-format at its zero byte — were all at 0%, the last of `lstrlib.go` no
+format at its zero byte — were all at 0%, the last of `internal/core/lstrlib.go` no
 test had ever reached. A fuzz cannot change that, because it runs the
 two interpreters as subprocesses and a subprocess does not answer
 `go test -cover`; `TestPackInProcess` is what does, driving the same
@@ -665,13 +667,13 @@ two letters in front of a format being the part the C library decides
 instead: `os.date("!%Y", -65307340800)`, which PUC-Lua answers `-100`,
 is a line in it, and it is a line the grid does not have.
 
-The same was true of four functions of `ltablib.go`, and it is four
+The same was true of four functions of `internal/core/ltablib.go`, and it is four
 this time because the table library has more small helpers than the
 others do: `tableCheckField`, `tableIncr`, `tableRandomizePivot` and
 `tableChoosePivot` were all at 0%, and `tableCheckTab` at 20%, every
 case that entered them being a case in another process.
 `TestTableInProcess` asks them in this process, and every function of
-`ltablib.go` is at 100% now. It is not a second copy of the grid: the
+`internal/core/ltablib.go` is at 100% now. It is not a second copy of the grid: the
 two things it asks that the grid cannot ask outside a subprocess are
 the two places `partition` says the comparison function is not an
 order, and since both of them say the same thing, what tells them
@@ -703,12 +705,12 @@ random number it is handed, and a `tableRandomizePivot` that always
 answers 0, are the same thing to an array that comes out sorted either
 way, and the two functions are only asked so that they are entered.
 
-It was true four times over of `lmathlib.go`, and there the reason is
+It was true four times over of `internal/core/lmathlib.go`, and there the reason is
 that the grid asks its questions in a subprocess for the excellent
 reason that the reference interpreter *is* one. `mathFrexp`,
 `mathLdexp`, `mathPow` and `mathTanh` were at 0% and a dozen more were
 half covered. `TestMathInProcess` asks all 31 names of the library in
-this process and every function of `lmathlib.go` is at 100% but one,
+this process and every function of `internal/core/lmathlib.go` is at 100% but one,
 and the one is `mathI2d`'s correction for a two's-complement negative:
 it is a line of `lmathlib.c` that exists for a `lua_Number` wider than
 64 bits, and since this port's is 64, `x >> 11` has 53 bits and `sx` is
@@ -735,7 +737,7 @@ whose message names nothing at all.
 ### 5.11 Performance
 
 `go test -bench=. -benchmem -run=XXX` runs the benchmarks in
-`bench_test.go`. The table below is the same work measured end to end
+`internal/core/bench_test.go`. The table below is the same work measured end to end
 through the two interpreters (Apple M1 Pro, PUC-Lua 5.4.9 built with
 `-O2`), best of three runs:
 
@@ -778,13 +780,39 @@ about the Go runtime rather than about Lua:
   An unreferenced short string is collected and interned afresh on its
   next use, again exactly as C's own sweep does; nothing accumulates.
 
-`Value` is 32 bytes rather than 40 for the same reason C's `TValue` is a
-union: a float shares the integer's field, stored as its IEEE bits.
+`Value` is 24 bytes (`i int64` + `p unsafe.Pointer` + `tt uint8`) and a
+table `node` is 48 bytes (`Value` + the key stored as `int64`/`unsafe.Pointer`
++ `keytt uint8` + `next int32`): a float shares the integer's field, stored
+as its IEEE bits, exactly as C's `TValue` is a union. Splitting the value
+into a pointer-sized field and an integer field, with the tag in a single
+byte, is what lets Go's GC scan the pointers without ever mistaking an
+integer or a float for one.
+
+The layout matters most for workloads that keep a large live set.
+`bench/mesh_gc.lua` builds two million six-field tables — every node lands
+in the hash part, where both a value's and a node's size show up — and then
+runs the collector; `bench/node_size.lua` asks the interpreter itself for
+the bytes one such node costs. Measured on the same machine as the table
+above, best of three runs against PUC-Lua 5.4.9 (`-O2`):
+
+| measurement | PUC-Lua 5.4.9 | this port |
+|---|---|---|
+| bytes per grid node (`collectgarbage("count")`) | 248 B | 464 B |
+| peak RSS, build of 2×10⁶ nodes | 528 MB | 1 020 MB |
+| one `collectgarbage("collect")` pass over them | 0.156 s | 0.181 s |
+
+The CPU table above comes from `internal/core/bench_test.go`
+(`go test -bench=. -benchmem -run=XXX`). The end-to-end workloads — `fib`,
+an arithmetic loop, `table.sort`, string operations, and the mesh
+build/collect above — live in `bench/` and are driven by `bench/run.sh`
+(`sh bench/run.sh /path/to/puc-lua ./lua`), which runs each workload three
+times and keeps the fastest wall time, so the two interpreters are measured
+the same way.
 
 ### 5.12 The third-party corpus
 
 Everything above is a case somebody wrote — somebody who was, in every
-instance, thinking about one thing. `testdata/third` is the other kind:
+instance, thinking about one thing. `internal/core/testdata/third` is the other kind:
 five single-file Lua libraries nobody wrote for this port, 2 759 lines
 between them, run unmodified and asked to print.
 
@@ -862,20 +890,20 @@ a difference is always reproducible.
 
 | | Built | Answers compared |
 |---|---|---|
-| `fuzz_test.go` | 72 463 expressions — 43 operands against every operator, and each of those again in a form the VM has to run at runtime instead of folding while it compiles, plus the calls that take a base or a format — and 201 written-out snippets for what combination cannot reach: syntax errors, metamethods, coroutines, hooks, patterns, non-string errors, stack overflow | 72 664 |
-| `patternfuzz_test.go` | 6 991 patterns — every pattern atom against every atom, plus the triples that need three pieces to mean anything — against 25 subjects | 1 048 650 |
-| `formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
-| `numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
-| `forfuzz_test.go` | 16 277 numeric `for` loops — 25 values in each of the three positions: zeroes of both signs, integers and floats, both ends of the integer range, the floats just outside it, the point where a float stops counting by ones, and the three values that are not comparable at all — each asked with the step written out and with it left to default to 1, plus each of 9 values that are not numbers in each of the three positions | 16 277 |
-| `codegenfuzz_test.go` | 101 356 snippets — every literal, every operator against every shape of operand, every statement form both bare and inside a function, every shape a closure can capture, 40 things that must not compile, and then every expression of depth two over 20 atoms and 18 operators plus a seventh of depth three, each in 22 statement positions — plus all 122 sources in `testdata` — official, ours, and the five third-party libraries of §5.12. What is compared is not what they print but **what they compile to**: 17 109 752 bytes of byte code | 17 109 752 |
-| `iofuzz_test.go` | 3 166 things the `io` library can be asked — every mode of length 0 to 3 over `r w a + b t x` against a file that exists, one that does not and a directory; every format `read` takes (each letter of the alphabet in both cases, the four C asks for, their `* ` spellings, and the counts and the values that are not formats) against 10 fixtures, and the same three at a time; what `write` puts in the file, byte for byte, for each kind of value and for two of them; `seek` from each of 8 whence by each of 17 offsets, before and after a read; `setvbuf`; `lines` and `f:lines`; 13 kinds of handle — the three standard ones, a file opened each way round, a closed one, `tmpfile`, both ends of a `popen` — used 17 ways each; `io.input` and `io.output`; and the errors, `<close>`, and dropping a handle without closing it. Both interpreters get an identical copy of the fixtures in a directory of their own | 3 166 |
-| `debugfuzz_test.go` | 1 333 questions about the debug library — every option string of length 0 to 2 over the eight letters `getinfo` recognises and the one it does not, asked about each of 8 kinds of function; every stack level from each of 7 shapes of stack, which is the only way to reach a `name`, a `namewhat`, a `currentline` that moves and an `istailcall`; a coroutine in each of 5 states; the same function called 10 ways, asked about itself and about its caller; every local index in every shape of frame, on the main thread and on a coroutine, and `setlocal` for each; every upvalue got, set, identified and joined — including the 25 ways two closures can be joined and the 8 ways two upvalues can be the same one; 56 hook masks, 6 counts, `gethook` on the main thread, on a coroutine, and on a coroutine made before or after the hook was set; every `traceback` message at every level, from every depth; every metatable, the registry, and every user value — plus every debug function asked the wrong thing. And 12 hook errors, each in a process of its own, because an error in a hook escapes every `pcall` and ends the run | 1 333 + 12 |
-| `packfuzz_test.go` | 3 733 questions about `string.pack`, `string.unpack` and `string.packsize` — every byte of the alphabet as a format of its own, all 256 of them and not the 26 C looks up, because a byte that is not an option is an option refused and the refusal is printed with the byte in it; every size from 0 to 17 of `i`, `I`, `s` and `c` — the sweep running past 16 in both directions, because only the sizes that are refused can say where the edge is — each with 12 values and with the three that sit on the edge of that size; every alignment `!` can ask for, over 20 things to align and then over every pair of 6; every endianness over every option; every pair of 16 options, and an `X` between every pair of 12; `unpack` at 15 positions of 12 formats; every option given 8 wrong things, and given nothing; 138 round trips; 53 written-out formats; a zero byte at every position of 9 formats; a zero byte in a value; and every size read out of 6 buffers of raw bytes | 5 337 |
-| `namefuzz_test.go` | 1 328 questions about a name with a zero byte in it — every name a script can hand to the OS, with a zero at every position of five of them (`a`, `a.txt`, `sub`, `no`, `m.lua`), asked of `io.open` in each of its 6 modes, of `io.lines`, `loadfile`, `dofile`, `os.remove`, `os.rename` (in the name moved, in the name it is moved to, and in both), `require` and `package.searchpath`, each against a file that is there, a directory, and nothing; then the same renames and removals with no zero in them, which is where a directory meets a directory; a name with a slash on the end of it, which is not a name a regular file can be given; and 62 commands with a zero in them, run by `io.popen` and `os.execute`. 1 218 names and 62 commands, each with a number of its own so that one case's file is never another case's, and both interpreters get an empty directory of their own | 1 328 |
-| `corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
-| `tablefuzz_test.go` | 1 005 questions about the six functions of the table library — every `f`, `e` and `t` of a `table.move` over a table of four, to itself and to another table; every position a `table.remove` and a `table.insert` can be given, at every size up to four, and the number of arguments they take; every kind of value in every position of a `table.concat`, every kind of separator and every pair of ends; every pair of ends of a `table.unpack` and four that are past the end of anything, and `table.pack`; 218 `table.sort`s — 52 with a comparison function that writes down every pair it is asked about in the order it is asked about them, 69 with one that claims a different element is the pivot, 45 with one that says so of an element there are two copies of, 15 of a `__len` that answers with a length belonging to no array — 13 of them on a table and two on a userdata — which is the only way to reach "array too big", and the ones that raise, the ones that move the array while it is being sorted, and the ones that are not orders; and 142 things that behave like a table and things that do not — 64 of them userdata with each of the eight combinations of the three metamethods, in each of the six functions and as both ends of a `move`, 30 of them tables with a metatable on them, and 48 that are not tables at all | 1 005 |
-| `mathfuzz_test.go` | 4 787 questions about the maths library — every one of 41 values there is a name for, the 31 numbers and the 9 strings that read as them: both zeroes, the two ends of the integers, the three sizes at which a float stops counting by ones, both infinities, the NaN and π — through each of `abs`, `floor`, `ceil`, `sqrt`, `tointeger` and `type`; every pair of 15 dividends and 15 divisors of a `fmod`; every pair of the 41 through each of `max` and `min`, and every triple of three near 1 through each; every pair of 8 through `ult`; every one of the 41 through `modf`, and through `frexp` besides the 18 powers of two that are asked of it on their own; every one of the 41 through each of `deg` and `rad`; 18 mantissas through `ldexp` with each of 18 exponents, the last four of which do not fit in the `int` C truncates to; 151 draws from a generator seeded with two integers, in each of 15 shapes and after each of 5 single-integer seeds; every form of `randomseed` and a draw after each of 7; 160 things that are not numbers — a nil, a boolean, a string, a table and a function — asked of every one of the 31 names in the library, and of `log` in both of its positions; and 28 of those names given nothing at all, `fmod` being given one argument instead of none | 4 787 |
-| `datefuzz_test.go` | 2 517 questions about `os.date` and `os.time` — every conversion specifier of C99's `strftime`, all 37 of them, asked of every day of 2000 and of 2001 and of every noon of 2000, of every hour and every five minutes of one day, and of the instants at and past the ends of a `struct tm`; the 19 `E` and `O` modifiers at four instants; the nine fields of `*t`; the 51 formats that are not specifiers, 18 of them with a zero byte in them; the format that is not there at all; and 124 tables for `os.time`, two of them only on a host whose `mktime` reads `isdst` the way this port does. Every one of them asked in each of four zones — one with no summer time, one west of Greenwich, one east, and Dublin, whose standard time is the smaller of its two — because four of the specifiers are questions the zone answers | 2 517 × 4, or 2 523 × 4 where the C library is glibc's |
+| `internal/core/fuzz_test.go` | 72 463 expressions — 43 operands against every operator, and each of those again in a form the VM has to run at runtime instead of folding while it compiles, plus the calls that take a base or a format — and 201 written-out snippets for what combination cannot reach: syntax errors, metamethods, coroutines, hooks, patterns, non-string errors, stack overflow | 72 664 |
+| `internal/core/patternfuzz_test.go` | 6 991 patterns — every pattern atom against every atom, plus the triples that need three pieces to mean anything — against 25 subjects | 1 048 650 |
+| `internal/core/formatfuzz_test.go` | 11 340 format strings — every flag against every width, precision and conversion — against 22 values, plus one line each with the value left out | 260 820 |
+| `internal/core/numfuzz_test.go` | 1 834 strings read as numbers — every sign, integer part, fraction and exponent in combination, then the same for hexadecimal, then each wrapped in nine different kinds of space — and 49 values written back by `tostring`, `%q`, `math.tointeger`, `%g` and `%e` | 11 053 |
+| `internal/core/forfuzz_test.go` | 16 277 numeric `for` loops — 25 values in each of the three positions: zeroes of both signs, integers and floats, both ends of the integer range, the floats just outside it, the point where a float stops counting by ones, and the three values that are not comparable at all — each asked with the step written out and with it left to default to 1, plus each of 9 values that are not numbers in each of the three positions | 16 277 |
+| `internal/core/codegenfuzz_test.go` | 101 356 snippets — every literal, every operator against every shape of operand, every statement form both bare and inside a function, every shape a closure can capture, 40 things that must not compile, and then every expression of depth two over 20 atoms and 18 operators plus a seventh of depth three, each in 22 statement positions — plus all 122 sources in `testdata` — official, ours, and the five third-party libraries of §5.12. What is compared is not what they print but **what they compile to**: 17 109 752 bytes of byte code | 17 109 752 |
+| `internal/core/iofuzz_test.go` | 3 166 things the `io` library can be asked — every mode of length 0 to 3 over `r w a + b t x` against a file that exists, one that does not and a directory; every format `read` takes (each letter of the alphabet in both cases, the four C asks for, their `* ` spellings, and the counts and the values that are not formats) against 10 fixtures, and the same three at a time; what `write` puts in the file, byte for byte, for each kind of value and for two of them; `seek` from each of 8 whence by each of 17 offsets, before and after a read; `setvbuf`; `lines` and `f:lines`; 13 kinds of handle — the three standard ones, a file opened each way round, a closed one, `tmpfile`, both ends of a `popen` — used 17 ways each; `io.input` and `io.output`; and the errors, `<close>`, and dropping a handle without closing it. Both interpreters get an identical copy of the fixtures in a directory of their own | 3 166 |
+| `internal/core/debugfuzz_test.go` | 1 333 questions about the debug library — every option string of length 0 to 2 over the eight letters `getinfo` recognises and the one it does not, asked about each of 8 kinds of function; every stack level from each of 7 shapes of stack, which is the only way to reach a `name`, a `namewhat`, a `currentline` that moves and an `istailcall`; a coroutine in each of 5 states; the same function called 10 ways, asked about itself and about its caller; every local index in every shape of frame, on the main thread and on a coroutine, and `setlocal` for each; every upvalue got, set, identified and joined — including the 25 ways two closures can be joined and the 8 ways two upvalues can be the same one; 56 hook masks, 6 counts, `gethook` on the main thread, on a coroutine, and on a coroutine made before or after the hook was set; every `traceback` message at every level, from every depth; every metatable, the registry, and every user value — plus every debug function asked the wrong thing. And 12 hook errors, each in a process of its own, because an error in a hook escapes every `pcall` and ends the run | 1 333 + 12 |
+| `internal/core/packfuzz_test.go` | 3 733 questions about `string.pack`, `string.unpack` and `string.packsize` — every byte of the alphabet as a format of its own, all 256 of them and not the 26 C looks up, because a byte that is not an option is an option refused and the refusal is printed with the byte in it; every size from 0 to 17 of `i`, `I`, `s` and `c` — the sweep running past 16 in both directions, because only the sizes that are refused can say where the edge is — each with 12 values and with the three that sit on the edge of that size; every alignment `!` can ask for, over 20 things to align and then over every pair of 6; every endianness over every option; every pair of 16 options, and an `X` between every pair of 12; `unpack` at 15 positions of 12 formats; every option given 8 wrong things, and given nothing; 138 round trips; 53 written-out formats; a zero byte at every position of 9 formats; a zero byte in a value; and every size read out of 6 buffers of raw bytes | 5 337 |
+| `internal/core/namefuzz_test.go` | 1 328 questions about a name with a zero byte in it — every name a script can hand to the OS, with a zero at every position of five of them (`a`, `a.txt`, `sub`, `no`, `m.lua`), asked of `io.open` in each of its 6 modes, of `io.lines`, `loadfile`, `dofile`, `os.remove`, `os.rename` (in the name moved, in the name it is moved to, and in both), `require` and `package.searchpath`, each against a file that is there, a directory, and nothing; then the same renames and removals with no zero in them, which is where a directory meets a directory; a name with a slash on the end of it, which is not a name a regular file can be given; and 62 commands with a zero in them, run by `io.popen` and `os.execute`. 1 218 names and 62 commands, each with a number of its own so that one case's file is never another case's, and both interpreters get an empty directory of their own | 1 328 |
+| `internal/core/corofuzz_test.go` | 396 coroutines — six things a coroutine can do (suspend, fail, finish, suspend and then either, suspend twice) in each of 22 places it can do them: bare, under one and two `pcall`s, under `xpcall`, in every metamethod Lua itself calls, in a `for` iterator, in the callbacks of `table.sort` and `string.gsub`, in the reader `load` asks, in a coroutine of its own, and with a to-be-closed variable still pending — each driven three ways: resumed four times, driven through `coroutine.wrap`, and closed with `coroutine.close` | 396 |
+| `internal/core/tablefuzz_test.go` | 1 005 questions about the six functions of the table library — every `f`, `e` and `t` of a `table.move` over a table of four, to itself and to another table; every position a `table.remove` and a `table.insert` can be given, at every size up to four, and the number of arguments they take; every kind of value in every position of a `table.concat`, every kind of separator and every pair of ends; every pair of ends of a `table.unpack` and four that are past the end of anything, and `table.pack`; 218 `table.sort`s — 52 with a comparison function that writes down every pair it is asked about in the order it is asked about them, 69 with one that claims a different element is the pivot, 45 with one that says so of an element there are two copies of, 15 of a `__len` that answers with a length belonging to no array — 13 of them on a table and two on a userdata — which is the only way to reach "array too big", and the ones that raise, the ones that move the array while it is being sorted, and the ones that are not orders; and 142 things that behave like a table and things that do not — 64 of them userdata with each of the eight combinations of the three metamethods, in each of the six functions and as both ends of a `move`, 30 of them tables with a metatable on them, and 48 that are not tables at all | 1 005 |
+| `internal/core/mathfuzz_test.go` | 4 787 questions about the maths library — every one of 41 values there is a name for, the 31 numbers and the 9 strings that read as them: both zeroes, the two ends of the integers, the three sizes at which a float stops counting by ones, both infinities, the NaN and π — through each of `abs`, `floor`, `ceil`, `sqrt`, `tointeger` and `type`; every pair of 15 dividends and 15 divisors of a `fmod`; every pair of the 41 through each of `max` and `min`, and every triple of three near 1 through each; every pair of 8 through `ult`; every one of the 41 through `modf`, and through `frexp` besides the 18 powers of two that are asked of it on their own; every one of the 41 through each of `deg` and `rad`; 18 mantissas through `ldexp` with each of 18 exponents, the last four of which do not fit in the `int` C truncates to; 151 draws from a generator seeded with two integers, in each of 15 shapes and after each of 5 single-integer seeds; every form of `randomseed` and a draw after each of 7; 160 things that are not numbers — a nil, a boolean, a string, a table and a function — asked of every one of the 31 names in the library, and of `log` in both of its positions; and 28 of those names given nothing at all, `fmod` being given one argument instead of none | 4 787 |
+| `internal/core/datefuzz_test.go` | 2 517 questions about `os.date` and `os.time` — every conversion specifier of C99's `strftime`, all 37 of them, asked of every day of 2000 and of 2001 and of every noon of 2000, of every hour and every five minutes of one day, and of the instants at and past the ends of a `struct tm`; the 19 `E` and `O` modifiers at four instants; the nine fields of `*t`; the 51 formats that are not specifiers, 18 of them with a zero byte in them; the format that is not there at all; and 124 tables for `os.time`, two of them only on a host whose `mktime` reads `isdst` the way this port does. Every one of them asked in each of four zones — one with no summer time, one west of Greenwich, one east, and Dublin, whose standard time is the smaller of its two — because four of the specifiers are questions the zone answers | 2 517 × 4, or 2 523 × 4 where the C library is glibc's |
 
 The pattern half exists because `lstrlib.c`'s `match` is two hundred
 lines of exactly the kind of logic nobody writes down the combinations
@@ -891,7 +919,7 @@ reproduce **C's** `printf`, including the parts of it that are decided
 by the library rather than by the standard — and it is therefore
 hand-written: `strParseFormat`, `strPadField`, `strFormatUnsigned`,
 `strHexFloat`. It found two real differences, both now fixed and pinned
-in `lstrlib_test.go`:
+in `internal/core/lstrlib_test.go`:
 
 * **The value is checked before the specification.** In C, `d`, `i`,
   `u`, `o`, `x`, `X` all go through `intcase`, which is
@@ -947,7 +975,7 @@ underscores of a Go literal and C's `strtod` does not.
 `strings.TrimSpace` trims the Unicode spaces and C's `isspace` does not —
 and the hexadecimal path, a second parser for the numerals Go will not
 take without an exponent, had its own copy of that second trim. All
-three are fixed and pinned in `lobject_test.go`. A sixty-string probe
+three are fixed and pinned in `internal/core/lobject_test.go`. A sixty-string probe
 found the first two, which is why the grid was built at all. What the
 number half deliberately does not ask is a *computed* value: `math.pi`
 is a constant and is fine, `math.exp(1)` is not, because Go's `math` and
@@ -1004,7 +1032,7 @@ path at all: `forlimit` cannot coerce it and truncates it to
 `mininteger`, or skips the loop, depending on the step's sign.
 
 The io half was written last and found the most. It was written because
-`liolib.go` was the one file whose coverage stayed under 55% — 79
+`internal/core/liolib.go` was the one file whose coverage stayed under 55% — 79
 functions, 28 of them never entered — and it went red six times, all
 six in the same way: C asks the FILE a question, and the port asked the
 descriptor behind it.
@@ -1062,7 +1090,7 @@ dropped inside a `do ... end` writes its bytes out.
 
 The debug half found the two things below, one in
 the library and one outside it — in the interpreter's own 'main', which
-is the one place a fuzz is not expected to reach. `ldblib.go` had four
+is the one place a fuzz is not expected to reach. `internal/core/ldblib.go` had four
 of its 43 functions that no test had ever entered — `debug.upvalueid`,
 `debug.upvaluejoin`, `debug.setuservalue` and the helper they share —
 and a probe of 258 cases over the whole library went red in one place.
@@ -1101,7 +1129,7 @@ string is a program
 in sizes, alignments, endianness and options, and `lstrlib.c` is an
 interpreter for it. A probe of 907 hand-chosen cases over the three went
 **0 lines red**, and by the rule of this project that is not yet an
-answer, so the same corpus was asked twice with `lstrlib.go` broken on
+answer, so the same corpus was asked twice with `internal/core/lstrlib.go` broken on
 purpose and it saw the break both times: the sign extension in `packint`
 taken out, 36 lines red; `*ntoalign` in `getdetails` forced to 0, 4
 lines red. Four lines out of 907 is what a hand-picked probe misses, and
@@ -1163,7 +1191,7 @@ more, and neither of them has a zero byte in it.
   directory it is told to move onto a directory that is there answers
   EEXIST — and, worse, the rename does not happen. C's `rename` is
   asked nothing and answers EISDIR, or ENOTDIR, or ENOTEMPTY. `ioRename`
-  in `liolib.go` calls `syscall.Rename`, which is `rename(2)`.
+  in `internal/core/liolib.go` calls `syscall.Rename`, which is `rename(2)`.
 * **The spelling of an errno Go groups with another one.** `ioStrError`
   used `errors.Is(err, fs.ErrExist)`, and `Errno.Is` answers that
   ENOTEMPTY *is* `fs.ErrExist`: true of what a Go program is asking,
@@ -1250,7 +1278,7 @@ the smaller of its two — because a specifier that is about the zone is
 a different question in each of them.
 
 A probe of 1 643 cases went **0 lines red**, and thirteen things were
-then taken out of `loslib.go` one at a time and it stayed at 0 for all
+then taken out of `internal/core/loslib.go` one at a time and it stayed at 0 for all
 thirteen — verified afterwards by hand, because `%U` at the first of
 January 2001 is 01 in one of those and 00 in the other. A probe that
 asks nothing is not a probe that found nothing, so the grid was built:
@@ -1426,7 +1454,7 @@ fourteen that are left — `sin`, `cos`, `tan`, `asin`, `acos`, `atan`,
 asked only what they say about a table, a boolean and nothing at all,
 which is theirs and not the library's whatever they say about 0.5; their
 answers to a number, and the three places in which this port had to
-leave Go's implementations, are pinned in `lmathlib_test.go`.
+leave Go's implementations, are pinned in `internal/core/lmathlib_test.go`.
 
 Four things the half does not hold, and three of them nobody can:
 
@@ -1520,7 +1548,7 @@ would then print alike.
 ## 6. Known differences from PUC-Lua 5.4.9
 
 1. **`file:read(n)` with a count above 2 GiB is treated as end of file** — C hands the count straight to the allocator, and it is the allocator that rejects an absurd one ("not enough memory", which a negative count always is and this port reproduces). This port will not allocate on that scale, so a count that large reads nothing. Binary chunks are not affected: `string.dump` produces the same bytes PUC-Lua 5.4.9 produces — stripped or not — and each loads the other's. The one exception is at the end of §6.7: a float constant folded from `^` can differ in the last ulp, because `pow` is not decided by IEEE arithmetic.
-2. **C extension modules load only when the host is built with cgo** — `cdlopen.go` is the `lsys_load`/`lsys_sym` half of `loadlib.c` and dlopens the library for real, so `package.cpath`, the four searchers and `require` work on an ordinary `.so` written against `lua.h`, and `package.loadlib` answers `dlerror()`'s own message with `"open"` or `"init"`, byte for byte what PUC-Lua answers. It needs cgo for one reason: a Go binary has to export the `lua_*`/`luaL_*` names into its **dynamic symbol table** for the module to resolve them, and only the cgo path can do that. Build with `CGO_ENABLED=1` (the default where a C toolchain is present) and compile the extension the way its platform allows the names to stay unresolved until load time — `-undefined dynamic_lookup` on macOS; on Linux, where the host's symbols are resolved from the executable's dynamic table, `-shared -fPIC` is enough. No linker flag is asked of whoever embeds the library: the exporting is the package's own business and travels with it through `#cgo LDFLAGS` (`//go:cgo_ldflag`), which reaches the link of anything built against it — `--export-dynamic` on Linux, where an ELF executable exports nothing it is not told to and `dlopen` looks nowhere else. That one matters more than it looks: Go's linker adds `--export-dynamic-symbol` per `//export`-ed Go function, which is most of the API, but the four variadic ones are C (`cdlbridge.c`) and are never mentioned to the linker at all, so without it every PUC-Lua shared object stops at `undefined symbol: lua_pushfstring`. macOS needs nothing — its executables export their globals by default. `go test` covers it: `cdlopen_test.go` writes a C extension with `luaL_newlib`, compiles it, `require`s it and calls into it; `cdlopen_api_test.go` compiles a larger one and compares all 25 lines it prints against the same extension run under PUC-Lua 5.4.9 — userdata with a registered metatable, `luaL_checkudata`, `luaL_checkoption`, the buffer API, user values, `lua_rawgetp`/`lua_rawsetp`, `lua_dump`, `lua_gc`, `lua_getstack`/`lua_getinfo` through a C `lua_Debug`, `lua_stringtonumber`, and every conversion `lua_pushfstring` has (including the "invalid option" error for one it does not).
+2. **C extension modules load only when the host is built with cgo** — `internal/core/cdlopen.go` is the `lsys_load`/`lsys_sym` half of `loadlib.c` and dlopens the library for real, so `package.cpath`, the four searchers and `require` work on an ordinary `.so` written against `lua.h`, and `package.loadlib` answers `dlerror()`'s own message with `"open"` or `"init"`, byte for byte what PUC-Lua answers. It needs cgo for one reason: a Go binary has to export the `lua_*`/`luaL_*` names into its **dynamic symbol table** for the module to resolve them, and only the cgo path can do that. Build with `CGO_ENABLED=1` (the default where a C toolchain is present) and compile the extension the way its platform allows the names to stay unresolved until load time — `-undefined dynamic_lookup` on macOS; on Linux, where the host's symbols are resolved from the executable's dynamic table, `-shared -fPIC` is enough. No linker flag is asked of whoever embeds the library: the exporting is the package's own business and travels with it through `#cgo LDFLAGS` (`//go:cgo_ldflag`), which reaches the link of anything built against it — `--export-dynamic` on Linux, where an ELF executable exports nothing it is not told to and `dlopen` looks nowhere else. That one matters more than it looks: Go's linker adds `--export-dynamic-symbol` per `//export`-ed Go function, which is most of the API, but the four variadic ones are C (`cdlbridge.c`) and are never mentioned to the linker at all, so without it every PUC-Lua shared object stops at `undefined symbol: lua_pushfstring`. macOS needs nothing — its executables export their globals by default. `go test` covers it: `internal/core/cdlopen_test.go` writes a C extension with `luaL_newlib`, compiles it, `require`s it and calls into it; `internal/core/cdlopen_api_test.go` compiles a larger one and compares all 25 lines it prints against the same extension run under PUC-Lua 5.4.9 — userdata with a registered metatable, `luaL_checkudata`, `luaL_checkoption`, the buffer API, user values, `lua_rawgetp`/`lua_rawsetp`, `lua_dump`, `lua_gc`, `lua_getstack`/`lua_getinfo` through a C `lua_Debug`, `lua_stringtonumber`, and every conversion `lua_pushfstring` has (including the "invalid option" error for one it does not).
 
 The four functions that take `...` — `lua_pushfstring`, `lua_pushvfstring`, `luaL_error`, `lua_gc` — are written in C (`cdlbridge.c`), because neither direction of the cgo boundary can express a variadic call. They reproduce `luaO_pushvfstring` rather than delegating to `printf`: `%d` is a Lua integer, `%f` is `%.14g` with the `.0` C adds when the result looks like an integer, `%p` is a bare `%p`, `%U` is a UTF-8 sequence, and anything else is the error PUC-Lua gives. `printf` would have accepted `%.2f` (which Lua rejects) and printed `%d` as C's `int`.
 
@@ -1552,7 +1580,7 @@ so "after which allocation" has no answer. Strings, numbers and
 booleans are never weakened, exactly as in PUC-Lua.
 5. **`os.setlocale` asks the C library when the build has cgo, and answers from a built-in table of decimal points when it does not** — the decimal point is the one part of a locale Lua observes, and it is observed in three places: `tostring` of a number, `string.format`'s `%f`/`%e`/`%g` (but not `%a` or `%q`, which is what lets `%q` round-trip), and `tonumber`, which accepts either separator while a source literal always uses `.`. With cgo the C library's `setlocale` is the authority and answers what it would in PUC-Lua, including `nil` for a locale the host has not installed. Without cgo there is no C library to ask, so the port accepts the name and reads the decimal point from the language of the locale — `pt_BR`, `fr_FR`, `de_DE` and the rest of the languages that write a comma get `,`, everything else and `"C"`/`"POSIX"` get `.` — and `os.setlocale("")` reads `LC_ALL`/`LC_NUMERIC`/`LANG` the way C's would. Which locales are installed is the host's business when cgo is on; when it is off, every name is accepted, because the only thing Lua can see of a locale is that one character.
 6. **`os.date` refuses a slightly different range of times, `os.time` accepts dates the host's `mktime` refuses, and `os.date("!%z")` answers the UTC offset rather than the local one** — `struct tm` keeps the year in an `int`, and the host's `gmtime`/`localtime` answer NULL once it no longer fits, which is where PUC-Lua's "date result cannot be represented in this installation" comes from. This port asks the same question against `tm_year` and reproduces the top of the range exactly — 67768036191676799 is the last representable second (year 2147485547, `tm_year` `INT_MAX`) and one more is refused — but the bottom of the host's range stops a little short of `INT_MIN`, so a window of some 2×10¹⁴ seconds at the far negative end is answered here and refused there; no second beyond that is answered by either. For `os.time`, PUC-Lua builds a time with the C library's `mktime` and reports "time result cannot be represented in this installation" when it answers -1; which dates those are is up to the C library (on macOS, anything that normalises to a year before 1900; glibc accepts those). Go's `time.Date` has no such limit, so this port answers a number. Everything PUC-Lua itself decides is reproduced — the bounds each field must satisfy before it reaches `struct tm` ("field 'year' is out-of-bound"), the missing and non-integer fields, a result of exactly -1, and every other specifier of `os.date`. Six of the thirty-seven conversion specifiers are not theirs in every place they could be asked — `%Z`, `%z`, `%Y`, `%y`, `%C` and `%G`, and the `%F` and `%g` that are spelled out of the year. They ask the C library, and where the two C libraries disagree they are in §6.15.
-7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh` and `tanh` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Five functions that used to be on that list are not on it: `frexp`, `ldexp`, `modf`, `deg` and `rad` are arithmetic and not the library's, and a probe of 44 478 answers over them — every power of two from 2^-1074 to 2^1023, the subnormals, both infinities and the NaN — found **not one** that differs, which is why they are 457 cases of the maths half of the fuzz (§5.13). Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently — and an ulp is a small absolute error when the answer itself is near zero, which is why `cos` of a large argument can read as tens of ulp away while the two agree to within one rounding of the reduced argument. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. There are three places where the port deliberately steps outside Go's implementations. The first is the band in which `exp(|x|)` approaches the largest float: `math.exp`, `math.sinh` and `math.cosh` are computed there by reducing the argument modulo ln 2 and scaling the answer by a power of two (`mathExpScaled`) rather than by asking `math.Exp` itself, because `math.Exp` is not one function but a hand-written assembly version per architecture and the copies disagree at that edge. On amd64 `math.Exp(709.5)` answers `inf`, where `exp(709.5)` is 1.3549863193146328e+308 — an ordinary float, and what arm64, the generic Go implementation and C's libm all answer — because `exp_amd64.s` truncates its overflow constant to `7.09782712893384e+02` instead of `7.09782712893383973096e+02`. The same threshold makes Go's `math.Sinh(710)` an `inf` whose true value, `exp(710) / 2` = 1.1e308, is representable. 25 answers across that border — 709, 709.5, 709.78, 709.79, 710, 710.5, 800 and their negatives — are pinned against PUC-Lua in `lmathlib_test.go`. The second is the other end of the same range: `log_amd64.s` loses several digits on a **subnormal** argument, and `1e-308` is one — the smallest normal float is 2.2250738585072014e-308 — answering `-708.71839997088` where `log(1e-308)` is `-709.19620864217`. So `math.log` and `math.log10` scale a subnormal up into the normal range first, by a power of two, which is exact, and take the exponent back off afterwards (`mathLogScaled`): `math.log10(1e-308)` is `-308` again. Fourteen answers down there — `1e-308`, `1e-320`, `5e-324` and the smallest normal, in every base — are pinned in the same file. The third is `math.log(x, 2)`, which asks C for `log2(x)` and not for `math.log(x)/math.log(2)`: Go's `math.Log2` splits the argument with `Frexp` and adds the exponent back afterwards, so an answer that is near zero — which is what the log of a number near 1 is — is left made of the roundings of two numbers a million times bigger than it is. `math.log(1.0000000000000002, 2)` is 3.2034265038149e-16 to C's `log2` and 3.6816598061451e-16 to `math.Log2`: fifteen per cent, and unlike anything else on this list. So in the band `[sqrt(2)/2, sqrt(2))`, where `math.Log` has no exponent to add back and keeps those bits, `mathLog2Scaled` asks `math.Log` and divides by ln 2; outside it — and for every power of two, where `math.Log2` is exact — it asks `math.Log2`, whose error does not grow with the exponent the way a quotient's does. 26 answers across that border, from `1 + 2^-52` to `5e-324`, are pinned in the same file.
+7. **The maths library is Go's, not the platform's libm** — `math.sin`, `cos`, `tan`, `exp`, `log`, `log10`, `sqrt`, `asin`, `acos`, `atan`, `atan2`, `pow`, `sinh`, `cosh` and `tanh` are Go's implementations rather than the ones libc links. They agree to 15 significant digits and differ in the last one or two for a fraction of the arguments: measured over 120 arguments spread across fifteen magnitudes, `sqrt` never differs, `exp` and `log` differ for a handful (below one ulp), `log10`, `tanh`, `asin`, `acos` and `atan` for a few dozen (around one ulp), and `sin`, `cos` and `tan` for a quarter to a half. Five functions that used to be on that list are not on it: `frexp`, `ldexp`, `modf`, `deg` and `rad` are arithmetic and not the library's, and a probe of 44 478 answers over them — every power of two from 2^-1074 to 2^1023, the subnormals, both infinities and the NaN — found **not one** that differs, which is why they are 457 cases of the maths half of the fuzz (§5.13). Above 2^53, where the argument has to be reduced before the function can be asked, the gap widens — `tan` strays by six ulp and `sin` by seven — because neither implementation is correctly rounded there and they reduce differently — and an ulp is a small absolute error when the answer itself is near zero, which is why `cos` of a large argument can read as tens of ulp away while the two agree to within one rounding of the reduced argument. Every arithmetic operation, `sqrt`, and both integer conversions are exact. A NaN is spelled the way the platform's C library spells it — `"nan"` on macOS, `"-nan"` on glibc when the sign bit is set — because that is what C's `printf` does with it. There are three places where the port deliberately steps outside Go's implementations. The first is the band in which `exp(|x|)` approaches the largest float: `math.exp`, `math.sinh` and `math.cosh` are computed there by reducing the argument modulo ln 2 and scaling the answer by a power of two (`mathExpScaled`) rather than by asking `math.Exp` itself, because `math.Exp` is not one function but a hand-written assembly version per architecture and the copies disagree at that edge. On amd64 `math.Exp(709.5)` answers `inf`, where `exp(709.5)` is 1.3549863193146328e+308 — an ordinary float, and what arm64, the generic Go implementation and C's libm all answer — because `exp_amd64.s` truncates its overflow constant to `7.09782712893384e+02` instead of `7.09782712893383973096e+02`. The same threshold makes Go's `math.Sinh(710)` an `inf` whose true value, `exp(710) / 2` = 1.1e308, is representable. 25 answers across that border — 709, 709.5, 709.78, 709.79, 710, 710.5, 800 and their negatives — are pinned against PUC-Lua in `internal/core/lmathlib_test.go`. The second is the other end of the same range: `log_amd64.s` loses several digits on a **subnormal** argument, and `1e-308` is one — the smallest normal float is 2.2250738585072014e-308 — answering `-708.71839997088` where `log(1e-308)` is `-709.19620864217`. So `math.log` and `math.log10` scale a subnormal up into the normal range first, by a power of two, which is exact, and take the exponent back off afterwards (`mathLogScaled`): `math.log10(1e-308)` is `-308` again. Fourteen answers down there — `1e-308`, `1e-320`, `5e-324` and the smallest normal, in every base — are pinned in the same file. The third is `math.log(x, 2)`, which asks C for `log2(x)` and not for `math.log(x)/math.log(2)`: Go's `math.Log2` splits the argument with `Frexp` and adds the exponent back afterwards, so an answer that is near zero — which is what the log of a number near 1 is — is left made of the roundings of two numbers a million times bigger than it is. `math.log(1.0000000000000002, 2)` is 3.2034265038149e-16 to C's `log2` and 3.6816598061451e-16 to `math.Log2`: fifteen per cent, and unlike anything else on this list. So in the band `[sqrt(2)/2, sqrt(2))`, where `math.Log` has no exponent to add back and keeps those bits, `mathLog2Scaled` asks `math.Log` and divides by ln 2; outside it — and for every power of two, where `math.Log2` is exact — it asks `math.Log2`, whose error does not grow with the exponent the way a quotient's does. 26 answers across that border, from `1 + 2^-52` to `5e-324`, are pinned in the same file.
 
 One consequence is worth naming, because it reaches further than a
 number that is off by one rounding. `A op B` with two numerals is
@@ -1598,18 +1626,19 @@ string conversions are decided by the representation. Measured against
 ## 7. Build & test
 
 ```bash
-go build ./...
-go test ./...
-go test -race ./...
+go build ./...                    # build (top-level + internal/core + cmd)
+go test ./...                     # unit tests (includes Lua semantics)
+go test ./internal/core/          # core implementation tests only
+go test -race ./...               # race detection
 go vet ./...
-gofmt -l .                                  # must print nothing
+gofmt -l .                        # must print nothing
 go test -bench=. -benchmem -run=XXX ./...   # benchmarks
-go build -o lua  ./cmd/lua    # the standalone interpreter
-go build -o luac ./cmd/luac   # the standalone compiler
+go build -o lua  ./cmd/lua        # the standalone interpreter
+go build -o luac ./cmd/luac       # the standalone compiler
 ```
 
-Two of those need more than Go: `cdlopen_test.go` and
-`cdlopen_api_test.go` compile C extensions and `require` them, and skip
+Two of those need more than Go: `internal/core/cdlopen_test.go` and
+`internal/core/cdlopen_api_test.go` compile C extensions and `require` them, and skip
 themselves when there is no cgo or no C compiler, so
 `CGO_ENABLED=0 go test ./...` is a supported configuration that simply
 does not exercise the dlopen path.
@@ -1621,7 +1650,7 @@ CI runs the whole matrix on Linux, macOS and Windows
 |---|---|---|
 | **build** | 3 OS × `oldstable` + `stable` | `go vet`, `go build`, `go test`; `go test -race` on Linux and macOS (the race detector needs cgo); a `gofmt` check and one pass over the benchmarks on Linux |
 | **nocgo** | 3 OS | `CGO_ENABLED=0` build and test, plus cross-compiles for five targets — this is what keeps the pure-Go promise true |
-| **PUC-Lua suites** | Linux + macOS | downloads Lua 5.4.9 from lua.org, builds a reference interpreter from source, and runs both suites with `LUA_REF` pointed at it: `TestOfficialSuite` (Lua's own 33 files, in `testdata/official`) and `TestDifferentialSuite` (this port's 82 cases, in `testdata/diff`) and `TestThirdPartySuite` (§5.12's five third-party libraries). Goldens are captured fresh for that platform and then compared byte for byte. That makes both suites real gates everywhere and stops the checked-in darwin goldens from rotting unnoticed. (No Windows: Lua's own makefile is a Unix one.) |
+| **PUC-Lua suites** | Linux + macOS | downloads Lua 5.4.9 from lua.org, builds a reference interpreter from source, and runs both suites with `LUA_REF` pointed at it: `TestOfficialSuite` (Lua's own 33 files, in `internal/core/testdata/official`) and `TestDifferentialSuite` (this port's 82 cases, in `internal/core/testdata/diff`) and `TestThirdPartySuite` (§5.12's five third-party libraries). Goldens are captured fresh for that platform and then compared byte for byte. That makes both suites real gates everywhere and stops the checked-in darwin goldens from rotting unnoticed. (No Windows: Lua's own makefile is a Unix one.) |
 
 Reference sources for review (not vendored): `lua-5.4.9`, <https://www.lua.org/ftp/lua-5.4.9.tar.gz>.
 

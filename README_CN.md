@@ -40,33 +40,35 @@
 
 ### 2.2 源码对照表
 
+所有实现文件位于 `internal/core/` 目录下，顶层仅保留一个 `golua.go` 作为对外接口重导出。
+
 | C 源文件 | Go 目标文件 | 状态 | 备注 |
 |---|---|---|---|
-| `lobject.h/.c` | `lobject.go` | ⬜ | `TValue`、`Table`、`Proto`、`Upvaldesc`、算术与比较原语 |
-| `lstate.h/.c` | `lstate.go` | ⬜ | `lua_State`/`global_State`/`CallInfo`（GC 字段删除） |
-| `lstring.c` | `lstring.go` | ⬜ | 字符串驻留表（Go weak map；短串在被引用期间驻留，与 C 一致） |
-| `ltable.c` | `ltable.go` | ⬜ | 数组部 + 开放寻址哈希部，`luaH_next` 保序（不能用 Go map 替代） |
-| `lfunc.c` | `lfunc.go` | ⬜ | `Proto`/`UpVal`/`CClosure`/`LClosure`（GC 链表删除） |
-| `ltm.c` | `ltm.go` | ⬜ | 元方法名表与 `luaT_gettm` |
-| `lopcodes.h/.c` | `lopcodes.go` | ⬜ | opcode 定义与编码解码（指令内部格式自持） |
-| `ldo.c` | `ldo.go` | ⬜ | 调用/保护调用/栈增长（longjmp→panic） |
-| `lvm.c` | `lvm.go` | ⬜ | `luaV_execute` 主循环，指令分派 |
-| `ldebug.c` | `ldebug.go` | ⬜ | 行号、栈回溯、`luaG_*` 错误信息 |
-| `lapi.c` | `lapi.go` | ⬜ | `lua_*` 对外 API |
-| `lauxlib.c` | `lauxlib.go` | ⬜ | `luaL_*` 辅助库 |
-| `llex.c` | `llex.go` | ⬜ | 词法分析 |
-| `lparser.c` | `lparser.go` | ⬜ | 递归下降语法分析 |
-| `lcode.c` | `lcode.go` | ⬜ | 代码生成、寄存器分配、跳转回填 |
-| `ldump.c` / `lundump.c` | `ldump.go` / `lundump.go` | ⬜ | 自有二进制格式（不与 PUC 字节兼容） |
-| `lbaselib.c` | `lbaselib.go` | ⬜ | 基础库 + `_G` |
-| `lcorolib.c` | `lcorolib.go` | ⬜ | 协程 |
-| `ltablib.c` / `lmathlib.c` / `lstrlib.c` / `lutf8lib.c` | 同名 `.go` | ⬜ | 表/数学/字符串（含模式匹配）/UTF-8 |
-| `liolib.c` / `loslib.c` | 同名 `.go` | ⬜ | IO / 系统调用 |
-| `ldblib.c` | `ldblib.go` | ⬜ | 调试库（hook 部分做最小实现） |
-| `loadlib.c` | `loadlib.go` | ⬜ | `require` + searcher；C 加载器换成 Go 模块注册表 |
-| `linit.c` | `linit.go` | ⬜ | `OpenLibs` |
+| `lobject.h/.c` | `internal/core/lobject.go` | ⬜ | `TValue`、`Table`、`Proto`、`Upvaldesc`、算术与比较原语 |
+| `lstate.h/.c` | `internal/core/lstate.go` | ⬜ | `lua_State`/`global_State`/`CallInfo`（GC 字段删除） |
+| `lstring.c` | `internal/core/lstring.go` | ⬜ | 字符串驻留表（Go weak map；短串在被引用期间驻留，与 C 一致） |
+| `ltable.c` | `internal/core/ltable.go` | ⬜ | 数组部 + 开放寻址哈希部，`luaH_next` 保序（不能用 Go map 替代） |
+| `lfunc.c` | `internal/core/lfunc.go` | ⬜ | `Proto`/`UpVal`/`CClosure`/`LClosure`（GC 链表删除） |
+| `ltm.c` | `internal/core/ltm.go` | ⬜ | 元方法名表与 `luaT_gettm` |
+| `lopcodes.h/.c` | `internal/core/lopcodes.go` | ⬜ | opcode 定义与编码解码（指令内部格式自持） |
+| `ldo.c` | `internal/core/ldo.go` | ⬜ | 调用/保护调用/栈增长（longjmp→panic） |
+| `lvm.c` | `internal/core/lvm.go` | ⬜ | `luaV_execute` 主循环，指令分派 |
+| `ldebug.c` | `internal/core/ldebug.go` | ⬜ | 行号、栈回溯、`luaG_*` 错误信息 |
+| `lapi.c` | `internal/core/lapi.go` | ⬜ | `lua_*` 对外 API |
+| `lauxlib.c` | `internal/core/lauxlib.go` | ⬜ | `luaL_*` 辅助库 |
+| `llex.c` | `internal/core/llex.go` | ⬜ | 词法分析 |
+| `lparser.c` | `internal/core/lparser.go` | ⬜ | 递归下降语法分析 |
+| `lcode.c` | `internal/core/lcode.go` | ⬜ | 代码生成、寄存器分配、跳转回填 |
+| `ldump.c` / `lundump.c` | `internal/core/ldump.go` / `internal/core/lundump.go` | ⬜ | 自有二进制格式（不与 PUC 字节兼容） |
+| `lbaselib.c` | `internal/core/lbaselib.go` | ⬜ | 基础库 + `_G` |
+| `lcorolib.c` | `internal/core/lcorolib.go` | ⬜ | 协程 |
+| `ltablib.c` / `lmathlib.c` / `lstrlib.c` / `lutf8lib.c` | `internal/core/` 同名 `.go` | ⬜ | 表/数学/字符串（含模式匹配）/UTF-8 |
+| `liolib.c` / `loslib.c` | `internal/core/` 同名 `.go` | ⬜ | IO / 系统调用 |
+| `ldblib.c` | `internal/core/ldblib.go` | ⬜ | 调试库（hook 部分做最小实现） |
+| `loadlib.c` | `internal/core/loadlib.go` | ⬜ | `require` + searcher；C 加载器换成 Go 模块注册表 |
+| `linit.c` | `internal/core/linit.go` | ⬜ | `OpenLibs` |
 | `lua.c` | `cmd/lua/main.go` | ⬜ | 命令行解释器 + REPL |
-| `luac.c` | `luac.go` + `cmd/luac/main.go` | ⬜ | 独立编译器：dump / strip / 只解析 / listing |
+| `luac.c` | `internal/core/luac.go` + `cmd/luac/main.go` | ⬜ | 独立编译器：dump / strip / 只解析 / listing |
 | **`lgc.c/.h`** | **（删除）** | ✅ | **由 Go 并发 GC 接管** |
 
 ### 2.3 关键类型映射
@@ -115,8 +117,15 @@
           ┌──────────────────────────────────────────────┐
           │  Go 宿主代码 / cmd/lua（REPL、脚本执行）        │
           └───────────────────┬──────────────────────────┘
-                              │  lapi.go (lua_*) / lauxlib.go (luaL_*)
+                              │  import "github.com/esrrhs/golua"
           ┌───────────────────▼──────────────────────────┐
+          │  golua.go — 顶层公开接口（type alias + 重导出） │
+          │  import "github.com/esrrhs/golua/internal/core" │
+          └───────────────────┬──────────────────────────┘
+                              │  internal/core (package core)
+          ┌───────────────────▼──────────────────────────┐
+          │  lapi.go (lua_*) / lauxlib.go (luaL_*)        │
+          ├──────────────────────────────────────────────┤
           │  State 栈 · CallInfo 帧 · 注册表 · 全局表       │  lstate.go
           ├──────────────────────────────────────────────┤
           │  lvm.go 指令循环 ──► ltm.go 元方法 ──► ltable  │  ldo.go 调用/保护调用
@@ -126,6 +135,55 @@
           │  前端：llex.go → lparser.go → lcode.go → Proto│
           └──────────────────────────────────────────────┘
                     Go runtime：并发 GC / goroutine / os
+```
+
+目录结构：
+
+```
+golua/
+├── golua.go                  ← 顶层公开接口（type alias + 常量 + 函数重导出）
+├── cmd/
+│   ├── lua/main.go           ← 命令行解释器 + REPL
+│   └── luac/main.go          ← 命令行编译器
+├── internal/
+│   └── core/                 ← 全部实现（package core）
+│       ├── lstate.go         ← State / CallInfo / NewState
+│       ├── lapi.go           ← lua_* API
+│       ├── lauxlib.go        ← luaL_* 辅助库
+│       ├── lvm.go            ← VM 指令循环
+│       ├── lparser.go        ← 语法分析
+│       ├── lcode.go          ← 代码生成
+│       ├── llex.go           ← 词法分析
+│       ├── lobject.go        ← Value / Table / Proto / TString
+│       ├── ltable.go         ← 表实现
+│       ├── lstring.go        ← 字符串驻留
+│       ├── lfunc.go          ← 函数 / UpVal / Closure
+│       ├── ltm.go            ← 元方法
+│       ├── lopcodes.go       ← opcode 定义
+│       ├── ldo.go            ← 调用 / 保护调用
+│       ├── ldebug.go         ← 调试 / 行号
+│       ├── ldump.go          ← 序列化
+│       ├── lundump.go        ← 反序列化
+│       ├── lgc.go            ← GC 辅助（弱引用等）
+│       ├── lgc_weak.go       ← 弱表实现
+│       ├── linit.go          ← OpenLibs
+│       ├── lbaselib.go       ← 基础库
+│       ├── lcorolib.go       ← 协程库
+│       ├── ltablib.go        ← 表库
+│       ├── lmathlib.go       ← 数学库
+│       ├── lstrlib.go        ← 字符串库
+│       ├── lutf8lib.go       ← UTF-8 库
+│       ├── liolib.go         ← IO 库
+│       ├── loslib.go         ← OS 库
+│       ├── ldblib.go         ← 调试库
+│       ├── loadlib.go        ← package 库
+│       ├── luac.go           ← 独立编译器逻辑
+│       ├── locale.go         ← locale 支持（cgo）
+│       ├── cdlopen*.go       ← C 扩展加载（cgo）
+│       └── *_test.go         ← 测试文件
+├── include/                  ← C 头文件（供 C 扩展编译使用）
+├── bench/                    ← 基准测试 Lua 脚本
+└── testdata/ → internal/core/testdata/  ← 测试数据
 ```
 
 ---
@@ -176,22 +234,22 @@
 这一切之后才跑（`creating 1 / creating 2 / 2 / creating 3 / nil / 1`），
 而且在终结器里创建的那个对象根本不会被终结——状态已经在退场了。
 
-`go test` 内也镜像了这套比对：`testdata/diff/*.lua`（80 个用例）与从 PUC-Lua 5.4.9
-采集的 golden 文件逐字节比对；`cli_test.go` 另外钉住解释器自身的可观察行为——
+`go test` 内也镜像了这套比对：`internal/core/testdata/diff/*.lua`（80 个用例）与从 PUC-Lua 5.4.9
+采集的 golden 文件逐字节比对；`internal/core/cli_test.go` 另外钉住解释器自身的可观察行为——
 `-v`/`-e`/`-l`/`-E`/`-W`/`--`、`arg` 表、脚本可变参数、usage 文案与退出码。
 
-**这 33 个官方用例现在就躺在仓库里，是 `go test` 的一等公民**：`testdata/official/`
+**这 33 个官方用例现在就躺在仓库里，是 `go test` 的一等公民**：`internal/core/testdata/official/`
 存着 `testes/` 的全部 33 个 `.lua`（同 MIT 许可一起再分发），旁边是
 `<name>.<goos>.expected`——参考解释器源码编译出来后对该文件打印的内容。
-`official_test.go` 一边跑参考、一边跑本实现，归一化后逐字节比对，于是
+`internal/core/official_test.go` 一边跑参考、一边跑本实现，归一化后逐字节比对，于是
 `go test ./...` 里就带上了 30 个全等 / 2 个已知差异 / 1 个不跑。它有几个刻意的安排：
 
-- **`testdata/official/libs/*.c`（Lua 自带 makefile 里那五个 C 库）会在副本里
+- **`internal/core/testdata/official/libs/*.c`（Lua 自带 makefile 里那五个 C 库）会在副本里
   现编出来**，于是 `attrib.lua` 与 `main.lua` 真的跑了套件的 C 那一半：带版本号的
   模块名（`lib2-v2`）、`luaopen_` 链、以及一个库借用在它之前打开的那个库的符号。
   没有它们，这两个文件都停在「cannot load dynamic library」，上面这些一行也没测到。
 - 用例跑在 `t.TempDir()` 里的一份副本上。`attrib.lua` 会往 `libs/` 写十几个
-  chunk 再 `require` 它们，`main.lua` 会派生子进程——不能写进 `testdata/`，
+  chunk 再 `require` 它们，`main.lua` 会派生子进程——不能写进 `internal/core/testdata/`，
   而且一次残留会改变下一次的答案。
 - 退出码不算在比对里。这些文件里有好几个**就是**以一个失败的 `assert` 收尾的。
 - `heavy` 不跑（两边都超时）；`all` / `gc` / `coroutine` / `gengc` / `locals`
@@ -212,11 +270,11 @@
   用 Go 重写 `T` 也补不完：`api.lua` 向 `T` 要的东西里有三分之一是**调试分配器**
   （`T.alloccount`、`T.totalmem`：设一个上限，之后的分配就失败）和收集器自身的状态
   （`T.gcstate`、`T.gccolor`），这些在这里都不存在。这跟 `gc.lua` 是同一种情况，
-  不是能补上的缺口；C API 的覆盖由 §5.7–§5.9、五个真实 C 扩展和 `capi_test.go` 承担。
+  不是能补上的缺口；C API 的覆盖由 §5.7–§5.9、五个真实 C 扩展和 `internal/core/capi_test.go` 承担。
 
 ### 5.2 一个真实的 C 扩展：LPeg
 
-`go test` 还会用 `testdata/lpeg/` 里的源码编译 [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/)
+`go test` 还会用 `internal/core/testdata/lpeg/` 里的源码编译 [LPeg](http://www.inf.puc-rio.br/~roberto/lpeg/)
 1.1.0（六个编译单元，是发布在外、被广泛使用的第三方扩展），并跑 LPeg 自带的测试套件到
 最后一行。这比「再写一个为测试而生的扩展」有价值得多，因为 LPeg 会去碰小扩展永远
 碰不到的那部分 C API，也因此找出了四个别的测试都没发现的真 bug：
@@ -228,9 +286,9 @@
 | 用 `luaL_Buffer`：既走 `luaL_addchar`，也往 `luaL_prepbuffsize` 返回的地址里写 | 那个地址是 NULL，且结果把占位符留在了栈上——栈被顶偏，随后的 `lua_call` 调错了东西 |
 | 用 `lua_tostring` 区分「用字符串命名的规则」和「用表命名的规则」 | PUC-Lua 回答 NULL 的地方我们回答了空串，LPeg 因此走了错分支 |
 
-它打印的每一行都取自 PUC-Lua 5.4.9 的实跑结果，存在 `testdata/lpeg/expected.txt`，
+它打印的每一行都取自 PUC-Lua 5.4.9 的实跑结果，存在 `internal/core/testdata/lpeg/expected.txt`，
 所以这个测试既不需要参照解释器，也不需要联网。二者均为 MIT 许可，随
-`testdata/lpeg/LICENSE` 一并再分发。
+`internal/core/testdata/lpeg/LICENSE` 一并再分发。
 
 #### 为 PUC-Lua 编好的 .so 可以直接用
 
@@ -251,7 +309,7 @@ LPeg、CJSON、LuaFileSystem 另外还**用参照解释器自己的头文件**�
 ### 5.3 第二个扩展：Lua CJSON，它找出了 locale
 
 [Lua CJSON](https://kyne.com.au/~mark/software/lua-cjson.php) 2.1.0.10 用同样的方式从
-`testdata/cjson/` 编译（三个编译单元），并跑完它自带的 105 个用例——全部通过。LPeg
+`internal/core/testdata/cjson/` 编译（三个编译单元），并跑完它自带的 105 个用例——全部通过。LPeg
 练的是模式、userdata 与 buffer API，CJSON 练的是另一半：用 `lua_next` 遍历表、数字与
 字符串的双向转换、以及用 `luaL_error` 造错误消息。它还找出了一件 LPeg 没碰到的事：
 
@@ -288,8 +346,8 @@ print(1.5)                -- 然后检查数字长什么样
 `write` 的 100 KB 块）、一个必须超时而非阻塞的 `receive`、`select`、UDP、`getaddrinfo`，
 以及 mime 的两个过滤器——base64 与 quoted-printable——经 `ltn12` 走一遍。另有一个我们
 自己写的回环往返脚本 `socket_e2e.lua` 把它们串起来。它打印的每一行都取自 PUC-Lua 5.4.9
-的实跑结果，存在 `testdata/luasocket/expected.txt`。MIT 许可，随
-`testdata/luasocket/LICENSE` 一并再分发。
+的实跑结果，存在 `internal/core/testdata/luasocket/expected.txt`。MIT 许可，随
+`internal/core/testdata/luasocket/LICENSE` 一并再分发。
 
 ### 5.5 第四个扩展：LuaFileSystem，它伸手进了解释器造的东西
 
@@ -308,8 +366,8 @@ userdata 强转成 `luaL_Stream`（一个 `FILE*` 加一个关闭函数，就这
 自己的 `luaopen_` 时要用。两者现在都在。
 
 它的用例会创建文件、链接与目录，所以跑在自己的临时目录里。它打印的每一行都取自
-PUC-Lua 5.4.9 的实跑结果，存在 `testdata/luafilesystem/expected.txt`。MIT 许可，随
-`testdata/luafilesystem/LICENSE` 一并再分发。
+PUC-Lua 5.4.9 的实跑结果，存在 `internal/core/testdata/luafilesystem/expected.txt`。MIT 许可，随
+`internal/core/testdata/luafilesystem/LICENSE` 一并再分发。
 
 ### 5.6 延续：C API 的最后一块
 
@@ -322,12 +380,12 @@ longjmp 出去，它的 C 栈被整个丢掉。
 `CallInfo` 带上 `k` 与它的上下文，`(*State).Yield` 在恢复时调延续并回答它压了几个值，
 `lua_pcallk` 则按 `ldo.c` 的 `findpcall` + `finishpcallk` 那样回收下面抛出的错误。
 
-`testdata/continuation/k.c` 是专为这件事写的 C 扩展，覆盖每一条路径：带延续与不带延续的
+`internal/core/testdata/continuation/k.c` 是专为这件事写的 C 扩展，覆盖每一条路径：带延续与不带延续的
 `lua_yieldk`、被调方 yield 的 `lua_callk`、没有延续的 `lua_callk`（必须**不可**yield）、
 yield 的 `lua_pcallk`、抛错的 `lua_pcallk`、带 message handler 的、用 `lua_gettop` 数结果的
 延续（PUC-Lua 自己的 `dofilecont` 就是这么写的，`lua_pcallk` 与 `lua_yieldk` 留下的栈还不一样）、
 一个 C 函数靠同一个延续连挂三次、零值 yield、以及对停在 C yield 里的协程调 `coroutine.close`。
-它打印的 31 行全部取自 PUC-Lua 5.4.9，存在 `testdata/continuation/expected.txt`，
+它打印的 31 行全部取自 PUC-Lua 5.4.9，存在 `internal/core/testdata/continuation/expected.txt`，
 由 `TestContinuation` 逐行比对。为本仓库所写，MIT 许可，与其他 testdata 一致。
 
 ### 5.7 第五个扩展：luaposix，它把整个 C API 走了一遍
@@ -350,15 +408,15 @@ yield 的 `lua_pcallk`、抛错的 `lua_pcallk`、带 message handler 的、用 
 本实现写成函数的那十来个（`lua_call`、`lua_pcall`、`lua_yield`、八个 `lua_is*`）
 两种写法行为相同。
 
-用例打印的 30 行全部取自 PUC-Lua 5.4.9，存在 `testdata/luaposix/expected.txt`，
+用例打印的 30 行全部取自 PUC-Lua 5.4.9，存在 `internal/core/testdata/luaposix/expected.txt`，
 由 `TestLuaPosix` 逐行比对。它会创建文件、目录与链接，所以跑在自己的临时目录里。
-MIT 许可，随 `testdata/luaposix/LICENSE` 一并再分发。
+MIT 许可，随 `internal/core/testdata/luaposix/LICENSE` 一并再分发。
 
 ### 5.8 把 C API 从头到尾走一遍
 
 LPeg、CJSON、LuaSocket、LuaFileSystem 与 luaposix 合起来调用了 C API 的很大一部分，
 但它们是「有活要干的程序」，不是普查：整组整组的函数从未被触及。于是
-`testdata/capi/capi.c` 就是那份普查。它是一个普通扩展——对着 `include/` 编译、
+`internal/core/testdata/capi/capi.c` 就是那份普查。它是一个普通扩展——对着 `include/` 编译、
 由 `luaopen_capi` 打开、被 `require` 找到——按组把 C API 走一遍，并用数字、布尔
 与固定字符串作答，这正是它可被比对的原因：
 
@@ -377,9 +435,9 @@ LPeg、CJSON、LuaSocket、LuaFileSystem 与 luaposix 合起来调用了 C API �
 | 文件句柄 | `luaL_checkudata(L, 1, LUA_FILEHANDLE)`，再转成 `luaL_Stream` |
 | 限额 | `lua_setcstacklimit`、`lua_atpanic` |
 
-它打印的 35 行全部取自 PUC-Lua 5.4.9，存在 `testdata/capi/expected.txt`，
+它打印的 35 行全部取自 PUC-Lua 5.4.9，存在 `internal/core/testdata/capi/expected.txt`，
 由 `TestCApiSurface` 逐行比对。驱动是以 chunk 名 `cext` 加载的（参考解释器那侧由
-`testdata/capi/run.lua` 来做），所以 `luaL_where` 答案里的那个 `cext:35` 两边一样。
+`internal/core/testdata/capi/run.lua` 来做），所以 `luaL_where` 答案里的那个 `cext:35` 两边一样。
 
 它找出十处问题，五个已发布的扩展一个都没碰到：
 
@@ -428,7 +486,7 @@ print(f)
 于是 `string.dump` 写出的字节并不总是 PUC-Lua 的。现在那张表就是扫描器的，偶尔
 重复的常量也被复现出来了。
 
-`testdata/luac/` 把它钉住：三个源文件、它们合起来 683 行的 listing
+`internal/core/testdata/luac/` 把它钉住：三个源文件、它们合起来 683 行的 listing
 （`expected.txt`，取自 PUC-Lua 5.4.9，原型地址抹掉——跨进程不可能相同）、
 以及 `luac -o` 为它们写出的两个二进制 chunk（逐字节比对，再加载回来跑）。
 多文件合并用的也是 luac.c 的做法——把 `"(function()end)();\n"` 按文件数重复编译一遍，
@@ -441,12 +499,12 @@ print(f)
 「已经当过常量的字面量」之后再出现一次都会变成新对象，同一个 chunk 里两个相等的长串
 字面量就不再是同一个串——这正是 PUC-Lua 自己的 `literals.lua` 与 `verybig.lua`
 断言的东西。常量一开始共用扫描器的表，这两个用例立刻挂了；改回读键之后两者转绿，
-并由 `testdata/diff/80_strid.lua` 钉住。
+并由 `internal/core/testdata/diff/80_strid.lua` 钉住。
 
 ### 5.10 覆盖盘点
 
 一致性靠输出比对来测，但还有个更粗暴的问题值得单独回答：**东西是不是都在？**
-`testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
+`internal/core/testdata/diff/79_inventory.lua` 把参考解释器暴露的每一个名字都枚举出来——
 `_G` 与九个标准库、全部三十个元方法、`collectgarbage` 的十个选项、以及版本可见的常量——
 排序后打印，这样 `pairs` 的顺序（PUC-Lua 每次运行都随机化）就不会造成影响。
 答案是**与 PUC-Lua 5.4.9 逐字节一致**，也就是说没有缺项，也没有多项：
@@ -463,7 +521,7 @@ print(f)
 三十个元方法全部被识别，含 `__close`、`__gc`、`__mode`、`__name`、`__pairs`、
 `__ipairs`、`__metatable`。
 
-名字列表看不出来的行为，由 `testdata/diff/78_new54.lua` 钉住：`warn` 及其
+名字列表看不出来的行为，由 `internal/core/testdata/diff/78_new54.lua` 钉住：`warn` 及其
 `@on`/`@off` 控制消息、`debug.setcstacklimit` 与它实际换来的栈深、整数版
 `math.random`（以及同一种子产出完全相同的序列）、新的 `%q`、`load` 的 mode 参数、
 `table.pack`/`unpack` 的边界、以及负数上的整数除法与取模。
@@ -483,7 +541,7 @@ print(f)
 `string.pack` 这一族也一样，而且是同样四个加七个函数：`str_pack`、`str_unpack`、
 `str_packsize` 以及它们背后的七个辅助函数——`strGetOption`、`strGetDetails`、
 `strPackInt`、`strUnpackInt`、`strPackBits`、`strUnpackBits`，以及把格式串在零字节
-处切断的那一个——全部是 0%，是 `lstrlib.go` 里最后一批从未被测试进入的函数。fuzz
+处切断的那一个——全部是 0%，是 `internal/core/lstrlib.go` 里最后一批从未被测试进入的函数。fuzz
 改变不了这件事：它把两个解释器当子进程跑，而子进程不回答 `go test -cover`；
 `TestPackInProcess` 才是，它在本进程里经 API 驱动同样的函数。它们现在在 92% 与
 100% 之间，网格找到的那两处也钉在里面。
@@ -504,10 +562,10 @@ print(f)
 由它钉住：`os.date("!%Y", -65307340800)` 在 PUC-Lua 下答 `-100`，那是它里面的一行，
 也正是网格没有的一行。
 
-`ltablib.go` 的四个函数也是同样的问题，这次是四个，因为表库的小工具函数
+`internal/core/ltablib.go` 的四个函数也是同样的问题，这次是四个，因为表库的小工具函数
 比别的多：`tableCheckField`、`tableIncr`、`tableRandomizePivot`、
 `tableChoosePivot` 全是 0%，`tableCheckTab` 是 20%，凡是进入过它们的用例都在
-另一个进程里。`TestTableInProcess` 在本进程里问它们，现在 `ltablib.go`
+另一个进程里。`TestTableInProcess` 在本进程里问它们，现在 `internal/core/ltablib.go`
 的每个函数都是 100%。它不是网格的副本：有两样东西网格在子进程里问不到，
 就是 `partition` 说比较函数不构成序的那两处；两处说的是同一句话，所以能
 把两者区分开的是比较函数在放弃之前被问了多少对——从 `lo` 往上走的那处是
@@ -530,10 +588,10 @@ of arguments to '**insert**'」是 `ltablib.c` 里的字面量，无论什么情
 都照样排好序；问这两个函数只是为了让它们被走到。
 
 
-`lmathlib.go` 有四处同样的问题，而那里的理由更是直白：网格把问题放在子进程
+`internal/core/lmathlib.go` 有四处同样的问题，而那里的理由更是直白：网格把问题放在子进程
 里问，是因为**参考解释器本身就是一个子进程**。`mathFrexp`、`mathLdexp`、
 `mathPow`、`mathTanh` 是 0%，还有十几个只覆盖了一半。`TestMathInProcess`
-在本进程里问遍库里那 31 个名字，于是 `lmathlib.go` 的每个函数都是 100%，
+在本进程里问遍库里那 31 个名字，于是 `internal/core/lmathlib.go` 的每个函数都是 100%，
 只有一个例外，而那个例外是 `mathI2d` 里为「二进制补码负数」做的修正：那是
 `lmathlib.c` 里为**比 64 位更宽的** `lua_Number` 写的一行，而本移植的是
 64 位，`x >> 11` 只有 53 位，`sx` 永远不会是负的——正如 C 自己说的，「好的
@@ -552,7 +610,7 @@ of arguments to '**insert**'」是 `ltablib.c` 里的字面量，无论什么情
 
 ### 5.11 性能
 
-`go test -bench=. -benchmem -run=XXX` 跑 `bench_test.go` 里的基准。
+`go test -bench=. -benchmem -run=XXX` 跑 `internal/core/bench_test.go` 里的基准。
 下表是同一份工作分别交给两个解释器端到端跑出来的耗时
 （Apple M1 Pro，PUC-Lua 5.4.9 以 `-O2` 编译，取三次最好成绩）：
 
@@ -593,14 +651,14 @@ of arguments to '**insert**'」是 `ltablib.c` 里的字面量，无论什么情
 
 ---
 
-## 6. 用法（目标形态，P4 后可用）
+## 6. 用法
 
 ```go
 package main
 
 import (
 	"fmt"
-	lua "github.com/esrrhs/fakescript_go"
+	lua "github.com/esrrhs/golua"
 )
 
 func main() {
@@ -680,7 +738,7 @@ cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
 ### 5.12 第三方语料
 
 上面所有用例都是**有人写出来**的——而且每一个写的人，当时都在想某一件具体的事。
-`testdata/third` 是另一种：五个单文件 Lua 库，没有一个是为这个移植写的，共
+`internal/core/testdata/third` 是另一种：五个单文件 Lua 库，没有一个是为这个移植写的，共
 2 759 行，原样跑起来，然后让它们打印。
 
 | | 行数 | 它是什么 |
@@ -740,20 +798,20 @@ cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
 
 | | 生成方式 | 比对答案数 |
 |---|---|---|
-| `fuzz_test.go` | 72 463 个表达式（43 个操作数 × 全部运算符，且每一个再生成一份"VM 必须运行时算、编译时折不了"的形式，外加带进制/格式的调用），再加 201 条手写 snippet 覆盖组合达不到的东西：语法错误、元方法、协程、钩子、模式、非字符串错误、栈溢出 | 72 664 |
-| `patternfuzz_test.go` | 6 991 个模式（每个模式原子 × 每个原子，外加必须三片才有意义的三元组）× 25 个主题串 | 1 048 650 |
-| `formatfuzz_test.go` | 11 340 个格式串（每个标志 × 每个宽度、精度、转换）× 22 个值，外加每个格式串一次"不给值" | 260 820 |
-| `numfuzz_test.go` | 1 834 个待读的字符串（符号 × 整数部分 × 小数部分 × 指数的全部组合，再加十六进制同样一遍，再各自套九种"空格"），以及 49 个值被 `tostring`、`%q`、`math.tointeger`、`%g`、`%e` 写回 | 11 053 |
-| `forfuzz_test.go` | 16 277 个数值 `for` 循环——25 个值各在 start / limit / step 三个位置上：两种符号的零、整数与浮点、整数区间的两端、刚好越界的浮点、浮点不再能逐一点下去的那个点，以及三个根本不可比较的值——每个都问两遍（写出 step / 省略 step 让它默认为 1），外加 9 个「不是数字」的值各放在三个位置上 | 16 277 |
-| `codegenfuzz_test.go` | 101 356 个片段——每一种字面量、每个运算符 × 每种操作数形状、每种语句形式（裸写一次、放进函数里再一次）、闭包能捕获变量的每种形态、40 个不该编译通过的东西，再往后是 20 个原子 × 18 个运算符的全部深度二表达式加上七分之一的深度三，各放进 22 种语句位置——外加 `testdata` 下全部 122 个源文件（官方的、我们自己的，以及 §5.12 那五个第三方库）。比对的**不是它们打印什么，而是它们编译成什么**：17 109 752 字节字节码 | 17 109 752 |
-| `iofuzz_test.go` | 3 166 件 `io` 库能被问到的事——`r w a + b t x` 上长度 0 到 3 的**每一种**模式，各问一个已存在的文件、一个不存在的文件和一个目录；`read` 能接的每一种格式（大小写各 26 个字母、C 认的四个及其 `* ` 写法、以及根本不是格式的计数与值）× 10 个样本文件，还有三个一组的组合；`write` 对每种值与两种值的组合真正写进文件的字节；`seek` 的 8 种 whence × 17 种偏移（读之前与读过一行之后各一遍）；`setvbuf`；`lines` 与 `f:lines`；13 种句柄——三个标准流、每种方式打开的文件、已关闭的、`tmpfile`、`popen` 的两端——各用 17 种方式；`io.input` 与 `io.output`；以及报错、`<close>`，和「丢掉一个句柄而不关闭它」。两边的样本文件各自一份、内容完全相同 | 3 166 |
-| `debugfuzz_test.go` | 1 333 个关于 debug 库的问题——长度 0 到 2 的**每一种** `getinfo` 选项串（八个 C 认的字母与一个它不认的）× 8 种函数；每种栈深度下的每个层次，那是唯一能拿到 `name`、`namewhat`、会动的 `currentline` 和 `istailcall` 的路径；5 种状态下的协程；同一个函数用 10 种方式被调用，各问一遍自己与调用者；每种栈帧形态下的每个局部变量下标（主线程上与协程上），以及各自的 `setlocal`；每个 upvalue 的取、设、取标识与接合——包括两个闭包接合的 25 种方式、两个 upvalue 是同一个的 8 种问法；56 种钩子掩码、6 种计数，以及对主线程、对协程、对「在设钩子之前 / 之后造出来的协程」各问一遍 `gethook`；每种 `traceback` 消息 × 每个层次 × 每种嵌套深度；每种元表、注册表、每种 user value——外加每个 debug 函数被问错的样子。另有 12 个钩子报错，各自开一个进程问，因为钩子里的错误会挣脱每一个 `pcall` 并结束整个进程 | 1 333 + 12 |
-| `packfuzz_test.go` | 3 733 个关于 `string.pack`、`string.unpack` 与 `string.packsize` 的问题——字母表里**每一个字节**单独当格式串，是全部 256 个而不是 C 认的那 26 个，因为一个不是选项的字节就是一个被拒绝的选项，而拒绝消息里就带着那个字节；`i`、`I`、`s`、`c` 的每一个尺寸 0 到 17——要越过 16 两侧都扫，因为只有被拒绝的那些尺寸能说出边界在哪——每个尺寸 12 个值，外加正落在它边界上的 3 个；`!` 能要的每一种对齐，配 20 种被对齐的对象，再配 6 种对象两两配对的全部 36 种；每一种字节序配每一种选项；16 种选项两两配对的 256 种，以及在 12 种两两配对中间插一个 `X` 的 144 种；12 种格式 × 15 个位置上的 `unpack`；每种选项被给 8 个错的东西，以及什么都不给；138 次往返；53 个写出来的格式串；9 个格式串里每个位置上的零字节；值里的零字节；以及 6 个原始字节缓冲区里读出来的每种尺寸 | 5 337 |
-| `namefuzz_test.go` | 1 328 个关于「带零字节的名字」的问题——脚本能交给操作系统的每一个名字，在五个（`a`、`a.txt`、`sub`、`no`、`m.lua`）的每一个位置上插一个零，去问 `io.open` 的 6 种模式、`io.lines`、`loadfile`、`dofile`、`os.remove`、`os.rename`（在被挪的名字里、在挪到的名字里、两个都有）、`require` 与 `package.searchpath`，每个都对着一个存在的文件、一个目录、以及什么都没有；然后是没有零字节的同样的改名与删除——目录与目录相撞的地方；末尾带斜杠的名字，那不是普通文件能有的名字；以及 62 条带零字节的命令，交给 `io.popen` 与 `os.execute` 去跑。1 218 个名字与 62 条命令，各自带一个自己的编号，于是一个用例的文件永远不会是另一个用例的，两边各拿到一个自己的空目录 | 1 328 |
-| `corofuzz_test.go` | 396 个协程：协程能做的六件事（挂起、出错、结束、先挂起再二者之一、挂起两次）× 能做的 22 个位置——裸调用、一层与两层 `pcall`、`xpcall`、Lua 自己调用的每一个元方法、`for` 迭代器、`table.sort` 与 `string.gsub` 的回调、`load` 要的 reader、自己的子协程，以及"尚有待关闭变量"——每个再用三种方式驱动：连续 resume 四次、经 `coroutine.wrap`、用 `coroutine.close` 关闭 | 396 |
-| `tablefuzz_test.go` | 1 005 个关于表库六个函数的问题——四元素表上 `table.move` 的每一个 `f`、`e`、`t`，搬到自己身上与搬到另一张表上；`table.remove` 与 `table.insert` 能拿到的每一个位置，在长度直到四的每一种长度上，以及它们收几个参数；`table.concat` 每个位置上的每一种值、每一种分隔符与每一对端点；`table.unpack` 的每一对端点与四个越过一切末端的位置，以及 `table.pack`；218 次 `table.sort`——52 次用「把每对被问到的东西按被问到的顺序记下来」的比较函数，69 次用声称另一个元素是 pivot 的，45 次用对「有两个副本的那个元素」这么说的，15 次用 `__len` 答出一个不属于任何数组的长度（13 次在表上、2 次在 userdata 上）——那是通往「array too big」的唯一道路——还有那些会抛错的、排序时挪动数组的、以及根本不构成序的；以及 142 个「像表一样行为的」与「不像表一样行为的」——其中 64 个是带三个元方法八种组合的 userdata，分布在六个函数里并作为 `move` 的两端，30 个是带元表的表，48 个根本不是表 | 1 005 |
-| `mathfuzz_test.go` | 4 787 个关于数学库的问题——41 个有名字的值，31 个数字与 9 个读成数字的字符串：两个零、整数的两端、浮点不再能按一计数的三个量级、两个无穷、NaN 与 π——各自穿过 `abs`、`floor`、`ceil`、`sqrt`、`tointeger`、`type`；`fmod` 的 15 个被除数与 15 个除数的每一对；那 41 个的每一对穿过 `max` 与 `min`，以及 1 附近每三个一组再穿过一遍；8 个的每一对穿过 `ult`；那 41 个逐个穿过 `modf`，`frexp` 除此之外还单独穿过 18 个 2 的幂；那 41 个逐个穿过 `deg` 与 `rad`；18 个尾数穿过 `ldexp`，各配 18 个指数，其中最后四个装不进 C 截断到的那个 `int`；以两个整数为种子的生成器抽出的 151 次，分布在 15 种形状与 5 个单整数种子之后；`randomseed` 的每一种形式及其后 7 次抽取；160 个「不是数字的东西」——nil、布尔、字符串、表、函数——问遍库里全部 31 个名字，其中 `log` 的两个位置都问；以及其中 28 个名字什么都不给——`fmod` 改成给它一个参数 | 4 787 |
-| `datefuzz_test.go` | 2 517 个关于 `os.date` 与 `os.time` 的问题——C99 `strftime` 的全部 37 个转换说明符，问遍 2000 与 2001 的每一天、2000 的每一个正午、某一天的每一小时与每五分钟，以及 `struct tm` 两端与越过两端的那些时刻；4 个时刻上的 19 个 `E` / `O` 修饰符；`*t` 的九个字段；51 个「根本不是转换说明符」的格式串，其中 18 个带零字节；完全没有给出的格式串；以及 124 张交给 `os.time` 的表，其中两张只在 `mktime` 按本移植的方式读 `isdst` 的机器上才问。每一个都在四个时区里各问一遍——一个没有夏令时、一个在格林尼治以西、一个在东，还有都柏林，它的标准时间是两个里较小的那个——因为有四个说明符问的是时区 | macOS 上 2 517 × 4，C 库是 glibc 时 2 523 × 4 |
+| `internal/core/fuzz_test.go` | 72 463 个表达式（43 个操作数 × 全部运算符，且每一个再生成一份"VM 必须运行时算、编译时折不了"的形式，外加带进制/格式的调用），再加 201 条手写 snippet 覆盖组合达不到的东西：语法错误、元方法、协程、钩子、模式、非字符串错误、栈溢出 | 72 664 |
+| `internal/core/patternfuzz_test.go` | 6 991 个模式（每个模式原子 × 每个原子，外加必须三片才有意义的三元组）× 25 个主题串 | 1 048 650 |
+| `internal/core/formatfuzz_test.go` | 11 340 个格式串（每个标志 × 每个宽度、精度、转换）× 22 个值，外加每个格式串一次"不给值" | 260 820 |
+| `internal/core/numfuzz_test.go` | 1 834 个待读的字符串（符号 × 整数部分 × 小数部分 × 指数的全部组合，再加十六进制同样一遍，再各自套九种"空格"），以及 49 个值被 `tostring`、`%q`、`math.tointeger`、`%g`、`%e` 写回 | 11 053 |
+| `internal/core/forfuzz_test.go` | 16 277 个数值 `for` 循环——25 个值各在 start / limit / step 三个位置上：两种符号的零、整数与浮点、整数区间的两端、刚好越界的浮点、浮点不再能逐一点下去的那个点，以及三个根本不可比较的值——每个都问两遍（写出 step / 省略 step 让它默认为 1），外加 9 个「不是数字」的值各放在三个位置上 | 16 277 |
+| `internal/core/codegenfuzz_test.go` | 101 356 个片段——每一种字面量、每个运算符 × 每种操作数形状、每种语句形式（裸写一次、放进函数里再一次）、闭包能捕获变量的每种形态、40 个不该编译通过的东西，再往后是 20 个原子 × 18 个运算符的全部深度二表达式加上七分之一的深度三，各放进 22 种语句位置——外加 `testdata` 下全部 122 个源文件（官方的、我们自己的，以及 §5.12 那五个第三方库）。比对的**不是它们打印什么，而是它们编译成什么**：17 109 752 字节字节码 | 17 109 752 |
+| `internal/core/iofuzz_test.go` | 3 166 件 `io` 库能被问到的事——`r w a + b t x` 上长度 0 到 3 的**每一种**模式，各问一个已存在的文件、一个不存在的文件和一个目录；`read` 能接的每一种格式（大小写各 26 个字母、C 认的四个及其 `* ` 写法、以及根本不是格式的计数与值）× 10 个样本文件，还有三个一组的组合；`write` 对每种值与两种值的组合真正写进文件的字节；`seek` 的 8 种 whence × 17 种偏移（读之前与读过一行之后各一遍）；`setvbuf`；`lines` 与 `f:lines`；13 种句柄——三个标准流、每种方式打开的文件、已关闭的、`tmpfile`、`popen` 的两端——各用 17 种方式；`io.input` 与 `io.output`；以及报错、`<close>`，和「丢掉一个句柄而不关闭它」。两边的样本文件各自一份、内容完全相同 | 3 166 |
+| `internal/core/debugfuzz_test.go` | 1 333 个关于 debug 库的问题——长度 0 到 2 的**每一种** `getinfo` 选项串（八个 C 认的字母与一个它不认的）× 8 种函数；每种栈深度下的每个层次，那是唯一能拿到 `name`、`namewhat`、会动的 `currentline` 和 `istailcall` 的路径；5 种状态下的协程；同一个函数用 10 种方式被调用，各问一遍自己与调用者；每种栈帧形态下的每个局部变量下标（主线程上与协程上），以及各自的 `setlocal`；每个 upvalue 的取、设、取标识与接合——包括两个闭包接合的 25 种方式、两个 upvalue 是同一个的 8 种问法；56 种钩子掩码、6 种计数，以及对主线程、对协程、对「在设钩子之前 / 之后造出来的协程」各问一遍 `gethook`；每种 `traceback` 消息 × 每个层次 × 每种嵌套深度；每种元表、注册表、每种 user value——外加每个 debug 函数被问错的样子。另有 12 个钩子报错，各自开一个进程问，因为钩子里的错误会挣脱每一个 `pcall` 并结束整个进程 | 1 333 + 12 |
+| `internal/core/packfuzz_test.go` | 3 733 个关于 `string.pack`、`string.unpack` 与 `string.packsize` 的问题——字母表里**每一个字节**单独当格式串，是全部 256 个而不是 C 认的那 26 个，因为一个不是选项的字节就是一个被拒绝的选项，而拒绝消息里就带着那个字节；`i`、`I`、`s`、`c` 的每一个尺寸 0 到 17——要越过 16 两侧都扫，因为只有被拒绝的那些尺寸能说出边界在哪——每个尺寸 12 个值，外加正落在它边界上的 3 个；`!` 能要的每一种对齐，配 20 种被对齐的对象，再配 6 种对象两两配对的全部 36 种；每一种字节序配每一种选项；16 种选项两两配对的 256 种，以及在 12 种两两配对中间插一个 `X` 的 144 种；12 种格式 × 15 个位置上的 `unpack`；每种选项被给 8 个错的东西，以及什么都不给；138 次往返；53 个写出来的格式串；9 个格式串里每个位置上的零字节；值里的零字节；以及 6 个原始字节缓冲区里读出来的每种尺寸 | 5 337 |
+| `internal/core/namefuzz_test.go` | 1 328 个关于「带零字节的名字」的问题——脚本能交给操作系统的每一个名字，在五个（`a`、`a.txt`、`sub`、`no`、`m.lua`）的每一个位置上插一个零，去问 `io.open` 的 6 种模式、`io.lines`、`loadfile`、`dofile`、`os.remove`、`os.rename`（在被挪的名字里、在挪到的名字里、两个都有）、`require` 与 `package.searchpath`，每个都对着一个存在的文件、一个目录、以及什么都没有；然后是没有零字节的同样的改名与删除——目录与目录相撞的地方；末尾带斜杠的名字，那不是普通文件能有的名字；以及 62 条带零字节的命令，交给 `io.popen` 与 `os.execute` 去跑。1 218 个名字与 62 条命令，各自带一个自己的编号，于是一个用例的文件永远不会是另一个用例的，两边各拿到一个自己的空目录 | 1 328 |
+| `internal/core/corofuzz_test.go` | 396 个协程：协程能做的六件事（挂起、出错、结束、先挂起再二者之一、挂起两次）× 能做的 22 个位置——裸调用、一层与两层 `pcall`、`xpcall`、Lua 自己调用的每一个元方法、`for` 迭代器、`table.sort` 与 `string.gsub` 的回调、`load` 要的 reader、自己的子协程，以及"尚有待关闭变量"——每个再用三种方式驱动：连续 resume 四次、经 `coroutine.wrap`、用 `coroutine.close` 关闭 | 396 |
+| `internal/core/tablefuzz_test.go` | 1 005 个关于表库六个函数的问题——四元素表上 `table.move` 的每一个 `f`、`e`、`t`，搬到自己身上与搬到另一张表上；`table.remove` 与 `table.insert` 能拿到的每一个位置，在长度直到四的每一种长度上，以及它们收几个参数；`table.concat` 每个位置上的每一种值、每一种分隔符与每一对端点；`table.unpack` 的每一对端点与四个越过一切末端的位置，以及 `table.pack`；218 次 `table.sort`——52 次用「把每对被问到的东西按被问到的顺序记下来」的比较函数，69 次用声称另一个元素是 pivot 的，45 次用对「有两个副本的那个元素」这么说的，15 次用 `__len` 答出一个不属于任何数组的长度（13 次在表上、2 次在 userdata 上）——那是通往「array too big」的唯一道路——还有那些会抛错的、排序时挪动数组的、以及根本不构成序的；以及 142 个「像表一样行为的」与「不像表一样行为的」——其中 64 个是带三个元方法八种组合的 userdata，分布在六个函数里并作为 `move` 的两端，30 个是带元表的表，48 个根本不是表 | 1 005 |
+| `internal/core/mathfuzz_test.go` | 4 787 个关于数学库的问题——41 个有名字的值，31 个数字与 9 个读成数字的字符串：两个零、整数的两端、浮点不再能按一计数的三个量级、两个无穷、NaN 与 π——各自穿过 `abs`、`floor`、`ceil`、`sqrt`、`tointeger`、`type`；`fmod` 的 15 个被除数与 15 个除数的每一对；那 41 个的每一对穿过 `max` 与 `min`，以及 1 附近每三个一组再穿过一遍；8 个的每一对穿过 `ult`；那 41 个逐个穿过 `modf`，`frexp` 除此之外还单独穿过 18 个 2 的幂；那 41 个逐个穿过 `deg` 与 `rad`；18 个尾数穿过 `ldexp`，各配 18 个指数，其中最后四个装不进 C 截断到的那个 `int`；以两个整数为种子的生成器抽出的 151 次，分布在 15 种形状与 5 个单整数种子之后；`randomseed` 的每一种形式及其后 7 次抽取；160 个「不是数字的东西」——nil、布尔、字符串、表、函数——问遍库里全部 31 个名字，其中 `log` 的两个位置都问；以及其中 28 个名字什么都不给——`fmod` 改成给它一个参数 | 4 787 |
+| `internal/core/datefuzz_test.go` | 2 517 个关于 `os.date` 与 `os.time` 的问题——C99 `strftime` 的全部 37 个转换说明符，问遍 2000 与 2001 的每一天、2000 的每一个正午、某一天的每一小时与每五分钟，以及 `struct tm` 两端与越过两端的那些时刻；4 个时刻上的 19 个 `E` / `O` 修饰符；`*t` 的九个字段；51 个「根本不是转换说明符」的格式串，其中 18 个带零字节；完全没有给出的格式串；以及 124 张交给 `os.time` 的表，其中两张只在 `mktime` 按本移植的方式读 `isdst` 的机器上才问。每一个都在四个时区里各问一遍——一个没有夏令时、一个在格林尼治以西、一个在东，还有都柏林，它的标准时间是两个里较小的那个——因为有四个说明符问的是时区 | macOS 上 2 517 × 4，C 库是 glibc 时 2 523 × 4 |
 
 模式这一半存在的理由：`lstrlib.c` 的 `match` 是两百行"没人会把组合写下来"的
 逻辑——frontier 后面跟一个集合、位置捕获上加量词、`%b` 的定界符本身又是魔法字符。
@@ -764,7 +822,7 @@ cc -shared -fPIC -I/path/to/fakescript_go/include -o myext.so myext.c
 把格式交给 Go 自己的 `fmt`，要么按 Lua 的方式读数字；`str_format` 必须复现
 **C 的** `printf`，包括那些由库而非标准决定的部分——所以它是手写的：
 `strParseFormat`、`strPadField`、`strFormatUnsigned`、`strHexFloat`。它找出两处
-真差异，均已修好并钉在 `lstrlib_test.go` 里：
+真差异，均已修好并钉在 `internal/core/lstrlib_test.go` 里：
 
 * **先检查值，再检查格式串。** C 里 `d`、`i`、`u`、`o`、`x`、`X` 都走 `intcase`，
   也就是 `luaL_checkinteger(L, arg); checkformat(...)`，`e`、`E`、`f`、`g`、`G`
@@ -802,7 +860,7 @@ Go 的 `strconv.ParseFloat` 接受 Go 字面量里的下划线，而 C 的 `strt
 它；`tonumber("\u{3000}1")` 这里答 `1`、那里答 `nil`，因为 `strings.TrimSpace` 会
 剪掉 Unicode 空格，而 C 的 `isspace` 不会——十六进制那条路（Go 不给指数就不收的那些
 数字，由第二个解析器负责）还自带了第二份同样的剪裁。三处都已修好并钉在
-`lobject_test.go`。六十个字符串的探针先找出前两条，这正是网格被建起来的原因。数字
+`internal/core/lobject_test.go`。六十个字符串的探针先找出前两条，这正是网格被建起来的原因。数字
 这一半**故意不问**算出来的值：`math.pi` 是常量、没问题，`math.exp(1)` 就不行——Go 的
 `math` 与平台 libm 在最后一个 ulp 上不一致（§7.8），那样 fuzz 报的就是数学库而不是
 转换本身。
@@ -843,7 +901,7 @@ C 用 `luai_numlt(0, step) ? luai_numlt(limit, init) : luai_numlt(init, limit)`
 **limit**、而 start 与 step 都是整数时，根本不走浮点那条路：`forlimit` 无法把它
 转成整数，于是按 step 的符号把它截成 `mininteger`，或者干脆跳过循环。
 
-io 这一半写得最晚，找到的也最多。写它是因为 `liolib.go` 是唯一覆盖率一直低于
+io 这一半写得最晚，找到的也最多。写它是因为 `internal/core/liolib.go` 是唯一覆盖率一直低于
 55% 的文件——79 个函数，28 个从未被进入过——而它红了六次，六次都是同一个形状：
 **C 问的是 FILE，移植问的是 FILE 后面的那个描述符**。
 
@@ -882,7 +940,7 @@ io 这一半写得最晚，找到的也最多。写它是因为 `liolib.go` 是�
 里丢掉的句柄会把字节写出来。
 
 debug 这一半找到的两件事，一件在库里，一件在库外——在解释器自己的 `main` 里，
-那是 fuzz 本不该够得着的地方。`ldblib.go` 有 43 个函数，其中 4 个从未被任何测试进入
+那是 fuzz 本不该够得着的地方。`internal/core/ldblib.go` 有 43 个函数，其中 4 个从未被任何测试进入
 过——`debug.upvalueid`、`debug.upvaluejoin`、`debug.setuservalue` 以及它们共用的那个
 辅助函数——而一份 258 例的全库探针只红了**一处**。
 
@@ -906,7 +964,7 @@ debug 这一半找到的两件事，一件在库里，一件在库外——在�
 pack 这一半问的是 `string.pack`、`string.unpack` 与 `string.packsize`——标准库里
 最后一套没有自己网格的 C 小语言，它找到的就在下面两处。格式串是尺寸、对齐、字节序与选项构成的一段程序，
 `lstrlib.c` 就是它的解释器。一份 907 例的手选探针在三者之上**一行没红**，而按本项目的
-规矩，那还不是答案：于是把 `lstrlib.go` 故意弄坏两遍，用同一份语料各问一次——两遍都
+规矩，那还不是答案：于是把 `internal/core/lstrlib.go` 故意弄坏两遍，用同一份语料各问一次——两遍都
 看见了——去掉 `packint` 里的符号扩展，红 36 行；把 `getdetails` 里的 `*ntoalign` 强行
 置 0，红 4 行。907 例里只红 4 行，正是手选探针会漏掉的东西，网格就是为它们建的。
 它找到两处。
@@ -949,7 +1007,7 @@ EINVAL：于是移植版对每一条都答「Invalid argument」，而 PUC-Lua �
 * **`os.rename` 改到目录上。**Go 的 `os.Rename` 在调用 `rename(2)` 之前先问一句
   「给我的这个名字是不是空的」，于是让它把一个目录挪到一个已经存在的目录上去，它
   答 EEXIST——更糟的是，这次改名根本没发生。C 的 `rename` 不会被问任何问题，它答
-  EISDIR、ENOTDIR 或 ENOTEMPTY。`liolib.go` 里的 `ioRename` 直接调用
+  EISDIR、ENOTDIR 或 ENOTEMPTY。`internal/core/liolib.go` 里的 `ioRename` 直接调用
   `syscall.Rename`，那就是 `rename(2)`。
 * **一个被 Go 归到另一个 errno 上的 errno 的拼写。**`ioStrError` 用的是
   `errors.Is(err, fs.ErrExist)`，而 `Errno.Is` 会说 ENOTEMPTY **就是**
@@ -1005,7 +1063,7 @@ date 这一半是最新的一半，问的是 `os.date` 与 `os.time`——标准
 一个完全没有夏令时、一个在格林尼治以西、一个在东，还有都柏林，它的标准时间是两个里
 较小的那个——因为问时区的那个说明符在每个时区里都是不同的问题。
 
-1 643 个用例的探针** 0 行红**，然后把 `loslib.go` 里的十三样东西逐个拿掉，十三次
+1 643 个用例的探针** 0 行红**，然后把 `internal/core/loslib.go` 里的十三样东西逐个拿掉，十三次
 全是 0——事后手工验证过，因为 `%U` 在 2001 年 1 月 1 日一个答 01、另一个答 00。
 「什么都没问到」的探针不等于「什么都没找到」的探针，于是网格建起来了：两年的每一天
 （其中一年的一月一日正是那两个 C 库对 `%U` 与 `%W` 有分歧的那个星期一），午夜一遍、
@@ -1125,7 +1183,7 @@ xoshiro256\*\*，它给出的序列是两个程序可以被问、并可能答得
 里被问了 470 遍，§7.8 也照此改写。剩下的十四个——`sin`、`cos`、`tan`、`asin`、
 `acos`、`atan`、`atan2`、`exp`、`log`、`log10`、`cosh`、`sinh`、`tanh`、`pow`——
 只被问它们对一张表、一个布尔与「什么都没有」说什么，那是它们自己的、不是库的，
-无论它们对 0.5 说什么；它们对数字的答案是 `lmathlib_test.go` 的事，本移植三处
+无论它们对 0.5 说什么；它们对数字的答案是 `internal/core/lmathlib_test.go` 的事，本移植三处
 必须离开 Go 实现的地方也钉在那里。
 
 这一半有四样不比，其中三样谁都问不了：
@@ -1189,8 +1247,8 @@ xoshiro256\*\*，它给出的序列是两个程序可以被问、并可能答得
 ## 7. 已知差异与限制（相对 PUC-Lua 5.4.9）
 
 1. **`file:read(n)` 的计数超过 2 GiB 时按文件末尾处理**：C 把计数直接交给分配器，荒谬的计数是被分配器拒绝的（报 "not enough memory"；负数计数必然如此，本实现已还原这一点）。本实现不会做那个量级的分配，所以过大的计数读到空。二进制 chunk 不受影响：`string.dump` 产出的字节与 PUC-Lua 5.4.9 **完全一致**（strip 与否都一样），两边互相都能加载对方的产物——唯一的例外见 §7.8 末尾：`^` 折叠出的浮点常量会差最后一个 ulp，因为 `pow` 不是 IEEE 决定的。
-2. **加载 C 扩展模块需要宿主带 cgo 构建**：`cdlopen.go` 就是 `loadlib.c` 里 `lsys_load`/`lsys_sym` 那一半，会真的 dlopen 目标库，所以 `package.cpath`、四个 searcher 与 `require` 能直接吃按 `lua.h` 写的普通 `.so`，`package.loadlib` 返回的是 `dlerror()` 自己的消息加 `"open"` 或 `"init"`——与 PUC-Lua 逐字节相同。它必须要 cgo，原因只有一个：Go 二进制得把 `lua_*`/`luaL_*` 这些名字导出到**动态符号表**里，模块才能解析到，而只有走 cgo 的链接路径才做得到。用 `CGO_ENABLED=1` 构建（有 C 工具链时本就是默认），扩展按平台允许「名字留到加载时再解析」的方式编译——macOS 上加 `-undefined dynamic_lookup`；Linux 上宿主符号从可执行文件的动态表里解析，`-shared -fPIC` 就够了。`go test` 里有覆盖：`cdlopen_test.go` 写一个用 `luaL_newlib` 的 C 扩展、编译、`require`、再调进去；
-`cdlopen_api_test.go` 编译一个更大的扩展，把它打印的 **25 行输出与同一个扩展在 PUC-Lua 5.4.9 下的输出逐行比对**——
+2. **加载 C 扩展模块需要宿主带 cgo 构建**：`internal/core/cdlopen.go` 就是 `loadlib.c` 里 `lsys_load`/`lsys_sym` 那一半，会真的 dlopen 目标库，所以 `package.cpath`、四个 searcher 与 `require` 能直接吃按 `lua.h` 写的普通 `.so`，`package.loadlib` 返回的是 `dlerror()` 自己的消息加 `"open"` 或 `"init"`——与 PUC-Lua 逐字节相同。它必须要 cgo，原因只有一个：Go 二进制得把 `lua_*`/`luaL_*` 这些名字导出到**动态符号表**里，模块才能解析到，而只有走 cgo 的链接路径才做得到。用 `CGO_ENABLED=1` 构建（有 C 工具链时本就是默认），扩展按平台允许「名字留到加载时再解析」的方式编译——macOS 上加 `-undefined dynamic_lookup`；Linux 上宿主符号从可执行文件的动态表里解析，`-shared -fPIC` 就够了。`go test` 里有覆盖：`internal/core/cdlopen_test.go` 写一个用 `luaL_newlib` 的 C 扩展、编译、`require`、再调进去；
+`internal/core/cdlopen_api_test.go` 编译一个更大的扩展，把它打印的 **25 行输出与同一个扩展在 PUC-Lua 5.4.9 下的输出逐行比对**——
 带注册元表的 userdata、`luaL_checkudata`、`luaL_checkoption`、buffer API、user value、
 `lua_rawgetp`/`lua_rawsetp`、`lua_dump`、`lua_gc`、经 C 的 `lua_Debug` 读到的
 `lua_getstack`/`lua_getinfo`、`lua_stringtonumber`，以及 `lua_pushfstring` 的每一种转换
@@ -1290,8 +1348,9 @@ fuzz 会问参考解释器它链接的是哪一份库；若它答 `0x0.000000000
 ## 8. 构建与测试
 
 ```bash
-go build ./...            # 构建
+go build ./...            # 构建（顶层 + internal/core + cmd）
 go test ./...             # 单元测试（含 Lua 语义用例）
+go test ./internal/core/  # 仅跑核心实现测试
 go test -race ./...       # 竞态检测
 go vet ./...
 gofmt -l .                # 必须无输出
@@ -1300,7 +1359,7 @@ go build -o lua  ./cmd/lua    # 命令行解释器
 go build -o luac ./cmd/luac   # 命令行编译器
 ```
 
-其中两项需要的不止 Go：`cdlopen_test.go` 与 `cdlopen_api_test.go` 会编译 C 扩展
+其中两项需要的不止 Go：`internal/core/cdlopen_test.go` 与 `internal/core/cdlopen_api_test.go` 会编译 C 扩展
 并 `require` 它们，在没有 cgo 或没有 C 编译器时自行跳过；因此
 `CGO_ENABLED=0 go test ./...` 也是受支持的配置，只是不走 dlopen 那条路径。
 
