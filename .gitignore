@@ -35,3 +35,7 @@ Thumbs.db
 
 # WorkBuddy session data (project notes, never part of the source tree)
 .workbuddy/
+
+# Generated report bundles (Trae Work share packages)
+.trae-html-share-packages/
+/string-interning-memopt/
