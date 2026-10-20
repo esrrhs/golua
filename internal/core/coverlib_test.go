@@ -87,7 +87,7 @@ func TestLibrariesInProcess(t *testing.T) {
 	rf:close()
 
 	local p = assert(io.popen("echo popen-ok", "r"))
-	say((p:read("*l")))
+	say((p:read("*l"):gsub("\r$", "")))
 	local pc, how, code = p:close()
 	say(pc)
 	say(how)
