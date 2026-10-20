@@ -21,7 +21,7 @@ package main
 import (
 	"os"
 
-	lua "github.com/esrrhs/fakescript_go"
+	lua "github.com/esrrhs/golua"
 )
 
 func main() {

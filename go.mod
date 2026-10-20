@@ -1,3 +1,3 @@
-module github.com/esrrhs/fakescript_go
+module github.com/esrrhs/golua
 
 go 1.24

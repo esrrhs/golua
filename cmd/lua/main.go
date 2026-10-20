@@ -20,7 +20,7 @@ import (
 	"os"
 	"strings"
 
-	lua "github.com/esrrhs/fakescript_go"
+	lua "github.com/esrrhs/golua"
 )
 
 // progName is argv[0], as in lua.c (which uses it to prefix the messages

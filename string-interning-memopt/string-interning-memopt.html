@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>短字符串驻留内存优化对比报告 — fakescript_go</title>
+<title>短字符串驻留内存优化对比报告 — golua</title>
 <style>
 @font-face {
   font-family: 'Work Sans';
@@ -304,7 +304,7 @@ sup a:hover { text-decoration: underline; }
 
 <header class="masthead">
   <div class="container">
-    <div class="kicker">fakescript_go · 内存优化工程报告</div>
+    <div class="kicker">golua · 内存优化工程报告</div>
     <h1>短字符串驻留：从「永久驻留」到「弱引用驻留」的对比报告</h1>
     <p class="subtitle">唯一短字符串场景的峰值内存从 609 MB 降至 21 MB（−96.6%），与 PUC-Lua 的时间差距从 12.6× 收窄到 5.7×，同时完整保留 C 扩展依赖的指针同一性保证，官方测试套件零回归。</p>
     <div class="meta-row">
@@ -341,7 +341,7 @@ sup a:hover { text-decoration: underline; }
 <!-- ================= 1 背景 ================= -->
 <section id="s1">
   <h2><span class="num">01</span>背景：一个建立在误读上的设计</h2>
-  <p>fakescript_go 是 PUC-Lua 5.4.9 的逐文件 Go 移植，目标之一是让使用其 C API 编译的 <code>.so</code> 扩展不经修改即可运行。上一轮兼容性修复中，短字符串驻留表（<code>stringTable</code>）从「两代缓存」改成了<strong>永久驻留</strong>：<code>map[string]*TString</code> 强引用持有每一个驻留过的短串，直到 state 关闭。当时的理由是保证<strong>指针同一性</strong>——两个相等的短串必须是同一个对象，<code>lua_topointer</code> 才回答同一地址，短串才能作 <code>lua_rawsetp</code> 的键——并在 README 中写道这是「the same price PUC-Lua pays」。</p>
+  <p>golua 是 PUC-Lua 5.4.9 的逐文件 Go 移植，目标之一是让使用其 C API 编译的 <code>.so</code> 扩展不经修改即可运行。上一轮兼容性修复中，短字符串驻留表（<code>stringTable</code>）从「两代缓存」改成了<strong>永久驻留</strong>：<code>map[string]*TString</code> 强引用持有每一个驻留过的短串，直到 state 关闭。当时的理由是保证<strong>指针同一性</strong>——两个相等的短串必须是同一个对象，<code>lua_topointer</code> 才回答同一地址，短串才能作 <code>lua_rawsetp</code> 的键——并在 README 中写道这是「the same price PUC-Lua pays」。</p>
   <p>随后的大内存压测暴露了问题，也证伪了这句话：</p>
   <div class="callout">
     <div class="title">误读的代价</div>
@@ -541,7 +541,7 @@ func luaS_eqshrstr(a, b *TString) bool {
       <h2 style="border:none;padding:0;font-size:1rem;margin-bottom:0.75rem;">数据来源</h2>
       <ol>
         <li id="cite-1"><span class="src-title">本机实测。所有数字来自 2026-10-19/20 在 Apple M1 Pro（32 GB，macOS，Go 1.27.1 darwin/arm64，cgo 启用）上的 best-of-3 测量，对照解释为 PUC-Lua 5.4.9（/tmp/refcap/lua，源码构建）。峰值 RSS 取自 /usr/bin/time -l 的 maximum resident set size；存活内存取自 collectgarbage("count")。</span></li>
-        <li id="cite-2"><span class="src-title">代码与提交。fakescript_go 仓库：基线 659f621（永久驻留），优化提交 9b1a792（弱引用驻留），两代缓存实现取自历史提交 b127b22。</span></li>
+        <li id="cite-2"><span class="src-title">代码与提交。golua 仓库：基线 659f621（永久驻留），优化提交 9b1a792（弱引用驻留），两代缓存实现取自历史提交 b127b22。</span></li>
         <li id="cite-3"><span class="src-title">验证。官方 PUC-Lua 5.4.9 测试套件（testdata/official，27 identical / 5 known differences）、15 个差分 fuzz 网格、5 个真实 C 扩展（Lua CJSON、LPeg、LuaSocket、LuaFileSystem、luaposix）。</span></li>
       </ol>
     </div>

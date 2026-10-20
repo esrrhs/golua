@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	lua "github.com/esrrhs/fakescript_go"
+	lua "github.com/esrrhs/golua"
 )
 
 // luacRun runs the compiler with the given argv and returns what it wrote
