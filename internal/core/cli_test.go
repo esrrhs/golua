@@ -278,6 +278,24 @@ func TestCLIREPLPromptGlobal(t *testing.T) {
 	}
 }
 
+// TestCLIStdinSkipsShebangAndBOM pins luaL_loadfile(NULL): a shebang keeps
+// its newline, so the error is on line 2, a leading BOM is discarded, and
+// a shebang with no newline is the whole chunk.
+func TestCLIStdinSkipsShebangAndBOM(t *testing.T) {
+	_, errb, code := cliRunStdin(t, "#!/usr/bin/env lua\nerror('boom')\n", "-")
+	if code == 0 || !strings.Contains(errb, "stdin:2:") {
+		t.Errorf("shebang on stdin: code %d stderr %q", code, errb)
+	}
+	out, errb, code := cliRunStdin(t, "\uFEFF#!/usr/bin/env lua\nprint(7)\n", "-")
+	if code != 0 || out != "7\n" {
+		t.Errorf("BOM on stdin: code %d out %q stderr %q", code, out, errb)
+	}
+	out, errb, code = cliRunStdin(t, "#!/usr/bin/env lua", "-")
+	if code != 0 || out != "" {
+		t.Errorf("shebang without a newline: code %d out %q stderr %q", code, out, errb)
+	}
+}
+
 // TestCLIScriptFromStdinGetsArgs pins that a script read from stdin ("-")
 // still gets its arguments: handle_script pushes arg[1..n], which is a
 // different thing from running stdin when there is no script (that one

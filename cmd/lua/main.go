@@ -17,6 +17,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -464,26 +465,31 @@ func doReader(f *os.File, name string) error {
 }
 
 func loadReader(f *os.File, name string) error {
-	data, err := os.ReadFile("/dev/stdin")
+	data, err := io.ReadAll(f)
 	if err != nil {
-		/* fall back to reading the file handle directly */
-		buf := make([]byte, 0, 4096)
-		tmp := make([]byte, 4096)
-		for {
-			n, e := f.Read(tmp)
-			buf = append(buf, tmp[:n]...)
-			if e != nil {
-				break
-			}
-		}
-		data = buf
+		return err
 	}
-	if len(data) > 0 && data[0] == '#' { /* skip exec. file comment */
-		if i := strings.IndexByte(string(data), '\n'); i >= 0 {
-			data = data[i+1:]
-		}
+	/* luaL_loadfile(NULL) runs skipBOM and skipcomment before compiling.
+	   The newline that ends a shebang has to stay, or every later line
+	   number is one too small. */
+	return L.LoadBytes(skipStdinComment(data), name)
+}
+
+// skipStdinComment is skipBOM/skipcomment from lauxlib.c, the same rules
+// LoadFile uses for a script on disk.
+func skipStdinComment(data []byte) []byte {
+	const bom = "\xEF\xBB\xBF"
+	if len(data) >= len(bom) && string(data[:len(bom)]) == bom {
+		data = data[len(bom):]
 	}
-	return L.LoadBytes(data, name)
+	if len(data) > 0 && data[0] == '#' {
+		i := 0
+		for i < len(data) && data[i] != '\n' {
+			i++
+		}
+		return data[i:]
+	}
+	return data
 }
 
 func doString(src, name string) error {

@@ -697,9 +697,16 @@ func ispow2realasize(t *Table) bool { return !isrealasize(t) || ispow2u(t.alimit
 
 // floatToIntEq converts a float with an exact integer value to that
 // integer (luaV_flttointeger with mode F2Ieq).
+//
+// The upper bound has to be exclusive. float64(math.MaxInt64) rounds up
+// to 2^63, so 'n <= math.MaxInt64' accepts 9223372036854775808.0 and the
+// conversion to int64 wraps it onto math.mininteger. A table then stores
+// that float key on top of the minimum integer. lua_numbertointeger
+// rejects it: the value must be strictly less than 2^63.
 func floatToIntEq(n float64) (int64, bool) {
-	if n == math.Trunc(n) && n >= math.MinInt64 && n <= math.MaxInt64 && !math.IsInf(n, 0) {
-		return int64(n), true
+	var k int64
+	if floatToInt(n, &k) {
+		return k, true
 	}
 	return 0, false
 }

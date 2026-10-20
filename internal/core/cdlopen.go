@@ -78,7 +78,10 @@ package core
 // cannot be kept by asking whoever embeds this library to remember a
 // flag.  macOS needs nothing, and -undefined dynamic_lookup is what the
 // extension's own build carries there.
-#cgo linux LDFLAGS: -Wl,--export-dynamic
+// -ldl is required on glibc before 2.34, where dlopen/dlsym/dlerror live
+// in libdl rather than libc. Newer glibc keeps libdl as an empty stub,
+// so the flag is harmless there.
+#cgo linux LDFLAGS: -Wl,--export-dynamic -ldl
 
 #include <dlfcn.h>
 

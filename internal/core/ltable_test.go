@@ -102,6 +102,32 @@ func TestDeadKeyDoesNotBreakTraversal(t *testing.T) {
 	}
 }
 
+// TestFloatKeyOutsideIntegerRange pins the boundary lua_numbertointeger
+// uses for a float key. 2^63 is exactly representable and one past
+// math.maxinteger; converting it wraps to math.mininteger, so the two
+// keys would collapse into one.
+func TestFloatKeyOutsideIntegerRange(t *testing.T) {
+	if _, ok := floatToIntEq(9223372036854775808.0); ok {
+		t.Fatal("2^63 converted to an integer")
+	}
+	k, ok := floatToIntEq(-9223372036854775808.0)
+	if !ok || k != -9223372036854775808 {
+		t.Fatalf("mininteger float converted to %d, %v", k, ok)
+	}
+	got := runChunk(t, `
+		local big = 9223372036854775808.0
+		local t = {}
+		t[big] = "float"
+		t[math.mininteger] = "min"
+		local n = 0
+		for _ in pairs(t) do n = n + 1 end
+		return t[big] .. " " .. t[math.mininteger] .. " " .. n
+	`)
+	if got != "float min 2" {
+		t.Fatalf("2^63 key collided with mininteger: %q", got)
+	}
+}
+
 // parseCount reads the n-th whitespace-separated field of 's' as an int.
 func parseCount(s string, n int) int {
 	f := strings.Fields(s)
