@@ -24,9 +24,8 @@ concurrent GC.
 | G5 | **Zero deps, no cgo, pure Go** | stdlib only; trivial cross-compilation and static linking on Linux/macOS/Windows |
 
 **Non-goals:** ABI byte-compatibility with `liblua` (that would be a separate c-shared layer).
-Loading C dynamic libraries is a built-in build-time option rather than a default: built with
-cgo the port loads real `.so`/`.dylib` extensions (§4.1, §5.2–5.5 and §5.7); built without it, modules
-are registered in Go.
+Loading C dynamic libraries is the cgo build's business: with cgo the port loads real
+`.so`/`.dylib` extensions (§4.1, §5.2–5.5 and §5.7); without it, modules are registered in Go.
 
 ---
 
