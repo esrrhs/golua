@@ -163,10 +163,11 @@ differential, third-party and fuzz suites with `LUA_REF` pointing at it.
 - **C modules need cgo.** Without cgo there is no `dlopen` and no C
   `setlocale` (a built-in table supplies the decimal point); Windows has
   no dynamic-loader backend at all.
-- **Platform answers.** Maths uses Go's implementations rather than the
-  platform libm, so a few results differ in the last ulp or two.
-  `os.date`/`os.time`, locale, NaN spelling and `%a` of subnormals follow
-  the host C library; the rules are pinned by tests.
+- **Platform answers.** With cgo the maths library calls the host libm,
+  the same library PUC-Lua uses. Without cgo it uses Go's `math`, and a
+  few results differ in the last ulp or two. `os.date`/`os.time`, locale,
+  NaN spelling and `%a` of subnormals follow the host C library; the
+  rules are pinned by tests.
 - **A few API edges.** There is no `_UBOX*` registry key; `file:read(n)`
   with `n` above 2 GiB reads as end of file; a negative `setvbuf` size
   succeeds; `math.randomseed()`'s second seed is a Go heap address.

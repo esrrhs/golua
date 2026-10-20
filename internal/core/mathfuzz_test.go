@@ -35,11 +35,12 @@ import (
 //
 //   'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2', 'exp',
 //   'log', 'log10', 'cosh', 'sinh', 'tanh' and 'pow' are the C
-//   library's, and this port answers them from Go's own, which is a
-//   different library whether or not the machine has one.
-//   'math.pow(4611686018427387904, 1.5)' is 9.903520314283e+27 to
-//   PUC-Lua and 9.9035203142831e+27 to this: the same number to
-//   fourteen digits and not to fifteen.  It is the '%a' and the '!%z'
+//   library's. A cgo build calls that library; a build without cgo
+//   calls Go's math, which is a different one. Either way the bits
+//   belong to the host, not to a golden in this repository.
+//   Without cgo, 'math.pow(4611686018427387904, 1.5)' is
+//   9.903520314283e+27 to PUC-Lua and 9.9035203142831e+27 to Go: the
+//   same number to fourteen digits and not to fifteen.  It is the '%a' and the '!%z'
 //   of this library (§6.11, §6.16) and it is §6.7's subject — the
 //   answer belongs to the library, not to Lua — so the grid asks none
 //   of those fourteen answers, and nothing else here does.
@@ -71,10 +72,10 @@ import (
 //   two runs: §6.8.  There is nothing to compare.  Every other form
 //   of 'randomseed' is asked, and so is every draw that follows one.
 //
-//   The answer of any of the fourteen up there to a number.  It is a
-//   thing this port gets right to fourteen digits and cannot get
-//   right to fifteen, and a grid that asked it would be a grid that
-//   is red on one machine and green on another.
+//   The answer of any of the fourteen up there to a number.  Without
+//   cgo this port gets it right to fourteen digits and not to
+//   fifteen; with cgo the bits are the host libm's.  A grid that
+//   asked it would be red on one machine and green on another.
 //
 //   Which position 'math.fmod' complains about when it is handed
 //   nothing at all.  It is the one place in the whole of PUC-Lua

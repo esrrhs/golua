@@ -1,6 +1,8 @@
 package core
 
 import (
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -9,14 +11,20 @@ import (
 // range, where exp overflows but half of it -- which is what 'sinh' and
 // 'cosh' tend to -- still does not.
 //
-// The values are PUC-Lua's.  They are here because Go's math.Exp is not
-// one function but a hand-written assembly version per architecture, and
-// they disagree: on amd64 math.Exp(709.5) answers +Inf, and 709.5 is
-// well inside the range -- exp(709.5) is 1.3549863193146328e+308.  So
-// 'math.exp' and 'math.sinh' have to be worked out without asking Go's
-// exp about an argument that large, which is what mathExpScaled does.
-// On arm64 this test passes either way; on amd64 it is the only thing
-// here that would catch the port answering inf.
+// The values below are the Go approximation (mathExpScaled), which is
+// what a build without cgo answers.  A build with cgo calls the host
+// libm, and glibc's sinh(710) is one ulp above that approximation; both
+// are finite, and exp(710) is still +Inf.  The exact bit is the host's,
+// so that case only checks the overflow boundary.
+//
+// They are here because Go's math.Exp is not one function but a
+// hand-written assembly version per architecture, and they disagree: on
+// amd64 math.Exp(709.5) answers +Inf, and 709.5 is well inside the range
+// -- exp(709.5) is 1.3549863193146328e+308.  So without cgo, 'math.exp'
+// and 'math.sinh' have to be worked out without asking Go's exp about an
+// argument that large, which is what mathExpScaled does.  On arm64 this
+// test passes either way; on amd64 it is the only thing here that would
+// catch the port answering inf.
 func TestExpAtTheEdgeOfTheFloatRange(t *testing.T) {
 	got := runChunk(t, `
 	local out = {}
@@ -62,9 +70,45 @@ sinh(-710) = -1.1169973830808555e+308
 cosh(-710) = 1.1169973830808555e+308
 sinh(-800) = -inf
 cosh(-800) = inf`
+	if haveLibm {
+		got = acceptHostSinh710(t, got)
+	}
 	if got != want {
 		t.Errorf("math.exp/sinh/cosh at the edge of the range:\n%s", sideBySide(want, got))
 	}
+}
+
+// acceptHostSinh710 checks the four sinh/cosh(±710) lines and then
+// rewrites them to the Go-approximation golden.  Host libm and that
+// approximation differ by an ulp; both must stay finite and past 1e308.
+func acceptHostSinh710(t *testing.T, got string) string {
+	t.Helper()
+	lines := strings.Split(got, "\n")
+	for i, line := range lines {
+		var sign string
+		switch {
+		case strings.HasPrefix(line, "sinh(710) = "), strings.HasPrefix(line, "cosh(710) = "), strings.HasPrefix(line, "cosh(-710) = "):
+			sign = "+"
+		case strings.HasPrefix(line, "sinh(-710) = "):
+			sign = "-"
+		default:
+			continue
+		}
+		eq := strings.Index(line, " = ")
+		v, err := strconv.ParseFloat(line[eq+3:], 64)
+		if err != nil || math.IsInf(v, 0) || math.IsNaN(v) || math.Abs(v) < 1e308 {
+			t.Errorf("sinh/cosh(±710) should be a finite value past 1e308, got %q", line)
+			continue
+		}
+		if sign == "+" && v < 0 || sign == "-" && v > 0 {
+			t.Errorf("sinh/cosh(±710) has the wrong sign: %q", line)
+		}
+		lines[i] = line[:eq+3] + "1.1169973830808555e+308"
+		if sign == "-" {
+			lines[i] = line[:eq+3] + "-1.1169973830808555e+308"
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // TestLogOfASubnormal pins the answers at the bottom of the range,

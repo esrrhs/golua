@@ -483,7 +483,7 @@ func numarith(L *State, op int, v1, v2 float64) float64 {
 	case LUA_OPDIV:
 		return v1 / v2
 	case LUA_OPPOW:
-		return math.Pow(v1, v2)
+		return libmPow(v1, v2)
 	case LUA_OPIDIV:
 		return math.Floor(v1 / v2)
 	case LUA_OPUNM:

@@ -28,34 +28,34 @@ func mathAbs(L *State) int {
 }
 
 func mathSin(L *State) int {
-	L.PushNumber(math.Sin(L.CheckNumber(1)))
+	L.PushNumber(libmSin(L.CheckNumber(1)))
 	return 1
 }
 
 func mathCos(L *State) int {
-	L.PushNumber(math.Cos(L.CheckNumber(1)))
+	L.PushNumber(libmCos(L.CheckNumber(1)))
 	return 1
 }
 
 func mathTan(L *State) int {
-	L.PushNumber(math.Tan(L.CheckNumber(1)))
+	L.PushNumber(libmTan(L.CheckNumber(1)))
 	return 1
 }
 
 func mathAsin(L *State) int {
-	L.PushNumber(math.Asin(L.CheckNumber(1)))
+	L.PushNumber(libmAsin(L.CheckNumber(1)))
 	return 1
 }
 
 func mathAcos(L *State) int {
-	L.PushNumber(math.Acos(L.CheckNumber(1)))
+	L.PushNumber(libmAcos(L.CheckNumber(1)))
 	return 1
 }
 
 func mathAtan(L *State) int {
 	y := L.CheckNumber(1)
 	x := L.OptNumber(2, 1)
-	L.PushNumber(math.Atan2(y, x))
+	L.PushNumber(libmAtan2(y, x))
 	return 1
 }
 
@@ -119,7 +119,7 @@ func mathFmod(L *State) int {
 			L.PushInteger(n % d)
 		}
 	} else {
-		L.PushNumber(math.Mod(L.CheckNumber(1), L.CheckNumber(2)))
+		L.PushNumber(libmFmod(L.CheckNumber(1), L.CheckNumber(2)))
 	}
 	return 1
 }
@@ -155,7 +155,7 @@ func mathModf(L *State) int {
 }
 
 func mathSqrt(L *State) int {
-	L.PushNumber(math.Sqrt(L.CheckNumber(1)))
+	L.PushNumber(libmSqrt(L.CheckNumber(1)))
 	return 1
 }
 
@@ -170,15 +170,15 @@ func mathLog(L *State) int {
 	x := L.CheckNumber(1)
 	var res float64
 	if L.IsNoneOrNil(2) {
-		res = mathLogScaled(x)
+		res = mathLogOf(x)
 	} else {
 		base := L.CheckNumber(2)
 		if base == 2.0 {
-			res = mathLog2Scaled(x)
+			res = mathLog2Of(x)
 		} else if base == 10.0 {
-			res = mathLog10Scaled(x)
+			res = mathLog10Of(x)
 		} else {
-			res = mathLogScaled(x) / mathLogScaled(base)
+			res = mathLogOf(x) / mathLogOf(base)
 		}
 	}
 	L.PushNumber(res)
@@ -186,9 +186,14 @@ func mathLog(L *State) int {
 }
 
 func mathExp(L *State) int {
+	x := L.CheckNumber(1)
+	if haveLibm {
+		L.PushNumber(libmExp(x)) /* the host libm, same as PUC-Lua */
+		return 1
+	}
 	/* Not math.Exp on its own: see mathExpScaled -- on amd64 it answers
 	   inf for exp(709.5), which is 1.3549863193146328e+308. */
-	L.PushNumber(mathExpScaled(L.CheckNumber(1), 0))
+	L.PushNumber(mathExpScaled(x, 0))
 	return 1
 }
 
@@ -506,6 +511,30 @@ func mathLog10Scaled(x float64) float64 {
 	return mathLogScaled(x) * (1 / math.Ln10)
 }
 
+// mathLogOf / mathLog2Of / mathLog10Of are the C library's log, log2 and
+// log10 when this build can call them, and the scaled Go versions when
+// it cannot.
+func mathLogOf(x float64) float64 {
+	if haveLibm {
+		return libmLog(x)
+	}
+	return mathLogScaled(x)
+}
+
+func mathLog2Of(x float64) float64 {
+	if haveLibm {
+		return libmLog2(x)
+	}
+	return mathLog2Scaled(x)
+}
+
+func mathLog10Of(x float64) float64 {
+	if haveLibm {
+		return libmLog10(x)
+	}
+	return mathLog10Scaled(x)
+}
+
 // mathLog2Scaled is C's 'log2', which is what math.log(x, 2) asks for --
 // not math.log(x)/math.log(2), which is what every other base gets.
 //
@@ -541,6 +570,10 @@ func mathLog2Scaled(x float64) float64 {
 
 func mathSinh(L *State) int {
 	x := L.CheckNumber(1)
+	if haveLibm {
+		L.PushNumber(libmSinh(x))
+		return 1
+	}
 	s := math.Sinh(x)
 	if math.IsInf(s, 0) && !math.IsInf(x, 0) {
 		/* exp(|x|) overflowed; exp(|x|) / 2 may not have */
@@ -560,6 +593,10 @@ func mathSinh(L *State) int {
 
 func mathCosh(L *State) int {
 	x := L.CheckNumber(1)
+	if haveLibm {
+		L.PushNumber(libmCosh(x))
+		return 1
+	}
 	s := math.Cosh(x)
 	if math.IsInf(s, 0) && !math.IsInf(x, 0) {
 		/* 'cosh' tends to the same value as 'sinh', and is never negative */
@@ -573,14 +610,14 @@ func mathCosh(L *State) int {
 }
 
 func mathTanh(L *State) int {
-	L.PushNumber(math.Tanh(L.CheckNumber(1)))
+	L.PushNumber(libmTanh(L.CheckNumber(1)))
 	return 1
 }
 
 func mathPow(L *State) int {
 	x := L.CheckNumber(1)
 	y := L.CheckNumber(2)
-	L.PushNumber(math.Pow(x, y))
+	L.PushNumber(libmPow(x, y))
 	return 1
 }
 
@@ -602,7 +639,7 @@ func mathLdexp(L *State) int {
 }
 
 func mathLog10(L *State) int {
-	L.PushNumber(mathLog10Scaled(L.CheckNumber(1)))
+	L.PushNumber(mathLog10Of(L.CheckNumber(1)))
 	return 1
 }
 

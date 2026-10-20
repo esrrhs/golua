@@ -148,9 +148,10 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
   弱表条目与终结器在周期边界处理，而不是在某一次分配中途处理。
 - **C 模块需要 cgo。** 没有 cgo 就没有 `dlopen`，也没有 C 的 `setlocale`
   （小数点由内置表提供）；Windows 目前没有动态加载后端。
-- **平台决定的部分。** 数学库用的是 Go 的实现而非平台 libm，少数结果会差
-  最后的一两个 ulp。`os.date`/`os.time`、locale、NaN 的写法以及次正规数的
-  `%a` 输出跟随宿主 C 库，具体规则由测试钉住。
+- **平台决定的部分。** 带 cgo 时数学库调用宿主 libm，和 PUC-Lua 用的是
+  同一套。没有 cgo 时用的是 Go 的 `math`，少数结果会差最后的一两个 ulp。
+  `os.date`/`os.time`、locale、NaN 的写法以及次正规数的 `%a` 输出跟随宿主
+  C 库，具体规则由测试钉住。
 - **少量 API 边缘。** 注册表里没有 `_UBOX*` 键；`file:read(n)` 在 `n`
   超过 2 GiB 时按文件末尾处理；负的 `setvbuf` 大小会成功；
   `math.randomseed()` 的第二个种子是 Go 堆地址。
