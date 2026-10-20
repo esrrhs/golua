@@ -219,7 +219,7 @@ static inline void *cdl_dlopen_global(const char *path) { return NULL; }
 /* ---- the callbacks cdlbridge.c uses to reach the Go side ----
    These are //export-ed from Go, so cgo declares them too; the
    declarations must match cgo's exactly, which is why no const. */
-extern void cdl_pushlstring_cb(lua_State *L, char *s, size_t n);
+extern char *cdl_pushlstring_cb(lua_State *L, char *s, size_t n);
 extern int cdl_error_cb(lua_State *L, char *s);
 extern int cdl_gc_cb(lua_State *L, int what, int a1, int a2, int a3);
 /* the "invalid option" error of lua_pushfstring */
@@ -230,6 +230,11 @@ const char *lua_pushvfstring(lua_State *L, const char *fmt, va_list ap);
 const char *lua_pushfstring(lua_State *L, const char *fmt, ...);
 int luaL_error(lua_State *L, const char *fmt, ...);
 int lua_gc(lua_State *L, int what, ...);
+
+/* test hooks: how many formatted buffers lua_pushfstring has not freed,
+   and one call of it. */
+int cdl_out_live_count(void);
+const char *cdl_test_one_fstring(lua_State *L, int i);
 
 /* the buffer keeps the state it was made with, which luaL_addgsub needs */
 static inline lua_State *cdl_buf_L(luaL_Buffer *B) { return B->L; }

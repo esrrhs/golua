@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"unsafe"
 )
@@ -142,6 +143,12 @@ type globalState struct {
 	// flag there, as it is here -- a finalizer that asks is asking from
 	// whichever state is closing.
 	gcInFinalizer bool
+
+	// cstates are the malloc'd lua_State handles of every thread C has
+	// been shown. Closing the main state gives them all back. Unused
+	// without cgo.
+	cstateMu sync.Mutex
+	cstates  []*cstateBlock
 }
 
 // State is the Go equivalent of lua_State.
@@ -215,14 +222,17 @@ type State struct {
 	// dynamic-loading backend (cdlopen.go, cgo only) fills it in the
 	// first time C is handed this state: it is the address of a small
 	// malloc'd block -- C never dereferences it, and cgo will not let a
-	// Go pointer be left in C memory -- whose one word is a
-	// runtime/cgo.Handle naming the state.  It is nil until then, and
+	// Go pointer be left in C memory -- whose one word is an integer
+	// naming the state in a weak registry.  It is nil until then, and
 	// nil for good in a build without cgo.
 	cstate unsafe.Pointer
 	// cstateBase is the block 'cstate' was carved out of: 'lua_getextraspace'
 	// reaches behind the pointer C was handed, so the malloc'd block starts
 	// LUA_EXTRASPACE bytes earlier and that is what has to be freed.
 	cstateBase unsafe.Pointer
+	// cstateTok is the same block, so Close and the state's cleanup
+	// agree on freeing it once.
+	cstateTok *cstateBlock
 
 	// The allocator lua_setallocf has set, for lua_getallocf to hand
 	// back. Both are C-side only: an extension calls what it is given.

@@ -430,6 +430,9 @@ func (L *State) drainCloseQueue() {
 			break
 		}
 		L.callFinalizer(v)
+		if ttypetag(&v) == LUA_VUSERDATA {
+			discardUdataC(uvalue(&v))
+		}
 		L.runFinalizers() /* a '__gc' may have queued more */
 	}
 	L.runFinalizers()
@@ -545,11 +548,30 @@ func setUdataFinalizer(L *State, u *Udata) {
 			if L := o.finL; L != nil {
 				gcQueueFinalizer(gcFinalizer{L: L, obj: makeUdataValue(o)})
 			}
-			return /* the block is freed once the metamethod has run */
+			return /* the block stays until the object is really dead */
 		}
-		freeUdataCBlock(o)
+		discardUdataC(o)
 	})
 }
+
+// discardUdataC gives back the C memory tied to a userdata that is not
+// coming back: the block lua_newuserdata handed out, and the luaL_Buffer
+// whose box this is. Both are idempotent.
+func discardUdataC(u *Udata) {
+	if u == nil {
+		return
+	}
+	if freeUdataCBlock != nil {
+		freeUdataCBlock(u)
+	}
+	if releaseUdataBuf != nil {
+		releaseUdataBuf(u)
+	}
+}
+
+// releaseUdataBuf drops the luaL_Buffer whose box is u. Set by the cgo
+// backend; nil otherwise.
+var releaseUdataBuf func(u *Udata)
 
 // freeUdataCBlock releases the C block behind a userdata. Only the cgo
 // bridge ever allocates one, so without cgo this is nil and a userdata
@@ -583,8 +605,19 @@ func (L *State) runFinalizers() {
 		*/
 		gcUnwatch(&it.obj)
 		L.callFinalizer(it.obj)
-		if freeUdataCBlock != nil && ttypetag(&it.obj) == LUA_VUSERDATA {
-			freeUdataCBlock(uvalue(&it.obj)) /* after '__gc': see setUdataFinalizer */
+		if ttypetag(&it.obj) == LUA_VUSERDATA {
+			u := uvalue(&it.obj)
+			if L.g.closing {
+				/* the state is going away: nothing may resurrect it */
+				discardUdataC(u)
+			} else if u.finL != nil {
+				/* Go runs a finalizer once. Arm another, so a userdata
+				   that __gc stored somewhere keeps its C block, and one
+				   that nothing kept is freed the next time it is
+				   unreachable -- not while __gc can still see it. */
+				u.finSet = false
+				setUdataFinalizer(u.finL, u)
+			}
 		}
 	}
 }

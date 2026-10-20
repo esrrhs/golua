@@ -99,9 +99,12 @@ func init() {
 		if u.cblock == nil {
 			return
 		}
-		C.free(u.cblock)
+		p := u.cblock
 		u.cblock = nil
 		cdlUserFrees.Add(1)
+		/* Not C.free: a .so may still be inside the call that dropped
+		   the userdata, holding the pointer it was given. */
+		cgoFree(p)
 	}
 }
 

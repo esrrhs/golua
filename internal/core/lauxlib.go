@@ -382,8 +382,8 @@ func (L *State) NewLib(l []Reg) {
 // cgo -- where nothing can ask for the address -- a Go slice stands in.
 type Buffer struct {
 	L      *State
-	boxIdx int    // index of the "box" (a userdata marking the buffer)
-	box    *Udata // the box itself, so luaL_pushresult can be sure
+	boxIdx int     // index of the "box" (a userdata marking the buffer)
+	boxPtr uintptr // address of the box, not a reference the GC follows
 
 	scratch unsafe.Pointer // the block, when there is one
 	slen    int            // how much it holds
@@ -424,7 +424,7 @@ func (L *State) NewBuffer() *Buffer {
 	setuvalue(&L.stack[L.top], u)
 	L.top++
 	b.boxIdx = L.AbsIndex(-1)
-	b.box = u
+	b.boxPtr = uintptr(unsafe.Pointer(u))
 	return b
 }
 

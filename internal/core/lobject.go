@@ -349,6 +349,7 @@ type Udata struct {
 	cblock    unsafe.Pointer // the C block behind it, if it has one
 	len       int            // its size in bytes: what lua_rawlen answers
 	finL      *State         // its state, which the finalizer needs
+	bufID     int            // luaL_Buffer slot, freed with the userdata
 }
 
 // ---------------------------------------------------------------------

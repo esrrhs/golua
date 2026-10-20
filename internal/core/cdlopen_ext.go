@@ -24,7 +24,7 @@ package core
 import "C"
 
 import (
-	"runtime/cgo"
+	"runtime"
 	"sync"
 	"unsafe"
 )
@@ -297,8 +297,19 @@ func init() {
 	/* The only place a C function pointer can be called from. */
 	callContinuation = func(L *State, ci *CallInfo, status int) int {
 		k := C.lua_KFunction(ci.cK)
-		return int(C.cdl_call_kfunction(k, L.statePtr(), C.int(status),
+		p := L.statePtr()
+		cgoEnter()
+		defer func() {
+			cgoLeave()
+			runtime.KeepAlive(L)
+		}()
+		return int(C.cdl_call_kfunction(k, p, C.int(status),
 			C.lua_KContext(ci.cCtx)))
+	}
+	cgoOnQuiet = func() {
+		cgoArMu.Lock()
+		cgoArs = map[uintptr]*dbAr{}
+		cgoArMu.Unlock()
 	}
 }
 
@@ -362,6 +373,8 @@ func lua_dump(p *C.lua_State, writer C.lua_Writer, data unsafe.Pointer, strip C.
 		}
 		cbytes := C.CBytes(b)
 		defer C.free(cbytes)
+		cgoEnter()
+		defer cgoLeave()
 		return int(C.cdl_call_writer(writer, p, cbytes, C.size_t(len(b)), data))
 	}, strip != 0)
 	/* C pops nothing; the function stays on the stack */
@@ -387,6 +400,8 @@ func lua_setwarnf(p *C.lua_State, f C.lua_WarnFunction, ud unsafe.Pointer) {
 	L.SetWarnFunction(func(L *State, msg string, tocont bool) {
 		cs := C.CString(msg)
 		defer C.free(unsafe.Pointer(cs))
+		cgoEnter()
+		defer cgoLeave()
 		C.cdl_call_warnf(f, cs, cBool(tocont), nil)
 	}, nil)
 }
@@ -404,10 +419,18 @@ func lua_sethook(p *C.lua_State, f C.lua_Hook, mask, count C.int) {
 	}
 	L.SetHook(func(L *State, ar *dbAr) {
 		/* the hook is called with a debug record C can read: ours is
-		   filled in from the activation record and copied out */
+		   filled in from the activation record and copied out. cAr is
+		   Go memory, so it has to stay live for the whole call. */
 		var cAr C.lua_Debug
 		fillDebug(&cAr, ar)
-		C.cdl_call_hook(f, L.statePtr(), &cAr)
+		p := L.statePtr()
+		cgoEnter()
+		defer func() {
+			cgoLeave()
+			runtime.KeepAlive(&cAr)
+			runtime.KeepAlive(L)
+		}()
+		C.cdl_call_hook(f, p, &cAr)
 	}, int(mask), int(count))
 }
 
@@ -466,18 +489,16 @@ func fillDebug(c *C.lua_Debug, ar *dbAr) {
 	c.ftransfer = C.ushort(ar.ftransfer)
 	c.ntransfer = C.ushort(ar.ntransfer)
 	copyCStr(&c.short_src[0], ar.shortSrc, CDL_IDSIZE)
-	c.i_ci = ptrOf(uintptr(cgo.NewHandle(ar)))
+	/* i_ci is private to the host. The activation record is found from
+	   the address of the lua_Debug C passed in, not from a handle that
+	   would pin ar for the rest of the process. */
+	c.i_ci = nil
 }
 
-// keepCStr answers a NUL-terminated copy of s that outlives this call.
-// The C record holds the pointer, and C is free to read it later, so it
-// cannot be freed here; the copies are kept for the life of the process.
-func keepCStr(s string) *C.char {
-	if s == "" {
-		return nil
-	}
-	return C.CString(s)
-}
+// keepCStr answers a NUL-terminated copy of s. Debug records point at it
+// and C may keep the pointer, so equal strings share one immortal copy
+// instead of allocating a fresh one on every hook event.
+func keepCStr(s string) *C.char { return internCStr(s) }
 
 func boolChar(b bool) C.char {
 	if b {
@@ -724,8 +745,16 @@ func luaopen_package(p *C.lua_State) C.int { return C.int(OpenPackage(stateOf(p)
 // ---------------------------------------------------------------------
 
 //export cdl_pushlstring_cb
-func cdl_pushlstring_cb(p *C.lua_State, s *C.char, n C.size_t) {
-	stateOf(p).PushBytes([]byte(C.GoStringN(s, C.int(n))))
+func cdl_pushlstring_cb(p *C.lua_State, s *C.char, n C.size_t) *C.char {
+	L := stateOf(p)
+	if s == nil || n == 0 {
+		L.PushString("")
+	} else {
+		L.PushBytes([]byte(C.GoStringN(s, C.int(n))))
+	}
+	/* The pointer C keeps is the string's own copy, not the scratch
+	   buffer lua_pushfstring formatted into. */
+	return pushedCStr(L)
 }
 
 //export cdl_error_cb

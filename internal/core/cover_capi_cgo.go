@@ -141,7 +141,11 @@ func exerciseCAPI(dir string) error {
 	if C.GoString(tn) != "string" {
 		return fmt.Errorf("typename")
 	}
-	C.free(unsafe.Pointer(tn))
+	/* The pointer is a stable interned literal, the same one PUC-Lua
+	   returns. Freeing it would corrupt the next lua_typename. */
+	if lua_typename(p, LUA_TSTRING) != tn {
+		return fmt.Errorf("typename not stable")
+	}
 
 	lua_pushstring(p, cs("  42 "))
 	if lua_stringtonumber(p, cs("  42 ")) == 0 || lua_tointeger(p, -1) != 42 {

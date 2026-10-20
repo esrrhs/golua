@@ -26,10 +26,13 @@
 // Two details shape the file:
 //
 //   - lua_State is an opaque handle C never dereferences: the address
-//     of a malloc'd word holding a runtime/cgo.Handle.  No Go pointer
-//     lives in C memory (which cgo forbids), and encoding an id in the
-//     pointer instead would mean turning a uintptr into a pointer,
-//     which is the one thing go vet will not let past.
+//     of a malloc'd word holding an integer.  That integer names the
+//     state in a weak registry.  No Go pointer lives in C memory (which
+//     cgo forbids), and encoding the id in the pointer itself would
+//     mean turning a uintptr into a pointer, which is the one thing
+//     go vet will not let past.  A cgo.Handle would pin the state for
+//     the life of the block, so a coroutine C had only looked at could
+//     never be collected.
 //
 //   - Go cannot call a C function pointer, so every call into an
 //     extension goes through a trampoline in cdlbridge.h, which is
@@ -98,7 +101,6 @@ import "C"
 import (
 	"fmt"
 	"runtime"
-	"runtime/cgo"
 	"sync"
 	"unsafe"
 )
@@ -110,18 +112,19 @@ import (
 // A `lua_State *` has to be an address C can hold, even though C never
 // dereferences it: cgo will not let a Go pointer be left in C memory,
 // and the state is not a C object to begin with. So each state gets one
-// malloc'd word holding a runtime/cgo.Handle that names it, and that
-// address is what C carries around. Making the number up out of a Go
-// address would answer the same question, but only by converting a
-// uintptr to a pointer, which is exactly what the rules (and go vet)
-// forbid.
+// malloc'd word holding an integer that names it in a weak registry,
+// and that address is what C carries around. Making the number up out
+// of a Go address would answer the same question, but only by converting
+// a uintptr to a pointer, which is exactly what the rules (and go vet)
+// forbid. The registry does not keep the state alive: when Go drops it
+// the block is freed, and Close frees every thread's block at once.
 // luaExtraSpace is LUA_EXTRASPACE (luaconf.h): the bytes PUC-Lua keeps in
 // front of every lua_State, which 'lua_getextraspace' hands to C.
 const luaExtraSpace = unsafe.Sizeof(uintptr(0))
 
 func (L *State) statePtr() *C.lua_State {
 	if L.cstate == nil {
-		/* The block is LUA_EXTRASPACE bytes followed by the handle:
+		/* The block is LUA_EXTRASPACE bytes followed by the id:
 		   'lua_getextraspace' hands C the bytes *before* the pointer it
 		   was given, and PUC-Lua really does keep them there, so they
 		   have to exist and be addressable. */
@@ -130,11 +133,17 @@ func (L *State) statePtr() *C.lua_State {
 		if base == nil {
 			panic("lua: out of memory for a lua_State handle")
 		}
-		C.memset(base, 0, C.size_t(luaExtraSpace))
+		C.memset(base, 0, C.size_t(luaExtraSpace)+C.size_t(size))
 		block := unsafe.Pointer(uintptr(base) + luaExtraSpace)
-		*(*uintptr)(block) = uintptr(cgo.NewHandle(L))
+		tok := &cstateBlock{base: base}
+		tok.id = registerState(L)
+		*(*uintptr)(block) = tok.id
 		L.cstate = block
 		L.cstateBase = base
+		L.cstateTok = tok
+		cstateLive.Add(1)
+		L.g.trackCState(tok)
+		runtime.AddCleanup(L, func(t *cstateBlock) { t.release() }, tok)
 	}
 	return (*C.lua_State)(L.cstate)
 }
@@ -143,33 +152,37 @@ func stateOf(p *C.lua_State) *State {
 	if p == nil {
 		panic("lua: C handed back a null lua_State")
 	}
-	h := cgo.Handle(*(*uintptr)(unsafe.Pointer(p)))
-	L, ok := h.Value().(*State)
-	if !ok {
+	L := stateByID(*(*uintptr)(unsafe.Pointer(p)))
+	if L == nil {
 		panic("lua: C handed back an unknown lua_State")
 	}
 	return L
 }
 
-// cgoReleaseState gives back the handle a state's block holds. It is
-// called from State.Close, which is in a file built either way, hence
-// the indirection: without cgo there is no block and nothing to give
-// back.
+// cgoReleaseState gives back every lua_State block of this global state.
+// It is called from State.Close, which is in a file built either way,
+// hence the indirection: without cgo there is no block and nothing to
+// give back. Child threads are included: Close only runs on the main
+// thread, and a thread C was shown would otherwise keep its block.
 func cgoReleaseState(L *State) {
-	if L.cstate == nil {
+	if L == nil || L.g == nil {
 		return
 	}
-	cgo.Handle(*(*uintptr)(L.cstate)).Delete()
-	C.free(L.cstateBase)
-	L.cstate = nil
-	L.cstateBase = nil
+	L.g.releaseCStates()
+	releaseCgoBufsOf(L.g)
 }
 
 // cFunc wraps a C function pointer as the GoFunc the VM calls: the VM
 // sees an ordinary closure, and the closure crosses into C.
 func cFunc(f unsafe.Pointer) GoFunc {
 	return func(L *State) int {
-		return int(C.cdl_call_cfunction(C.lua_CFunction(f), L.statePtr()))
+		p := L.statePtr()
+		cgoEnter()
+		defer func() {
+			cgoLeave()
+			runtime.KeepAlive(L)
+		}()
+		return int(C.cdl_call_cfunction(C.lua_CFunction(f), p))
 	}
 }
 
@@ -228,7 +241,7 @@ func lua_remove(p *C.lua_State, idx C.int) {
 func lua_type(p *C.lua_State, idx C.int) C.int { return C.int(stateOf(p).Type(idxInt(idx))) }
 
 //export lua_typename
-func lua_typename(p *C.lua_State, tp C.int) *C.char { return C.CString(TypeName(int(tp))) }
+func lua_typename(p *C.lua_State, tp C.int) *C.char { return internCStr(TypeName(int(tp))) }
 
 //export lua_isnil
 func lua_isnil(p *C.lua_State, idx C.int) C.int { return cBool(stateOf(p).IsNil(idxInt(idx))) }
@@ -338,22 +351,35 @@ func lua_tolstring(p *C.lua_State, idx C.int, l *C.size_t) *C.char {
 // needs: a Go string carries no terminator, and C reads until it finds
 // one. The copy is made once and kept with the string, because C holds on
 // to the pointer -- lpeg keeps the name of a rule around while it builds
-// the message it goes into -- and it is freed when the string itself is.
+// the message it goes into. It is not freed from the finalizer itself:
+// Go can collect the string while a .so is still inside a cgo call, and
+// C.free at that moment is a use-after-free. The finalizer only detaches
+// the pointer; cgoFree returns it once no such call is in progress.
 func tsCStr(ts *TString) unsafe.Pointer {
+	p := unsafe.Pointer(C.CString(ts.val))
 	cstrMu.Lock()
-	defer cstrMu.Unlock()
-	if ts.cstr == nil {
-		ts.cstr = unsafe.Pointer(C.CString(ts.val))
-		runtime.SetFinalizer(ts, func(t *TString) {
-			cstrMu.Lock()
-			if t.cstr != nil {
-				C.free(t.cstr)
-				t.cstr = nil
-			}
-			cstrMu.Unlock()
-		})
+	if ts.cstr != nil {
+		old := ts.cstr
+		cstrMu.Unlock()
+		C.free(p)
+		return old
 	}
-	return ts.cstr
+	ts.cstr = p
+	cstrMu.Unlock()
+	runtime.SetFinalizer(ts, freeTStringC)
+	return p
+}
+
+func freeTStringC(t *TString) {
+	cstrMu.Lock()
+	p := t.cstr
+	t.cstr = nil
+	cstrMu.Unlock()
+	if p == nil {
+		return
+	}
+	cstrDetached.Add(1)
+	cgoFree(p)
 }
 
 var cstrMu sync.Mutex
@@ -433,10 +459,26 @@ func lua_pushnumber(p *C.lua_State, n C.lua_Number) { stateOf(p).PushNumber(floa
 //export lua_pushinteger
 func lua_pushinteger(p *C.lua_State, n C.lua_Integer) { stateOf(p).PushInteger(int64(n)) }
 
+// pushedCStr is the internal copy of the string just pushed. PUC-Lua
+// returns that, not the caller's buffer: the caller may free its own
+// memory and keep the pointer.
+func pushedCStr(L *State) *C.char {
+	v := index2value(L, -1)
+	if v == nil || !ttisstring(v) {
+		return nil
+	}
+	return (*C.char)(tsCStr(tsvalue(v)))
+}
+
 //export lua_pushlstring
 func lua_pushlstring(p *C.lua_State, s *C.char, l C.size_t) *C.char {
-	stateOf(p).PushBytes([]byte(C.GoStringN(s, C.int(l))))
-	return s
+	L := stateOf(p)
+	if s == nil || l == 0 {
+		L.PushString("")
+		return pushedCStr(L)
+	}
+	L.PushBytes([]byte(C.GoStringN(s, C.int(l))))
+	return pushedCStr(L)
 }
 
 //export lua_pushstring
@@ -445,8 +487,9 @@ func lua_pushstring(p *C.lua_State, s *C.char) *C.char {
 		stateOf(p).PushNil()
 		return nil
 	}
-	stateOf(p).PushString(C.GoString(s))
-	return s
+	L := stateOf(p)
+	L.PushString(C.GoString(s))
+	return pushedCStr(L)
 }
 
 //export lua_pushboolean
@@ -637,6 +680,8 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 	}
 	return C.int(cdlStatus(L.LoadStream(nil, func() []byte {
 		var sz C.size_t
+		cgoEnter()
+		defer cgoLeave()
 		cs := C.cdl_call_reader(reader, p, data, &sz)
 		if cs == nil || sz == 0 {
 			return nil
@@ -674,10 +719,9 @@ func luaL_optnumber(p *C.lua_State, arg C.int, def C.lua_Number) C.lua_Number {
 
 //export luaL_checklstring
 func luaL_checklstring(p *C.lua_State, arg C.int, l *C.size_t) *C.char {
-	/* luaL_checklstring is lua_tolstring plus a type error, so it is
-	   written that way: the pointer has to outlive the call, and
-	   C.CString's fresh allocation does at the cost of never being
-	   freed -- mime's filters call it once per chunk. */
+	/* luaL_checklstring is lua_tolstring plus a type error. The pointer
+	   is the string's own copy, so it stays valid for as long as the
+	   value does. */
 	s := lua_tolstring(p, arg, l)
 	if s == nil {
 		stateOf(p).tagError(int(arg), LUA_TSTRING)
@@ -897,10 +941,13 @@ func init() {
 	}
 	bufFree = func(b *Buffer) {
 		if b.scratch != nil {
-			C.free(b.scratch)
+			p := b.scratch
 			b.scratch = nil
+			b.slen = 0
+			cgoFree(p)
 		}
 	}
+	releaseUdataBuf = releaseUdataBufID
 }
 
 var (
@@ -926,6 +973,14 @@ func luaL_buffinit(p *C.lua_State, b *C.luaL_Buffer) {
 	id := cgoBufNext
 	cgoBufs[id] = buf
 	cgoBufMu.Unlock()
+	/* The box is what keeps the buffer reachable while C uses it, and
+	   what releases it once that userdata is gone. A pointer from the
+	   buffer back to the box would pin both forever. */
+	if L.top > 0 && ttisfulluserdata(&L.stack[L.top-1]) {
+		u := uvalue(&L.stack[L.top-1])
+		u.bufID = id
+		setUdataFinalizer(L, u)
+	}
 	/* the visible fields are the extension's to read, and 'ref' lives at
 	   the end of the struct that extension declared, so both are written
 	   through C rather than by a Go field access */
@@ -1036,12 +1091,68 @@ func luaL_pushresult(b *C.luaL_Buffer) {
 	   behind and the stack one deep for the lua_call that follows.
 	   Remove it only if it is still there, so that a buffer used some
 	   other way cannot lose a value. */
-	if buf.box != nil && L.top >= 2 {
-		if v := &L.stack[L.top-2]; ttisfulluserdata(v) && uvalue(v) == buf.box {
+	if buf.boxPtr != 0 && L.top >= 2 {
+		if v := &L.stack[L.top-2]; ttisfulluserdata(v) && uintptr(unsafe.Pointer(uvalue(v))) == buf.boxPtr {
 			L.Remove(-2)
 		}
 	}
 	bufLeave(b, buf)
+	if b != nil {
+		id := int(*C.cdl_buf_refp(b))
+		*C.cdl_buf_refp(b) = 0
+		releaseCgoBuf(id)
+	}
+}
+
+// releaseCgoBuf drops one buffer and gives its block back. Calling it
+// twice is harmless: the second time the id is already gone.
+func releaseCgoBuf(id int) {
+	if id == 0 {
+		return
+	}
+	cgoBufMu.Lock()
+	buf := cgoBufs[id]
+	delete(cgoBufs, id)
+	cgoBufMu.Unlock()
+	if buf != nil && bufFree != nil {
+		bufFree(buf)
+	}
+}
+
+func releaseUdataBufID(u *Udata) {
+	if u == nil || u.bufID == 0 {
+		return
+	}
+	id := u.bufID
+	u.bufID = 0
+	releaseCgoBuf(id)
+}
+
+// releaseCgoBufsOf gives back the buffers that belong to g. Close uses
+// it so a buffer whose box never became unreachable does not outlive
+// the state.
+func releaseCgoBufsOf(g *globalState) {
+	cgoBufMu.Lock()
+	var bufs []*Buffer
+	for id, buf := range cgoBufs {
+		if buf != nil && buf.L != nil && buf.L.g == g {
+			delete(cgoBufs, id)
+			bufs = append(bufs, buf)
+		}
+	}
+	cgoBufMu.Unlock()
+	for _, buf := range bufs {
+		if bufFree != nil {
+			bufFree(buf)
+		}
+	}
+}
+
+func cgoBufCount() int {
+	cgoBufMu.Lock()
+	n := len(cgoBufs)
+	cgoBufMu.Unlock()
+	return n
 }
 
 //export luaL_pushresultsize

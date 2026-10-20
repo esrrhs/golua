@@ -43,28 +43,9 @@
    to nothing. */
 #if !defined(_WIN32)
 
-#define CDL_NKEEP 4  /* how many formatted results stay valid at once */
-
-static char *cdl_keep_buf[CDL_NKEEP];
-static size_t cdl_keep_size[CDL_NKEEP];
-static int cdl_keep_next;
-
-/* cdl_keep answers a copy of s/n that stays valid until CDL_NKEEP more
-   calls have been made.  PUC-Lua answers the string on the Lua stack;
-   that lives in Go memory, which C may not hold, so what C gets is a
-   copy that is good for the "format it and use it at once" idiom. */
-static char *cdl_keep(const char *s, size_t n) {
-  int i = cdl_keep_next;
-  cdl_keep_next = (cdl_keep_next + 1) % CDL_NKEEP;
-  if (cdl_keep_size[i] < n + 1) {
-    char *p = (char *)realloc(cdl_keep_buf[i], n + 1);
-    if (p == NULL) return NULL;
-    cdl_keep_buf[i] = p;
-    cdl_keep_size[i] = n + 1;
-  }
-  memcpy(cdl_keep_buf[i], s, n + 1);
-  return cdl_keep_buf[i];
-}
+/* formatted scratch buffers not yet freed. Tests watch this: a leak in
+   lua_pushfstring shows up as it climbing. */
+static int cdl_out_live;
 
 /* ---- the growable buffer the formatter writes into ---- */
 
@@ -112,6 +93,12 @@ static int cdl_sb_printf(cdl_SB *b, const char *fmt, ...) {
   return 1;
 }
 
+static int cdl_fmt_fail(cdl_SB *b) {
+  free(b->p);
+  b->p = NULL;
+  return 0 - 1;
+}
+
 /* ---- luaO_utf8esc (lobject.c), for %U ---- */
 #define CDL_UTF8BUFFSZ 8
 static int cdl_utf8esc(char *buff, unsigned long x) {
@@ -144,34 +131,34 @@ static int cdl_vformat(lua_State *L, const char *fmt, va_list argp, char **out,
   while (*fmt != 0) {
     const char *e = strchr(fmt, '%');
     if (e == NULL) { /* no more '%': the rest is literal */
-      if (!cdl_sb_put(&b, fmt, strlen(fmt))) return -1;
+      if (!cdl_sb_put(&b, fmt, strlen(fmt))) return cdl_fmt_fail(&b);
       break;
     }
-    if (e > fmt && !cdl_sb_put(&b, fmt, (size_t)(e - fmt))) return -1;
+    if (e > fmt && !cdl_sb_put(&b, fmt, (size_t)(e - fmt))) return cdl_fmt_fail(&b);
     if (e[1] == 0) { /* a trailing '%' with nothing after it */
-      if (!cdl_sb_put(&b, "%", 1)) return -1;
+      if (!cdl_sb_put(&b, "%", 1)) return cdl_fmt_fail(&b);
       break;
     }
     switch (e[1]) {
       case 's': {
         const char *s = va_arg(argp, char *);
         if (s == NULL) s = "(null)";
-        if (!cdl_sb_put(&b, s, strlen(s))) return -1;
+        if (!cdl_sb_put(&b, s, strlen(s))) return cdl_fmt_fail(&b);
         break;
       }
       case 'c': {
         char c = (char)(unsigned char)va_arg(argp, int);
-        if (!cdl_sb_put(&b, &c, 1)) return -1;
+        if (!cdl_sb_put(&b, &c, 1)) return cdl_fmt_fail(&b);
         break;
       }
       case 'd': {
         /* an int, printed the way Lua prints an integer */
-        if (!cdl_sb_printf(&b, "%lld", (long long)va_arg(argp, int))) return -1;
+        if (!cdl_sb_printf(&b, "%lld", (long long)va_arg(argp, int))) return cdl_fmt_fail(&b);
         break;
       }
       case 'I': {
         if (!cdl_sb_printf(&b, "%lld", (long long)va_arg(argp, lua_Integer)))
-          return -1;
+          return cdl_fmt_fail(&b);
         break;
       }
       case 'f': {
@@ -179,26 +166,26 @@ static int cdl_vformat(lua_State *L, const char *fmt, va_list argp, char **out,
            like an integer (tostringbuff in lobject.c) */
         double d = (double)va_arg(argp, lua_Number);
         size_t at = b.len;
-        if (!cdl_sb_printf(&b, "%.14g", d)) return -1;
+        if (!cdl_sb_printf(&b, "%.14g", d)) return cdl_fmt_fail(&b);
         if (strspn(b.p + at, "-0123456789") == b.len - at) {
-          if (!cdl_sb_put(&b, ".0", 2)) return -1;
+          if (!cdl_sb_put(&b, ".0", 2)) return cdl_fmt_fail(&b);
         }
         break;
       }
       case 'p': {
         /* lua_pointer2str is a bare "%p", not "%p" with "0x" in front */
         void *p = va_arg(argp, void *);
-        if (!cdl_sb_printf(&b, "%p", p)) return -1;
+        if (!cdl_sb_printf(&b, "%p", p)) return cdl_fmt_fail(&b);
         break;
       }
       case 'U': {
         char bf[CDL_UTF8BUFFSZ];
         int n = cdl_utf8esc(bf, (unsigned long)va_arg(argp, long));
-        if (!cdl_sb_put(&b, bf + CDL_UTF8BUFFSZ - n, (size_t)n)) return -1;
+        if (!cdl_sb_put(&b, bf + CDL_UTF8BUFFSZ - n, (size_t)n)) return cdl_fmt_fail(&b);
         break;
       }
       case '%': {
-        if (!cdl_sb_put(&b, "%", 1)) return -1;
+        if (!cdl_sb_put(&b, "%", 1)) return cdl_fmt_fail(&b);
         break;
       }
       default: {
@@ -212,7 +199,7 @@ static int cdl_vformat(lua_State *L, const char *fmt, va_list argp, char **out,
   }
   if (b.p == NULL) { /* nothing at all was written */
     b.p = (char *)malloc(1);
-    if (b.p == NULL) return -1;
+    if (b.p == NULL) return cdl_fmt_fail(&b);
     b.p[0] = 0;
   }
   *out = b.p;
@@ -229,9 +216,24 @@ const char *lua_pushvfstring(lua_State *L, const char *fmt, va_list ap) {
     cdl_runerror_cb(L, msg);
     return NULL;
   }
-  if (st != 0 || out == NULL) return NULL;
-  cdl_pushlstring_cb(L, out, strlen(out));
-  return cdl_keep(out, strlen(out));
+  if (st != 0 || out == NULL) {
+    free(out);
+    return NULL;
+  }
+  /* out is a scratch copy. C is given the Lua string's own pointer,
+     which stays valid while that value does, and out is freed here
+     instead of being leaked or parked in a ring. */
+  cdl_out_live++;
+  char *ret = cdl_pushlstring_cb(L, out, strlen(out));
+  free(out);
+  cdl_out_live--;
+  return ret;
+}
+
+int cdl_out_live_count(void) { return cdl_out_live; }
+
+const char *cdl_test_one_fstring(lua_State *L, int i) {
+  return lua_pushfstring(L, "i=%d", i);
 }
 
 const char *lua_pushfstring(lua_State *L, const char *fmt, ...) {
