@@ -205,6 +205,26 @@ func diffCapture(t *testing.T, ref string, files []string) {
 	t.Logf("captured %d golden files for GOOS=%s from %s", n, runtime.GOOS, ref)
 }
 
+// diffKnownDiffBuild are the cases that cannot match until the build has
+// what the golden was captured with: the same idea as
+// officialKnownDiffBuild, and the same probe answers for both, since it
+// is one binary being asked.
+//
+// A golden here comes from the reference interpreter, which always has
+// the C library.  A build with CGO_ENABLED=0 has none, so 'os.setlocale'
+// answers from the decimal-point table instead of asking, and every name
+// is accepted -- where C refuses a locale the machine does not have.
+// The answers to three of these cases turn on exactly that, and turn on
+// nothing else.
+var diffKnownDiffBuild = map[string]struct {
+	needs []string
+	why   string
+}{
+	"24_errmsg": {[]string{"clocale"}, "asks os.setlocale(1), a locale this machine may not have"},
+	"42_os":     {[]string{"clocale"}, "asks os.setlocale(42), a locale this machine may not have"},
+	"61_ospkg":  {[]string{"clocale"}, `asks os.setlocale for "xx_XX" and for 5, locales this machine may not have`},
+}
+
 func TestDifferentialSuite(t *testing.T) {
 	files, err := filepath.Glob(filepath.Join("testdata", "diff", "*.lua"))
 	if err != nil || len(files) == 0 {
@@ -214,6 +234,19 @@ func TestDifferentialSuite(t *testing.T) {
 	if ref := os.Getenv("LUA_REF"); ref != "" {
 		diffCapture(t, ref, files)
 	}
+	/* What the binary under test can answer, asked of the binary rather
+	   than guessed from CGO_ENABLED, which is a setting of a build no
+	   test can see.  Asked lazily, so that a platform with no goldens
+	   never runs it at all -- it is only ever needed to explain a
+	   difference that is not a mistake. */
+	var caps map[string]bool
+	can := func(name string) bool {
+		if caps == nil {
+			caps = officialProbe(t, diffBuild(t))
+		}
+		return caps[name]
+	}
+	same, differ := 0, 0
 	for _, path := range files {
 		golden := diffGolden(path)
 		want, err := os.ReadFile(golden)
@@ -225,13 +258,32 @@ func TestDifferentialSuite(t *testing.T) {
 		}
 		got := diffRunCase(t, path)
 		w, g := diffNormalise(string(want)), diffNormalise(got)
-		if w != g {
-			/* normalised on the way out as well: a heap address in the
-			   message reads as a difference that is not one */
-			t.Errorf("%s: output differs from PUC-Lua 5.4.9\n--- want ---\n%s\n--- got ---\n%s",
-				filepath.Base(path), w, g)
+		if w == g {
+			same++
+			continue
 		}
+		/* Is a difference here expected?  The design one this suite can
+		   have is the build's: see diffKnownDiffBuild. */
+		name := strings.TrimSuffix(filepath.Base(path), ".lua")
+		if b, ok := diffKnownDiffBuild[name]; ok {
+			var missing []string
+			for _, n := range b.needs {
+				if !can(n) {
+					missing = append(missing, n)
+				}
+			}
+			if len(missing) > 0 {
+				differ++
+				t.Logf("%-12s known difference: %s (no %s)", name, b.why, strings.Join(missing, ", "))
+				continue
+			}
+		}
+		/* normalised on the way out as well: a heap address in the
+		   message reads as a difference that is not one */
+		t.Errorf("%s: output differs from PUC-Lua 5.4.9\n--- want ---\n%s\n--- got ---\n%s",
+			filepath.Base(path), w, g)
 	}
+	t.Logf("differential suite: %d identical, %d known difference, of %d", same, differ, len(files))
 }
 
 // ---------------------------------------------------------------------
