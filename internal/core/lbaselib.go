@@ -82,17 +82,6 @@ func baseWarn(L *State) int {
 
 const baseSpaceChars = " \f\n\r\t\v"
 
-func baseIsAlnum(c byte) bool {
-	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-}
-
-func baseASCIIUpper(c byte) byte {
-	if c >= 'a' && c <= 'z' {
-		return c - ('a' - 'A')
-	}
-	return c
-}
-
 // baseStr2Int converts 's' in the given base; it returns the value, the
 // index where the conversion stopped, and whether it succeeded
 // (b_str2int).  The conversion is only valid when it consumes the
@@ -109,23 +98,23 @@ func baseStr2Int(s string, base int) (int64, int, bool) {
 	} else if i < len(s) && s[i] == '+' {
 		i++
 	}
-	if i >= len(s) || !baseIsAlnum(s[i]) { /* no digit? */
+	if i >= len(s) || !localeIsAlnum(s[i]) { /* no digit? */
 		return 0, 0, false
 	}
 	var n uint64
 	for {
 		var digit int
-		if s[i] >= '0' && s[i] <= '9' {
+		if localeIsDigit(s[i]) {
 			digit = int(s[i] - '0')
 		} else {
-			digit = int(baseASCIIUpper(s[i])-'A') + 10
+			digit = int(localeToUpper(s[i])-'A') + 10
 		}
 		if digit >= base {
 			return 0, 0, false /* invalid numeral */
 		}
 		n = n*uint64(base) + uint64(digit)
 		i++
-		if i >= len(s) || !baseIsAlnum(s[i]) {
+		if i >= len(s) || !localeIsAlnum(s[i]) {
 			break
 		}
 	}

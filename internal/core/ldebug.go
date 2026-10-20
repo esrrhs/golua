@@ -798,7 +798,7 @@ func luaV_lessthan(L *State, l, r *Value) bool {
 		return ltNum(l, r)
 	}
 	if ttisstring(l) && ttisstring(r) {
-		return tsvalue(l).val < tsvalue(r).val
+		return luaV_strcmp(tsvalue(l).val, tsvalue(r).val) < 0
 	}
 	return luaT_callorderTM(L, l, r, TM_LT)
 }
@@ -809,7 +809,7 @@ func luaV_lessequal(L *State, l, r *Value) bool {
 		return leNum(l, r)
 	}
 	if ttisstring(l) && ttisstring(r) {
-		return tsvalue(l).val <= tsvalue(r).val
+		return luaV_strcmp(tsvalue(l).val, tsvalue(r).val) <= 0
 	}
 	return luaT_callorderTM(L, l, r, TM_LE)
 }

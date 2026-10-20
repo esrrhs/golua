@@ -101,7 +101,7 @@ func strLower(L *State) int {
 	s := L.CheckString(1)
 	b := []byte(s)
 	for i := range b {
-		b[i] = strASCIILower(b[i])
+		b[i] = localeToLower(b[i])
 	}
 	L.PushString(string(b))
 	return 1
@@ -111,7 +111,7 @@ func strUpper(L *State) int {
 	s := L.CheckString(1)
 	b := []byte(s)
 	for i := range b {
-		b[i] = strASCIIUpper(b[i])
+		b[i] = localeToUpper(b[i])
 	}
 	L.PushString(string(b))
 	return 1
@@ -400,33 +400,33 @@ func strIsSpace(c byte) bool {
 // strMatchClass tells whether 'c' belongs to the class 'cl' (match_class).
 func strMatchClass(c, cl byte) bool {
 	var res bool
-	switch strASCIILower(cl) {
+	switch localeToLower(cl) {
 	case 'a':
-		res = strIsAlpha(c)
+		res = localeIsAlpha(c)
 	case 'c':
-		res = strIsCntrl(c)
+		res = localeIsCntrl(c)
 	case 'd':
-		res = strIsDigit(c)
+		res = localeIsDigit(c)
 	case 'g':
-		res = strIsGraph(c)
+		res = localeIsGraph(c)
 	case 'l':
-		res = strIsLower(c)
+		res = localeIsLower(c)
 	case 'p':
-		res = strIsPunct(c)
+		res = localeIsPunct(c)
 	case 's':
-		res = strIsSpace(c)
+		res = localeIsSpace(c)
 	case 'u':
-		res = strIsUpper(c)
+		res = localeIsUpper(c)
 	case 'w':
-		res = strIsAlnum(c)
+		res = localeIsAlnum(c)
 	case 'x':
-		res = strIsXDigit(c)
+		res = localeIsXDigit(c)
 	case 'z':
 		res = (c == 0) /* deprecated option */
 	default:
 		return cl == c
 	}
-	if strIsLower(cl) {
+	if localeIsLower(cl) {
 		return res
 	}
 	return !res
@@ -1281,7 +1281,11 @@ func strNumber2StrX(L *State, form string, x float64) string {
 		}
 	}
 	if upper {
-		s = strings.ToUpper(s)
+		b := []byte(s)
+		for i := range b {
+			b[i] = localeToUpper(b[i])
+		}
+		s = string(b)
 	}
 	return s
 }
@@ -1462,7 +1466,7 @@ func strAddQuoted(b *Buffer, s string) {
 		if c == '"' || c == '\\' || c == '\n' {
 			b.AddChar('\\')
 			b.AddChar(c)
-		} else if strIsCntrl(c) {
+		} else if localeIsCntrl(c) {
 			if i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '9' {
 				b.AddString(fmt.Sprintf("\\%03d", int(c)))
 			} else {

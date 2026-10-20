@@ -536,15 +536,13 @@ func osDiffTime(L *State) int {
 	return 1
 }
 
-// osSetLocale is 'os.setlocale' (loslib.c). With cgo the C library's
-// locale is set, and with it the decimal point that numbers are written
-// with -- see locale.go. Without cgo only "C", which is how Go behaves
-// anyway, is available, and every other name is reported the way a C
-// build reports a locale it does not have.
+// osSetLocale is 'os.setlocale' (loslib.c). With cgo it is the C
+// library's setlocale, including the per-category query. Without cgo
+// there is no C library to ask; see locale.go.
 func osSetLocale(L *State) int {
 	cat := L.CheckOption(2, "all", localeCategories)
 	if L.IsNoneOrNil(1) { /* no locale: query the current one */
-		L.PushString(localeName)
+		L.PushString(localeCurrent(cat))
 		return 1
 	}
 	name, _ := L.ToString(1)

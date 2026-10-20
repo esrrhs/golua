@@ -21,8 +21,10 @@
 ** and print %d as C's int rather than Lua's, so it cannot be used.
 */
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <locale.h>
+#include <string.h>
 
 #ifdef _WIN32
 #include <io.h>
@@ -328,6 +330,23 @@ int cdl_lc_cat (int which) {
     default: return LC_ALL;
   }
 }
+
+/* The argument of every ctype function has to be EOF or an unsigned
+   char.  A bare 'char' that is negative is undefined, so the cast
+   happens here and Go passes the byte as an int. */
+int cdl_strcoll (const char *a, const char *b) { return strcoll(a, b); }
+int cdl_tolower (int c) { return tolower((unsigned char)c); }
+int cdl_toupper (int c) { return toupper((unsigned char)c); }
+int cdl_isalpha (int c) { return isalpha((unsigned char)c); }
+int cdl_iscntrl (int c) { return iscntrl((unsigned char)c); }
+int cdl_isdigit (int c) { return isdigit((unsigned char)c); }
+int cdl_isgraph (int c) { return isgraph((unsigned char)c); }
+int cdl_islower (int c) { return islower((unsigned char)c); }
+int cdl_ispunct (int c) { return ispunct((unsigned char)c); }
+int cdl_isspace (int c) { return isspace((unsigned char)c); }
+int cdl_isupper (int c) { return isupper((unsigned char)c); }
+int cdl_isalnum (int c) { return isalnum((unsigned char)c); }
+int cdl_isxdigit (int c) { return isxdigit((unsigned char)c); }
 
 /* ---- a file handle as C sees it: see cdlbridge.h ---- */
 

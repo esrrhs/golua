@@ -1,21 +1,30 @@
 package core
 
-import "os"
+import (
+	"os"
+	"strings"
+	"sync/atomic"
+)
 
-// The locale, as far as numbers are concerned.
+// The locale.
 //
-// os.setlocale is the C library's, and what it changes that a Lua program
-// can see is one thing: the decimal point. Under pt_BR, 'print(1.5)'
-// writes "1,5", 'string.format("%.3f", 4.51)' writes "4,510", and
-// 'tonumber("3,4")' is 3.4 -- while 'tonumber("3.4")' still is, because
-// the reference interpreter accepts both once the locale is set. Number
-// literals in source are unaffected: 'load("return 3.4")' is 3.4 and
-// 'load("return .4,3")' is still two values.
+// os.setlocale is the C library's. Three things a Lua program can see
+// change with it:
+//
+//   - the decimal point (LC_NUMERIC). Under pt_BR, 'print(1.5)' writes
+//     "1,5" and 'tonumber("3,4")' is 3.4. Number literals in source are
+//     unaffected.
+//   - string order (LC_COLLATE). '<' and '<=' go through strcoll, one
+//     segment between zeros at a time (lvm.c l_strcmp). In the C locale
+//     that is ordinary byte order, zeros included.
+//   - character classes (LC_CTYPE). string.upper, string.lower, the
+//     pattern classes and tonumber's digit scan use ctype.h.
 //
 // Go has no setlocale of its own, so this reaches C's when the build has
-// cgo (see cdlopen_locale.go) and answers "not available" when it does
-// not -- which is exactly what a C build answers for a locale that is not
-// installed, and what this port answered for every locale but "C" before.
+// cgo (see cdlopen_locale.go). Without cgo there is no C library to ask:
+// a name is accepted and only the decimal point changes, which is what a
+// program that calls os.setlocale for the decimal comma needs, and the
+// collate and ctype answers stay those of the C locale.
 
 // localeName is what os.setlocale reports when asked, and localeDecPoint
 // is the decimal point of that locale: the one character number
@@ -29,7 +38,41 @@ var (
 // setLocaleHook is the C library's setlocale. It answers the name the
 // library settled on and the decimal point that goes with it, or false
 // when the locale is not available. It is nil without cgo.
-var setLocaleHook func(cat int, name string) (string, string, bool)
+//
+// localeQueryHook is setlocale(cat, NULL): the name of that one category.
+// strColl is strcoll, and the ctype hooks are ctype.h. They are nil
+// without cgo, and the C-locale stand-ins below are what runs then.
+var (
+	setLocaleHook   func(cat int, name string) (string, string, bool)
+	localeQueryHook func(cat int) string
+	strColl         func(a, b string) int
+
+	ctypeToLower  func(byte) byte
+	ctypeToUpper  func(byte) byte
+	ctypeIsAlpha  func(byte) bool
+	ctypeIsCntrl  func(byte) bool
+	ctypeIsDigit  func(byte) bool
+	ctypeIsGraph  func(byte) bool
+	ctypeIsLower  func(byte) bool
+	ctypeIsPunct  func(byte) bool
+	ctypeIsSpace  func(byte) bool
+	ctypeIsUpper  func(byte) bool
+	ctypeIsAlnum  func(byte) bool
+	ctypeIsXDigit func(byte) bool
+)
+
+// collateIsC / ctypeIsC select the C-locale fast path. strcoll of the C
+// locale is byte order, and the ctype predicates are the ASCII ones, so
+// a program that never calls os.setlocale does not pay for a cgo call on
+// every comparison. A name of "C" or "POSIX" is that locale; anything
+// the C library spells differently, including "C.UTF-8", is not.
+var collateIsC atomic.Bool
+var ctypeIsC atomic.Bool
+
+func init() {
+	collateIsC.Store(true)
+	ctypeIsC.Store(true)
+}
 
 // localeCategories are the categories os.setlocale takes, in the order
 // Lua lists them, as LC_* constants.
@@ -112,6 +155,7 @@ func setLocale(catIdx int, name string) (string, bool) {
 		} else {
 			localeDecPoint = "."
 		}
+		localeNote(catIdx, got)
 		return localeName, true
 	}
 	/* Pure Go: no C library. Accept the name, and if the category is one
@@ -125,6 +169,152 @@ func setLocale(catIdx int, name string) (string, bool) {
 		localeDecPoint = decPointOf(name)
 	}
 	return localeName, true
+}
+
+// localeCurrent is what 'os.setlocale(nil, cat)' answers. With cgo that
+// is the C library's name for the one category, which is not the name of
+// the last category anybody set: collate can be pt_BR while ctype is
+// still "C", and "all" is then the long LC_CTYPE=... form.
+func localeCurrent(catIdx int) string {
+	if localeQueryHook != nil {
+		return localeQueryHook(localeCatOf(catIdx))
+	}
+	return localeName
+}
+
+// localeNote records whether collate and ctype are still the C locale,
+// so the comparison and the character classes can stay on the fast path.
+func localeNote(catIdx int, name string) {
+	if strColl == nil { /* no C library: both stay the C locale */
+		return
+	}
+	c := name == "C" || name == "POSIX"
+	switch catIdx {
+	case 0: /* all */
+		collateIsC.Store(c)
+		ctypeIsC.Store(c)
+	case 1: /* collate */
+		collateIsC.Store(c)
+	case 2: /* ctype */
+		ctypeIsC.Store(c)
+	}
+}
+
+// luaV_strcmp is l_strcmp (lvm.c). In the C locale it is byte order,
+// which already handles a zero in the middle the way the segment loop
+// does. Otherwise each stretch between zeros is strcoll's.
+func luaV_strcmp(a, b string) int {
+	if collateIsC.Load() || strColl == nil {
+		return strings.Compare(a, b)
+	}
+	for {
+		if c := strColl(a, b); c != 0 {
+			return c
+		}
+		zl1 := strings.IndexByte(a, 0)
+		zl2 := strings.IndexByte(b, 0)
+		if zl1 < 0 {
+			zl1 = len(a)
+		}
+		if zl2 < 0 {
+			zl2 = len(b)
+		}
+		if zl2 == len(b) { /* 'b' is finished? */
+			if zl1 == len(a) {
+				return 0
+			}
+			return 1
+		}
+		if zl1 == len(a) { /* 'a' is finished, 'b' is not */
+			return -1
+		}
+		a = a[zl1+1:]
+		b = b[zl2+1:]
+	}
+}
+
+func localeToLower(c byte) byte {
+	if ctypeIsC.Load() || ctypeToLower == nil {
+		return strASCIILower(c)
+	}
+	return ctypeToLower(c)
+}
+
+func localeToUpper(c byte) byte {
+	if ctypeIsC.Load() || ctypeToUpper == nil {
+		return strASCIIUpper(c)
+	}
+	return ctypeToUpper(c)
+}
+
+func localeIsAlpha(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsAlpha == nil {
+		return strIsAlpha(c)
+	}
+	return ctypeIsAlpha(c)
+}
+
+func localeIsCntrl(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsCntrl == nil {
+		return strIsCntrl(c)
+	}
+	return ctypeIsCntrl(c)
+}
+
+func localeIsDigit(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsDigit == nil {
+		return strIsDigit(c)
+	}
+	return ctypeIsDigit(c)
+}
+
+func localeIsGraph(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsGraph == nil {
+		return strIsGraph(c)
+	}
+	return ctypeIsGraph(c)
+}
+
+func localeIsLower(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsLower == nil {
+		return strIsLower(c)
+	}
+	return ctypeIsLower(c)
+}
+
+func localeIsPunct(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsPunct == nil {
+		return strIsPunct(c)
+	}
+	return ctypeIsPunct(c)
+}
+
+func localeIsSpace(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsSpace == nil {
+		return strIsSpace(c)
+	}
+	return ctypeIsSpace(c)
+}
+
+func localeIsUpper(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsUpper == nil {
+		return strIsUpper(c)
+	}
+	return ctypeIsUpper(c)
+}
+
+func localeIsAlnum(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsAlnum == nil {
+		return strIsAlnum(c)
+	}
+	return ctypeIsAlnum(c)
+}
+
+func localeIsXDigit(c byte) bool {
+	if ctypeIsC.Load() || ctypeIsXDigit == nil {
+		return strIsXDigit(c)
+	}
+	return ctypeIsXDigit(c)
 }
 
 // num2strLocale writes a number the way the locale wants it: printf has

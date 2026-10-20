@@ -79,6 +79,23 @@ const char *cdl_setlocale(int cat, const char *name);
 const char *cdl_decpoint(void);
 int cdl_lc_cat(int which);
 
+/* strcoll and the ctype predicates.  Lua compares strings with strcoll,
+   one segment at a time, and string.upper / string.lower / '%a' ask
+   toupper and tolower.  A NULL name to cdl_setlocale queries. */
+int cdl_strcoll(const char *a, const char *b);
+int cdl_tolower(int c);
+int cdl_toupper(int c);
+int cdl_isalpha(int c);
+int cdl_iscntrl(int c);
+int cdl_isdigit(int c);
+int cdl_isgraph(int c);
+int cdl_islower(int c);
+int cdl_ispunct(int c);
+int cdl_isspace(int c);
+int cdl_isupper(int c);
+int cdl_isalnum(int c);
+int cdl_isxdigit(int c);
+
 #include <stdlib.h>
 
 /* LUA_IDSIZE is 60 in PUC-Lua; short_src below must be the same size */
