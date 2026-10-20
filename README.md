@@ -23,8 +23,10 @@ concurrent GC.
 | G4 | **API mirrors the C API** | `lua_*` / `luaL_*` semantics preserved, so cgo-based hosts port with minimal edits |
 | G5 | **Zero deps, no cgo, pure Go** | stdlib only; trivial cross-compilation and static linking on Linux/macOS/Windows |
 
-**Non-goals:** ABI byte-compatibility with `liblua` (that would be a separate c-shared layer);
-loading C dynamic libraries (replaced by Go-side module registration).
+**Non-goals:** ABI byte-compatibility with `liblua` (that would be a separate c-shared layer).
+Loading C dynamic libraries is a built-in build-time option rather than a default: built with
+cgo the port loads real `.so`/`.dylib` extensions (§4.1, §5.2–5.5 and §5.7); built without it, modules
+are registered in Go.
 
 ---
 
@@ -217,7 +219,7 @@ collector of our own — or from the test environment:
 Weak tables and `__gc` are supported: an entry goes when nothing but the
 table refers to it, and a `__gc` runs, both at a cycle boundary — the step
 an allocation drives, `collectgarbage`, or `Close()` — which is what
-`closure`, `db`, `cstack`, `events`, `tracegc` and the 80 golden cases
+`closure`, `db`, `cstack`, `events`, `tracegc` and the 83 golden cases
 exercise. See §6 for how they are done, and §5.1 above for what a cycle
 here cannot answer.
 
@@ -700,7 +702,7 @@ position in front of the message with it.
 
 Of the 24 things this half has been broken with to see whether the
 in-process test can see them, 22 turn it red. The two that stay green
-are the two that are §6.18's: a `tableChoosePivot` that ignores the
+are the two that are §6.17's: a `tableChoosePivot` that ignores the
 random number it is handed, and a `tableRandomizePivot` that always
 answers 0, are the same thing to an array that comes out sorted either
 way, and the two functions are only asked so that they are entered.
@@ -948,7 +950,7 @@ passing them:
   libraries do differently: glibc hands the last digit kept to
   `round_away`, which leaves an even digit alone and steps an odd one,
   while Apple's library rounds a tie *down* whatever that digit is.
-  (§6.11)
+  (§6.10)
   `%.0A` of `1.5` is `0X2P+0` under the first and `0X1P+0` under the
   second, and no port can answer both. This port answers `0X2P+0` — what
   glibc answers, what the C library's own `%f` answers on every platform
@@ -961,7 +963,7 @@ passing them:
   pins both halves against the reference.
 * **A subnormal number**, whose leading digit C leaves the library to
   choose: `5e-324` is `0x1p-1074` here and `0x0.0000000000001p-1022`
-  under glibc. (§6.12) The two are handled by the same question put to
+  under glibc. (§6.11) The two are handled by the same question put to
   the reference at the top of the run — one probe each, each with its
   two possible answers written out, and a reference that answers
   anything else fails the test rather than being compared anyway.
@@ -1372,7 +1374,7 @@ checks and then copies for the rest of time, on every machine — so
 there is no answer to compare against; what the two checks say is asked
 instead. And a `table.sort` of more than 128 elements whose comparison
 function cares about the order it is called in is left alone for the
-reason in §6.18.
+reason in §6.17.
 
 The third was "array too big", and it turned out to be askable after
 all. What the check is on is the *number*, asked for before a single
@@ -1400,7 +1402,7 @@ and whether its answer is turned into a boolean; and all four ways
 `checktab` can be wrong about a metamethod, and the five ways the
 length `sort` refuses can be wrong — 37 turn it red. The one
 that stays green is the randomized pivot, and it stays green because
-the grid asks no array that could reach one: it is §6.18's.
+the grid asks no array that could reach one: it is §6.17's.
 
 Two of them are worth naming, because they are what the corpus was
 built around after the mutation test said the grid could not see them.
@@ -1468,13 +1470,13 @@ Four things the half does not hold, and three of them nobody can:
   gets right to fourteen digits and cannot get right to fifteen, and a
   grid that asked it would be red on one machine and green on another.
 * Which position `math.fmod` complains about when it is handed
-  nothing at all: §6.20. It is the only place in the whole of PUC-Lua
+  nothing at all: §6.19. It is the only place in the whole of PUC-Lua
   where two argument checkers sit in one argument list, so which of
   them is reached first is the compiler's business — clang says `#1`
   and gcc says `#2`. One argument is asked instead, which has only one
   position that can be wrong.
 * Which of the two names `atan` and `atan2` an error message says:
-  §6.19. They are one function, and the name is not the one the source
+  §6.18. They are one function, and the name is not the one the source
   spells but the one `findfield` walks into first, which the hash seed
   decides. Both sides answer it at random and disagree half the time, so
   the ten messages that could say either are asked, and then made to say
@@ -1644,13 +1646,13 @@ themselves when there is no cgo or no C compiler, so
 does not exercise the dlopen path.
 
 CI runs the whole matrix on Linux, macOS and Windows
-(`.github/workflows/go.yml`) — four jobs:
+(`.github/workflows/go.yml`) — three jobs:
 
 | Job | Platforms | What it does |
 |---|---|---|
 | **build** | 3 OS × `oldstable` + `stable` | `go vet`, `go build`, `go test`; `go test -race` on Linux and macOS (the race detector needs cgo); a `gofmt` check and one pass over the benchmarks on Linux |
 | **nocgo** | 3 OS | `CGO_ENABLED=0` build and test, plus cross-compiles for five targets — this is what keeps the pure-Go promise true |
-| **PUC-Lua suites** | Linux + macOS | downloads Lua 5.4.9 from lua.org, builds a reference interpreter from source, and runs both suites with `LUA_REF` pointed at it: `TestOfficialSuite` (Lua's own 33 files, in `internal/core/testdata/official`) and `TestDifferentialSuite` (this port's 82 cases, in `internal/core/testdata/diff`) and `TestThirdPartySuite` (§5.12's five third-party libraries). Goldens are captured fresh for that platform and then compared byte for byte. That makes both suites real gates everywhere and stops the checked-in darwin goldens from rotting unnoticed. (No Windows: Lua's own makefile is a Unix one.) |
+| **PUC-Lua suites** | Linux + macOS | downloads Lua 5.4.9 from lua.org, builds a reference interpreter from source, and runs both suites with `LUA_REF` pointed at it: `TestOfficialSuite` (Lua's own 33 files, in `internal/core/testdata/official`) and `TestDifferentialSuite` (this port's 83 cases, in `internal/core/testdata/diff`) and `TestThirdPartySuite` (§5.12's five third-party libraries). Goldens are captured fresh for that platform and then compared byte for byte. That makes both suites real gates everywhere and stops the checked-in darwin goldens from rotting unnoticed. (No Windows: Lua's own makefile is a Unix one.) |
 
 Reference sources for review (not vendored): `lua-5.4.9`, <https://www.lua.org/ftp/lua-5.4.9.tar.gz>.
 

@@ -109,7 +109,7 @@ func buildCModule(t *testing.T, dir string) (string, bool) {
 	}
 	src := filepath.Join(dir, "ctest.c")
 	so := filepath.Join(dir, "ctest.so")
-	inc, err := filepath.Abs("include")
+	inc, err := filepath.Abs("../../include")
 	if err != nil {
 		t.Fatal(err)
 	}

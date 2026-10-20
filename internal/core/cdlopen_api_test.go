@@ -257,7 +257,7 @@ func compileCExt(t *testing.T, dir, modname string) bool {
 	}
 	src := filepath.Join(dir, modname+".c")
 	so := filepath.Join(dir, modname+".so")
-	inc, err := filepath.Abs("include")
+	inc, err := filepath.Abs("../../include")
 	if err != nil {
 		t.Fatal(err)
 	}

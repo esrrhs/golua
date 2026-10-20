@@ -59,20 +59,20 @@ type (
 // Package-level function wrappers
 // ---------------------------------------------------------------------------
 
-func NewState() *State                            { return core.NewState() }
-func TypeName(tp int) string                      { return core.TypeName(tp) }
-func UpvalueIndex(i int) int                      { return core.UpvalueIndex(i) }
-func OpenBase(L *State) int                       { return core.OpenBase(L) }
-func OpenCoroutine(L *State) int                  { return core.OpenCoroutine(L) }
-func OpenPackage(L *State) int                    { return core.OpenPackage(L) }
-func OpenIO(L *State) int                         { return core.OpenIO(L) }
-func OpenOS(L *State) int                         { return core.OpenOS(L) }
-func OpenString(L *State) int                     { return core.OpenString(L) }
-func OpenMath(L *State) int                       { return core.OpenMath(L) }
-func OpenUTF8(L *State) int                       { return core.OpenUTF8(L) }
-func OpenDebug(L *State) int                      { return core.OpenDebug(L) }
-func OpenTable(L *State) int                      { return core.OpenTable(L) }
-func Luac(argv []string, out, err io.Writer) int  { return core.Luac(argv, out, err) }
+func NewState() *State                           { return core.NewState() }
+func TypeName(tp int) string                     { return core.TypeName(tp) }
+func UpvalueIndex(i int) int                     { return core.UpvalueIndex(i) }
+func OpenBase(L *State) int                      { return core.OpenBase(L) }
+func OpenCoroutine(L *State) int                 { return core.OpenCoroutine(L) }
+func OpenPackage(L *State) int                   { return core.OpenPackage(L) }
+func OpenIO(L *State) int                        { return core.OpenIO(L) }
+func OpenOS(L *State) int                        { return core.OpenOS(L) }
+func OpenString(L *State) int                    { return core.OpenString(L) }
+func OpenMath(L *State) int                      { return core.OpenMath(L) }
+func OpenUTF8(L *State) int                      { return core.OpenUTF8(L) }
+func OpenDebug(L *State) int                     { return core.OpenDebug(L) }
+func OpenTable(L *State) int                     { return core.OpenTable(L) }
+func Luac(argv []string, out, err io.Writer) int { return core.Luac(argv, out, err) }
 
 // ---------------------------------------------------------------------------
 // Constants – lobject.go
@@ -143,9 +143,9 @@ const (
 	LUA_VUPVAL         = core.LUA_VUPVAL
 	LUA_VPROTO         = core.LUA_VPROTO
 
-	LUA_TUPVAL    = core.LUA_TUPVAL
-	LUA_TPROTO    = core.LUA_TPROTO
-	LUA_TDEADKEY  = core.LUA_TDEADKEY
+	LUA_TUPVAL   = core.LUA_TUPVAL
+	LUA_TPROTO   = core.LUA_TPROTO
+	LUA_TDEADKEY = core.LUA_TDEADKEY
 )
 
 const (
@@ -257,24 +257,24 @@ const (
 )
 
 const (
-	MAXARG_C        = core.MAXARG_C
-	MAXARG_sC       = core.MAXARG_sC
-	MAXARG_B        = core.MAXARG_B
-	MAXARG_sB       = core.MAXARG_sB
-	MAXARG_Bx       = core.MAXARG_Bx
-	MAXARG_sBx      = core.MAXARG_sBx
-	MAXARG_Ax       = core.MAXARG_Ax
-	MAXARG_sJ       = core.MAXARG_sJ
-	OFFSET_sC       = core.OFFSET_sC
-	OFFSET_sB       = core.OFFSET_sB
-	OFFSET_sBx      = core.OFFSET_sBx
-	OFFSET_sJ       = core.OFFSET_sJ
-	MAXARG_A        = core.MAXARG_A
-	SIZE_A          = core.SIZE_A
-	MAXINDEXRK      = core.MAXINDEXRK
-	NO_REG          = core.NO_REG
+	MAXARG_C          = core.MAXARG_C
+	MAXARG_sC         = core.MAXARG_sC
+	MAXARG_B          = core.MAXARG_B
+	MAXARG_sB         = core.MAXARG_sB
+	MAXARG_Bx         = core.MAXARG_Bx
+	MAXARG_sBx        = core.MAXARG_sBx
+	MAXARG_Ax         = core.MAXARG_Ax
+	MAXARG_sJ         = core.MAXARG_sJ
+	OFFSET_sC         = core.OFFSET_sC
+	OFFSET_sB         = core.OFFSET_sB
+	OFFSET_sBx        = core.OFFSET_sBx
+	OFFSET_sJ         = core.OFFSET_sJ
+	MAXARG_A          = core.MAXARG_A
+	SIZE_A            = core.SIZE_A
+	MAXINDEXRK        = core.MAXINDEXRK
+	NO_REG            = core.NO_REG
 	LFIELDS_PER_FLUSH = core.LFIELDS_PER_FLUSH
-	MAXUPVAL        = core.MAXUPVAL
+	MAXUPVAL          = core.MAXUPVAL
 )
 
 // ---------------------------------------------------------------------------
@@ -303,8 +303,8 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	NO_JUMP  = core.NO_JUMP
-	MAXREGS  = core.MAXREGS
+	NO_JUMP = core.NO_JUMP
+	MAXREGS = core.MAXREGS
 
 	OPR_ADD      = core.OPR_ADD
 	OPR_SUB      = core.OPR_SUB
@@ -329,11 +329,11 @@ const (
 	OPR_OR       = core.OPR_OR
 	OPR_NOBINOPR = core.OPR_NOBINOPR
 
-	OPR_MINUS    = core.OPR_MINUS
-	OPR_BNOT     = core.OPR_BNOT
-	OPR_NOT      = core.OPR_NOT
-	OPR_LEN      = core.OPR_LEN
-	OPR_NOUNOPR  = core.OPR_NOUNOPR
+	OPR_MINUS   = core.OPR_MINUS
+	OPR_BNOT    = core.OPR_BNOT
+	OPR_NOT     = core.OPR_NOT
+	OPR_LEN     = core.OPR_LEN
+	OPR_NOUNOPR = core.OPR_NOUNOPR
 )
 
 // ---------------------------------------------------------------------------
@@ -399,26 +399,26 @@ const (
 	RDKTOCLOSE = core.RDKTOCLOSE
 	RDKCTC     = core.RDKCTC
 
-	VVOID      = core.VVOID
-	VNIL       = core.VNIL
-	VTRUE      = core.VTRUE
-	VFALSE     = core.VFALSE
-	VK         = core.VK
-	VKFLT      = core.VKFLT
-	VKINT      = core.VKINT
-	VKSTR      = core.VKSTR
-	VNONRELOC  = core.VNONRELOC
-	VLOCAL     = core.VLOCAL
-	VUPVAL     = core.VUPVAL
-	VCONST     = core.VCONST
-	VINDEXED   = core.VINDEXED
-	VINDEXUP   = core.VINDEXUP
-	VINDEXI    = core.VINDEXI
-	VINDEXSTR  = core.VINDEXSTR
-	VJMP       = core.VJMP
-	VRELOC     = core.VRELOC
-	VCALL      = core.VCALL
-	VVARARG    = core.VVARARG
+	VVOID     = core.VVOID
+	VNIL      = core.VNIL
+	VTRUE     = core.VTRUE
+	VFALSE    = core.VFALSE
+	VK        = core.VK
+	VKFLT     = core.VKFLT
+	VKINT     = core.VKINT
+	VKSTR     = core.VKSTR
+	VNONRELOC = core.VNONRELOC
+	VLOCAL    = core.VLOCAL
+	VUPVAL    = core.VUPVAL
+	VCONST    = core.VCONST
+	VINDEXED  = core.VINDEXED
+	VINDEXUP  = core.VINDEXUP
+	VINDEXI   = core.VINDEXI
+	VINDEXSTR = core.VINDEXSTR
+	VJMP      = core.VJMP
+	VRELOC    = core.VRELOC
+	VCALL     = core.VCALL
+	VVARARG   = core.VVARARG
 )
 
 // ---------------------------------------------------------------------------
@@ -459,20 +459,19 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	LUAI_MAXCCALLS  = core.LUAI_MAXCCALLS
+	LUAI_MAXCCALLS   = core.LUAI_MAXCCALLS
 	LUAI_MAXSHORTLEN = core.LUAI_MAXSHORTLEN
-	LUAI_HASHLIMIT  = core.LUAI_HASHLIMIT
-	MAXABITS        = core.MAXABITS
-	MAXASIZE        = core.MAXASIZE
-	MAXHBITS        = core.MAXHBITS
-	MAXTAGLOOP      = core.MAXTAGLOOP
-	NBITS           = core.NBITS
-	LUA_NOREF       = core.LUA_NOREF
-	LUA_REFNIL      = core.LUA_REFNIL
-	CDL_IDSIZE      = core.CDL_IDSIZE
-	LUA_COPYRIGHT   = core.LUA_COPYRIGHT
-	LUA_FLOORN2I    = core.LUA_FLOORN2I
-	F2Ieq           = core.F2Ieq
-	F2Ifloor        = core.F2Ifloor
-	F2Iceil         = core.F2Iceil
+	LUAI_HASHLIMIT   = core.LUAI_HASHLIMIT
+	MAXABITS         = core.MAXABITS
+	MAXASIZE         = core.MAXASIZE
+	MAXHBITS         = core.MAXHBITS
+	MAXTAGLOOP       = core.MAXTAGLOOP
+	NBITS            = core.NBITS
+	LUA_NOREF        = core.LUA_NOREF
+	LUA_REFNIL       = core.LUA_REFNIL
+	LUA_COPYRIGHT    = core.LUA_COPYRIGHT
+	LUA_FLOORN2I     = core.LUA_FLOORN2I
+	F2Ieq            = core.F2Ieq
+	F2Ifloor         = core.F2Ifloor
+	F2Iceil          = core.F2Iceil
 )

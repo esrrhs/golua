@@ -235,7 +235,7 @@ func officialBuildLibs(t *testing.T, dir string) bool {
 	if err != nil {
 		return false /* no C compiler: see officialKnownDiffBuild */
 	}
-	inc, err := filepath.Abs("include")
+	inc, err := filepath.Abs("../../include")
 	if err != nil {
 		t.Fatal(err)
 	}

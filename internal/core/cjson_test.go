@@ -104,7 +104,7 @@ func TestCJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	inc, err := filepath.Abs("include")
+	inc, err := filepath.Abs("../../include")
 	if err != nil {
 		t.Fatal(err)
 	}

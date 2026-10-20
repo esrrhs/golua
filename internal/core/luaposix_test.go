@@ -70,7 +70,7 @@ func TestLuaPosix(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(src, "_helpers.c")); err != nil {
 		t.Skipf("testdata/luaposix is not there (%v)", err)
 	}
-	inc, err := filepath.Abs("include")
+	inc, err := filepath.Abs("../../include")
 	if err != nil {
 		t.Fatal(err)
 	}

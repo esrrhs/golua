@@ -156,13 +156,13 @@ jobs:
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run TestOfficialSuite -timeout 20m .
+        run: go test -v -run TestOfficialSuite -timeout 20m ./internal/core/
 
       - name: Differential suite
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run TestDifferentialSuite -timeout 20m .
+        run: go test -v -run TestDifferentialSuite -timeout 20m ./internal/core/
 
       # Five single-file Lua libraries nobody wrote for this port, 2 759
       # lines of them, asked 264 questions (testdata/third).  It needs
@@ -172,7 +172,7 @@ jobs:
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run TestThirdPartySuite -timeout 20m .
+        run: go test -v -run TestThirdPartySuite -timeout 20m ./internal/core/
 
       # The same comparison without cases anybody wrote: 37 816
       # expressions and snippets built in the test and answered by both
@@ -199,4 +199,4 @@ jobs:
         shell: bash
         env:
           LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
-        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential|TestDateFuzzDifferential|TestTableFuzzDifferential|TestMathFuzzDifferential|TestBaseFuzzDifferential' -timeout 30m .
+        run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential|TestDateFuzzDifferential|TestTableFuzzDifferential|TestMathFuzzDifferential|TestBaseFuzzDifferential' -timeout 30m ./internal/core/

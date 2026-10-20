@@ -46,7 +46,7 @@ func TestContinuation(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(src, "k.c")); err != nil {
 		t.Skipf("testdata/continuation is not there (%v)", err)
 	}
-	inc, err := filepath.Abs("include")
+	inc, err := filepath.Abs("../../include")
 	if err != nil {
 		t.Fatal(err)
 	}

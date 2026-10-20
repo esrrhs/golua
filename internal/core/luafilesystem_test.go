@@ -53,7 +53,7 @@ func TestLuaFileSystem(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(src, "lfs.c")); err != nil {
 		t.Skipf("testdata/luafilesystem is not there (%v)", err)
 	}
-	inc, err := filepath.Abs("include")
+	inc, err := filepath.Abs("../../include")
 	if err != nil {
 		t.Fatal(err)
 	}
