@@ -572,9 +572,13 @@ func osExit(L *State) int {
 	   does not run '__gc', so a file that was never closed keeps what
 	   was written to it. */
 	ioFlushAll()
-	os.Exit(status)
+	osExitHook(status)
 	return 0
 }
+
+// osExitHook is os.Exit. Tests replace it so they can see the status
+// without ending the process.
+var osExitHook = os.Exit
 
 // ---------------------------------------------------------------------
 // registration

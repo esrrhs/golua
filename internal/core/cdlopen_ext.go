@@ -623,7 +623,10 @@ func luaL_getmetatable(p *C.lua_State, tname *C.char) {
 //export luaL_loadfilex
 func luaL_loadfilex(p *C.lua_State, filename, mode *C.char) C.int {
 	L := stateOf(p)
-	m := ""
+	/* A NULL mode is "bt", the same default as luaL_loadfile in C.
+	   An empty string is a mode the caller really passed, and it
+	   matches nothing. */
+	m := "bt"
 	if mode != nil {
 		m = C.GoString(mode)
 	}
