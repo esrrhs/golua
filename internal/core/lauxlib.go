@@ -225,6 +225,11 @@ func (L *State) CallMeta(obj int, name string) bool {
 	return true
 }
 
+// ToLString converts the value at idx the way luaL_tolstring does
+// (__tostring, then the default formatting) and leaves that string on
+// the stack.
+func (L *State) ToLString(idx int) string { return strToLString(L, idx) }
+
 func (L *State) checkNElems(n int) {
 	if L.GetTop() < n {
 		L.ArgError(n, "value expected")

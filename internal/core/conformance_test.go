@@ -89,15 +89,16 @@ func TestConformanceNumbers(t *testing.T) {
 		assert(not okf)
 	`)
 	if got := confGlobalString(t, L, "conf_mod_ok"); got != "false" {
-		t.Logf("KNOWN BUG: integer modulo by zero pcall success flag = %s, want false (lvm.c:753-756)", got)
+		t.Errorf("integer modulo by zero pcall success flag = %s, want false", got)
 	}
 	if got := confGlobalString(t, L, "conf_mod_error"); !strings.Contains(got, "n%0") {
-		t.Logf("KNOWN BUG: integer modulo by zero error = %q, want message containing n%%0 (lvm.c:753-756)", got)
+		t.Errorf("integer modulo by zero error = %q, want a message containing n%%0", got)
 	}
-	// lvm.c:771-774 dispatches float modulo to luai_nummod, whose
-	// llimits.h:332-335 fmod rule returns NaN for a zero float divisor.
-	if got := confGlobalString(t, L, "conf_float_mod_zero"); got != "true:nan" {
-		t.Logf("KNOWN BUG: 1.0 %% 0.0 = %q, want true:nan (lvm.c:771-774, llimits.h:332-335)", got)
+	// Float modulo by zero is NaN. The sign bit is the host libm's:
+	// glibc's fmod prints "-nan", others print "nan".
+	got := confGlobalString(t, L, "conf_float_mod_zero")
+	if got != "true:nan" && got != "true:-nan" {
+		t.Errorf("1.0 %% 0.0 = %q, want true:nan or true:-nan", got)
 	}
 }
 
@@ -137,10 +138,10 @@ func TestConformanceComparisons(t *testing.T) {
 		assert(not ok2 and tostring(e2):find("compare", 1, true))
 	`)
 	if got := confGlobalString(t, L, "conf_mixed_large_neq"); got != "true" {
-		t.Logf("KNOWN BUG: mixed integer/float equality lost precision at runtime: got %s, want true (lvm.h:75, lvm.c:579-589)", got)
+		t.Errorf("mixed integer/float equality lost precision at runtime: got %s, want true", got)
 	}
 	if got := confGlobalString(t, L, "conf_mixed_large_literal_neq"); got != "true" {
-		t.Logf("KNOWN BUG: mixed integer/float literal equality lost precision: got %s, want true (lvm.h:75, lvm.c:579-589)", got)
+		t.Errorf("mixed integer/float literal equality lost precision: got %s, want true", got)
 	}
 }
 
@@ -218,10 +219,10 @@ func TestConformanceMetamethods(t *testing.T) {
 		assert(rawget(raw, "x") == 9 and rawlen(raw) == 2)
 	`)
 	if got := confGlobalString(t, L, "conf_cross_eq_result"); got != "true" {
-		t.Logf("KNOWN BUG: a ~= c with first __eq returning false = %s, want true (lvm.c:609-624)", got)
+		t.Errorf("a ~= c with the first __eq returning false = %s, want true", got)
 	}
 	if got := confGlobalString(t, L, "conf_cross_eq_calls"); got != "2" {
-		t.Logf("KNOWN BUG: __eq across different metatables was called %s total time(s), want 2 (lvm.c:609-624)", got)
+		t.Errorf("__eq across different metatables was called %s total time(s), want 2", got)
 	}
 }
 
@@ -528,21 +529,19 @@ func TestConformanceCoroutines(t *testing.T) {
 		conf_co_close_error = table.concat({tostring(okfc), tostring(efc), coroutine.status(failing_close)}, "|")
 	`)
 	if got := confGlobalString(t, L, "conf_co_first"); got != "true|11|first|true|false|true|suspended" {
-		t.Logf("KNOWN BUG: first coroutine resume/yield tuple = %q, want %q", got, "true|11|first|true|false|true|suspended")
+		t.Errorf("first coroutine resume/yield tuple = %q, want %q", got, "true|11|first|true|false|true|suspended")
 	}
 	if got := confGlobalString(t, L, "conf_co_second"); got != "true|14|done|dead" {
-		t.Logf("KNOWN BUG: second coroutine resume tuple = %q, want %q", got, "true|14|done|dead")
+		t.Errorf("second coroutine resume tuple = %q, want %q", got, "true|14|done|dead")
 	}
 	if got := confGlobalString(t, L, "conf_co_dead"); !strings.HasPrefix(got, "false|") || !strings.Contains(got, "dead coroutine") {
-		t.Logf("KNOWN BUG: resuming dead coroutine = %q, want false plus dead-coroutine error", got)
+		t.Errorf("resuming dead coroutine = %q, want false plus a dead-coroutine error", got)
 	}
-	// lcorolib.c:170-183 delegates close to lua_closethread; lstate.c:330-355
-	// resets the thread through luaD_closeprotected, closing pending variables.
 	if got := confGlobalString(t, L, "conf_co_close"); got != "true|nil|dead|resource:nil" {
-		t.Logf("KNOWN BUG: coroutine.close with <close> = %q, want %q (lcorolib.c:177-183)", got, "true|nil|dead|resource:nil")
+		t.Errorf("coroutine.close with <close> = %q, want %q", got, "true|nil|dead|resource:nil")
 	}
 	if got := confGlobalString(t, L, "conf_co_close_error"); got != "false|closefail|dead" {
-		t.Logf("KNOWN BUG: coroutine.close __close error = %q, want %q (lcorolib.c:170-183, lstate.c:330-355)", got, "false|closefail|dead")
+		t.Errorf("coroutine.close __close error = %q, want %q", got, "false|closefail|dead")
 	}
 }
 
@@ -580,16 +579,14 @@ func TestConformanceToBeClosedAndAttributes(t *testing.T) {
 		end)
 		assert(not okvalue and tostring(evalue):find("non%-closable"))
 	`)
-	// lfunc.c:227-236 closes pending variables from stack top to bottom.
-	// ldo.c:954-989 preserves the original status/error object while doing so.
 	if got := confGlobalString(t, L, "conf_close_normal"); got != "b:nil,a:nil" {
-		t.Logf("KNOWN BUG: normal <close> order/log = %q, want %q (lfunc.c:227-236)", got, "b:nil,a:nil")
+		t.Errorf("normal <close> order/log = %q, want %q", got, "b:nil,a:nil")
 	}
 	if got := confGlobalString(t, L, "conf_close_error_result"); got != "false:boom" {
-		t.Logf("KNOWN BUG: protected error with <close> = %q, want false:boom (ldo.c:954-989, lfunc.c:227-236)", got)
+		t.Errorf("protected error with <close> = %q, want false:boom", got)
 	}
 	if got := confGlobalString(t, L, "conf_close_error_log"); got != "b:boom,a:boom" {
-		t.Logf("KNOWN BUG: error <close> order/log = %q, want %q (lfunc.c:227-236)", got, "b:boom,a:boom")
+		t.Errorf("error <close> order/log = %q, want %q", got, "b:boom,a:boom")
 	}
 }
 
@@ -597,5 +594,32 @@ func TestConformanceErrorMessagesGoSide(t *testing.T) {
 	msg := confRunError(t, "local function f() error('boom', 2) end\nf()")
 	if !strings.Contains(msg, "chunk:2: boom") {
 		t.Errorf("error level message = %q, want chunk:2: boom", msg)
+	}
+}
+
+// TestErrorObjectSurvivesStackReset pins a Go-only hole in protected
+// calls. error() panics, and a defer that runs on the way out can pop
+// the Lua stack before the protected call reads the error object back.
+// The object has to be the one that was thrown — here a boolean — and
+// not whatever the defer left on top.
+func TestErrorObjectSurvivesStackReset(t *testing.T) {
+	L := confNewState(t)
+	L.PushGoFunc(func(L *State) int {
+		top := L.GetTop()
+		defer L.SetTop(top)
+		L.PushBoolean(false)
+		return L.Error()
+	})
+	L.SetGlobal("boom")
+	if err := L.DoString(`ok, err = pcall(boom)`); err != nil {
+		t.Fatal(err)
+	}
+	if got := confGlobalString(t, L, "ok"); got != "false" {
+		t.Fatalf("pcall success = %s, want false", got)
+	}
+	L.GetGlobal("err")
+	defer L.Pop(1)
+	if L.Type(-1) != LUA_TBOOLEAN || L.ToBoolean(-1) {
+		t.Fatalf("pcall error is %s, want the boolean false that was thrown", TypeName(L.Type(-1)))
 	}
 }

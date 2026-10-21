@@ -541,8 +541,14 @@ func callChunk() error {
 }
 
 func lastError() error {
-	s, _ := L.ToString(-1)
+	/* lua_tostring, not luaL_tolstring: a table (or any other
+	   non-string) is not converted again. C prints a fixed sentence
+	   when the pointer comes back NULL. */
+	s, ok := L.ToString(-1)
 	L.Pop(1)
+	if !ok {
+		return fmt.Errorf("(error message not a string)")
+	}
 	return fmt.Errorf("%s", s)
 }
 
@@ -564,7 +570,17 @@ func report(err error) {
 func doREPL() {
 	oldProgName := progName
 	progName = "" /* no 'progname' on errors in interactive mode */
-	defer func() { progName = oldProgName }()
+	/* C assigns the saved name back only after the loop. An error
+	   that escapes — the prompt's __tostring, for one — longjmps
+	   past that assignment, so report prints no program name.
+	   Restoring it in every defer would put "lua: " in front of
+	   that message. */
+	defer func() {
+		if e := recover(); e != nil {
+			panic(e)
+		}
+		progName = oldProgName
+	}()
 
 	in := bufio.NewScanner(os.Stdin)
 	in.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
@@ -599,7 +615,7 @@ func doREPL() {
 }
 
 // replPrompt is lua.c's 'get_prompt': the global _PROMPT, or _PROMPT2 on
-// a continuation line, with 'tostring' applied to it -- which is the only
+// a continuation line, passed through luaL_tolstring.  That is the only
 // reason a prompt that is not a string can work at all.  A _PROMPT that
 // is nil means the default; one that is the empty string is an empty
 // prompt and not the default.
@@ -614,24 +630,10 @@ func replPrompt(first bool) string {
 	if L.Type(-1) == lua.LUA_TNIL {
 		return def
 	}
-	if L.CallMeta(-1, "__tostring") { /* luaL_tolstring asks first */
-		if s, ok := L.ToString(-1); ok {
-			return s /* a number counts: 'lua_isstring' says it does */
-		}
-		return def /* C would raise "'__tostring' must return a string" */
-	}
-	switch L.Type(-1) {
-	case lua.LUA_TNUMBER, lua.LUA_TSTRING:
-		if s, ok := L.ToString(-1); ok {
-			return s
-		}
-	case lua.LUA_TBOOLEAN:
-		if L.ToBoolean(-1) {
-			return "true"
-		}
-		return "false"
-	}
-	return def
+	/* luaL_tolstring. A table with no metamethod is "table: 0x...",
+	   and a __tostring that does not return a string is an error;
+	   neither of those is the default prompt. */
+	return L.ToLString(-1)
 }
 
 // loadLine compiles one REPL line, reading continuation lines from 'in'

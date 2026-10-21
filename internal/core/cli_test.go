@@ -263,9 +263,50 @@ func TestCLIREPLCallsPrint(t *testing.T) {
 	}
 }
 
+// TestCLIREPLPromptTostringError pins get_prompt's luaL_tolstring.
+// A __tostring that raises, or that returns a non-string, is an error
+// from the prompt itself. It escapes the REPL, progname stays cleared
+// (the longjmp never restores it), and a non-string error object is
+// reported as the fixed sentence rather than an empty "lua: ".
+func TestCLIREPLPromptTostringError(t *testing.T) {
+	out, errb, code := cliRunStdin(t, "_PROMPT=setmetatable({}, {__tostring=error})\n", "-i")
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1; stdout %q stderr %q", code, out, errb)
+	}
+	if errb != "(error message not a string)\n" {
+		t.Errorf("stderr = %q, want the non-string sentence and no program name", errb)
+	}
+	out, errb, code = cliRunStdin(t, "_PROMPT=setmetatable({}, {__tostring=function() return {} end})\n", "-i")
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1; stdout %q stderr %q", code, out, errb)
+	}
+	if errb != "'__tostring' must return a string\n" {
+		t.Errorf("stderr = %q, want the __tostring sentence and no program name", errb)
+	}
+}
+
+// TestCLIREPLIncompleteEOF pins multiline input closed by end-of-file.
+// The syntax error of the unfinished line is a string, reported from
+// inside the REPL, and the interpreter then exits successfully.
+func TestCLIREPLIncompleteEOF(t *testing.T) {
+	out, errb, code := cliRunStdin(t, "a.\n", "-i")
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0; stdout %q stderr %q", code, out, errb)
+	}
+	if !strings.Contains(errb, "stdin:1: <name> expected near <eof>") {
+		t.Errorf("stderr = %q, want the unfinished line's syntax error", errb)
+	}
+	if strings.Contains(errb, "lua:") || strings.Contains(errb, "error message not a string") {
+		t.Errorf("stderr = %q, the REPL must report the syntax error itself", errb)
+	}
+	if !strings.Contains(out, "> ") || !strings.Contains(out, ">> ") {
+		t.Errorf("stdout = %q, want the first prompt and the continuation prompt", out)
+	}
+}
+
 // TestCLIREPLPromptGlobal pins '_PROMPT': lua.c reads it through
-// 'tostring', which is the only reason a prompt that is not a string --
-// one whose __tostring counts, say -- can work at all.
+// luaL_tolstring, which is the only reason a prompt that is not a
+// string -- one whose __tostring counts, or a bare table -- can work.
 func TestCLIREPLPromptGlobal(t *testing.T) {
 	src := "local C = 0; _PROMPT=setmetatable({},{__tostring = function () C = C + 1; return C end})"
 	out, _, _ := cliRunStdin(t, "--\na = 2\n", "-e", src, "-i")
@@ -275,6 +316,10 @@ func TestCLIREPLPromptGlobal(t *testing.T) {
 	out, _, _ = cliRunStdin(t, "1+1\n", "-e", "_PROMPT='' _PROMPT2=''", "-i")
 	if !strings.HasSuffix(out, "2\n\n") {
 		t.Errorf("an empty _PROMPT is an empty prompt, not the default: %q", out)
+	}
+	out, _, _ = cliRunStdin(t, "1+1\n", "-e", "_PROMPT={}", "-i")
+	if !strings.Contains(out, "table: 0x") {
+		t.Errorf("a table prompt is its luaL_tolstring text, got %q", out)
 	}
 }
 

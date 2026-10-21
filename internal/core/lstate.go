@@ -1063,6 +1063,18 @@ func (L *State) rawRunProtected(f func()) (status int) {
 		switch x := r.(type) {
 		case *luaError:
 			status = x.status
+			/* The error object was copied into the panic because a
+			   Go defer between the throw and here — replPrompt's
+			   SetTop, for one — can pop it off the Lua stack before
+			   luaD_seterrorobj reads it. C's longjmp does not run
+			   those defers, so the object is still on top. Put the
+			   copy back; an object that was never popped is then
+			   on top twice, and seterrorobj keeps the top one. */
+			if L.top >= len(L.stack) {
+				L.reallocStack(len(L.stack) + EXTRA_STACK)
+			}
+			L.stack[L.top] = x.value
+			L.top++
 		case *closeSignal:
 			panic(x)
 		default:
