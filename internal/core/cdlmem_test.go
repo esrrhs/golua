@@ -3,6 +3,8 @@
 package core
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
@@ -224,4 +226,100 @@ func TestCStateBlocksReleasedOnClose(t *testing.T) {
 	if got := cstateLive.Load(); got != before {
 		t.Fatalf("live handles after Close %d, want %d", got, before)
 	}
+}
+
+// A yield parks the cgo depth so deferred frees of other states are not
+// stuck behind a suspended C frame for the life of that coroutine.
+func TestCgoParkFlushesDeferredFrees(t *testing.T) {
+	held, freed := testCgoParkFlush()
+	if !held {
+		t.Fatal("cgoFree ran while a cgo call was still entered")
+	}
+	if !freed {
+		t.Fatal("cgoPark did not flush deferred frees")
+	}
+}
+
+// luaL_error used to allocate a formatted message, call into Go (which
+// panics), and never reach free. The scratch is freed before the throw.
+func TestLuaLErrorDoesNotLeak(t *testing.T) {
+	L := NewState()
+	t.Cleanup(L.Close)
+	if live := testErrorDoesNotLeak(L, 64); live != 0 {
+		t.Fatalf("after luaL_error, %d scratch buffers still live", live)
+	}
+}
+
+// Close drops the atpanic map entry so a closed state's globalState is
+// not pinned for the rest of the process.
+func TestPanicCPtrClearedOnClose(t *testing.T) {
+	L := NewState()
+	g := L.g
+	testHoldPanicPtr(L)
+	if !panicCPtrHolds(g) {
+		t.Fatal("setup failed")
+	}
+	L.Close()
+	if panicCPtrHolds(g) {
+		t.Fatal("panicCPtr still held the closed state")
+	}
+}
+
+// release removes the handle from g.cstates. Without that, every
+// short-lived thread C had seen left a dead entry until Close.
+func TestCStateReleaseUntracks(t *testing.T) {
+	L := NewState()
+	t.Cleanup(L.Close)
+	_ = L.statePtr()
+	th := L.NewThread()
+	_ = th.statePtr()
+	before := cstateTrackedCount(L.g)
+	th.cstateTok.release()
+	if got := cstateTrackedCount(L.g); got != before-1 {
+		t.Fatalf("tracked handles %d, want %d", got, before-1)
+	}
+}
+
+// A C function that yields must not keep the whole process from freeing
+// C memory. While it is suspended, a collected string's copy is freed.
+func TestYieldDoesNotStarveCgoFree(t *testing.T) {
+	dir := t.TempDir()
+	const src = `#include "lua.h"
+#include "lauxlib.h"
+static int l_y(lua_State *L) { return lua_yield(L, 0); }
+static const luaL_Reg reg[] = {{"y", l_y}, {NULL, NULL}};
+int luaopen_y(lua_State *L) { luaL_newlib(L, reg); return 1; }
+`
+	if err := os.WriteFile(filepath.Join(dir, "y.c"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !compileCExt(t, dir, "y") {
+		return
+	}
+	L := NewState()
+	t.Cleanup(L.Close)
+	L.OpenLibs()
+	if err := L.DoString("package.cpath = " + quoteLuaString(filepath.Join(dir, "?.so"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := L.DoString(`
+		local y = require('y')
+		co = coroutine.create(function() y.y() end)
+		assert(coroutine.resume(co))
+		assert(coroutine.status(co) == 'suspended')
+	`); err != nil {
+		t.Fatalf("yield setup: %v", err)
+	}
+
+	const want = "yield-park-sentinel"
+	L.PushString(want)
+	p := tsCStr(tsvalue(index2value(L, -1)))
+	L.Pop(1)
+	beforeDet := cstrDetached.Load()
+	beforeFree := cgoFreed.Load()
+	L.fullCollect()
+	waitUntil(t, "string free while C coroutine yielded", func() bool {
+		return cstrDetached.Load() > beforeDet && cgoFreed.Load() > beforeFree
+	})
+	_ = p /* freed; the counters above are the assertion */
 }

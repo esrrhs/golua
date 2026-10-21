@@ -281,6 +281,12 @@ func lua_yieldk(p *C.lua_State, nresults C.int, ctx C.lua_KContext, k C.lua_KFun
 	} else {
 		L.ci.cK = nil
 	}
+	/* Park the cgo depth across the wait. The C frame stays on this
+	   goroutine's stack, but nothing in it may keep a pointer that
+	   survives a yield (PUC-Lua already says so), and other states must
+	   be free to reclaim memory while this coroutine is suspended. */
+	cgoPark()
+	defer cgoUnpark()
 	/* When there is no continuation, this is the number of values the
 	   resumer passed to 'coroutine.resume' and they are already on the
 	   stack: the results of the yield.  With one, it is what the
@@ -290,6 +296,8 @@ func lua_yieldk(p *C.lua_State, nresults C.int, ctx C.lua_KContext, k C.lua_KFun
 
 //export lua_yield
 func lua_yield(p *C.lua_State, nresults C.int) C.int {
+	cgoPark()
+	defer cgoUnpark()
 	return C.int(stateOf(p).Yield(int(nresults)))
 }
 
@@ -757,14 +765,20 @@ func cdl_pushlstring_cb(p *C.lua_State, s *C.char, n C.size_t) *C.char {
 	return pushedCStr(L)
 }
 
-//export cdl_error_cb
-func cdl_error_cb(p *C.lua_State, s *C.char) C.int {
+//export cdl_error_prepare_cb
+func cdl_error_prepare_cb(p *C.lua_State, s *C.char) {
 	L := stateOf(p)
-	/* luaL_error is 'luaL_where(1)' plus the message, concatenated */
+	/* luaL_error is 'luaL_where(1)' plus the message, concatenated.
+	   The throw is a separate call so C can free a heap message first:
+	   L.Error panics and never returns to the free. */
 	L.Where2(1)
 	L.PushString(C.GoString(s))
 	L.Concat(2)
-	L.Error()
+}
+
+//export cdl_error_throw_cb
+func cdl_error_throw_cb(p *C.lua_State) C.int {
+	stateOf(p).Error()
 	return 0
 }
 

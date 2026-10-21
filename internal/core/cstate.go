@@ -11,5 +11,6 @@ import (
 type cstateBlock struct {
 	base unsafe.Pointer
 	id   uintptr
+	g    *globalState // so release can untrack after the State is gone
 	once sync.Once
 }

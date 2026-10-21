@@ -245,6 +245,10 @@ const char *lua_pushfstring(lua_State *L, const char *fmt, ...) {
   return r;
 }
 
+/* formatted luaL_error scratch not yet freed. The throw panics out of
+   Go and never returns here, so the free has to happen before it. */
+static int cdl_err_live;
+
 int luaL_error(lua_State *L, const char *fmt, ...) {
   va_list ap;
   char *out = NULL;
@@ -256,12 +260,42 @@ int luaL_error(lua_State *L, const char *fmt, ...) {
   if (st == 1) {
     char msg[64];
     snprintf(msg, sizeof msg, "invalid option '%%%c' to 'lua_pushfstring'", opt);
-    return cdl_error_cb(L, msg);
+    cdl_error_prepare_cb(L, msg);
+    return cdl_error_throw_cb(L);
   }
-  if (st != 0 || out == NULL) return cdl_error_cb(L, (char *)fmt);
-  st = cdl_error_cb(L, out);
+  if (st != 0 || out == NULL) {
+    cdl_error_prepare_cb(L, (char *)fmt);
+    return cdl_error_throw_cb(L);
+  }
+  /* Copy into the Lua stack first, free the scratch, then throw. A
+     single callback that both pushed and threw would skip this free. */
+  cdl_err_live++;
+  cdl_error_prepare_cb(L, out);
   free(out);
-  return st;
+  cdl_err_live--;
+  return cdl_error_throw_cb(L);
+}
+
+int cdl_err_live_count(void) { return cdl_err_live; }
+
+/* The symbols lua_pcall and friends are //export-ed from Go. */
+extern void lua_pushcclosure(lua_State *L, lua_CFunction fn, int n);
+extern void lua_pushinteger(lua_State *L, lua_Integer n);
+extern int lua_pcall(lua_State *L, int nargs, int nresults, int msgh);
+extern lua_Integer lua_tointeger(lua_State *L, int idx);
+
+static int cdl_test_boom(lua_State *L) {
+  return luaL_error(L, "boom %d (%s)", (int)lua_tointeger(L, 1), "x");
+}
+
+int cdl_test_error_round(lua_State *L, int n) {
+  int i;
+  for (i = 0; i < n; i++) {
+    lua_pushcclosure(L, cdl_test_boom, 0);
+    lua_pushinteger(L, (lua_Integer)i);
+    (void)lua_pcall(L, 1, 0, 0);
+  }
+  return cdl_err_live;
 }
 
 int lua_gc(lua_State *L, int what, ...) {

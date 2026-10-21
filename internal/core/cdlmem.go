@@ -64,6 +64,15 @@ func cgoLeave() {
 	}
 }
 
+// cgoPark steps out of the current cgo call across a yield. A suspended
+// C frame must not keep every state's deferred frees waiting: holding a
+// lua_tolstring pointer across a yield is already undefined in PUC-Lua,
+// and other coroutines are free to run and collect.
+func cgoPark() { cgoLeave() }
+
+// cgoUnpark re-enters after a yield resumes into the parked C frame.
+func cgoUnpark() { cgoEnter() }
+
 // cgoFree releases p now when no cgo call is in progress, and otherwise
 // queues it until the outermost call returns.
 func cgoFree(p unsafe.Pointer) {
@@ -152,6 +161,22 @@ func (g *globalState) trackCState(b *cstateBlock) {
 	g.cstateMu.Unlock()
 }
 
+func (g *globalState) untrackCState(b *cstateBlock) {
+	if g == nil || b == nil {
+		return
+	}
+	g.cstateMu.Lock()
+	for i, x := range g.cstates {
+		if x == b {
+			g.cstates[i] = g.cstates[len(g.cstates)-1]
+			g.cstates[len(g.cstates)-1] = nil
+			g.cstates = g.cstates[:len(g.cstates)-1]
+			break
+		}
+	}
+	g.cstateMu.Unlock()
+}
+
 func (g *globalState) releaseCStates() {
 	g.cstateMu.Lock()
 	all := g.cstates
@@ -160,6 +185,16 @@ func (g *globalState) releaseCStates() {
 	for _, b := range all {
 		b.release()
 	}
+}
+
+func cstateTrackedCount(g *globalState) int {
+	if g == nil {
+		return 0
+	}
+	g.cstateMu.Lock()
+	n := len(g.cstates)
+	g.cstateMu.Unlock()
+	return n
 }
 
 // ---------------------------------------------------------------------
@@ -266,6 +301,9 @@ func (b *cstateBlock) release() {
 			L.cstateBase = nil
 			L.cstateTok = nil
 		}
+		if b.g != nil {
+			b.g.untrackCState(b)
+		}
 		unregisterState(b.id)
 		if b.base != nil {
 			base := b.base
@@ -274,4 +312,42 @@ func (b *cstateBlock) release() {
 		}
 		cstateLive.Add(-1)
 	})
+}
+
+// testCgoParkFlush enters a cgo call, queues a free, parks (as a yield
+// would), and reports whether the free happened before and after park.
+func testCgoParkFlush() (heldDuringEnter, freedOnPark bool) {
+	cgoEnter()
+	p := C.malloc(1)
+	if p == nil {
+		cgoLeave()
+		return false, false
+	}
+	base := cgoFreed.Load()
+	cgoFree(p)
+	heldDuringEnter = cgoFreed.Load() == base
+	cgoPark()
+	freedOnPark = cgoFreed.Load() > base
+	cgoUnpark()
+	cgoLeave()
+	return heldDuringEnter, freedOnPark
+}
+
+// testErrorDoesNotLeak raises n formatted luaL_error calls under pcall
+// and answers how many of their scratch buffers were still live after.
+func testErrorDoesNotLeak(L *State, n int) int {
+	return int(C.cdl_test_error_round(L.statePtr(), C.int(n)))
+}
+
+func testHoldPanicPtr(L *State) {
+	panicMu.Lock()
+	panicCPtr[L.g] = unsafe.Pointer(uintptr(1))
+	panicMu.Unlock()
+}
+
+func panicCPtrHolds(g *globalState) bool {
+	panicMu.Lock()
+	_, ok := panicCPtr[g]
+	panicMu.Unlock()
+	return ok
 }

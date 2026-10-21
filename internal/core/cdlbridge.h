@@ -220,7 +220,10 @@ static inline void *cdl_dlopen_global(const char *path) { return NULL; }
    These are //export-ed from Go, so cgo declares them too; the
    declarations must match cgo's exactly, which is why no const. */
 extern char *cdl_pushlstring_cb(lua_State *L, char *s, size_t n);
-extern int cdl_error_cb(lua_State *L, char *s);
+/* prepare pushes the error object; throw raises it. Split so luaL_error
+   can free a heap-formatted message before the Go panic unwinds. */
+extern void cdl_error_prepare_cb(lua_State *L, char *s);
+extern int cdl_error_throw_cb(lua_State *L);
 extern int cdl_gc_cb(lua_State *L, int what, int a1, int a2, int a3);
 /* the "invalid option" error of lua_pushfstring */
 extern int cdl_runerror_cb(lua_State *L, char *s);
@@ -231,10 +234,12 @@ const char *lua_pushfstring(lua_State *L, const char *fmt, ...);
 int luaL_error(lua_State *L, const char *fmt, ...);
 int lua_gc(lua_State *L, int what, ...);
 
-/* test hooks: how many formatted buffers lua_pushfstring has not freed,
-   and one call of it. */
+/* test hooks: how many formatted buffers lua_pushfstring / luaL_error
+   have not freed, and one call of each. */
 int cdl_out_live_count(void);
 const char *cdl_test_one_fstring(lua_State *L, int i);
+int cdl_err_live_count(void);
+int cdl_test_error_round(lua_State *L, int n);
 
 /* the buffer keeps the state it was made with, which luaL_addgsub needs */
 static inline lua_State *cdl_buf_L(luaL_Buffer *B) { return B->L; }

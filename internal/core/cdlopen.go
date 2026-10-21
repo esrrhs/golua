@@ -135,7 +135,7 @@ func (L *State) statePtr() *C.lua_State {
 		}
 		C.memset(base, 0, C.size_t(luaExtraSpace)+C.size_t(size))
 		block := unsafe.Pointer(uintptr(base) + luaExtraSpace)
-		tok := &cstateBlock{base: base}
+		tok := &cstateBlock{base: base, g: L.g}
 		tok.id = registerState(L)
 		*(*uintptr)(block) = tok.id
 		L.cstate = block
@@ -168,6 +168,9 @@ func cgoReleaseState(L *State) {
 	if L == nil || L.g == nil {
 		return
 	}
+	panicMu.Lock()
+	delete(panicCPtr, L.g)
+	panicMu.Unlock()
 	L.g.releaseCStates()
 	releaseCgoBufsOf(L.g)
 }
