@@ -107,6 +107,7 @@ func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
 	ci.savedpc = 0
 	ci.nExtraArgs = 0
 	ci.goCont = nil
+	ci.migrateFunc = nil
 	return ci
 }
 
@@ -117,6 +118,15 @@ func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
 	if L.hookmask&dbMaskCall != 0 { /* is call hook on? */
 		narg := L.top - funcIdx - 1
 		luaD_hook(L, hookCall, -1, 1, narg)
+	}
+	/* The synchronous coroutine path may only unwind pure Lua and
+	   coroutine.yield. Any other Go function can call back into Lua,
+	   establish an error boundary, or expose the live stack through the
+	   debug API. Move its already-pushed frame before entering it. */
+	if L.co != nil && L.co.sync && L.inVM &&
+		funcptr(f) != funcptr(coYield) {
+		ci.migrateFunc = f
+		panic(&migrateAbort{})
 	}
 	n := f(L)
 	if L.fastYield {

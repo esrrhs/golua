@@ -98,6 +98,11 @@ type CallInfo struct {
 	// calling goCont instead of re-entering the Go function. Nil when
 	// the frame has none.
 	goCont func(L *State, status int) int
+	// migrateFunc is the Go function whose already-pushed C frame asked
+	// to move onto the coroutine goroutine before entering its body.
+	// Tail calls may no longer leave a usable closure in funcIdx, so the
+	// function is recorded explicitly for finishMigrated.
+	migrateFunc GoFunc
 	// ypcall is CIST_YPCALL: this frame is an interrupted 'lua_pcallk'
 	// with a continuation, so an error raised below it is recovered
 	// here instead of killing the coroutine (ldo.c findpcall).
@@ -1165,9 +1170,11 @@ func (L *State) resumeSync(ccalls int) (resp resumeResp) {
 			resp.vals = L.co.vals
 		}
 	}()
-	if !L.fastYield && !ttisLclosure(&L.stack[0]) {
-		// A Go body has to keep its stack across a yield, so it runs
-		// on the coroutine goroutine from the first resume.
+	if !L.fastYield && (L.hookmask != 0 || !ttisLclosure(&L.stack[0])) {
+		// A Go body has to keep its stack across a yield. A hooked Lua
+		// body also stays asynchronous: hook calls expose every frame
+		// and saved program counter, which the synchronous unwind does
+		// not preserve.
 		resp = L.promoteBody(ccalls)
 		return
 	}
@@ -1261,7 +1268,11 @@ func (L *State) finishMigrated() (status int, closed bool) {
 	// The migrating ccall had already counted this C frame.
 	L.nCcalls++
 	ci := L.ci
-	f := clCvalue(&L.stack[ci.funcIdx]).f
+	f := ci.migrateFunc
+	if f == nil {
+		f = clCvalue(&L.stack[ci.funcIdx]).f
+	}
+	ci.migrateFunc = nil
 	n := f(L)
 	luaD_poscall(L, ci, n)
 	L.unroll()
