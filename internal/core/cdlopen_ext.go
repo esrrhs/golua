@@ -337,20 +337,17 @@ func lua_resume(p *C.lua_State, from *C.lua_State, nargs C.int, nres *C.int) C.i
 		f = stateOf(from)
 	}
 	stat := L.Resume(f, int(nargs))
-	n := len(L.co.vals)
+	/* Results (and the error object) are already on L: Resume matches
+	   C's lua_resume, including the from == nil case. The main thread
+	   has no coRuntime, so fall back to GetTop for nresults. */
+	n := 0
+	if L.co != nil {
+		n = len(L.co.vals)
+	} else {
+		n = L.GetTop()
+	}
 	if nres != nil {
 		*nres = C.int(n)
-	}
-	if stat == LUA_YIELD && n > 0 {
-		/* C's lua_resume leaves the yielded values on the coroutine's
-		   own stack and reports how many there are; the caller moves
-		   them across with lua_xmove when it wants them, which is what
-		   auxresume does. Taking them off in (*State).Yield is what
-		   keeps a continuation's lua_gettop honest, so they go back on
-		   here for whoever asked through the API. */
-		L.checkStack(n)
-		copy(L.stack[L.top:], L.co.vals)
-		L.top += n
 	}
 	return C.int(stat)
 }

@@ -547,3 +547,14 @@ func testCgoParkedCount() int {
 	cgoMu.Unlock()
 	return n
 }
+
+// testLuaResume is lua_resume for tests that cannot import "C".
+func testLuaResume(L, from *State, nargs int) (status, nres int) {
+	var f *C.lua_State
+	if from != nil {
+		f = from.statePtr()
+	}
+	var n C.int
+	st := lua_resume(L.statePtr(), f, C.int(nargs), &n)
+	return int(st), int(n)
+}

@@ -522,18 +522,26 @@ func NewState() *State {
 	return L
 }
 
-// Close closes a state (replaces lua_close).
+// Close closes a state (replaces lua_close / close_state).
 func (L *State) Close() {
+	/* os.exit(…, true) and lua_close may run on a coroutine. That
+	   caller cannot be asked to exit via co.req — it is the goroutine
+	   running Close — so it is skipped below and marked dead at the end. */
+	caller := L
 	L = L.g.mainthread /* only the main thread can be closed */
-	// the '__gc' metamethods run on closing, as they do in C
+	/* C's close_state: luaF_close on the main stack before finalizers. */
+	_ = luaD_closeprotected(L, 0, closeKTOP, false)
+	/* Unwind children before '__gc' so a suspended <close> runs while
+	   its userdata C block is still live. Finalizers may create more
+	   threads; a second pass after closeFinalizers catches those. */
+	L.g.closeAllThreads(caller)
 	L.closeFinalizers()
 	L.status = LUA_OK
 	L.dead = true
-	/* Stop every child coroutine before the C lua_State handles go
-	   away. NewThread starts a goroutine that waits on co.req; without
-	   this those goroutines — and any C frame parked in Yield — outlive
-	   the freed handles. */
-	L.g.closeAllThreads()
+	L.g.closeAllThreads(caller)
+	if caller != L && !caller.isMain {
+		caller.dead = true
+	}
 	/* the block C was handed as this state's `lua_State *`, if any */
 	if releaseCState != nil {
 		releaseCState(L)
@@ -545,7 +553,10 @@ func (L *State) Close() {
 // handles those frames may still name. It rescans until none remain,
 // so a '__close' that creates another thread is still caught, and so a
 // child that is mid-coRun is retried until it waits or finishes.
-func (g *globalState) closeAllThreads() {
+//
+// skip is the thread that is running Close itself (when Close was
+// entered from a coroutine). Sending reqClose to it would deadlock.
+func (g *globalState) closeAllThreads(skip *State) {
 	if g == nil {
 		return
 	}
@@ -554,7 +565,7 @@ func (g *globalState) closeAllThreads() {
 		gcThrMu.Lock()
 		for i := range gcThrs {
 			th := gcThrs[i].Value()
-			if th == nil || th.g != g || th.isMain || th.dead {
+			if th == nil || th.g != g || th.isMain || th.dead || th == skip {
 				continue
 			}
 			kids = append(kids, th)
@@ -829,16 +840,17 @@ func (L *State) ResetThread() int {
 func (L *State) Resume(from *State, nargs int) int {
 	co := L
 	if co.isMain {
-		return LUA_ERRRUN
+		return resumeError(co, "cannot resume non-suspended coroutine")
 	}
 	switch co.status {
 	case LUA_OK:
 		if co.dead {
-			return LUA_ERRRUN
+			return resumeError(co, "cannot resume dead coroutine")
 		}
+		return resumeError(co, "cannot resume non-suspended coroutine")
 	case LUA_YIELD:
 	default:
-		return LUA_ERRRUN
+		return resumeError(co, "cannot resume dead coroutine")
 	}
 	if !co.started {
 		/* Starting the coroutine. C finds the body at 'ci->func + 1',
@@ -875,40 +887,63 @@ func (L *State) Resume(from *State, nargs int) int {
 		ccalls = int(from.nCcalls & 0xffff) /* getCcalls(from) */
 	}
 	if ccalls >= LUAI_MAXCCALLS {
-		/* C's resume_error: "C stack overflow" */
-		return resumeError(from, "C stack overflow")
+		/* C's resume_error: message goes on the resumed thread */
+		return resumeError(co, "C stack overflow")
 	}
 	co.co.req <- resumeReq{kind: reqResume, args: co.co.args, ccalls: ccalls}
 	resp := <-co.co.resp
 	co.status = byte(resp.status)
 	if resp.status == LUA_OK || resp.status == LUA_YIELD {
-		/* C's auxresume grows the resumer's stack with lua_checkstack,
-		   which must not raise: when the results do not fit, the error
-		   is "too many results to resume". */
-		if !from.CheckStack(len(resp.vals)) {
-			return resumeError(from, "too many results to resume")
-		}
-		copy(from.stack[from.top:], resp.vals)
-		from.top += len(resp.vals)
+		/* C's lua_resume leaves results on the coroutine. The caller
+		   (auxresume / lua_xmove) moves them. Yield took them off this
+		   stack; a normal return left them on slot 0 (the body was
+		   called there), which would make lua_gettop under-count — lift
+		   them above the base CI's function slot, as C does. */
+		n := len(resp.vals)
 		if resp.status == LUA_YIELD {
-			return LUA_YIELD
+			co.checkStack(n)
+			copy(co.stack[co.top:], resp.vals)
+			co.top += n
+		} else {
+			co.checkStack(n + 1)
+			copy(co.stack[1:1+n], resp.vals)
+			setnilvalue(&co.stack[0])
+			co.top = 1 + n
 		}
-		return LUA_OK
+		return int(resp.status)
 	}
-	if !from.CheckStack(1) {
-		return LUA_ERRRUN
+	/* error object on the coroutine, as C's lua_resume does. Do not
+	   rewrite the stack: a pending <close> variable may still sit in a
+	   lower slot and must survive until coroutine.close / resetthread. */
+	if len(resp.vals) > 0 {
+		if co.top == 0 || !luaV_rawequalobj(&co.stack[co.top-1], &resp.vals[0]) {
+			co.checkStack(1)
+			co.stack[co.top] = resp.vals[0]
+			co.top++
+		}
+		co.co.vals = append(co.co.vals[:0], resp.vals[0])
+	} else if co.co != nil {
+		co.co.vals = co.co.vals[:0]
 	}
-	from.stack[from.top] = resp.vals[0]
-	from.top++
 	return resp.status
 }
 
-// resumeError is 'resume_error' (ldo.c): it pushes the message and
-// reports the failure to 'resume'.
+// resumeError is 'resume_error' (ldo.c): it pushes the message on the
+// resumed thread and reports LUA_ERRRUN. co.vals is set so lua_resume's
+// nresults out-parameter is not left holding a prior successful count.
+// The stack below top is left alone so a dead coroutine's pending
+// to-be-closed slots are not destroyed.
 func resumeError(L *State, msg string) int {
+	if L == nil {
+		return LUA_ERRRUN
+	}
+	v := strValue(L, msg)
 	L.checkStack(1)
-	L.stack[L.top] = strValue(L, msg)
+	L.stack[L.top] = v
 	L.top++
+	if L.co != nil {
+		L.co.vals = append(L.co.vals[:0], v)
+	}
 	return LUA_ERRRUN
 }
 

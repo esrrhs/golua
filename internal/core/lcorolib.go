@@ -68,24 +68,33 @@ func coAuxResume(L *State, co *State, narg int) int {
 	co.XMove(L, narg)         /* C's auxresume: lua_xmove(L, co, narg) */
 	status := co.Resume(L, narg)
 	if status == LUA_OK || status == LUA_YIELD {
-		nres := L.GetTop() - base /* values moved back from the coroutine */
-		if !L.CheckStack(1) {     /* room for the boolean below them */
-			L.SetTop(base) /* remove results anyway */
+		nres := len(co.co.vals) /* results left on the coroutine */
+		if !L.CheckStack(nres + 1) {
+			co.top -= nres /* remove results from the coroutine */
+			if co.top < 0 {
+				co.top = 0
+			}
+			L.SetTop(base)
 			L.PushString("too many results to resume")
 			return -1 /* error flag */
 		}
+		L.XMove(co, nres) /* C's auxresume: lua_xmove(co, L, nres) */
 		return nres
 	}
-	/* error: Resume should have moved the error message onto L */
-	if L.GetTop() == base {
+	/* error: move the message from the coroutine onto L */
+	if co.top > 0 {
+		L.XMove(co, 1)
+	} else if len(co.co.vals) > 0 {
+		L.checkStack(1)
+		L.stack[L.top] = co.co.vals[0]
+		L.top++
+	} else {
 		L.PushString("cannot resume dead coroutine")
-	} else if ttisnil(&L.stack[L.top-1]) {
+	}
+	if ttisnil(&L.stack[L.top-1]) {
 		/* ldo.go's luaD_throw panics without carrying the error object,
-		   so the message never reaches (*State).Resume and the slot is
-		   left nil.  C's lua_resume picks it up from the top of the
-		   coroutine's stack with luaD_seterrorobj, which is still
-		   intact here -- do the same.  Delete this branch once
-		   luaD_throw stores L.stack[L.top-1] in the panic value. */
+		   so the message may be nil here while still sitting on the
+		   coroutine stack. C's lua_resume uses luaD_seterrorobj. */
 		if co.top > 0 {
 			L.stack[L.top-1] = co.stack[co.top-1]
 		}
@@ -112,17 +121,11 @@ func coAuxWrap(L *State) int {
 	if r < 0 { /* error? */
 		stat := co.Status()
 		if stat != LUA_OK && stat != LUA_YIELD { /* error in the coroutine? */
-			/* C calls lua_closethread(co, L) here: that is what closes
-			   the to-be-closed variables of the dead coroutine, and it
-			   also hands the C-call depth of L down to 'co'.  A
-			   '__close' that raises replaces the original error, and
-			   C moves *that* message (in slot 1 of 'co') to the
-			   caller. */
+			/* C's auxwrap calls lua_closethread to run pending __close
+			   handlers; the error object is already on L from auxresume
+			   and is what lua_error propagates (PUC-Lua 5.4.6+). */
 			co.nCcalls = L.nCcalls & 0xffff
-			st := co.resetThreadStatus(int(stat))
-			if st != LUA_OK {
-				L.stack[L.top-1] = co.stack[1] /* move error message */
-			}
+			_ = co.resetThreadStatus(int(stat))
 			stat = LUA_ERRRUN
 		}
 		if stat != LUA_ERRMEM && /* not a memory error and ... */
@@ -258,10 +261,16 @@ func coCloseThread(co, from *State) (bool, Value) {
 		st := co.resetThreadStatus(int(co.status))
 		if st != LUA_OK {
 			co.hasErr = false
+			/* Prefer the object resetThreadStatus left on the stack: a
+			   pending __close that raises replaces the body error, as in
+			   C's luaE_resetthread. lastErr is only the fallback. */
+			if co.top > 1 && !ttisnil(&co.stack[1]) {
+				return false, co.stack[1]
+			}
 			if !ttisnil(&co.lastErr) {
 				return false, co.lastErr
 			}
-			return false, co.stack[1]
+			return false, strValue(co, "error closing coroutine")
 		}
 		co.hasErr = false
 		return true, Value{} /* already closed */

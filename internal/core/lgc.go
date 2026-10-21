@@ -230,12 +230,15 @@ var gcHold []Value
 // gcReleaseFor drops the holds of one state so Go can collect its
 // unreachable watched objects, and keeps every other state's holds.
 // A global nil-out would let Close or collectgarbage on L1 finalize L2.
+//
+// gcHold is rebuilt under gcWatchMu together with the watch list so a
+// concurrent luaC_checkFinalizer cannot append a hold that this replace
+// then loses.
 func gcReleaseFor(g *globalState) {
 	gcWatchMu.Lock()
-	watch := gcWatch
-	gcWatchMu.Unlock()
-	hold := make([]Value, 0, len(watch))
-	for _, w := range watch {
+	defer gcWatchMu.Unlock()
+	hold := make([]Value, 0, len(gcWatch))
+	for _, w := range gcWatch {
 		if watchOwner(w) == g {
 			continue
 		}
@@ -250,10 +253,9 @@ func gcReleaseFor(g *globalState) {
 // gcRehold takes them back, for the time until the next cycle.
 func gcRehold() {
 	gcWatchMu.Lock()
-	watch := gcWatch
-	gcWatchMu.Unlock()
-	hold := make([]Value, 0, len(watch))
-	for _, w := range watch {
+	defer gcWatchMu.Unlock()
+	hold := make([]Value, 0, len(gcWatch))
+	for _, w := range gcWatch {
 		if w.dead() { /* collected, and so already finalised */
 			continue
 		}
@@ -548,8 +550,8 @@ func luaC_checkFinalizer(L *State, v *Value, mt *Table) {
 		})
 		gcWatchMu.Lock()
 		gcWatch = append(gcWatch, weakTableRef{w: weak.Make(t), g: L.g})
-		gcWatchMu.Unlock()
 		gcHold = append(gcHold, *v) /* see gcHold */
+		gcWatchMu.Unlock()
 	case LUA_VUSERDATA:
 		u := uvalue(v)
 		if u.finalized {
@@ -560,8 +562,8 @@ func luaC_checkFinalizer(L *State, v *Value, mt *Table) {
 		setUdataFinalizer(L, u)
 		gcWatchMu.Lock()
 		gcWatch = append(gcWatch, weakUdataRef{w: weak.Make(u), g: L.g})
-		gcWatchMu.Unlock()
 		gcHold = append(gcHold, *v) /* see gcHold */
+		gcWatchMu.Unlock()
 	}
 }
 

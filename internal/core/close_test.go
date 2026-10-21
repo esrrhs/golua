@@ -1,0 +1,159 @@
+package core
+
+import (
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+// os.exit(0, true) from a coroutine used to deadlock: Close asked the
+// calling thread to exit via co.req while that same goroutine was inside
+// closeAllThreads.
+func TestCloseFromCoroutineDoesNotHang(t *testing.T) {
+	old := osExitHook
+	osExitHook = func(int) {}
+	t.Cleanup(func() { osExitHook = old })
+
+	L := NewState()
+	L.OpenLibs()
+	done := make(chan error, 1)
+	go func() {
+		done <- L.DoString(`
+			local co = coroutine.create(function()
+				os.exit(0, true)
+			end)
+			assert(coroutine.resume(co))
+		`)
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("DoString: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Close from coroutine hung (closeAllThreads self-deadlock)")
+	}
+}
+
+// C's close_state runs luaF_close on the main stack before finalizers.
+func TestCloseRunsMainThreadTBC(t *testing.T) {
+	L := NewState()
+	ran := false
+	L.NewTable()
+	L.NewTable()
+	L.PushGoFunc(func(L *State) int {
+		ran = true
+		return 0
+	})
+	L.SetField(-2, "__close")
+	L.SetMetaTable(-2)
+	luaF_newtbcupval(L, L.top-1)
+	L.Close()
+	if !ran {
+		t.Fatal("main-thread to-be-closed __close did not run on Close")
+	}
+}
+
+// A suspended coroutine's <close> must run before __gc on state Close,
+// so __close can still see userdata C memory that discardUdataC frees.
+func TestCloseRunsChildTBCBeforeGC(t *testing.T) {
+	L := NewState()
+	L.OpenLibs()
+	var log strings.Builder
+	var mu sync.Mutex
+	L.PushGoFunc(func(L *State) int {
+		mu.Lock()
+		log.WriteString(L.CheckString(1))
+		log.WriteByte(';')
+		mu.Unlock()
+		return 0
+	})
+	L.SetGlobal("note")
+	if err := L.DoString(`
+		local mt = {
+			__close = function() note("close") end,
+			__gc = function() note("gc") end,
+		}
+		co = coroutine.create(function()
+			local x <close> = setmetatable({}, mt)
+			coroutine.yield()
+		end)
+		assert(coroutine.resume(co))
+	`); err != nil {
+		t.Fatal(err)
+	}
+	L.Close()
+	mu.Lock()
+	got := log.String()
+	mu.Unlock()
+	ci := strings.Index(got, "close;")
+	gi := strings.Index(got, "gc;")
+	if ci < 0 || gi < 0 {
+		t.Fatalf("log %q missing close and/or gc", got)
+	}
+	if ci > gi {
+		t.Fatalf("__gc ran before __close: %q", got)
+	}
+}
+
+// Closing a dead coroutine must report a pending __close error, not the
+// original body error that lastErr still holds.
+func TestCoroutineCloseReportsCloseError(t *testing.T) {
+	L := NewState()
+	t.Cleanup(L.Close)
+	L.OpenLibs()
+	if err := L.DoString(`
+		local co = coroutine.create(function()
+			local x <close> = setmetatable({}, {
+				__close = function() error("close", 0) end
+			})
+			error("body", 0)
+		end)
+		assert(not coroutine.resume(co))
+		local ok, err = coroutine.close(co)
+		_G.out = tostring(ok) .. " " .. tostring(err)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	L.GetGlobal("out")
+	s, _ := L.ToString(-1)
+	if s != "false close" {
+		t.Fatalf("got %q, want %q", s, "false close")
+	}
+}
+
+// Registering a __gc object in one state must not lose its hold when
+// another state collects at the same time.
+func TestGCHoldSurvivesConcurrentCollect(t *testing.T) {
+	L1 := NewState()
+	L2 := NewState()
+	t.Cleanup(L1.Close)
+	t.Cleanup(L2.Close)
+	L1.OpenLibs()
+	L2.OpenLibs()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = L1.DoString(`
+				local o = {}
+				setmetatable(o, {__gc = function() end})
+			`)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_ = L2.DoString(`collectgarbage("collect")`)
+		}
+	}()
+	wg.Wait()
+	/* L1 still has watched objects; a lost hold would let Go finalize
+	   them while L1 is open. A full collect on L1 must still be safe. */
+	if err := L1.DoString(`collectgarbage("collect")`); err != nil {
+		t.Fatal(err)
+	}
+}

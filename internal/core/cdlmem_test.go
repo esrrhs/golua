@@ -547,6 +547,72 @@ int luaopen_yc(lua_State *L) { luaL_newlib(L, reg); return 1; }
 	}
 }
 
+// os.exit(0, true) from one coroutine while another is suspended inside
+// a C yield must unwind the parked frame and not hang Close.
+func TestCloseFromCoroutineWithCYieldSibling(t *testing.T) {
+	dir := t.TempDir()
+	const src = `#include "lua.h"
+#include "lauxlib.h"
+static int l_y(lua_State *L) { return lua_yield(L, 0); }
+static const luaL_Reg reg[] = {{"y", l_y}, {NULL, NULL}};
+int luaopen_yc2(lua_State *L) { luaL_newlib(L, reg); return 1; }
+`
+	if err := os.WriteFile(filepath.Join(dir, "yc2.c"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !compileCExt(t, dir, "yc2") {
+		return
+	}
+	old := osExitHook
+	osExitHook = func(int) {}
+	t.Cleanup(func() { osExitHook = old })
+
+	before := cstateLive.Load()
+	L := NewState()
+	L.OpenLibs()
+	if err := L.DoString("package.cpath = " + quoteLuaString(filepath.Join(dir, "?.so"))); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- L.DoString(`
+			local y = require('yc2')
+			local parked = coroutine.create(function() y.y() end)
+			assert(coroutine.resume(parked))
+			assert(coroutine.status(parked) == 'suspended')
+			local killer = coroutine.create(function() os.exit(0, true) end)
+			assert(coroutine.resume(killer))
+		`)
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("DoString: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close from coroutine hung with a C-yielded sibling")
+	}
+	if testCgoParkedCount() != 0 {
+		t.Fatal("cgoParked still holds the yielded sibling after Close")
+	}
+	if got := cstateLive.Load(); got != before {
+		t.Fatalf("live handles after Close %d, want %d", got, before)
+	}
+}
+
+// lua_resume on the main thread must not panic: main has no coRuntime.
+func TestLuaResumeMainThreadNoPanic(t *testing.T) {
+	L := NewState()
+	t.Cleanup(L.Close)
+	st, nres := testLuaResume(L, nil, 0)
+	if st != LUA_ERRRUN {
+		t.Fatalf("status %d, want ERRRUN", st)
+	}
+	if nres != 1 {
+		t.Fatalf("nres=%d, want 1", nres)
+	}
+}
+
 // lua_getupvalue answers a non-NULL empty string for a C closure upvalue,
 // so callers that loop until NULL do not stop on the first upvalue.
 func TestGetUpvalueCClosureEmptyName(t *testing.T) {
