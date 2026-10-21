@@ -281,12 +281,13 @@ func lua_yieldk(p *C.lua_State, nresults C.int, ctx C.lua_KContext, k C.lua_KFun
 	} else {
 		L.ci.cK = nil
 	}
-	/* Park the cgo depth across the wait. The C frame stays on this
-	   goroutine's stack, but nothing in it may keep a pointer that
-	   survives a yield (PUC-Lua already says so), and other states must
-	   be free to reclaim memory while this coroutine is suspended. */
-	cgoPark()
-	defer cgoUnpark()
+	/* Park only when the yield will actually wait. A failing Yield
+	   (main thread, or across a C-call boundary) must not drop depth
+	   and flush frees while the outer C frame is still live. */
+	if !L.isMain && L.co != nil && yieldable(L) {
+		cgoPark()
+		defer cgoUnpark()
+	}
 	/* When there is no continuation, this is the number of values the
 	   resumer passed to 'coroutine.resume' and they are already on the
 	   stack: the results of the yield.  With one, it is what the
@@ -296,9 +297,12 @@ func lua_yieldk(p *C.lua_State, nresults C.int, ctx C.lua_KContext, k C.lua_KFun
 
 //export lua_yield
 func lua_yield(p *C.lua_State, nresults C.int) C.int {
-	cgoPark()
-	defer cgoUnpark()
-	return C.int(stateOf(p).Yield(int(nresults)))
+	L := stateOf(p)
+	if !L.isMain && L.co != nil && yieldable(L) {
+		cgoPark()
+		defer cgoUnpark()
+	}
+	return C.int(L.Yield(int(nresults)))
 }
 
 func init() {

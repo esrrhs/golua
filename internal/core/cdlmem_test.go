@@ -240,6 +240,18 @@ func TestCgoParkFlushesDeferredFrees(t *testing.T) {
 	}
 }
 
+// Nested enters (outer C calling through lua_callk into another C
+// function that yields) must park the whole nest, not one level.
+func TestCgoParkNestedFlushesDeferredFrees(t *testing.T) {
+	held, freed := testCgoParkNestedFlush()
+	if !held {
+		t.Fatal("cgoFree ran while nested cgo calls were entered")
+	}
+	if !freed {
+		t.Fatal("cgoPark left nested depth held; frees stayed deferred")
+	}
+}
+
 // luaL_error used to allocate a formatted message, call into Go (which
 // panics), and never reach free. The scratch is freed before the throw.
 func TestLuaLErrorDoesNotLeak(t *testing.T) {
@@ -277,6 +289,90 @@ func TestCStateReleaseUntracks(t *testing.T) {
 	th.cstateTok.release()
 	if got := cstateTrackedCount(L.g); got != before-1 {
 		t.Fatalf("tracked handles %d, want %d", got, before-1)
+	}
+}
+
+// Close stops child coroutine goroutines before freeing their lua_State
+// handles. Leaving them blocked on co.req leaked goroutines and left C
+// frames naming freed pointers.
+func TestCloseStopsChildThreads(t *testing.T) {
+	before := cstateLive.Load()
+	L := NewState()
+	_ = L.statePtr()
+	th := L.NewThread()
+	_ = th.statePtr()
+	if cstateLive.Load() != before+2 {
+		t.Fatalf("live handles %d, want %d", cstateLive.Load(), before+2)
+	}
+	L.Close()
+	if !th.dead {
+		t.Fatal("child coroutine goroutine was not stopped")
+	}
+	if got := cstateLive.Load(); got != before {
+		t.Fatalf("live handles after Close %d, want %d", got, before)
+	}
+}
+
+// Close also unwinds a child that is suspended inside a C yield, so the
+// parked C frame is gone before its lua_State* block is freed.
+func TestCloseUnwindsYieldedCThread(t *testing.T) {
+	dir := t.TempDir()
+	const src = `#include "lua.h"
+#include "lauxlib.h"
+static int l_y(lua_State *L) { return lua_yield(L, 0); }
+static const luaL_Reg reg[] = {{"y", l_y}, {NULL, NULL}};
+int luaopen_yc(lua_State *L) { luaL_newlib(L, reg); return 1; }
+`
+	if err := os.WriteFile(filepath.Join(dir, "yc.c"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !compileCExt(t, dir, "yc") {
+		return
+	}
+	before := cstateLive.Load()
+	L := NewState()
+	L.OpenLibs()
+	if err := L.DoString("package.cpath = " + quoteLuaString(filepath.Join(dir, "?.so"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := L.DoString(`
+		local y = require('yc')
+		co = coroutine.create(function() y.y() end)
+		assert(coroutine.resume(co))
+		assert(coroutine.status(co) == 'suspended')
+	`); err != nil {
+		t.Fatalf("yield setup: %v", err)
+	}
+	L.GetGlobal("co")
+	co := L.ToThread(-1)
+	L.Pop(1)
+	if co == nil {
+		t.Fatal("missing coroutine")
+	}
+	_ = co.statePtr()
+	L.Close()
+	if !co.dead {
+		t.Fatal("yielded C coroutine was not closed")
+	}
+	if got := cstateLive.Load(); got != before {
+		t.Fatalf("live handles after Close %d, want %d", got, before)
+	}
+}
+
+// lua_getupvalue answers a non-NULL empty string for a C closure upvalue,
+// so callers that loop until NULL do not stop on the first upvalue.
+func TestGetUpvalueCClosureEmptyName(t *testing.T) {
+	if testEmptyCStrID() == 0 {
+		t.Fatal("keepCStr(\"\") returned NULL")
+	}
+	L := NewState()
+	t.Cleanup(L.Close)
+	name, ok := testGetUpvalueCClosureName(L)
+	if !ok {
+		t.Fatal("lua_getupvalue returned NULL for a C closure upvalue")
+	}
+	if name != "" {
+		t.Fatalf("lua_getupvalue name %q", name)
 	}
 }
 

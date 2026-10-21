@@ -3,6 +3,7 @@
 package core
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -20,10 +21,16 @@ import "C"
 // call and does not see pointers that live only in C, so a finalizer
 // that called C.free directly would pull the block out from under the
 // .so. cgoFree postpones the free until every such call has returned.
+//
+// Depth is per goroutine: a yield parks that goroutine's whole nest of
+// enters (outer cFunc + inner cFunc via lua_callk), so other states are
+// not stuck behind a suspended frame. Concurrent cgo on another
+// goroutine still holds its own depth and still defers frees.
 var (
-	cgoMu    sync.Mutex
-	cgoDepth int
-	cgoDefer []unsafe.Pointer
+	cgoMu     sync.Mutex
+	cgoByG    = map[int64]int{} // goroutine id -> enter depth
+	cgoParked = map[int64]int{} // depth stashed by cgoPark for cgoUnpark
+	cgoDefer  []unsafe.Pointer
 
 	// cgoFreed counts blocks actually returned to libc.
 	cgoFreed atomic.Uint64
@@ -34,22 +41,45 @@ var (
 	cstateLive atomic.Int64
 )
 
-// cgoOnQuiet runs on the transition back to "no cgo call in progress".
+// cgoOnQuiet runs when the last active (non-parked) cgo call finishes.
+// It is not run on park: a suspended frame may still need its lua_Debug
+// entries in cgoArs after resume.
 var cgoOnQuiet func()
 
+func cgoGoid() int64 {
+	var buf [32]byte
+	n := runtime.Stack(buf[:], false)
+	// "goroutine N ["
+	const p = len("goroutine ")
+	if n <= p {
+		return 0
+	}
+	id := int64(0)
+	for i := p; i < n && buf[i] >= '0' && buf[i] <= '9'; i++ {
+		id = id*10 + int64(buf[i]-'0')
+	}
+	return id
+}
+
+func cgoBusyLocked() bool { return len(cgoByG) > 0 }
+
 func cgoEnter() {
+	id := cgoGoid()
 	cgoMu.Lock()
-	cgoDepth++
+	cgoByG[id]++
 	cgoMu.Unlock()
 }
 
 func cgoLeave() {
+	id := cgoGoid()
 	cgoMu.Lock()
-	if cgoDepth > 0 {
-		cgoDepth--
+	if d := cgoByG[id]; d > 1 {
+		cgoByG[id] = d - 1
+	} else {
+		delete(cgoByG, id)
 	}
 	var batch []unsafe.Pointer
-	quiet := cgoDepth == 0
+	quiet := !cgoBusyLocked()
 	if quiet {
 		batch = cgoDefer
 		cgoDefer = nil
@@ -64,23 +94,50 @@ func cgoLeave() {
 	}
 }
 
-// cgoPark steps out of the current cgo call across a yield. A suspended
-// C frame must not keep every state's deferred frees waiting: holding a
-// lua_tolstring pointer across a yield is already undefined in PUC-Lua,
-// and other coroutines are free to run and collect.
-func cgoPark() { cgoLeave() }
+// cgoPark steps this goroutine out of every nested cgo enter across a
+// yield. Holding a lua_tolstring pointer across a yield is already
+// undefined in PUC-Lua; other goroutines must be free to reclaim memory.
+func cgoPark() {
+	id := cgoGoid()
+	cgoMu.Lock()
+	n := cgoByG[id]
+	delete(cgoByG, id)
+	if n > 0 {
+		cgoParked[id] = n
+	}
+	var batch []unsafe.Pointer
+	quiet := !cgoBusyLocked()
+	if quiet {
+		batch = cgoDefer
+		cgoDefer = nil
+	}
+	cgoMu.Unlock()
+	for _, p := range batch {
+		C.free(p)
+		cgoFreed.Add(1)
+	}
+}
 
-// cgoUnpark re-enters after a yield resumes into the parked C frame.
-func cgoUnpark() { cgoEnter() }
+// cgoUnpark restores the enters that cgoPark stashed for this goroutine.
+func cgoUnpark() {
+	id := cgoGoid()
+	cgoMu.Lock()
+	n := cgoParked[id]
+	delete(cgoParked, id)
+	if n > 0 {
+		cgoByG[id] = n
+	}
+	cgoMu.Unlock()
+}
 
 // cgoFree releases p now when no cgo call is in progress, and otherwise
-// queues it until the outermost call returns.
+// queues it until every active call has returned or parked.
 func cgoFree(p unsafe.Pointer) {
 	if p == nil {
 		return
 	}
 	cgoMu.Lock()
-	if cgoDepth == 0 {
+	if !cgoBusyLocked() {
 		cgoMu.Unlock()
 		C.free(p)
 		cgoFreed.Add(1)
@@ -94,9 +151,12 @@ func cgoFree(p unsafe.Pointer) {
 // the debug API hand the pointer to C, which may keep it, so it is not
 // freed. Equal strings share one copy: a fresh malloc per call grows
 // without bound under a line hook.
+//
+// The empty string is a single immortal "" pointer: lua_getupvalue must
+// return non-NULL for a C closure's nameless upvalue, as PUC-Lua does.
 func internCStr(s string) *C.char {
 	if s == "" {
-		return nil
+		return cStrEmpty
 	}
 	if v, ok := cStrCache.Load(s); ok {
 		return v.(*C.char)
@@ -109,7 +169,10 @@ func internCStr(s string) *C.char {
 	return cs
 }
 
-var cStrCache sync.Map // string -> *C.char
+var (
+	cStrCache sync.Map // string -> *C.char
+	cStrEmpty = C.CString("")
+)
 
 // ---------------------------------------------------------------------
 // lua_State handles
@@ -331,6 +394,53 @@ func testCgoParkFlush() (heldDuringEnter, freedOnPark bool) {
 	cgoUnpark()
 	cgoLeave()
 	return heldDuringEnter, freedOnPark
+}
+
+// testCgoParkNestedFlush is testCgoParkFlush with two nested enters, the
+// shape of an outer C function that lua_callk's into another that yields.
+func testCgoParkNestedFlush() (heldDuringEnter, freedOnPark bool) {
+	cgoEnter()
+	cgoEnter()
+	p := C.malloc(1)
+	if p == nil {
+		cgoLeave()
+		cgoLeave()
+		return false, false
+	}
+	base := cgoFreed.Load()
+	cgoFree(p)
+	heldDuringEnter = cgoFreed.Load() == base
+	cgoPark()
+	freedOnPark = cgoFreed.Load() > base
+	cgoUnpark()
+	cgoLeave()
+	cgoLeave()
+	return heldDuringEnter, freedOnPark
+}
+
+// testEmptyCStrID is the address keepCStr returns for "".
+func testEmptyCStrID() uintptr {
+	p := keepCStr("")
+	if p == nil {
+		return 0
+	}
+	return uintptr(unsafe.Pointer(p))
+}
+
+// testGetUpvalueCClosureName calls lua_getupvalue on a one-upvalue C
+// closure and reports the name pointer's text ("" for C closures).
+func testGetUpvalueCClosureName(L *State) (name string, nonNil bool) {
+	cl := luaF_newCclosure(L, 1)
+	cl.f = func(L *State) int { return 0 }
+	setivalue(&cl.upvalue[0], 1)
+	L.checkStack(1)
+	setclCvalue(&L.stack[L.top], cl)
+	L.top++
+	p := lua_getupvalue(L.statePtr(), -1, 1)
+	if p == nil {
+		return "", false
+	}
+	return C.GoString(p), true
 }
 
 // testErrorDoesNotLeak raises n formatted luaL_error calls under pcall

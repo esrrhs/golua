@@ -517,17 +517,54 @@ func (L *State) Close() {
 	L = L.g.mainthread /* only the main thread can be closed */
 	// the '__gc' metamethods run on closing, as they do in C
 	L.closeFinalizers()
-	// close all coroutines of this state
-	// (nothing to free: the Go GC does it)
 	L.status = LUA_OK
 	L.dead = true
+	/* Stop every child coroutine before the C lua_State handles go
+	   away. NewThread starts a goroutine that waits on co.req; without
+	   this those goroutines — and any C frame parked in Yield — outlive
+	   the freed handles. */
+	L.g.closeAllThreads()
 	/* the block C was handed as this state's `lua_State *`, if any */
 	if releaseCState != nil {
 		releaseCState(L)
 	}
-	if L.co != nil && !L.isMain {
-		go func() { L.co.req <- resumeReq{kind: reqClose} }()
+}
+
+// closeAllThreads wakes every non-main thread of this state so its
+// goroutine can exit, before Close frees the malloc'd lua_State
+// handles those frames may still name.
+func (g *globalState) closeAllThreads() {
+	if g == nil {
+		return
 	}
+	var kids []*State
+	gcThrMu.Lock()
+	for i := range gcThrs {
+		th := gcThrs[i].Value()
+		if th == nil || th.g != g || th.isMain {
+			continue
+		}
+		kids = append(kids, th)
+	}
+	gcThrMu.Unlock()
+	for _, th := range kids {
+		th.forceCloseThread()
+	}
+}
+
+// forceCloseThread asks a child coroutine's goroutine to unwind. It is
+// a no-op when the thread is already dead or has no runtime.
+func (L *State) forceCloseThread() {
+	if L == nil || L.isMain || L.dead {
+		return
+	}
+	co := L.co
+	if co == nil {
+		return
+	}
+	co.req <- resumeReq{kind: reqClose}
+	<-co.resp
+	L.dead = true
 }
 
 // G returns the global state (G(L)).
