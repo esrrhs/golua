@@ -121,11 +121,21 @@ func coAuxWrap(L *State) int {
 	if r < 0 { /* error? */
 		stat := co.Status()
 		if stat != LUA_OK && stat != LUA_YIELD { /* error in the coroutine? */
-			/* C's auxwrap calls lua_closethread to run pending __close
-			   handlers; the error object is already on L from auxresume
-			   and is what lua_error propagates (PUC-Lua 5.4.6+). */
+			/* C's auxwrap calls lua_closethread(co, L): that closes
+			   pending to-be-closed variables. auxresume already moved
+			   the error onto L, but resetThreadStatus/seterrorobj and
+			   __close need it on co's stack (as the current error).
+			   Put it back, close, then take the (possibly replaced)
+			   message from co.stack[1]. */
 			co.nCcalls = L.nCcalls & 0xffff
-			_ = co.resetThreadStatus(int(stat))
+			err := L.stack[L.top-1]
+			co.checkStack(1)
+			co.stack[co.top] = err
+			co.top++
+			st := co.resetThreadStatus(int(stat))
+			if st != LUA_OK && co.top > 1 {
+				L.stack[L.top-1] = co.stack[1]
+			}
 			stat = LUA_ERRRUN
 		}
 		if stat != LUA_ERRMEM && /* not a memory error and ... */

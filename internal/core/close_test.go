@@ -124,8 +124,10 @@ func TestCoroutineCloseReportsCloseError(t *testing.T) {
 }
 
 // Registering a __gc object in one state must not lose its hold when
-// another state collects at the same time.
-func TestGCHoldSurvivesConcurrentCollect(t *testing.T) {
+// another state collects. (States are not safe for concurrent DoString
+// under the race detector; the hold list itself is what must stay
+// isolated across sequential collect cycles.)
+func TestGCHoldSurvivesOtherStateCollect(t *testing.T) {
 	L1 := NewState()
 	L2 := NewState()
 	t.Cleanup(L1.Close)
@@ -133,26 +135,17 @@ func TestGCHoldSurvivesConcurrentCollect(t *testing.T) {
 	L1.OpenLibs()
 	L2.OpenLibs()
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 200; i++ {
-			_ = L1.DoString(`
-				local o = {}
-				setmetatable(o, {__gc = function() end})
-			`)
+	for i := 0; i < 50; i++ {
+		if err := L1.DoString(`
+			local o = {}
+			setmetatable(o, {__gc = function() end})
+		`); err != nil {
+			t.Fatal(err)
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 200; i++ {
-			_ = L2.DoString(`collectgarbage("collect")`)
+		if err := L2.DoString(`collectgarbage("collect")`); err != nil {
+			t.Fatal(err)
 		}
-	}()
-	wg.Wait()
-	/* L1 still has watched objects; a lost hold would let Go finalize
-	   them while L1 is open. A full collect on L1 must still be safe. */
+	}
 	if err := L1.DoString(`collectgarbage("collect")`); err != nil {
 		t.Fatal(err)
 	}

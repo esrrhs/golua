@@ -898,14 +898,16 @@ func (L *State) Resume(from *State, nargs int) int {
 		   (auxresume / lua_xmove) moves them. Yield took them off this
 		   stack; a normal return left them on slot 0 (the body was
 		   called there), which would make lua_gettop under-count — lift
-		   them above the base CI's function slot, as C does. */
+		   them one slot above the base CI when they already fill [0:n].
+		   Only one extra slot is needed; checkStack(n+1) would ask for
+		   another full copy of a large MULTRET and abort. */
 		n := len(resp.vals)
 		if resp.status == LUA_YIELD {
 			co.checkStack(n)
 			copy(co.stack[co.top:], resp.vals)
 			co.top += n
-		} else {
-			co.checkStack(n + 1)
+		} else if n > 0 && co.top == n && co.ci != nil && co.ci.funcIdx == 0 {
+			co.checkStack(1)
 			copy(co.stack[1:1+n], resp.vals)
 			setnilvalue(&co.stack[0])
 			co.top = 1 + n
