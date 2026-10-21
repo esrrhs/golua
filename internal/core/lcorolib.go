@@ -267,13 +267,23 @@ func coCloseThread(co, from *State) (bool, Value) {
 		   closes any pending variable and reports the thread's status:
 		   a coroutine that ended with an error reports that error once
 		   again (false + message), and the report is then consumed --
-		   the second close returns true. */
+		   the second close returns true.
+
+		   Put lastErr back on the stack first so seterrorobj / __close
+		   see the body error (with its source:line). A raising __close
+		   still replaces it. */
+		if co.hasErr && !ttisnil(&co.lastErr) {
+			co.checkStack(1)
+			if co.top < 1 {
+				setnilvalue(&co.stack[0])
+				co.top = 1
+			}
+			co.stack[co.top] = co.lastErr
+			co.top++
+		}
 		st := co.resetThreadStatus(int(co.status))
 		if st != LUA_OK {
 			co.hasErr = false
-			/* Prefer the object resetThreadStatus left on the stack: a
-			   pending __close that raises replaces the body error, as in
-			   C's luaE_resetthread. lastErr is only the fallback. */
 			if co.top > 1 && !ttisnil(&co.stack[1]) {
 				return false, co.stack[1]
 			}

@@ -55,9 +55,10 @@ func TestCloseRunsMainThreadTBC(t *testing.T) {
 	}
 }
 
-// A suspended coroutine's <close> must run before __gc on state Close,
-// so __close can still see userdata C memory that discardUdataC frees.
-func TestCloseRunsChildTBCBeforeGC(t *testing.T) {
+// C's lua_close does not run child-coroutine __close; a suspended wrap
+// whose __close is os.exit must be collectable. Close still stops the
+// child goroutine and runs __gc for watched objects.
+func TestCloseCollectsSuspendedChildWithoutClose(t *testing.T) {
 	L := NewState()
 	L.OpenLibs()
 	var log strings.Builder
@@ -83,17 +84,19 @@ func TestCloseRunsChildTBCBeforeGC(t *testing.T) {
 	`); err != nil {
 		t.Fatal(err)
 	}
+	L.GetGlobal("co")
+	co := L.ToThread(-1)
+	L.Pop(1)
 	L.Close()
+	if co != nil && !co.dead {
+		t.Fatal("suspended child was not stopped")
+	}
 	mu.Lock()
 	got := log.String()
 	mu.Unlock()
-	ci := strings.Index(got, "close;")
-	gi := strings.Index(got, "gc;")
-	if ci < 0 || gi < 0 {
-		t.Fatalf("log %q missing close and/or gc", got)
-	}
-	if ci > gi {
-		t.Fatalf("__gc ran before __close: %q", got)
+	/* __close must not run on state Close (C does not); coroutine.close does. */
+	if strings.Contains(got, "close;") {
+		t.Fatalf("log %q: child __close ran on state Close", got)
 	}
 }
 

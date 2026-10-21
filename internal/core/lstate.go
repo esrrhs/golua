@@ -529,12 +529,13 @@ func (L *State) Close() {
 	   running Close — so it is skipped below and marked dead at the end. */
 	caller := L
 	L = L.g.mainthread /* only the main thread can be closed */
-	/* C's close_state: luaF_close on the main stack before finalizers. */
+	/* C's close_state: luaF_close on the main stack, then
+	   luaC_freeallobjects. Child coroutine __close is not run — a
+	   suspended wrap whose __close is os.exit must be collectable
+	   without being force-closed. Finalizers first; then stop any
+	   remaining child goroutines (with closing set, they exit without
+	   running __close). */
 	_ = luaD_closeprotected(L, 0, closeKTOP, false)
-	/* Unwind children before '__gc' so a suspended <close> runs while
-	   its userdata C block is still live. Finalizers may create more
-	   threads; a second pass after closeFinalizers catches those. */
-	L.g.closeAllThreads(caller)
 	L.closeFinalizers()
 	L.status = LUA_OK
 	L.dead = true
@@ -713,8 +714,18 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 				   CallInfo list and close every to-be-closed variable
 				   still pending on the coroutine's stack.  A '__close'
 				   that raises must not stop the others: C keeps going
-				   and reports the *newest* error. */
+				   and reports the *newest* error.
+
+				   When the whole state is closing, C does not run child
+				   __close at all — skip luaD_closeprotected so a
+				   suspended wrap whose __close is os.exit is not run. */
 				closed = true
+				if L.g.closing {
+					status = LUA_OK
+					L.top = 1
+					L.co.vals = L.co.vals[:0]
+					return
+				}
 				L.ci = &L.baseCI
 				L.baseCI.next = nil
 				L.baseCI.funcIdx = 0
