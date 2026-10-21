@@ -227,9 +227,25 @@ func (L *State) gcWaitFinalizers() {
 // at 'collectgarbage', and when the state closes.
 var gcHold []Value
 
-// gcRelease lets the held objects go, so that Go can see which of them
-// are really unreachable.
-func gcRelease() { gcHold = nil }
+// gcReleaseFor drops the holds of one state so Go can collect its
+// unreachable watched objects, and keeps every other state's holds.
+// A global nil-out would let Close or collectgarbage on L1 finalize L2.
+func gcReleaseFor(g *globalState) {
+	gcWatchMu.Lock()
+	watch := gcWatch
+	gcWatchMu.Unlock()
+	hold := make([]Value, 0, len(watch))
+	for _, w := range watch {
+		if watchOwner(w) == g {
+			continue
+		}
+		if w.dead() {
+			continue
+		}
+		hold = append(hold, w.value())
+	}
+	gcHold = hold
+}
 
 // gcRehold takes them back, for the time until the next cycle.
 func gcRehold() {
@@ -246,12 +262,23 @@ func gcRehold() {
 	gcHold = hold
 }
 
+func gcHasWatchFor(g *globalState) bool {
+	gcWatchMu.Lock()
+	defer gcWatchMu.Unlock()
+	for _, w := range gcWatch {
+		if watchOwner(w) == g {
+			return true
+		}
+	}
+	return false
+}
+
 // gcCycle is where PUC-Lua would have finished a collection: the objects
 // held for '__gc' are let go, the stale stack slots are cleared, Go
 // collects, and the metamethods of what has become unreachable run.
 func (L *State) gcCycle() {
 	gcPruneWatch()
-	gcRelease()
+	gcReleaseFor(L.g)
 	gcClearStacks() /* see gcClearStacks: stale slots keep objects alive */
 	L.gcSweepWeak()
 	runtime.GC() /* lets Go find the unreachable objects */
@@ -391,12 +418,14 @@ func (L *State) closeFinalizers() {
 		return
 	}
 	L.g.closing = true
-	if gcWatchEmpty() {
-		L.runFinalizers() /* nothing watched: drain whatever Go queued */
+	if !gcHasWatchFor(L.g) {
+		L.runFinalizers() /* nothing watched here: drain whatever Go queued */
 		return
 	}
 	gcPruneWatch()
-	gcRelease() /* nothing is held any more: the state is going away */
+	/* Drop only this state's holds. Other states' watched objects stay
+	   reachable until their own Close or collector cycle. */
+	gcReleaseFor(L.g)
 	gcClearStacks()
 	runtime.GC()         /* lets Go find the unreachable objects */
 	L.gcWaitFinalizers() /* nothing more will allocate: wait for the queue */
@@ -424,6 +453,7 @@ func (L *State) closeFinalizers() {
 	gcWatch = rest
 	gcWatchMu.Unlock()
 	L.drainCloseQueue()
+	gcRehold() /* restore holds for every state that is still open */
 }
 
 // drainCloseQueue is C's 'callallpendingfinalizers': while there is an

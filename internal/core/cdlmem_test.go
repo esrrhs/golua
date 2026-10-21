@@ -304,6 +304,34 @@ func TestCloseDoesNotFinalizeOtherState(t *testing.T) {
 	}
 }
 
+// Objects kept only by gcHold must survive another state's Close.
+// A global gcRelease would let Go finalize them immediately.
+func TestCloseDoesNotReleaseOtherStateHold(t *testing.T) {
+	L1 := NewState()
+	L2 := NewState()
+	t.Cleanup(L2.Close)
+
+	block := cgoNewUserBlock(L2, 4, 0)
+	*(*byte)(block) = 0xC3
+	L2.NewTable()
+	L2.PushGoFunc(func(L *State) int { return 0 })
+	L2.SetField(-2, "__gc")
+	L2.SetMetaTable(-2)
+	L2.Pop(1) /* only gcHold keeps the userdata */
+
+	before := cdlUserFrees.Load()
+	L1.Close()
+	for i := 0; i < 5; i++ {
+		runtime.GC()
+	}
+	if cdlUserFrees.Load() != before {
+		t.Fatal("L2 hold-only userdata was freed when L1 closed")
+	}
+	if *(*byte)(block) != 0xC3 {
+		t.Fatal("L2 hold-only block was reused after L1.Close")
+	}
+}
+
 // lua_setwarnf must hand the caller's ud to the C warning function.
 func TestWarnfReceivesUserData(t *testing.T) {
 	L := NewState()
