@@ -92,6 +92,12 @@ type CallInfo struct {
 	// cdlopen.go can call it.
 	cK   unsafe.Pointer
 	cCtx int64
+	// goCont is the continuation of a Go library function that a
+	// synchronous yield may have unwound (pcall, xpcall, dofile, pairs).
+	// The frame stays on the call chain; the resume finishes it by
+	// calling goCont instead of re-entering the Go function. Nil when
+	// the frame has none.
+	goCont func(L *State, status int) int
 	// ypcall is CIST_YPCALL: this frame is an interrupted 'lua_pcallk'
 	// with a continuation, so an error raised below it is recovered
 	// here instead of killing the coroutine (ldo.c findpcall).
@@ -193,6 +199,11 @@ type State struct {
 	openupval []*UpVal // open upvalues of this stack
 	tbclist   []int    // to-be-closed variables (stack indices)
 
+	// Last two-string concatenation. Tight loops commonly join the same
+	// pair on every iteration; short-string interning finds the same
+	// result but only after Go has allocated a temporary a+b string.
+	concatA, concatB, concatR *TString
+
 	errfunc int    // current error handling function (stack index)
 	nCcalls uint32 // l_uint32: see the note on incnny
 	nci     int
@@ -211,6 +222,19 @@ type State struct {
 	// only way to tell "start it" from "wake it up" in lua_resume.
 	started  bool
 	prevFunc Value // function to run on the next resume after a reset
+	// fastYield is set when a synchronous yield has unwound back to
+	// Resume. The yielding C frame is still L.ci; the next resume
+	// finishes it and continues the caller.
+	fastYield bool
+	// inVM is true while luaV_execute is on the stack. A nested
+	// luaD_call from there (a metamethod, a __close) cannot stay on
+	// the resumer's goroutine: the yield would have to come back into
+	// that Go frame. The call migrates the coroutine instead.
+	inVM bool
+	// vmNest is how many luaV_execute frames are active. A synchronous
+	// yield from the outermost one returns normally; a deeper one has
+	// Go frames above it and still unwinds.
+	vmNest int
 
 	// lastErr is the error object of a coroutine that ended with an
 	// error. C keeps it on the coroutine's own stack (lua_resume leaves
@@ -257,6 +281,15 @@ type coRuntime struct {
 	done chan struct{} // closed when coMain returns
 	vals []Value       // scratch for the values handed to the resumer
 	args []Value       // scratch for the arguments of a resume
+	// sync means this coroutine still runs on the resumer's goroutine.
+	// Pure Lua yield unwinds to Resume instead of parking. A Go body or
+	// a call into C promotes the coroutine onto its own goroutine,
+	// because that yield has to keep the Go or C stack it returns into.
+	sync bool
+	// live means coMain is running. Close uses it so a coroutine that
+	// was never given a goroutine is not mistaken for one whose
+	// goroutine has simply not reached the receive yet.
+	live bool
 }
 
 func newCoRuntime() *coRuntime {
@@ -283,12 +316,27 @@ type resumeResp struct {
 }
 
 const (
-	reqResume = 0
-	reqClose  = 1
+	reqResume   = 0
+	reqClose    = 1
+	reqContinue = 2 // finish a C call that was migrated onto the goroutine
+	reqReexec   = 3 // re-execute the current Lua frame on the goroutine
 )
 
 // closeSignal unwinds a coroutine being closed by coroutine.close.
 type closeSignal struct{}
+
+// yieldAbort unwinds a synchronous yield back to Resume. It is not an
+// error: the Lua stack and the call chain stay as they are, and the next
+// resume continues them.
+type yieldAbort struct{}
+
+// migrateAbort unwinds a synchronous resume back to Resume so the rest
+// of it can run on the coroutine's goroutine. reexec means the current
+// opcode has to be run again (a nested call had not started); otherwise
+// a C frame is already on the stack and only that call has to be made.
+type migrateAbort struct {
+	reexec bool
+}
 
 // luaError is the object thrown by luaD_throw.
 type luaError struct {
@@ -601,6 +649,14 @@ func (L *State) forceCloseThread() bool {
 		L.dead = true
 		return true
 	}
+	// A synchronous coroutine has no goroutine to signal. lua_close does
+	// not run a child's __close, so marking it dead is the whole of it.
+	// A bare coRuntime with sync still false (a test double) keeps the
+	// channel attempt below.
+	if co.sync && !co.live {
+		L.dead = true
+		return true
+	}
 	select {
 	case <-co.done:
 		L.dead = true
@@ -655,7 +711,7 @@ func (L *State) NewThread() *State {
 	L1.hookcount = L.basehookcount /* resethookcount(L1) */
 	L1.hookExternal = L.hookExternal
 	L1.co = newCoRuntime()
-	go L1.coMain()
+	L1.co.sync = true
 	// the thread object goes on the stack of the creating state
 	L.checkStack(1)
 	var th Value
@@ -680,8 +736,19 @@ func (L *State) coMain() {
 		/* 'coRun' returns only when the coroutine is through: a yield
 		   parks the goroutine inside (*State).Yield, which sends the
 		   resume response itself and waits there for the next resume
-		   request. */
-		status, closed := L.coRun(req.args, req.ccalls)
+		   request. A continuation request finishes the C call that was
+		   migrated here, then the Lua that called it. */
+		var status int
+		var closed bool
+		if req.kind == reqContinue {
+			L.nCcalls = uint32(req.ccalls)
+			status, closed = L.finishMigrated()
+		} else if req.kind == reqReexec {
+			L.nCcalls = uint32(req.ccalls)
+			status, closed = L.reexec()
+		} else {
+			status, closed = L.coRun(req.args, req.ccalls)
+		}
 		L.dead = true
 		if closed {
 			/* luaE_resetthread leaves the thread with status LUA_OK,
@@ -709,6 +776,8 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch x := r.(type) {
+			case *yieldAbort, *migrateAbort:
+				panic(x)
 			case *closeSignal:
 				/* C's lua_closethread -> luaE_resetthread: unwind the
 				   CallInfo list and close every to-be-closed variable
@@ -820,16 +889,22 @@ func (L *State) ResetThread() int {
 		return LUA_ERRRUN
 	}
 	if !L.dead && L.status == LUA_YIELD && L.co != nil {
-		// still suspended: unwind it
-		select {
-		case L.co.req <- resumeReq{kind: reqClose}:
+		if L.co.live {
+			// still suspended on its goroutine: unwind it there
 			select {
-			case <-L.co.resp:
+			case L.co.req <- resumeReq{kind: reqClose}:
+				select {
+				case <-L.co.resp:
+				case <-L.co.done:
+				}
 			case <-L.co.done:
 			}
-		case <-L.co.done:
+		} else {
+			// synchronous, and nothing is listening on the channel
+			_ = L.unwindForClose()
 		}
 	}
+	L.fastYield = false
 	L.dead = false
 	L.hasErr = false
 	L.lastErr = Value{}
@@ -843,6 +918,7 @@ func (L *State) ResetThread() int {
 	L.errfunc = 0
 	L.nCcalls = 0
 	L.co = newCoRuntime()
+	L.co.live = true
 	go L.coMain()
 	return LUA_OK
 }
@@ -901,8 +977,13 @@ func (L *State) Resume(from *State, nargs int) int {
 		/* C's resume_error: message goes on the resumed thread */
 		return resumeError(co, "C stack overflow")
 	}
-	co.co.req <- resumeReq{kind: reqResume, args: co.co.args, ccalls: ccalls}
-	resp := <-co.co.resp
+	var resp resumeResp
+	if co.co.sync {
+		resp = co.resumeSync(ccalls)
+	} else {
+		co.co.req <- resumeReq{kind: reqResume, args: co.co.args, ccalls: ccalls}
+		resp = <-co.co.resp
+	}
 	co.status = byte(resp.status)
 	if resp.status == LUA_OK || resp.status == LUA_YIELD {
 		/* C's lua_resume leaves results on the coroutine. The caller
@@ -958,6 +1039,289 @@ func resumeError(L *State, msg string) int {
 		L.co.vals = append(L.co.vals[:0], v)
 	}
 	return LUA_ERRRUN
+}
+
+// migrateNested moves a synchronous coroutine onto its goroutine and
+// re-executes the opcode that was about to do something a yield must
+// come back into. The opcode has already saved the next pc; stepping
+// back one lands on the opcode itself. No effect once the coroutine
+// has been promoted, or outside the interpreter.
+func (L *State) migrateNested() {
+	if L.co == nil || !L.co.sync || !L.inVM {
+		return
+	}
+	if ci := L.ci; ci != nil && isLua(ci) && ci.savedpc > 0 {
+		ci.savedpc--
+	}
+	panic(&migrateAbort{reexec: true})
+}
+
+// ensureAsync moves a synchronous coroutine onto its own goroutine.
+// The resumer is blocked in Resume, so the goroutine can take the next
+// request without the two of them running the body at once.
+func (L *State) ensureAsync() {
+	if L.co == nil || !L.co.sync {
+		return
+	}
+	L.co.sync = false
+	if !L.co.live {
+		L.co.live = true
+		go L.coMain()
+	}
+}
+
+// prepareFastYield suspends a synchronous coroutine and returns. The
+// yielding C frame stays current; the interpreter returns to Resume
+// instead of finishing the call. fastYieldNow is the same suspension
+// when Go frames above the interpreter have to be unwound.
+func (L *State) prepareFastYield(nresults int) {
+	if L.isMain || L.co == nil {
+		luaG_runerror(L, "attempt to yield from outside a coroutine")
+	}
+	if !yieldable(L) {
+		luaG_runerror(L, "attempt to yield across a C-call boundary")
+	}
+	L.nYields++
+	if nresults > 0 {
+		L.co.vals = append(L.co.vals[:0], L.stack[L.top-nresults:L.top]...)
+	} else {
+		L.co.vals = L.co.vals[:0]
+	}
+	L.top -= nresults
+	if L.top < 0 {
+		L.top = 0
+	}
+	L.fastYield = true
+}
+
+// fastYieldNow suspends a synchronous coroutine. It does not return:
+// Resume's recover continues the caller on the next resume.
+func (L *State) fastYieldNow(nresults int) {
+	L.prepareFastYield(nresults)
+	panic(&yieldAbort{})
+}
+
+// unroll finishes whatever call is current, the way ldo.c's unroll does
+// after a yield. A Lua frame is executed. A Go frame with a continuation
+// runs that; any other Go frame is finished with the values already on
+// the stack. It returns when the coroutine has yielded again or when
+// only the base frame is left.
+func (L *State) unroll() {
+	for {
+		ci := L.ci
+		if ci == nil || ci == &L.baseCI {
+			return
+		}
+		if isLua(ci) {
+			luaV_execute(L, ci)
+			if L.fastYield {
+				return
+			}
+			continue
+		}
+		var n int
+		if ci.goCont != nil {
+			n = ci.goCont(L, LUA_OK)
+			ci.goCont = nil
+		} else {
+			n = L.top - ci.funcIdx - 1
+			if n < 0 {
+				n = 0
+			}
+		}
+		luaD_poscall(L, ci, n)
+	}
+}
+
+// resumeSync runs one synchronous resume. A yield comes back as
+// LUA_YIELD with the values in co.vals; entering C migrates the rest of
+// the resume onto the coroutine goroutine and returns that goroutine's
+// response.
+func (L *State) resumeSync(ccalls int) (resp resumeResp) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		switch x := r.(type) {
+		case *yieldAbort:
+			resp.status = LUA_YIELD
+			resp.vals = L.co.vals
+		case *migrateAbort:
+			if x.reexec {
+				resp = L.reexecOnGoroutine(ccalls)
+			} else {
+				resp = L.continueOnGoroutine(ccalls)
+			}
+		default:
+			st, _ := L.recoverCo(r)
+			L.dead = true
+			if st != LUA_OK && len(L.co.vals) > 0 {
+				L.lastErr = L.co.vals[0]
+				L.hasErr = true
+			}
+			L.status = byte(st)
+			resp.status = st
+			resp.vals = L.co.vals
+		}
+	}()
+	if !L.fastYield && !ttisLclosure(&L.stack[0]) {
+		// A Go body has to keep its stack across a yield, so it runs
+		// on the coroutine goroutine from the first resume.
+		resp = L.promoteBody(ccalls)
+		return
+	}
+	if L.fastYield {
+		L.fastYield = false
+		L.nCcalls = uint32(ccalls + 1)
+		narg := len(L.co.args)
+		L.checkStack(narg)
+		copy(L.stack[L.top:], L.co.args)
+		L.top += narg
+		L.unroll()
+		if L.fastYield {
+			resp.status = LUA_YIELD
+			resp.vals = L.co.vals
+			return
+		}
+		L.dead = true
+		L.co.vals = append(L.co.vals[:0], L.stack[:L.top]...)
+		resp.status = LUA_OK
+		resp.vals = L.co.vals
+		return
+	}
+	n := len(L.co.args)
+	L.checkStack(n + 1)
+	copy(L.stack[1:], L.co.args)
+	L.top = 1 + n
+	L.nCcalls = uint32(ccalls)
+	luaD_call(L, 0, LUA_MULTRET)
+	if L.fastYield {
+		resp.status = LUA_YIELD
+		resp.vals = L.co.vals
+		return
+	}
+	L.dead = true
+	L.co.vals = append(L.co.vals[:0], L.stack[:L.top]...)
+	resp.status = LUA_OK
+	resp.vals = L.co.vals
+	return
+}
+
+// promoteBody runs a Go coroutine body on its own goroutine. The
+// arguments are already in co.args and the function is in stack[0],
+// which is where coRun expects them.
+func (L *State) promoteBody(ccalls int) resumeResp {
+	L.ensureAsync()
+	L.co.req <- resumeReq{kind: reqResume, args: L.co.args, ccalls: ccalls}
+	return <-L.co.resp
+}
+
+// reexecOnGoroutine runs the current Lua frame again on the coroutine
+// goroutine. ccall rewound savedpc to the opcode that wanted the nested
+// call, so the opcode and the call both happen where a yield can park.
+func (L *State) reexecOnGoroutine(ccalls int) resumeResp {
+	L.ensureAsync()
+	L.co.req <- resumeReq{kind: reqReexec, ccalls: ccalls}
+	return <-L.co.resp
+}
+
+// reexec is the goroutine side of reexecOnGoroutine.
+func (L *State) reexec() (status int, closed bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			status, closed = L.recoverCo(r)
+		}
+	}()
+	L.nCcalls++
+	if L.ci != nil && isLua(L.ci) {
+		luaV_execute(L, L.ci)
+	}
+	L.co.vals = append(L.co.vals[:0], L.stack[:L.top]...)
+	return LUA_OK, false
+}
+
+// continueOnGoroutine retries the C call that asked to migrate, on the
+// coroutine goroutine, and waits for that resume to yield or finish.
+func (L *State) continueOnGoroutine(ccalls int) resumeResp {
+	L.ensureAsync()
+	L.co.req <- resumeReq{kind: reqContinue, ccalls: ccalls}
+	return <-L.co.resp
+}
+
+// finishMigrated runs the C frame a synchronous resume had already
+// pushed, then the Lua that called it. Yields inside it park this
+// goroutine the ordinary way.
+func (L *State) finishMigrated() (status int, closed bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			status, closed = L.recoverCo(r)
+		}
+	}()
+	// The migrating ccall had already counted this C frame.
+	L.nCcalls++
+	ci := L.ci
+	f := clCvalue(&L.stack[ci.funcIdx]).f
+	n := f(L)
+	luaD_poscall(L, ci, n)
+	L.unroll()
+	L.co.vals = append(L.co.vals[:0], L.stack[:L.top]...)
+	return LUA_OK, false
+}
+
+// recoverCo is the panic recover shared by the coroutine runner. A
+// synchronous yield or a migration is not its business: those have to
+// reach Resume, so they are re-panicked.
+func (L *State) recoverCo(r any) (status int, closed bool) {
+	switch x := r.(type) {
+	case *yieldAbort, *migrateAbort:
+		panic(x)
+	case *closeSignal:
+		closed = true
+		if L.g.closing {
+			status = LUA_OK
+			L.top = 1
+			L.co.vals = L.co.vals[:0]
+			return
+		}
+		return L.unwindForClose(), true
+	case *luaError:
+		status = x.status
+		L.co.vals = append(L.co.vals[:0], x.value)
+		return
+	default:
+		status = LUA_ERRRUN
+		var v Value
+		setsvalue(&v, luaS_newlstr(L, fmt.Sprintf("%v", r)))
+		L.co.vals = append(L.co.vals[:0], v)
+		return
+	}
+}
+
+// unwindForClose closes a synchronous coroutine in place. It is what
+// the goroutine's closeSignal branch does, without the goroutine.
+func (L *State) unwindForClose() int {
+	L.ci = &L.baseCI
+	L.baseCI.next = nil
+	L.baseCI.funcIdx = 0
+	L.baseCI.top = 1
+	L.baseCI.callstatus = CIST_C
+	setnilvalue(&L.stack[0])
+	L.errfunc = 0
+	st := int(L.status)
+	if st == LUA_YIELD {
+		st = LUA_OK
+	}
+	L.status = LUA_OK
+	st = luaD_closeprotected(L, 1, st, false)
+	if st != LUA_OK {
+		luaD_seterrorobj(L, st, 1)
+		L.co.vals = append(L.co.vals[:0], L.stack[1])
+		return st
+	}
+	L.top = 1
+	L.co.vals = L.co.vals[:0]
+	return LUA_OK
 }
 
 // Yield yields nresults values (lua_yieldk / lua_yield / luaB_yield), and
@@ -1075,7 +1439,7 @@ func (L *State) rawRunProtected(f func()) (status int) {
 			}
 			L.stack[L.top] = x.value
 			L.top++
-		case *closeSignal:
+		case *closeSignal, *yieldAbort, *migrateAbort:
 			panic(x)
 		default:
 			/* A Go panic -- an index out of range, a failed type

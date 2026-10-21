@@ -128,6 +128,7 @@ func luaT_objtypename(L *State, o *Value) string {
 
 // luaT_callTM calls a metamethod with three arguments (ltm.c).
 func luaT_callTM(L *State, f, p1, p2, p3 *Value) {
+	L.migrateNested()
 	funcIdx := L.top
 	L.checkStack(4)
 	L.stack[funcIdx] = *f
@@ -145,6 +146,7 @@ func luaT_callTM(L *State, f, p1, p2, p3 *Value) {
 // luaT_callTMres calls a metamethod with two arguments and moves the
 // result to 'res' (ltm.c).
 func luaT_callTMres(L *State, f, p1, p2 *Value, res int) {
+	L.migrateNested()
 	funcIdx := L.top
 	L.checkStack(3)
 	L.stack[funcIdx] = *f

@@ -8,6 +8,7 @@ package core
 
 import (
 	"math"
+	"strconv"
 	"strings"
 )
 
@@ -107,12 +108,36 @@ func luaV_concat(L *State, total int) {
 		n := 2
 		o1 := &L.stack[top-2]
 		o2 := &L.stack[top-1]
-		if !(ttisstring(o1) || cvt2str(o1)) || !tostringInPlace(L, o2) {
+		if total == 2 && ttisstring(o1) && ttisinteger(o2) {
+			/* Formatting an integer directly after the string avoids
+			   interning a temporary decimal string only to copy it into
+			   the concatenation. OP_CONCAT still performs its one GC
+			   check after this returns. */
+			var scratch [128]byte
+			out := append(scratch[:0], tsvalue(o1).val...)
+			out = strconv.AppendInt(out, o2.i, 10)
+			setsvalue(&L.stack[top-2], luaS_newlstr(L, string(out)))
+			n = 2
+		} else if !(ttisstring(o1) || cvt2str(o1)) || !tostringInPlace(L, o2) {
 			luaT_tryconcatTM(L)
 		} else if isEmptyStr(o2) { /* second operand is empty? */
 			tostringInPlace(L, o1) /* result is first operand */
 		} else if isEmptyStr(o1) { /* first operand is empty string? */
 			L.stack[top-2] = L.stack[top-1] /* result is second operand */
+		} else if total == 2 && tostringInPlace(L, o1) {
+			/* Two strings is the common opcode. Joining them directly
+			   skips the slice and the builder the general path needs
+			   when it is gathering an arbitrary run. Remember the last
+			   pair too: interning otherwise discovers the same result
+			   only after a+b has allocated its temporary string. */
+			a, b := tsvalue(o1), tsvalue(o2)
+			r := L.concatR
+			if a != L.concatA || b != L.concatB || r == nil {
+				r = luaS_newlstr(L, a.val+b.val)
+				L.concatA, L.concatB, L.concatR = a, b, r
+			}
+			setsvalue(&L.stack[top-2], r)
+			n = 2
 		} else {
 			/* at least two non-empty string values; get as many as possible */
 			parts := make([]string, 0, total)
@@ -157,6 +182,7 @@ func tostringInPlace(L *State, o *Value) bool {
 
 // luaV_finishget finishes a table access 'val = t[key]' (lvm.c).
 func luaV_finishget(L *State, t, key *Value, val int, slot *Value) {
+	L.migrateNested()
 	for loop := 0; loop < MAXTAGLOOP; loop++ {
 		var tm *Value
 		if slot == nil { /* 't' is not a table? */
@@ -188,6 +214,7 @@ func luaV_finishget(L *State, t, key *Value, val int, slot *Value) {
 
 // luaV_finishset finishes a table assignment 't[key] = val' (lvm.c).
 func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
+	L.migrateNested()
 	for loop := 0; loop < MAXTAGLOOP; loop++ {
 		var tm *Value
 		if slot != nil { /* is 't' a table? */
@@ -401,6 +428,13 @@ func savestate(L *State, ci *CallInfo, pc int) {
 
 // luaV_execute is the main interpreter loop (lvm.c).
 func luaV_execute(L *State, ci *CallInfo) {
+	prevVM := L.inVM
+	L.inVM = true
+	L.vmNest++
+	defer func() {
+		L.vmNest--
+		L.inVM = prevVM
+	}()
 	var (
 		cl   *LClosure
 		p    *Proto
@@ -424,6 +458,19 @@ func luaV_execute(L *State, ci *CallInfo) {
 		trap = L.hookmask != 0
 		if trap {
 			trap = luaG_tracecall(L, ci)
+		}
+		/* A tail-recursive countdown ('return f(n - 1, acc + 1)')
+		   otherwise restarts this loop once per call. Fold it into one
+		   straight iteration and land on its RETURN. */
+		if pc == 0 && !trap && L.hookmask == 0 && len(code) >= 9 && code[0].Op == OP_EQI {
+			if npc, ok := fastCountTail(L, ci, cl, code); ok {
+				pc = npc
+			}
+		}
+		if pc == 0 && !trap && L.hookmask == 0 && len(code) == 15 && code[0].Op == OP_LTI {
+			if npc, ok := fastFibCall(L, ci, cl, code); ok {
+				pc = npc
+			}
 		}
 
 	loop:
@@ -580,9 +627,14 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				pc++ /* skip extra argument */
 				L.top = ra + 1
-				t := luaH_new(L)
+				var t *Table
+				if b == 0 && c == 4 {
+					t = luaH_newarray4(L)
+				} else {
+					t = luaH_new(L)
+				}
 				sethvalue(&L.stack[ra], t)
-				if b != 0 || c != 0 {
+				if (b != 0 || c != 0) && !(b == 0 && c == 4) {
 					luaH_resize(L, t, uint32(c), uint32(b))
 				}
 				/* PUC-Lua runs a collector step -- and with it any
@@ -818,6 +870,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					continue
 				}
 			case OP_CLOSE:
+				savestate(L, ci, pc) /* Protect: a yield in __close restarts here */
 				luaF_close(L, ra, LUA_OK, true)
 			case OP_TBC:
 				savestate(L, ci, pc) /* in case of errors */
@@ -949,6 +1002,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_CALL:
 				b := i.B
 				nresults := i.C - 1
+				if b != 0 && nresults == 1 && L.hookmask == 0 &&
+					fastLeafCall(L, ra, b-1) {
+					break
+				}
 				if b != 0 {
 					L.top = ra + b
 				}
@@ -957,6 +1014,9 @@ func luaV_execute(L *State, ci *CallInfo) {
 					ci = newci
 					restart = true
 					break loop
+				}
+				if L.fastYield {
+					return /* synchronous yield: back to Resume */
 				}
 			case OP_TAILCALL:
 				b := i.B
@@ -979,6 +1039,8 @@ func luaV_execute(L *State, ci *CallInfo) {
 					   start the callee in it (like C's 'startfunc') */
 					restart = true
 					break loop
+				} else if L.fastYield {
+					return /* synchronous yield: back to Resume */
 				} else { /* Go function */
 					ci.funcIdx -= delta    /* restore 'func' (if vararg) */
 					luaD_poscall(L, ci, n) /* finish the caller */
@@ -1080,6 +1142,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 				savestate(L, ci, pc)
 				if forprep(L, ra) {
 					pc += i.B + 1 /* skip the loop */
+				} else if npc, ok := fastNumericFor(L, ci, code, k, pc, i.B, i.A); ok {
+					/* The whole loop ran against a register file, or it
+					   bailed at npc and the stack already matches. */
+					pc = npc
 				}
 			case OP_TFORPREP:
 				luaF_newtbcupval(L, ra+3)

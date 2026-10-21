@@ -179,6 +179,13 @@ func cgoReleaseState(L *State) {
 // sees an ordinary closure, and the closure crosses into C.
 func cFunc(f unsafe.Pointer) GoFunc {
 	return func(L *State) int {
+		// Entering C from a synchronous coroutine has to happen on the
+		// coroutine's own goroutine: lua_yieldk parks, and parking on
+		// the resumer's goroutine deadlocks it. Panic before the cgo
+		// call so the resume can migrate and retry this frame there.
+		if L.co != nil && !L.isMain && L.co.sync {
+			panic(&migrateAbort{})
+		}
 		p := L.statePtr()
 		cgoEnter()
 		defer func() {

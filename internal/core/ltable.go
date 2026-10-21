@@ -271,6 +271,27 @@ func luaH_new(L *State) *Table {
 	return t
 }
 
+// tableArray4 stores the header and the common four-element literal in
+// one Go allocation. A regular table followed by luaH_resize needs one
+// object for the Table and another for []Value; an interior pointer to
+// table keeps this whole object (including its pointer-scanned array)
+// alive.
+type tableArray4 struct {
+	table Table
+	array [4]Value
+}
+
+func luaH_newarray4(L *State) *Table {
+	x := &tableArray4{}
+	t := &x.table
+	t.flags = maskflags
+	t.array = x.array[:]
+	t.alimit = 4
+	setrealasize(t)
+	setnodevector(L, t, 0)
+	return t
+}
+
 // invalidateTMcache invalidates the metamethod cache of a table.
 func invalidateTMcache(t *Table) { t.flags &= ^maskflags }
 

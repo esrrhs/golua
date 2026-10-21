@@ -382,6 +382,7 @@ type Proto struct {
 	numparams    byte
 	isVararg     byte
 	maxstacksize byte
+	fastLeaf     byte // cached straight-line numeric leaf classification
 
 	sizeupvalues int
 	sizek        int

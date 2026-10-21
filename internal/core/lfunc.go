@@ -168,6 +168,13 @@ func prepcallclosemth(L *State, level int, status int, yy bool) {
 
 // luaF_close closes tbc variables and upvalues up from 'level' (lfunc.c).
 func luaF_close(L *State, level int, status int, yy bool) {
+	// Closing can call a metamethod that yields. On a synchronous
+	// coroutine that has to happen on the coroutine's goroutine, and
+	// it has to happen before the to-be-closed list is consumed:
+	// the opcode is re-executed there from the start.
+	if len(L.tbclist) > 0 {
+		L.migrateNested()
+	}
 	luaF_closeupval(L, level) /* first, close the upvalues */
 	for len(L.tbclist) > 0 {
 		idx := L.tbclist[len(L.tbclist)-1]

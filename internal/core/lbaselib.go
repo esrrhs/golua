@@ -408,7 +408,13 @@ func basePairs(L *State) int {
 		L.PushValue(1) /* argument 'self' to metamethod */
 		/* C passes 'pairscont' as the continuation of lua_callk, which
 		   makes the call yieldable: '__pairs' may yield. */
+		if L.co != nil && L.co.sync {
+			L.ci.goCont = func(L *State, status int) int { return 3 }
+		}
 		L.callK(1, 3, true) /* get 3 values from metamethod */
+		if L.ci != nil {
+			L.ci.goCont = nil
+		}
 	}
 	return 3
 }
@@ -619,8 +625,16 @@ func baseDoFile(L *State) int {
 		return L.Error()
 	}
 	/* C passes 'dofilecont' as the continuation of lua_callk, so the
-	   loaded chunk may yield when 'dofile' runs inside a coroutine. */
+	   loaded chunk may yield when 'dofile' runs inside a coroutine.
+	   A synchronous yield unwinds this frame and the resume finishes
+	   it with the same result count. */
+	if L.co != nil && L.co.sync {
+		L.ci.goCont = func(L *State, status int) int { return L.GetTop() - 1 }
+	}
 	L.callK(0, LUA_MULTRET, true)
+	if L.ci != nil {
+		L.ci.goCont = nil
+	}
 	return L.GetTop() - 1 /* return all results */
 }
 
@@ -685,8 +699,17 @@ func basePCall(L *State) int {
 	L.Insert(1)         /* put it in place (lua_insert(L, 1)) */
 	/* 'finishpcall' is the continuation: in a yieldable thread C takes
 	   the yieldable path (lua_pcallk), so 'coroutine.yield' may cross
-	   a 'pcall'. */
+	   a 'pcall'. A synchronous yield unwinds this frame; the resume
+	   calls the continuation instead of returning here. */
+	if L.co != nil && L.co.sync {
+		L.ci.goCont = func(L *State, status int) int {
+			return baseFinishPCall(L, status, 0)
+		}
+	}
 	status := L.pcallK(L.GetTop()-2, LUA_MULTRET, 0, true)
+	if L.ci != nil {
+		L.ci.goCont = nil
+	}
 	return baseFinishPCall(L, status, 0)
 }
 
@@ -701,7 +724,15 @@ func baseXPCall(L *State) int {
 	L.PushBoolean(true)           /* first result */
 	L.PushValue(1)                /* function */
 	L.Rotate(3, 2)                /* move them below function's arguments */
+	if L.co != nil && L.co.sync {
+		L.ci.goCont = func(L *State, status int) int {
+			return baseFinishPCall(L, status, 2)
+		}
+	}
 	status := L.pcallK(n-2, LUA_MULTRET, 2, true)
+	if L.ci != nil {
+		L.ci.goCont = nil
+	}
 	return baseFinishPCall(L, status, 2)
 }
 

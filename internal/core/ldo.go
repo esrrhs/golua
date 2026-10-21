@@ -106,6 +106,7 @@ func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
 	ci.top = top
 	ci.savedpc = 0
 	ci.nExtraArgs = 0
+	ci.goCont = nil
 	return ci
 }
 
@@ -118,6 +119,10 @@ func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
 		luaD_hook(L, hookCall, -1, 1, narg)
 	}
 	n := f(L)
+	if L.fastYield {
+		/* synchronous yield: the frame stays, Resume finishes it */
+		return 0
+	}
 	luaD_poscall(L, ci, n)
 	return n
 }

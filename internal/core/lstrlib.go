@@ -1622,6 +1622,22 @@ func strFormat(L *State) int {
 	top := L.GetTop()
 	arg := 1
 	strfrmt := L.CheckString(arg)
+	/* A single unmodified decimal conversion with literal text around it
+	   is the overwhelmingly common logging/serialization form. Going
+	   through luaL_Buffer, the format parser and fmt.Sprintf for
+	   "%d-suffix" costs several allocations. strconv already has the
+	   exact decimal spelling Lua needs. Keep formats with flags, width,
+	   precision or another '%' on the full path below. */
+	if top == 2 {
+		if prefix, suffix, ok := simpleIntFormat(strfrmt); ok {
+			var scratch [128]byte
+			out := append(scratch[:0], prefix...)
+			out = strconv.AppendInt(out, L.CheckInteger(2), 10)
+			out = append(out, suffix...)
+			L.PushString(string(out))
+			return 1
+		}
+	}
 	b := L.NewBuffer()
 	i := 0
 	for i < len(strfrmt) {
@@ -1721,6 +1737,18 @@ func strFormat(L *State) int {
 	}
 	b.PushResult()
 	return 1
+}
+
+func simpleIntFormat(format string) (prefix, suffix string, ok bool) {
+	i := strings.IndexByte(format, '%')
+	if i < 0 || i+1 >= len(format) ||
+		(format[i+1] != 'd' && format[i+1] != 'i') {
+		return "", "", false
+	}
+	if strings.IndexByte(format[i+2:], '%') >= 0 {
+		return "", "", false
+	}
+	return format[:i], format[i+2:], true
 }
 
 // ---------------------------------------------------------------------

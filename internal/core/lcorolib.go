@@ -175,8 +175,19 @@ func coWrap(L *State) int {
 ** results of the yield.
  */
 func coYield(L *State) int {
-	/* the whole of it is now (*State).Yield: the park-and-wait
-	   handshake, the continuation, and the two error messages */
+	/* A pure Lua yield on a synchronous coroutine unwinds to Resume.
+	   The goroutine park stays for a coroutine that has been promoted
+	   (a Go body, or anything that has called into C), because there
+	   the yield has to return into the frame that called it. */
+	if L.co != nil && L.co.sync {
+		/* Outermost interpreter: return through the call. Deeper than
+		   that, Go frames sit above this one and have to be unwound. */
+		if L.vmNest == 1 {
+			L.prepareFastYield(L.GetTop())
+			return 0
+		}
+		L.fastYieldNow(L.GetTop())
+	}
 	return L.Yield(L.GetTop())
 }
 
@@ -260,6 +271,20 @@ func coCloseThread(co, from *State) (bool, Value) {
 	}
 	if from != nil {
 		co.nCcalls = from.nCcalls & 0xffff
+	}
+	if co.co != nil && co.co.sync && !co.co.live && !co.dead {
+		st := co.unwindForClose()
+		co.dead = true
+		if st == LUA_OK {
+			return true, Value{}
+		}
+		if len(co.co.vals) > 0 {
+			return false, co.co.vals[0]
+		}
+		if co.top > 1 && !ttisnil(&co.stack[1]) {
+			return false, co.stack[1]
+		}
+		return false, strValue(co, "error closing coroutine")
 	}
 	if co.dead || co.co == nil {
 		/* The coroutine already terminated, so there is no goroutine
