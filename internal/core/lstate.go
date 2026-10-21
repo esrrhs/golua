@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -253,8 +254,17 @@ type State struct {
 type coRuntime struct {
 	req  chan resumeReq
 	resp chan resumeResp
-	vals []Value // scratch for the values handed to the resumer
-	args []Value // scratch for the arguments of a resume
+	done chan struct{} // closed when coMain returns
+	vals []Value       // scratch for the values handed to the resumer
+	args []Value       // scratch for the arguments of a resume
+}
+
+func newCoRuntime() *coRuntime {
+	return &coRuntime{
+		req:  make(chan resumeReq),
+		resp: make(chan resumeResp),
+		done: make(chan struct{}),
+	}
 }
 
 type resumeReq struct {
@@ -532,39 +542,73 @@ func (L *State) Close() {
 
 // closeAllThreads wakes every non-main thread of this state so its
 // goroutine can exit, before Close frees the malloc'd lua_State
-// handles those frames may still name.
+// handles those frames may still name. It rescans until none remain,
+// so a '__close' that creates another thread is still caught, and so a
+// child that is mid-coRun is retried until it waits or finishes.
 func (g *globalState) closeAllThreads() {
 	if g == nil {
 		return
 	}
-	var kids []*State
-	gcThrMu.Lock()
-	for i := range gcThrs {
-		th := gcThrs[i].Value()
-		if th == nil || th.g != g || th.isMain {
-			continue
+	for {
+		var kids []*State
+		gcThrMu.Lock()
+		for i := range gcThrs {
+			th := gcThrs[i].Value()
+			if th == nil || th.g != g || th.isMain || th.dead {
+				continue
+			}
+			kids = append(kids, th)
 		}
-		kids = append(kids, th)
-	}
-	gcThrMu.Unlock()
-	for _, th := range kids {
-		th.forceCloseThread()
+		gcThrMu.Unlock()
+		if len(kids) == 0 {
+			return
+		}
+		progress := false
+		for _, th := range kids {
+			if th.forceCloseThread() {
+				progress = true
+			}
+		}
+		if !progress {
+			runtime.Gosched()
+		}
 	}
 }
 
-// forceCloseThread asks a child coroutine's goroutine to unwind. It is
-// a no-op when the thread is already dead or has no runtime.
-func (L *State) forceCloseThread() {
+// forceCloseThread asks a child coroutine's goroutine to unwind. It
+// returns true when the thread is dead afterwards. A running child is
+// not waiting on co.req, so the send is skipped and the caller retries;
+// a child that has already exited is noticed via co.done so Close cannot
+// block forever on a send nobody will read.
+func (L *State) forceCloseThread() bool {
 	if L == nil || L.isMain || L.dead {
-		return
+		return true
 	}
 	co := L.co
 	if co == nil {
-		return
+		L.dead = true
+		return true
 	}
-	co.req <- resumeReq{kind: reqClose}
-	<-co.resp
-	L.dead = true
+	select {
+	case <-co.done:
+		L.dead = true
+		return true
+	default:
+	}
+	select {
+	case co.req <- resumeReq{kind: reqClose}:
+		select {
+		case <-co.resp:
+		case <-co.done:
+		}
+		L.dead = true
+		return true
+	case <-co.done:
+		L.dead = true
+		return true
+	default:
+		return false
+	}
 }
 
 // G returns the global state (G(L)).
@@ -598,7 +642,7 @@ func (L *State) NewThread() *State {
 	L1.basehookcount = L.basehookcount
 	L1.hookcount = L.basehookcount /* resethookcount(L1) */
 	L1.hookExternal = L.hookExternal
-	L1.co = &coRuntime{req: make(chan resumeReq), resp: make(chan resumeResp)}
+	L1.co = newCoRuntime()
 	go L1.coMain()
 	// the thread object goes on the stack of the creating state
 	L.checkStack(1)
@@ -611,12 +655,14 @@ func (L *State) NewThread() *State {
 
 // coMain is the body of a coroutine goroutine.
 func (L *State) coMain() {
+	co := L.co
+	defer close(co.done)
 	for {
-		req := <-L.co.req
+		req := <-co.req
 		if req.kind == reqClose {
 			L.status = LUA_OK
 			L.dead = true
-			L.co.resp <- resumeResp{status: LUA_OK}
+			co.resp <- resumeResp{status: LUA_OK}
 			return
 		}
 		/* 'coRun' returns only when the coroutine is through: a yield
@@ -630,7 +676,7 @@ func (L *State) coMain() {
 			   so the error from '__close' is reported only once: a
 			   second 'coroutine.close' succeeds. */
 			L.status = LUA_OK
-			L.co.resp <- resumeResp{status: status, vals: L.co.vals}
+			co.resp <- resumeResp{status: status, vals: L.co.vals}
 			return
 		}
 		L.status = byte(status)
@@ -638,7 +684,7 @@ func (L *State) coMain() {
 			L.lastErr = L.co.vals[0]
 			L.hasErr = true
 		}
-		L.co.resp <- resumeResp{status: status, vals: L.co.vals}
+		co.resp <- resumeResp{status: status, vals: L.co.vals}
 		return
 	}
 }
@@ -751,10 +797,16 @@ func (L *State) ResetThread() int {
 	if L.isMain {
 		return LUA_ERRRUN
 	}
-	if !L.dead && L.status == LUA_YIELD {
+	if !L.dead && L.status == LUA_YIELD && L.co != nil {
 		// still suspended: unwind it
-		L.co.req <- resumeReq{kind: reqClose}
-		<-L.co.resp
+		select {
+		case L.co.req <- resumeReq{kind: reqClose}:
+			select {
+			case <-L.co.resp:
+			case <-L.co.done:
+			}
+		case <-L.co.done:
+		}
 	}
 	L.dead = false
 	L.hasErr = false
@@ -768,7 +820,7 @@ func (L *State) ResetThread() int {
 	L.openupval = nil
 	L.errfunc = 0
 	L.nCcalls = 0
-	L.co = &coRuntime{req: make(chan resumeReq), resp: make(chan resumeResp)}
+	L.co = newCoRuntime()
 	go L.coMain()
 	return LUA_OK
 }

@@ -84,12 +84,15 @@ func cgoLeave() {
 		batch = cgoDefer
 		cgoDefer = nil
 	}
+	/* OnQuiet clears cgoArs. A parked goroutine may still need those
+	   entries after resume, so wait until nothing is parked either. */
+	onQuiet := quiet && len(cgoParked) == 0
 	cgoMu.Unlock()
 	for _, p := range batch {
 		C.free(p)
 		cgoFreed.Add(1)
 	}
-	if quiet && cgoOnQuiet != nil {
+	if onQuiet && cgoOnQuiet != nil {
 		cgoOnQuiet()
 	}
 }
@@ -443,6 +446,38 @@ func testGetUpvalueCClosureName(L *State) (name string, nonNil bool) {
 	return C.GoString(p), true
 }
 
+// testCgoArsSurviveQuietWhileParked parks one goroutine, lets another
+// go cgo-quiet, and reports whether a cgoArs entry survived.
+func testCgoArsSurviveQuietWhileParked() bool {
+	const key = uintptr(0xc9a15)
+	ar := &dbAr{name: "parked-ar"}
+	cgoArMu.Lock()
+	cgoArs[key] = ar
+	cgoArMu.Unlock()
+
+	parked := make(chan struct{})
+	release := make(chan struct{})
+	go func() {
+		cgoEnter()
+		cgoPark()
+		close(parked)
+		<-release
+		cgoUnpark()
+		cgoLeave()
+	}()
+	<-parked
+	/* This leave is quiet for active cgo, but must not OnQuiet-wipe
+	   cgoArs while the other goroutine is parked. */
+	cgoEnter()
+	cgoLeave()
+	cgoArMu.Lock()
+	_, ok := cgoArs[key]
+	delete(cgoArs, key)
+	cgoArMu.Unlock()
+	close(release)
+	return ok
+}
+
 // testErrorDoesNotLeak raises n formatted luaL_error calls under pcall
 // and answers how many of their scratch buffers were still live after.
 func testErrorDoesNotLeak(L *State, n int) int {
@@ -451,7 +486,8 @@ func testErrorDoesNotLeak(L *State, n int) int {
 
 func testHoldPanicPtr(L *State) {
 	panicMu.Lock()
-	panicCPtr[L.g] = unsafe.Pointer(uintptr(1))
+	/* any non-nil C function pointer; the test only cares that Close deletes the entry */
+	panicCPtr[L.g] = unsafe.Pointer(C.cdl_allocfn())
 	panicMu.Unlock()
 }
 

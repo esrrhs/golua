@@ -252,6 +252,14 @@ func TestCgoParkNestedFlushesDeferredFrees(t *testing.T) {
 	}
 }
 
+// A parked coroutine's lua_Debug mapping must survive another goroutine
+// going cgo-quiet. Wiping cgoArs on that quiet broke getinfo after yield.
+func TestCgoArsSurviveQuietWhileParked(t *testing.T) {
+	if !testCgoArsSurviveQuietWhileParked() {
+		t.Fatal("cgoArs was cleared while a goroutine was parked")
+	}
+}
+
 // luaL_error used to allocate a formatted message, call into Go (which
 // panics), and never reach free. The scratch is freed before the throw.
 func TestLuaLErrorDoesNotLeak(t *testing.T) {
@@ -290,6 +298,54 @@ func TestCStateReleaseUntracks(t *testing.T) {
 	if got := cstateTrackedCount(L.g); got != before-1 {
 		t.Fatalf("tracked handles %d, want %d", got, before-1)
 	}
+}
+
+// forceCloseThread must not block forever on a coroutine whose goroutine
+// has already exited (nobody left to read co.req).
+func TestForceCloseFinishedThread(t *testing.T) {
+	L := NewState()
+	t.Cleanup(L.Close)
+	L.OpenLibs()
+	if err := L.DoString(`
+		co = coroutine.create(function() return 42 end)
+		assert(coroutine.resume(co))
+		assert(coroutine.status(co) == 'dead')
+	`); err != nil {
+		t.Fatal(err)
+	}
+	L.GetGlobal("co")
+	co := L.ToThread(-1)
+	L.Pop(1)
+	done := make(chan bool, 1)
+	go func() { done <- co.forceCloseThread() }()
+	select {
+	case ok := <-done:
+		if !ok {
+			t.Fatal("finished thread was not reported closed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("forceCloseThread hung on a finished coroutine")
+	}
+}
+
+// A child that is not waiting on co.req must not deadlock Close: the
+// send is skipped (false) until a receiver appears, then Close can finish.
+func TestForceCloseRunningDoesNotDeadlock(t *testing.T) {
+	st := &State{co: newCoRuntime()}
+	if st.forceCloseThread() {
+		t.Fatal("forceCloseThread succeeded with no receiver")
+	}
+	go func() {
+		req := <-st.co.req
+		if req.kind != reqClose {
+			return
+		}
+		st.co.resp <- resumeResp{status: LUA_OK}
+		close(st.co.done)
+	}()
+	waitUntil(t, "forceClose with late receiver", func() bool {
+		return st.forceCloseThread()
+	})
 }
 
 // Close stops child coroutine goroutines before freeing their lua_State

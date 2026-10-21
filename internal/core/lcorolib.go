@@ -266,8 +266,19 @@ func coCloseThread(co, from *State) (bool, Value) {
 		co.hasErr = false
 		return true, Value{} /* already closed */
 	}
-	co.co.req <- resumeReq{kind: reqClose}
-	resp := <-co.co.resp
+	var resp resumeResp
+	select {
+	case <-co.co.done:
+		co.dead = true
+		return true, Value{}
+	case co.co.req <- resumeReq{kind: reqClose}:
+		select {
+		case resp = <-co.co.resp:
+		case <-co.co.done:
+			co.dead = true
+			return true, Value{}
+		}
+	}
 	co.dead = true
 	if resp.status == LUA_OK {
 		return true, Value{}
