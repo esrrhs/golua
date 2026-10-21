@@ -407,9 +407,21 @@ func (L *State) closeFinalizers() {
 	   'callallpendingfinalizers' then takes them off that list one at a
 	   time; 'closeQueue' is that list, and it lives on the state so
 	   that a nested lua_close can take from it too. */
+	/* Only this state's watched objects. gcWatch is process-wide, and
+	   taking every entry would run another state's __gc and free its
+	   userdata C blocks while that state is still live. */
 	gcWatchMu.Lock()
-	L.g.closeQueue = append(L.g.closeQueue, gcWatch...)
-	gcWatch = nil
+	mine := make([]weakRef, 0, len(gcWatch))
+	rest := make([]weakRef, 0, len(gcWatch))
+	for _, w := range gcWatch {
+		if watchOwner(w) == L.g {
+			mine = append(mine, w)
+		} else {
+			rest = append(rest, w)
+		}
+	}
+	L.g.closeQueue = append(L.g.closeQueue, mine...)
+	gcWatch = rest
 	gcWatchMu.Unlock()
 	L.drainCloseQueue()
 }
@@ -505,7 +517,7 @@ func luaC_checkFinalizer(L *State, v *Value, mt *Table) {
 			gcQueueFinalizer(gcFinalizer{L: L, obj: makeTableValue(o)})
 		})
 		gcWatchMu.Lock()
-		gcWatch = append(gcWatch, weakTableRef{weak.Make(t)})
+		gcWatch = append(gcWatch, weakTableRef{w: weak.Make(t), g: L.g})
 		gcWatchMu.Unlock()
 		gcHold = append(gcHold, *v) /* see gcHold */
 	case LUA_VUSERDATA:
@@ -517,7 +529,7 @@ func luaC_checkFinalizer(L *State, v *Value, mt *Table) {
 		gcWatched.Add(1)
 		setUdataFinalizer(L, u)
 		gcWatchMu.Lock()
-		gcWatch = append(gcWatch, weakUdataRef{weak.Make(u)})
+		gcWatch = append(gcWatch, weakUdataRef{w: weak.Make(u), g: L.g})
 		gcWatchMu.Unlock()
 		gcHold = append(gcHold, *v) /* see gcHold */
 	}

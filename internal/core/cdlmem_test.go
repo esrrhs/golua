@@ -252,12 +252,116 @@ func TestCgoParkNestedFlushesDeferredFrees(t *testing.T) {
 	}
 }
 
+// A continuation that yields again must not erase the outer park.
+// Without a park stack the outer C frame would run with depth 0.
+func TestCgoParkStackKeepsOuterDepth(t *testing.T) {
+	held, freed := testCgoParkStackKeepsOuterDepth()
+	if !held {
+		t.Fatal("outer C depth was lost after a nested continuation yield")
+	}
+	if !freed {
+		t.Fatal("deferred free did not run after the outer frame left")
+	}
+}
+
 // A parked coroutine's lua_Debug mapping must survive another goroutine
 // going cgo-quiet. Wiping cgoArs on that quiet broke getinfo after yield.
 func TestCgoArsSurviveQuietWhileParked(t *testing.T) {
 	if !testCgoArsSurviveQuietWhileParked() {
 		t.Fatal("cgoArs was cleared while a goroutine was parked")
 	}
+}
+
+// Closing one state must not run another state's __gc or free its
+// userdata C blocks. gcWatch is process-wide; Close used to drain it all.
+func TestCloseDoesNotFinalizeOtherState(t *testing.T) {
+	L1 := NewState()
+	L2 := NewState()
+	t.Cleanup(L2.Close)
+
+	block := cgoNewUserBlock(L2, 4, 0)
+	*(*byte)(block) = 0x5A
+	L2.NewTable()
+	gcRan := false
+	L2.PushGoFunc(func(L *State) int {
+		gcRan = true
+		return 0
+	})
+	L2.SetField(-2, "__gc")
+	L2.SetMetaTable(-2)
+	/* leave the userdata on L2's stack so it stays reachable */
+
+	before := cdlUserFrees.Load()
+	L1.Close()
+	if gcRan {
+		t.Fatal("L2 __gc ran when L1 closed")
+	}
+	if cdlUserFrees.Load() != before {
+		t.Fatal("L2 userdata C block was freed when L1 closed")
+	}
+	if *(*byte)(block) != 0x5A {
+		t.Fatal("L2 userdata block was reused after L1.Close")
+	}
+}
+
+// lua_setwarnf must hand the caller's ud to the C warning function.
+func TestWarnfReceivesUserData(t *testing.T) {
+	L := NewState()
+	t.Cleanup(L.Close)
+	if !testWarnfSeesUD(L) {
+		t.Fatal("warnf did not receive the ud passed to lua_setwarnf")
+	}
+}
+
+// lua_closethread on a C-yielded coroutine must unwind it so cgoParked
+// does not keep cgoOnQuiet disabled for the rest of the process.
+func TestCloseThreadUnwindsCYield(t *testing.T) {
+	dir := t.TempDir()
+	const src = `#include "lua.h"
+#include "lauxlib.h"
+static int l_y(lua_State *L) { return lua_yield(L, 0); }
+static const luaL_Reg reg[] = {{"y", l_y}, {NULL, NULL}};
+int luaopen_yclose(lua_State *L) { luaL_newlib(L, reg); return 1; }
+`
+	if err := os.WriteFile(filepath.Join(dir, "yclose.c"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !compileCExt(t, dir, "yclose") {
+		return
+	}
+	L := NewState()
+	t.Cleanup(L.Close)
+	L.OpenLibs()
+	if err := L.DoString("package.cpath = " + quoteLuaString(filepath.Join(dir, "?.so"))); err != nil {
+		t.Fatal(err)
+	}
+	if err := L.DoString(`
+		local y = require('yclose')
+		co = coroutine.create(function() y.y() end)
+		assert(coroutine.resume(co))
+		assert(coroutine.status(co) == 'suspended')
+	`); err != nil {
+		t.Fatalf("yield setup: %v", err)
+	}
+	L.GetGlobal("co")
+	co := L.ToThread(-1)
+	if co == nil {
+		t.Fatal("missing coroutine")
+	}
+	if testCgoParkedCount() < 1 {
+		t.Fatal("C yield did not park cgo depth")
+	}
+	st := lua_closethread(co.statePtr(), L.statePtr())
+	if st != LUA_OK {
+		t.Fatalf("lua_closethread status %d", st)
+	}
+	if !co.dead {
+		t.Fatal("coroutine was not closed")
+	}
+	if testCgoParkedCount() != 0 {
+		t.Fatal("cgoParked still holds the closed coroutine")
+	}
+	L.Pop(1)
 }
 
 // luaL_error used to allocate a formatted message, call into Go (which

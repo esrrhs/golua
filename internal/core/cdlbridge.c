@@ -298,6 +298,24 @@ int cdl_test_error_round(lua_State *L, int n) {
   return cdl_err_live;
 }
 
+extern void lua_setwarnf(lua_State *L, lua_WarnFunction f, void *ud);
+extern void lua_warning(lua_State *L, const char *msg, int tocont);
+
+static void *cdl_warn_ud_seen;
+
+static void cdl_test_warnf(void *ud, const char *msg, int tocont) {
+  (void)msg;
+  (void)tocont;
+  cdl_warn_ud_seen = ud;
+}
+
+void cdl_test_install_warnf(lua_State *L, void *ud) {
+  cdl_warn_ud_seen = NULL;
+  lua_setwarnf(L, cdl_test_warnf, ud);
+}
+
+void *cdl_test_warn_ud_seen(void) { return cdl_warn_ud_seen; }
+
 int lua_gc(lua_State *L, int what, ...) {
   /* LUA_GC* from lua.h; repeated here so this file stands alone */
   int a1 = 0, a2 = 0, a3 = 0;

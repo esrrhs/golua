@@ -28,8 +28,8 @@ import "C"
 // goroutine still holds its own depth and still defers frees.
 var (
 	cgoMu     sync.Mutex
-	cgoByG    = map[int64]int{} // goroutine id -> enter depth
-	cgoParked = map[int64]int{} // depth stashed by cgoPark for cgoUnpark
+	cgoByG    = map[int64]int{}   // goroutine id -> enter depth
+	cgoParked = map[int64][]int{} // stack of depths stashed by nested parks
 	cgoDefer  []unsafe.Pointer
 
 	// cgoFreed counts blocks actually returned to libc.
@@ -100,13 +100,15 @@ func cgoLeave() {
 // cgoPark steps this goroutine out of every nested cgo enter across a
 // yield. Holding a lua_tolstring pointer across a yield is already
 // undefined in PUC-Lua; other goroutines must be free to reclaim memory.
+// Depths are pushed so a continuation that yields again does not erase
+// the outer park (that would leave the outer C frame with depth 0).
 func cgoPark() {
 	id := cgoGoid()
 	cgoMu.Lock()
 	n := cgoByG[id]
 	delete(cgoByG, id)
 	if n > 0 {
-		cgoParked[id] = n
+		cgoParked[id] = append(cgoParked[id], n)
 	}
 	var batch []unsafe.Pointer
 	quiet := !cgoBusyLocked()
@@ -121,14 +123,19 @@ func cgoPark() {
 	}
 }
 
-// cgoUnpark restores the enters that cgoPark stashed for this goroutine.
+// cgoUnpark restores the most recent park for this goroutine.
 func cgoUnpark() {
 	id := cgoGoid()
 	cgoMu.Lock()
-	n := cgoParked[id]
-	delete(cgoParked, id)
-	if n > 0 {
-		cgoByG[id] = n
+	stack := cgoParked[id]
+	if n := len(stack); n > 0 {
+		depth := stack[n-1]
+		if n == 1 {
+			delete(cgoParked, id)
+		} else {
+			cgoParked[id] = stack[:n-1]
+		}
+		cgoByG[id] = depth
 	}
 	cgoMu.Unlock()
 }
@@ -446,6 +453,31 @@ func testGetUpvalueCClosureName(L *State) (name string, nonNil bool) {
 	return C.GoString(p), true
 }
 
+// testCgoParkStackKeepsOuterDepth parks twice (outer yield + continuation
+// yield), unparks the inner nest, and reports whether a free is still
+// deferred while the outer C frame would still be live.
+func testCgoParkStackKeepsOuterDepth() (heldAfterInner, freedAfterOuter bool) {
+	cgoEnter() // outer C function
+	cgoPark()  // outer yield
+	cgoEnter() // continuation
+	cgoPark()  // continuation yields again
+	cgoUnpark()
+	cgoLeave() // continuation returns
+	/* outer unpark must restore depth; without a park stack it would not */
+	cgoUnpark()
+	p := C.malloc(1)
+	if p == nil {
+		cgoLeave()
+		return false, false
+	}
+	base := cgoFreed.Load()
+	cgoFree(p)
+	heldAfterInner = cgoFreed.Load() == base
+	cgoLeave()
+	freedAfterOuter = cgoFreed.Load() > base
+	return heldAfterInner, freedAfterOuter
+}
+
 // testCgoArsSurviveQuietWhileParked parks one goroutine, lets another
 // go cgo-quiet, and reports whether a cgoArs entry survived.
 func testCgoArsSurviveQuietWhileParked() bool {
@@ -496,4 +528,22 @@ func panicCPtrHolds(g *globalState) bool {
 	_, ok := panicCPtr[g]
 	panicMu.Unlock()
 	return ok
+}
+
+// testWarnfSeesUD installs a C warnf with ud and emits a warning.
+// It reports whether the handler received that same ud pointer.
+func testWarnfSeesUD(L *State) bool {
+	var marker int
+	ud := unsafe.Pointer(&marker)
+	C.cdl_test_install_warnf(L.statePtr(), ud)
+	L.Warning("warn-ud-probe", false)
+	return C.cdl_test_warn_ud_seen() == ud
+}
+
+// testCgoParkedCount is how many goroutines currently have a parked depth.
+func testCgoParkedCount() int {
+	cgoMu.Lock()
+	n := len(cgoParked)
+	cgoMu.Unlock()
+	return n
 }

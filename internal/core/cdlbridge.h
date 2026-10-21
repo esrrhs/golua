@@ -240,6 +240,8 @@ int cdl_out_live_count(void);
 const char *cdl_test_one_fstring(lua_State *L, int i);
 int cdl_err_live_count(void);
 int cdl_test_error_round(lua_State *L, int n);
+void cdl_test_install_warnf(lua_State *L, void *ud);
+void *cdl_test_warn_ud_seen(void);
 
 /* the buffer keeps the state it was made with, which luaL_addgsub needs */
 static inline lua_State *cdl_buf_L(luaL_Buffer *B) { return B->L; }

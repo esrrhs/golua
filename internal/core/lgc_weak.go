@@ -48,18 +48,36 @@ type weakRef interface {
 	value() Value
 }
 
-type weakTableRef struct{ w weak.Pointer[Table] }
+type weakTableRef struct {
+	w weak.Pointer[Table]
+	g *globalState // set for gcWatch entries; nil for weak-table keys
+}
 
 func (r weakTableRef) dead() bool { return r.w.Value() == nil }
 func (r weakTableRef) value() Value {
 	return makeTableValue(r.w.Value())
 }
 
-type weakUdataRef struct{ w weak.Pointer[Udata] }
+type weakUdataRef struct {
+	w weak.Pointer[Udata]
+	g *globalState // set for gcWatch entries; nil for weak-table keys
+}
 
 func (r weakUdataRef) dead() bool { return r.w.Value() == nil }
 func (r weakUdataRef) value() Value {
 	return makeUdataValue(r.w.Value())
+}
+
+// watchOwner is the globalState that put w on gcWatch. Other states must
+// not steal it on Close.
+func watchOwner(w weakRef) *globalState {
+	switch r := w.(type) {
+	case weakTableRef:
+		return r.g
+	case weakUdataRef:
+		return r.g
+	}
+	return nil
 }
 
 type weakLClosureRef struct{ w weak.Pointer[LClosure] }
@@ -86,9 +104,9 @@ func (r weakThreadRef) value() Value {
 func makeWeakRef(v *Value) weakRef {
 	switch ttypetag(v) {
 	case LUA_VTABLE:
-		return weakTableRef{weak.Make(hvalue(v))}
+		return weakTableRef{w: weak.Make(hvalue(v))}
 	case LUA_VUSERDATA:
-		return weakUdataRef{weak.Make(uvalue(v))}
+		return weakUdataRef{w: weak.Make(uvalue(v))}
 	case LUA_VLCL:
 		return weakLClosureRef{weak.Make(clLvalue(v))}
 	case LUA_VCCL:

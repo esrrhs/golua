@@ -68,14 +68,18 @@ func lua_closethread(p *C.lua_State, from *C.lua_State) C.int {
 	if from != nil {
 		f = stateOf(from)
 	}
-	/* lua_closethread closes the pending to-be-closed slots of 'L' and
-	   answers whether it is done; a thread with nothing pending, or one
-	   that is not suspended, is done. */
-	if L.Status() != LUA_YIELD {
-		return C.int(L.ResetThread())
+	/* PUC-Lua's lua_closethread always resets the thread. A suspended
+	   one used to be left alone here, which leaked its goroutine and —
+	   after a C yield — left an entry in cgoParked that permanently
+	   suppressed cgoOnQuiet. */
+	ok, errVal := coCloseThread(L, f)
+	if !ok {
+		L.checkStack(1)
+		L.stack[L.top] = errVal
+		L.top++
+		return C.int(LUA_ERRRUN)
 	}
-	_ = f
-	return 0
+	return C.int(LUA_OK)
 }
 
 //export lua_atpanic
@@ -414,7 +418,7 @@ func lua_setwarnf(p *C.lua_State, f C.lua_WarnFunction, ud unsafe.Pointer) {
 		defer C.free(unsafe.Pointer(cs))
 		cgoEnter()
 		defer cgoLeave()
-		C.cdl_call_warnf(f, cs, cBool(tocont), nil)
+		C.cdl_call_warnf(f, cs, cBool(tocont), ud)
 	}, nil)
 }
 
