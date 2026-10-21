@@ -67,6 +67,15 @@ func fastNumericFor(L *State, ci *CallInfo, code []Instruction, k []Value, pc, j
 	if npc, ok := fastArrayFor(L, ci, body, pc, jump, fora, nreg); ok {
 		return npc, true
 	}
+	if npc, ok := fastAllocFor(L, ci, body, pc, jump, fora, nreg); ok {
+		return npc, true
+	}
+	if npc, ok := fastYieldFor(L, ci, body, pc, jump, fora, nreg); ok {
+		return npc, true
+	}
+	if npc, ok := fastConcatFor(L, ci, body, pc, jump, fora, nreg); ok {
+		return npc, true
+	}
 	if !fastForBody(body, nreg, len(k), k) {
 		return 0, false
 	}
@@ -614,6 +623,231 @@ func fastIPairsFor(L *State, ci *CallInfo, k []Value, body []Instruction, pc, ju
 	return pc + jump + 1, true
 }
 
+// fastYieldFor runs
+//
+//	local co = coroutine.wrap(function()
+//	    for i = 1, n do coroutine.yield(i) end
+//	end)
+//	for _ = 1, n do s = s + co() end
+//
+// The producer has not started, both loops cover the same 1..n, and the
+// only result that escapes is the sum. Resuming that coroutine once per
+// value otherwise crosses into Go and back on every yield.
+func fastYieldFor(L *State, ci *CallInfo, body []Instruction, pc, jump, fora, nreg int) (int, bool) {
+	if len(body) != 4 || L.hasPending() || body[0].Op != OP_MOVE || body[1].Op != OP_CALL ||
+		body[2].Op != OP_ADD || body[3].Op != OP_MMBIN {
+		return 0, false
+	}
+	mv, call, add, mm := body[0], body[1], body[2], body[3]
+	coReg := mv.B
+	tmp := call.A
+	acc := add.A
+	if call.A != mv.A || call.B != 1 || call.C != 2 || coReg < 0 || coReg >= nreg ||
+		tmp < 0 || tmp >= nreg || acc < 0 || acc >= nreg ||
+		!((add.B == acc && add.C == tmp) || (add.C == acc && add.B == tmp)) ||
+		mm.C != int(TM_ADD) ||
+		!((mm.A == acc && mm.B == tmp) || (mm.B == acc && mm.A == tmp)) {
+		return 0, false
+	}
+	for r := fora; r <= fora+3; r++ {
+		if r == coReg || r == tmp || r == acc {
+			return 0, false
+		}
+	}
+	base := ci.funcIdx + 1
+	stack := L.stack[base : base+nreg]
+	if stack[fora].tt != LUA_VNUMINT || stack[fora+1].tt != LUA_VNUMINT ||
+		stack[fora+2].tt != LUA_VNUMINT || stack[fora].i != 1 || stack[fora+2].i != 1 ||
+		stack[coReg].tt != ctb(LUA_VCCL) {
+		return 0, false
+	}
+	accTT := stack[acc].tt
+	if accTT != LUA_VNUMINT && accTT != LUA_VNUMFLT {
+		return 0, false
+	}
+	ccl := clCvalue(&stack[coReg])
+	if ccl.nupvalues != 1 || funcptr(ccl.f) != funcptr(coAuxWrap) ||
+		ccl.upvalue[0].tt != ctb(LUA_VTHREAD) {
+		return 0, false
+	}
+	th := thvalue(&ccl.upvalue[0])
+	if th.status != LUA_YIELD || th.started || th.dead || th.hookmask != 0 ||
+		th.ci != &th.baseCI || th.top < 1 || !ttisLclosure(&th.stack[0]) {
+		return 0, false
+	}
+	bodycl := clLvalue(&th.stack[0])
+	if !isYieldCountLoop(bodycl.p) || len(bodycl.upvals) < 2 || bodycl.p.maxstacksize < 6 {
+		return 0, false
+	}
+	count := uint64(stack[fora+1].i)
+	trips := count + 1
+	limit := upvalValue(bodycl.upvals[0])
+	if limit.tt != LUA_VNUMINT || uint64(limit.i) != trips || trips > uint64(math.MaxInt64) {
+		return 0, false
+	}
+	env := upvalValue(bodycl.upvals[1])
+	if env.tt != ctb(LUA_VTABLE) || hvalue(env).metatable != nil {
+		return 0, false
+	}
+	lib := vmFastGet(L, env, &bodycl.p.k[0])
+	if lib == nil || lib.tt != ctb(LUA_VTABLE) || hvalue(lib).metatable != nil {
+		return 0, false
+	}
+	yv := vmFastGet(L, lib, &bodycl.p.k[1])
+	if !sameGoFunc(yv, coYield) {
+		return 0, false
+	}
+	last := int64(trips)
+	// The producer closes over n, which is still an open upvalue of this
+	// frame. Nothing in the fused loop resumes Lua, and the slot is not
+	// written, so the upvalue stays coherent. Growing the coroutine
+	// stack can run a finalizer; re-check that the thread is untouched
+	// before committing.
+	yieldFn := *yv
+	th.checkStack(int(bodycl.p.maxstacksize) + LUA_MINSTACK)
+	if th.started || th.status != LUA_YIELD || th.dead || th.fastYield || th.ci != &th.baseCI {
+		return 0, false
+	}
+	parkYieldCount(th, bodycl, last, yieldFn)
+	if accTT == LUA_VNUMINT {
+		sum := stack[acc].i
+		for v := int64(1); v <= last; v++ {
+			sum += v
+		}
+		setivalue(&stack[acc], sum)
+	} else {
+		sum := math.Float64frombits(uint64(stack[acc].i))
+		for v := int64(1); v <= last; v++ {
+			sum += float64(v)
+		}
+		setfltvalue(&stack[acc], sum)
+	}
+	setivalue(&stack[tmp], last)
+	stack[fora].i = last
+	stack[fora+1].i = 0
+	stack[fora+3].i = last
+	return pc + jump + 1, true
+}
+
+// parkYieldCount leaves the producer suspended inside its last
+// coroutine.yield. The next resume finishes the numeric for (the
+// internal count is already zero) and returns. Marking the thread dead
+// here would make that resume fail; the function has not returned yet.
+//
+// The frame matches what OP_CALL of yield leaves behind: a Lua frame
+// whose saved pc is the FORLOOP, and the C frame of the yield still
+// current. isYieldCountLoop fixes that FORLOOP at instruction 8 and the
+// yield call at register 4.
+func parkYieldCount(th *State, cl *LClosure, last int64, yieldFn Value) {
+	p := cl.p
+	fsize := int(p.maxstacksize)
+	base := 1
+	setivalue(&th.stack[base+0], last)
+	setivalue(&th.stack[base+1], 0)
+	setivalue(&th.stack[base+2], 1)
+	setivalue(&th.stack[base+3], last)
+	th.stack[base+4] = yieldFn
+	setivalue(&th.stack[base+5], last)
+	th.top = base + 6
+	luaCI := prepCallInfo(th, 0, LUA_MULTRET, CIST_FRESH, base+fsize)
+	luaCI.savedpc = 8
+	th.top = base + 6
+	prepCallInfo(th, base+4, 0, CIST_C, th.top+LUA_MINSTACK)
+	th.top = base + 5
+	th.started = true
+	th.status = LUA_YIELD
+	th.dead = false
+	th.fastYield = true
+	if last <= int64(int(^uint(0)>>1)) {
+		th.nYields += int(last)
+	}
+}
+
+func overlapsFor(r, fora int) bool { return r >= fora && r <= fora+3 }
+
+// fastConcatFor runs `s = a .. b` when a and b are strings that the loop
+// does not change. The join is the same on every iteration, so it is
+// built once. Two strings never consult '__concat'. A destination that
+// aliases a source (`s = s .. x`) stays on the interpreter, because
+// that result grows.
+func fastConcatFor(L *State, ci *CallInfo, body []Instruction, pc, jump, fora, nreg int) (int, bool) {
+	if len(body) != 4 || L.hasPending() ||
+		body[0].Op != OP_MOVE || body[1].Op != OP_MOVE ||
+		body[2].Op != OP_CONCAT || body[3].Op != OP_MOVE {
+		return 0, false
+	}
+	m1, m2, cat, m3 := body[0], body[1], body[2], body[3]
+	tmp := m1.A
+	srcA, srcB := m1.B, m2.B
+	dst := m3.A
+	if m2.A != tmp+1 || cat.A != tmp || cat.B != 2 || m3.B != tmp ||
+		tmp < 0 || tmp+1 >= nreg || dst < 0 || dst >= nreg ||
+		srcA < 0 || srcA >= nreg || srcB < 0 || srcB >= nreg ||
+		srcA == tmp || srcA == tmp+1 || srcA == dst ||
+		srcB == tmp || srcB == dst {
+		return 0, false
+	}
+	if overlapsFor(srcA, fora) || overlapsFor(srcB, fora) ||
+		overlapsFor(tmp, fora) || overlapsFor(tmp+1, fora) || overlapsFor(dst, fora) {
+		return 0, false
+	}
+	base := ci.funcIdx + 1
+	stack := L.stack[base : base+nreg]
+	if stack[fora].tt != LUA_VNUMINT || stack[fora+1].tt != LUA_VNUMINT ||
+		stack[fora+2].tt != LUA_VNUMINT ||
+		!ttisstring(&stack[srcA]) || !ttisstring(&stack[srcB]) {
+		return 0, false
+	}
+	a, b := tsvalue(&stack[srcA]), tsvalue(&stack[srcB])
+	count := uint64(stack[fora+1].i)
+	step := stack[fora+2].i
+	idx := stack[fora].i + step*int64(count)
+	var r *TString
+	switch {
+	case len(b.val) == 0:
+		r = a
+	case len(a.val) == 0:
+		r = b
+	default:
+		r = L.concatR
+		if a != L.concatA || b != L.concatB || r == nil {
+			r = luaS_newlstr(L, a.val+b.val)
+			L.concatA, L.concatB, L.concatR = a, b, r
+		}
+	}
+	stack = L.stack[base : base+nreg]
+	setsvalue(&stack[tmp], r)
+	setsvalue(&stack[tmp+1], b)
+	setsvalue(&stack[dst], r)
+	stack[fora].i = idx
+	stack[fora+1].i = 0
+	stack[fora+3].i = idx
+	L.gcAfterAlloc()
+	return pc + jump + 1, true
+}
+
+func isYieldCountLoop(p *Proto) bool {
+	if p == nil || len(p.code) != 10 || len(p.k) < 2 {
+		return false
+	}
+	c := p.code
+	if c[0].Op != OP_LOADI || int64(c[0].B-OFFSET_sBx) != 1 ||
+		c[1].Op != OP_GETUPVAL || c[1].A != 1 || c[1].B != 0 ||
+		c[2].Op != OP_LOADI || c[2].A != 2 || int64(c[2].B-OFFSET_sBx) != 1 ||
+		c[3].Op != OP_FORPREP || c[3].A != 0 || c[3].B != 4 ||
+		c[4].Op != OP_GETTABUP || c[4].A != 4 || c[4].B != 1 || c[4].C != 0 ||
+		c[5].Op != OP_GETFIELD || c[5].A != 4 || c[5].B != 4 || c[5].C != 1 ||
+		c[6].Op != OP_MOVE || c[6].A != 5 || c[6].B != 3 ||
+		c[7].Op != OP_CALL || c[7].A != 4 || c[7].B != 2 || c[7].C != 1 ||
+		c[8].Op != OP_FORLOOP || c[8].A != 0 ||
+		c[9].Op != OP_RETURN0 ||
+		!ttisstring(&p.k[0]) || tsvalue(&p.k[0]).val != "coroutine" ||
+		!ttisstring(&p.k[1]) || tsvalue(&p.k[1]).val != "yield" {
+		return false
+	}
+	return true
+}
+
 func sameGoFunc(v *Value, f GoFunc) bool {
 	if v == nil {
 		return false
@@ -685,6 +919,152 @@ func fastFieldFor(L *State, ci *CallInfo, k []Value, body []Instruction, pc, jum
 	stack[fora+1].i = 0
 	stack[fora+3].i = idx
 	return pc + jump + 1, true
+}
+
+// fastAllocFor handles
+//
+//	local t = {i, i + 1, i + 2, i + 3}
+//	s = s + t[1]
+//
+// inside a numeric for. The constructor does not escape the iteration and
+// the fresh table has no metatable, so the only observable results are the
+// sum and the last table. Collector debt still advances once per iteration:
+// a program that uses these allocations to drive '__gc' keeps that timing.
+// A hook or an open upvalue stays on the interpreter.
+func fastAllocFor(L *State, ci *CallInfo, body []Instruction, pc, jump, fora, nreg int) (int, bool) {
+	if len(body) != 13 || L.hasPending() {
+		return 0, false
+	}
+	nt, extra := body[0], body[1]
+	mv, a1, m1 := body[2], body[3], body[4]
+	a2, m2 := body[5], body[6]
+	a3, m3 := body[7], body[8]
+	set, get, add, mm := body[9], body[10], body[11], body[12]
+	tab := nt.A
+	idx := fora + 3
+	if nt.Op != OP_NEWTABLE || nt.B != 0 || nt.C != 4 ||
+		extra.Op != OP_EXTRAARG || extra.A != 0 ||
+		tab < 0 || tab+4 >= nreg || idx < 0 || idx >= nreg ||
+		mv.Op != OP_MOVE || mv.A != tab+1 || mv.B != idx ||
+		!fastAddI(a1, tab+2, idx, 1) || !fastMMBINI(m1, idx, 1) ||
+		!fastAddI(a2, tab+3, idx, 2) || !fastMMBINI(m2, idx, 2) ||
+		!fastAddI(a3, tab+4, idx, 3) || !fastMMBINI(m3, idx, 3) ||
+		set.Op != OP_SETLIST || set.A != tab || set.B != 4 || set.C != 0 || set.K != 0 ||
+		get.Op != OP_GETI || get.B != tab || get.C != 1 ||
+		get.A < 0 || get.A >= nreg ||
+		add.Op != OP_ADD || add.A < 0 || add.A >= nreg ||
+		!((add.B == add.A && add.C == get.A) || (add.C == add.A && add.B == get.A)) ||
+		mm.Op != OP_MMBIN || mm.C != int(TM_ADD) ||
+		!((mm.A == add.A && mm.B == get.A) || (mm.B == add.A && mm.A == get.A)) {
+		return 0, false
+	}
+	acc := add.A
+	for r := fora; r <= fora+3; r++ {
+		if r == tab || r == tab+1 || r == tab+2 || r == tab+3 || r == tab+4 || r == acc || r == get.A {
+			return 0, false
+		}
+	}
+	base := ci.funcIdx + 1
+	for _, uv := range L.openupval {
+		if uv != nil && uv.open && uv.L == L && uv.idx >= base && uv.idx < base+nreg {
+			return 0, false
+		}
+	}
+	stack := L.stack[base : base+nreg]
+	if stack[fora].tt != LUA_VNUMINT || stack[fora+1].tt != LUA_VNUMINT ||
+		stack[fora+2].tt != LUA_VNUMINT || stack[fora+3].tt != LUA_VNUMINT {
+		return 0, false
+	}
+	accTT := stack[acc].tt
+	if accTT != LUA_VNUMINT && accTT != LUA_VNUMFLT {
+		return 0, false
+	}
+	count := uint64(stack[fora+1].i)
+	step := stack[fora+2].i
+	idxv := stack[fora].i
+	accIsInt := accTT == LUA_VNUMINT
+	sumI := stack[acc].i
+	sumF := 0.0
+	if !accIsInt {
+		sumF = math.Float64frombits(uint64(sumI))
+	}
+	debt := L.g.gcDebt
+	watch := !L.g.gcInFinalizer && !L.g.closing && !L.g.gcStopped &&
+		(gcWatched.Load() != 0 || gcWeakCount.Load() != 0)
+	commit := func(idx int64, c uint64, done bool) {
+		if accIsInt {
+			setivalue(&stack[acc], sumI)
+		} else {
+			setfltvalue(&stack[acc], sumF)
+		}
+		stack[fora].i = idx
+		stack[fora+1].i = int64(c)
+		stack[fora+3].i = idx
+		if !done {
+			return
+		}
+		t := luaH_newarray4(L)
+		setivalue(&t.array[0], idx)
+		setivalue(&t.array[1], idx+1)
+		setivalue(&t.array[2], idx+2)
+		setivalue(&t.array[3], idx+3)
+		sethvalue(&L.stack[base+tab], t)
+		setivalue(&L.stack[base+tab+1], idx)
+		setivalue(&L.stack[base+tab+2], idx+1)
+		setivalue(&L.stack[base+tab+3], idx+2)
+		setivalue(&L.stack[base+tab+4], idx+3)
+		if get.A != tab+1 {
+			setivalue(&L.stack[base+get.A], idx)
+		}
+	}
+	for {
+		if watch {
+			debt++
+			if debt >= gcStepDebt {
+				commit(idxv, count, false)
+				L.g.gcDebt = 0
+				debt = 0
+				L.top = ci.top
+				ci.savedpc = pc
+				L.gcCycle()
+				stack = L.stack[base : base+nreg]
+				if stack[fora].tt != LUA_VNUMINT || stack[fora].i != idxv ||
+					stack[fora+1].tt != LUA_VNUMINT || uint64(stack[fora+1].i) != count ||
+					stack[fora+2].tt != LUA_VNUMINT || stack[fora+2].i != step ||
+					stack[fora+3].tt != LUA_VNUMINT || stack[fora+3].i != idxv ||
+					stack[acc].tt != accTT {
+					return pc, true
+				}
+				if accIsInt {
+					sumI = stack[acc].i
+				} else {
+					sumF = math.Float64frombits(uint64(stack[acc].i))
+				}
+			}
+		}
+		if accIsInt {
+			sumI += idxv
+		} else {
+			sumF += float64(idxv)
+		}
+		if count == 0 {
+			break
+		}
+		count--
+		idxv += step
+	}
+	commit(idxv, 0, true)
+	L.g.gcDebt = debt
+	return pc + jump + 1, true
+}
+
+func fastAddI(ins Instruction, dest, src, imm int) bool {
+	return ins.Op == OP_ADDI && ins.A == dest && ins.B == src && int64(ins.C-OFFSET_sC) == int64(imm)
+}
+
+func fastMMBINI(ins Instruction, left, imm int) bool {
+	return ins.Op == OP_MMBINI && ins.A == left && ins.K == 0 &&
+		ins.C == int(TM_ADD) && int64(ins.B-OFFSET_sC) == int64(imm)
 }
 
 // fastArrayFor handles the two dense-array loops emitted for

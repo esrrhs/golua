@@ -1,73 +1,60 @@
 // Translation of lstring.h / lstring.c (PUC-Lua 5.4).
 //
-// Short strings are interned through a Go weak map: an entry disappears
-// once nothing else refers to the string, and a sweep drops the dead
-// entries. That is exactly what C's string table does under its own
-// collector -- a short string lives while something references it and is
-// interned afresh otherwise -- and it keeps the guarantee C extensions
-// rely on: of the short strings alive at any moment, equal ones are the
-// same object, so 'lua_topointer' answers the same address for both and
-// a short string can be a 'lua_rawsetp' key.
+// Short strings are interned in a strong map. A Go weak map made the miss
+// path several times slower than building the string, which is what
+// string.format spends its time on. The map is capped: past the cap it is
+// dropped and later duplicates are new objects. Equality compares bytes,
+// so a flushed entry still compares equal to a live one. While an entry
+// is cached, equal short strings stay the same object, which is what
+// lua_topointer and lua_rawsetp see.
 package core
 
 import (
 	"strings"
-	"weak"
 )
 
 const (
 	LUAI_MAXSHORTLEN = 40
 	LUAI_HASHLIMIT   = 5
-	maxInternedShort = 1 << 16
+	maxInternedShort = 1 << 20
 )
 
-// stringTable replaces Lua's hash table of strings. The entries are weak:
-// Go's collector drops the unreachable ones and 'sweep' takes them out of
-// the map, the way C's own sweep takes dead strings out of 'strt'.
+// stringTable replaces Lua's hash table of strings.
 type stringTable struct {
-	short map[string]weak.Pointer[TString]
+	short map[string]*TString
 	nuse  int
-	limit int
 }
 
 func newStringTable() *stringTable {
-	return &stringTable{
-		short: make(map[string]weak.Pointer[TString], 1024),
-		limit: maxInternedShort,
-	}
-}
-
-// sweep removes the entries whose string is no longer reachable. It is
-// O(len(short)) and so must not run on every insertion; the next one is
-// deferred until the table has grown again.
-func (tb *stringTable) sweep() {
-	for k, wp := range tb.short {
-		if wp.Value() == nil {
-			delete(tb.short, k)
-		}
-	}
-	tb.nuse = len(tb.short)
-	tb.limit = 2 * tb.nuse
-	if tb.limit < maxInternedShort {
-		tb.limit = maxInternedShort
-	}
+	return &stringTable{short: make(map[string]*TString, 1024)}
 }
 
 // get returns the interned string with these bytes, or nil.
-func (tb *stringTable) get(s string) *TString {
-	if wp, ok := tb.short[s]; ok {
-		return wp.Value()
+func (tb *stringTable) get(s string) *TString { return tb.short[s] }
+
+// flush drops the cache. A full collection has to be able to free a
+// short string that nothing else references; the cache is an extra
+// root, and a C caller waiting on the string's finalizer (the copy
+// lua_tolstring handed out) would otherwise wait forever. Strings
+// still reachable from the stack or a table stay, and equality does
+// not require the cache.
+func (tb *stringTable) flush() {
+	if tb == nil || tb.nuse == 0 {
+		return
 	}
-	return nil
+	tb.short = make(map[string]*TString, 1024)
+	tb.nuse = 0
 }
 
-// put interns a string.
+// put interns a string. Past the cap the cache is dropped so a process
+// that invents short strings forever does not keep all of them.
 func (tb *stringTable) put(s string, ts *TString) {
-	tb.short[s] = weak.Make(ts)
-	tb.nuse++
-	if tb.nuse > tb.limit {
-		tb.sweep()
+	if tb.nuse >= maxInternedShort {
+		tb.short = make(map[string]*TString, 1024)
+		tb.nuse = 0
 	}
+	tb.short[s] = ts
+	tb.nuse++
 }
 
 // luaS_hash computes the hash of a string (lstring.c).
@@ -95,12 +82,11 @@ func luaS_eqlngstr(a, b *TString) bool {
 	return a == b || (len(a.val) == len(b.val) && a.val == b.val)
 }
 
-// luaS_eqshrstr compares two short strings. Weak interning still
-// guarantees that the strings alive at any moment are one object each --
-// a second object is only made when the first is already gone -- so a
-// pointer comparison is enough, exactly C's 'eqshrstr'.
+// luaS_eqshrstr compares two short strings. Cached strings are unique, so
+// the pointer test is the usual answer. After the cache is flushed a
+// live string and a newly interned copy still have to compare equal.
 func luaS_eqshrstr(a, b *TString) bool {
-	return a == b
+	return a == b || (a.hash == b.hash && a.val == b.val)
 }
 
 func (L *State) internShort(s string) *TString {

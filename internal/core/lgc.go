@@ -199,23 +199,6 @@ func (L *State) gcAwaitPending() {
 	}
 }
 
-// gcWaitFinalizers waits for the Go finalizer goroutine to hand over what
-// it has found.  'runtime.GC' returns as soon as the sweep is over, which
-// can be before the queue is filled.
-//
-// It costs milliseconds, because it has to be sure: only the closing of a
-// state can afford it, and only because nothing will allocate again.  A
-// collector step uses the bounded 'gcAwaitPending' instead.
-func (L *State) gcWaitFinalizers() {
-	for i := 0; i < 2 && !L.hasPending(); i++ {
-		runtime.GC()
-		runtime.Gosched()
-	}
-	for i := 0; i < 5 && !L.hasPending(); i++ {
-		time.Sleep(time.Millisecond)
-	}
-}
-
 // gcHold keeps every object that is being watched for '__gc' reachable
 // until the interpreter says it is time for a collection.
 //
@@ -283,6 +266,9 @@ func (L *State) gcCycle() {
 	gcReleaseFor(L.g)
 	gcClearStacks() /* see gcClearStacks: stale slots keep objects alive */
 	L.gcSweepWeak()
+	if L.g.strt != nil {
+		L.g.strt.flush() /* the intern table must not pin dead strings */
+	}
 	runtime.GC() /* lets Go find the unreachable objects */
 	L.gcAwaitPending()
 	L.runFinalizers()
@@ -425,12 +411,14 @@ func (L *State) closeFinalizers() {
 		return
 	}
 	gcPruneWatch()
-	/* Drop only this state's holds. Other states' watched objects stay
-	   reachable until their own Close or collector cycle. */
-	gcReleaseFor(L.g)
-	gcClearStacks()
-	runtime.GC()         /* lets Go find the unreachable objects */
-	L.gcWaitFinalizers() /* nothing more will allocate: wait for the queue */
+	/* Every watched object of this state is on gcWatch, held alive until
+	   its '__gc' runs. The walk below is that list, so a collection is
+	   not what finds them. runtime.GC here marks the whole Go heap and
+	   is most of the time a short script spends exiting, and waiting for
+	   a finalizer queue that never fills sleeps on top of that. Drain
+	   anything already queued, then finalize the rest in order. Holds stay until
+	   the walk finishes, so a concurrent Go collection cannot run the
+	   same metamethod a second time. */
 	L.runFinalizers()
 	/* What is still reachable was never queued, so it is found the way
 	   C finds it: by walking the list of watched objects.  C's
@@ -451,7 +439,13 @@ func (L *State) closeFinalizers() {
 			rest = append(rest, w)
 		}
 	}
-	L.g.closeQueue = append(L.g.closeQueue, mine...)
+	/* Newest first. PUC-Lua prepends onto 'tobefnz' while scanning
+	   allgc from the most recently allocated object, and a '__gc'
+	   that closes the state must still see the older objects
+	   waiting. Watch order is oldest first. */
+	for i := len(mine) - 1; i >= 0; i-- {
+		L.g.closeQueue = append(L.g.closeQueue, mine[i])
+	}
 	gcWatch = rest
 	gcWatchMu.Unlock()
 	L.drainCloseQueue()

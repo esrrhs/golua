@@ -237,6 +237,85 @@ func TestFastDenseArrayFor(t *testing.T) {
 	}
 }
 
+func TestFastAllocFor(t *testing.T) {
+	got := runChunk(t, `
+		local function alloc(n)
+			local s = 0
+			for i = 1, n do
+				local t = { i, i + 1, i + 2, i + 3 }
+				s = s + t[1]
+			end
+			return s
+		end
+		local t
+		local s = 0
+		for i = 1, 5 do
+			t = { i, i + 1, i + 2, i + 3 }
+			s = s + t[1]
+		end
+		local down = 0
+		for i = 10, 1, -3 do
+			local u = { i, i + 1, i + 2, i + 3 }
+			down = down + u[1]
+		end
+		local fs = 0.5
+		for i = 1, 4 do
+			local u = { i, i + 1, i + 2, i + 3 }
+			fs = fs + u[1]
+		end
+		return tostring(alloc(10000)) .. " " ..
+			t[1] .. "," .. t[2] .. "," .. t[3] .. "," .. t[4] .. "," .. s .. " " ..
+			tostring(down) .. " " .. tostring(fs)
+	`)
+	if got != "50005000 5,6,7,8,15 22 10.5" {
+		t.Errorf("alloc for: %q", got)
+	}
+}
+
+func TestFastYieldFor(t *testing.T) {
+	got := runChunk(t, `
+		local n = 100
+		local function producer()
+			for i = 1, n do coroutine.yield(i) end
+		end
+		local co = coroutine.wrap(producer)
+		local s = 0
+		for _ = 1, n do s = s + co() end
+		local ok, err = pcall(co)
+		local ok2, err2 = pcall(co)
+
+		local function shortp()
+			for i = 1, 5 do coroutine.yield(i) end
+		end
+		local co2 = coroutine.wrap(shortp)
+		local s2 = 0
+		for _ = 1, 3 do s2 = s2 + co2() end
+		return tostring(s) .. " " .. tostring(ok) .. ":" .. tostring(err) .. " " ..
+			tostring(ok2) .. ":" .. tostring(err2) .. " " ..
+			tostring(s2) .. " " .. tostring(co2())
+	`)
+	if got != "5050 true:nil false:cannot resume dead coroutine 6 4" {
+		t.Errorf("yield for: %q", got)
+	}
+}
+
+func TestFastConcatFor(t *testing.T) {
+	got := runChunk(t, `
+		local a, b = "hello", "world"
+		local s
+		for _ = 1, 100 do s = a .. b end
+		local s2 = ""
+		for _ = 1, 3 do s2 = s2 .. "x" end
+		local empty = ""
+		local s3
+		for _ = 1, 2 do s3 = a .. empty end
+		return s .. " " .. tostring(#s) .. " " .. s2 .. " " .. s3
+	`)
+	if got != "helloworld 10 xxx hello" {
+		t.Errorf("concat for: %q", got)
+	}
+}
+
 func TestFastGlobalFor(t *testing.T) {
 	got := runChunk(t, `
 	_G.fast_global_for_value = 0

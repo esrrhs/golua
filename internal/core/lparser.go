@@ -31,9 +31,12 @@ const (
 // hasmultret reports whether an expression kind has multiple returns.
 func hasmultret(k expkind) bool { return k == VCALL || k == VVARARG }
 
-// eqstr compares two strings. Because all strings are unified by the
-// scanner, the parser can use pointer equality.
-func eqstr(a, b *TString) bool { return a == b }
+// eqstr compares two strings. The scanner interns them, and the pointer
+// test is enough while that entry is still cached. Content covers a
+// name that was interned again after the cache was flushed.
+func eqstr(a, b *TString) bool {
+	return a == b || (a != nil && b != nil && a.val == b.val)
+}
 
 // ---------------------------------------------------------------------
 // Expression descriptor (lparser.h)
