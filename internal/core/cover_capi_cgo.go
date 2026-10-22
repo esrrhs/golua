@@ -32,7 +32,7 @@ func exerciseCAPI(dir string) error {
 		}
 	}()
 
-	luaL_checkversion_(p, 504, 0)
+	luaL_checkversion_(p, C.lua_Number(luaVersionNum), C.size_t(luaLNumSizes))
 	if lua_version(p) == 0 || lua_newstate(nil, nil) != nil || luaL_newstate() != nil {
 		return fmt.Errorf("version / newstate")
 	}

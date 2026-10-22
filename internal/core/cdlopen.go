@@ -705,7 +705,11 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 // ---------------------------------------------------------------------
 
 //export luaL_checkversion_
-func luaL_checkversion_(p *C.lua_State, ver C.lua_Number, sz C.size_t) {}
+func luaL_checkversion_(p *C.lua_State, ver C.lua_Number, sz C.size_t) {
+	/* PUC-Lua (lauxlib.c): refuse a size/version mismatch instead of
+	   letting a C module built for another core run silently. */
+	stateOf(p).CheckVersion_(float64(ver), uintptr(sz))
+}
 
 //export luaL_checkinteger
 func luaL_checkinteger(p *C.lua_State, arg C.int) C.lua_Integer {

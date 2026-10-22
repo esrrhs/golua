@@ -65,6 +65,27 @@ func (L *State) Error2(format string, args ...any) int {
 	return L.Error()
 }
 
+// luaLNumSizes is LUAL_NUMSIZES for this port: sizeof(lua_Integer)*16 +
+// sizeof(lua_Number). lua_Integer is int64 and lua_Number is float64, matching
+// include/lua.h.
+const luaLNumSizes = unsafe.Sizeof(int64(0))*16 + unsafe.Sizeof(float64(0))
+
+// luaVersionNumGo is LUA_VERSION_NUM (5.4 → 504). Kept here so non-cgo builds
+// can check versions the same way as the C export in cdlopen.go.
+const luaVersionNumGo = 504
+
+// CheckVersion_ checks that the running core matches the version and
+// numeric type sizes the caller was compiled against (luaL_checkversion_,
+// lauxlib.c). A mismatch raises via Error2 — it must not be a silent no-op.
+func (L *State) CheckVersion_(ver float64, sz uintptr) {
+	if sz != luaLNumSizes {
+		L.Error2("core and library have incompatible numeric types")
+	} else if float64(luaVersionNumGo) != ver {
+		L.Error2("version mismatch: app. needs %f, Lua core provides %f",
+			ver, float64(luaVersionNumGo))
+	}
+}
+
 // CheckAny raises an error when the argument is absent (luaL_checkany).
 // C only asks whether there *is* a value -- not what it is -- so the
 // message is "bad argument #n to 'f' (value expected)".
