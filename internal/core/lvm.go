@@ -1002,9 +1002,30 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_CALL:
 				b := i.B
 				nresults := i.C - 1
-				if b != 0 && nresults == 1 && L.hookmask == 0 &&
-					fastLeafCall(L, ra, b-1) {
-					break
+				if b != 0 && nresults == 1 && L.hookmask == 0 {
+					fv := &L.stack[ra]
+					if fv.tt == ctb(LUA_VLCL) {
+						p := clLvalue(fv).p
+						if p.fastLeaf == fastLeafUnknown && constantLeaf(p) {
+							p.fastLeaf = fastLeafConstant
+						}
+						if p.fastLeaf == fastLeafConstant {
+							load := p.code[0]
+							switch load.Op {
+							case OP_LOADI:
+								setivalue(fv, int64(load.B-OFFSET_sBx))
+							case OP_LOADF:
+								setfltvalue(fv, float64(load.B-OFFSET_sBx))
+							case OP_LOADK:
+								*fv = p.k[load.B]
+							}
+							L.top = ra + 1
+							break
+						}
+					}
+					if fastLeafCall(L, ra, b-1) {
+						break
+					}
 				}
 				if b != 0 {
 					L.top = ra + b

@@ -220,6 +220,22 @@ func TestFastNumericLeafCall(t *testing.T) {
 	}
 }
 
+func TestFastConstantLeafCall(t *testing.T) {
+	got := runChunk(t, `
+	local function zero() return 0 end
+	local function half(ignored) return 0.5 end
+	local function text() return "not numeric" end
+	local s = 0
+	for i = 1, 1000 do
+		s = s + zero() + half(i)
+	end
+	return tostring(s) .. " " .. text()
+	`)
+	if got != "500.0 not numeric" {
+		t.Errorf("constant leaf call: %q", got)
+	}
+}
+
 func TestFastDenseArrayFor(t *testing.T) {
 	got := runChunk(t, `
 	local n = 10000

@@ -3,6 +3,7 @@ package core
 const (
 	fastLeafUnknown = iota
 	fastLeafNo
+	fastLeafConstant
 	fastLeafNumeric
 )
 
@@ -23,11 +24,28 @@ func fastLeafCall(L *State, funcIdx, nargs int) bool {
 	}
 	p := clLvalue(fv).p
 	if p.fastLeaf == fastLeafUnknown {
-		if numericLeaf(p) {
+		if constantLeaf(p) {
+			p.fastLeaf = fastLeafConstant
+		} else if numericLeaf(p) {
 			p.fastLeaf = fastLeafNumeric
 		} else {
 			p.fastLeaf = fastLeafNo
 		}
+	}
+	if p.fastLeaf == fastLeafConstant {
+		load := p.code[0]
+		switch load.Op {
+		case OP_LOADI:
+			setivalue(&L.stack[funcIdx], int64(load.B-OFFSET_sBx))
+		case OP_LOADF:
+			setfltvalue(&L.stack[funcIdx], float64(load.B-OFFSET_sBx))
+		case OP_LOADK:
+			L.stack[funcIdx] = p.k[load.B]
+		default:
+			return false
+		}
+		L.top = funcIdx + 1
+		return true
 	}
 	if p.fastLeaf != fastLeafNumeric {
 		return false
@@ -63,6 +81,27 @@ func fastLeafCall(L *State, funcIdx, nargs int) bool {
 	L.stack[funcIdx] = Value{i: ri[r], tt: rt[r]}
 	L.top = funcIdx + 1
 	return true
+}
+
+// constantLeaf recognizes a function whose only observable work (without
+// hooks) is returning one numeric constant. It is common as a callback,
+// sentinel, and benchmark floor; preparing a Lua frame costs far more
+// than the load itself.
+func constantLeaf(p *Proto) bool {
+	if p.isVararg != 0 || len(p.code) != 3 ||
+		p.code[1].Op != OP_RETURN1 || p.code[1].A != p.code[0].A ||
+		p.code[2].Op != OP_RETURN0 {
+		return false
+	}
+	switch load := p.code[0]; load.Op {
+	case OP_LOADI, OP_LOADF:
+		return true
+	case OP_LOADK:
+		return load.B >= 0 && load.B < len(p.k) &&
+			ttisnumber(&p.k[load.B])
+	default:
+		return false
+	}
 }
 
 func numericLeaf(p *Proto) bool {

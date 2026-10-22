@@ -513,6 +513,7 @@ func ioToFile(L *State) *ioStream {
 var (
 	ioOpenStreamsMu sync.Mutex
 	ioOpenStreams   []weak.Pointer[ioStream]
+	ioOpenNextPrune = ioOpenMax
 )
 
 // ioOpenMax is how long the list is allowed to get before the handles
@@ -523,8 +524,15 @@ func ioTrackStream(s *ioStream) {
 	ioOpenStreamsMu.Lock()
 	ioOpenStreams = append(ioOpenStreams, weak.Make(s))
 	n := len(ioOpenStreams)
+	prune := n >= ioOpenNextPrune
+	if prune {
+		// Live handles cannot be pruned. Back off before releasing the
+		// lock so a run that creates many states does not copy the whole
+		// live list again on every subsequent handle.
+		ioOpenNextPrune = n * 2
+	}
 	ioOpenStreamsMu.Unlock()
-	if n >= ioOpenMax {
+	if prune {
 		ioPruneOpen()
 	}
 }
@@ -544,6 +552,12 @@ func ioPruneOpen() {
 	}
 	ioOpenStreamsMu.Lock()
 	ioOpenStreams = append(ioOpenStreams, keep...)
+	if n := len(ioOpenStreams); n < ioOpenNextPrune/4 {
+		ioOpenNextPrune = ioOpenMax
+		if n*2 > ioOpenNextPrune {
+			ioOpenNextPrune = n * 2
+		}
+	}
 	ioOpenStreamsMu.Unlock()
 }
 

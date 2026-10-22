@@ -14,6 +14,14 @@ import (
 	"testing"
 )
 
+func BenchmarkStateStartup(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		L := NewState()
+		L.OpenLibs()
+		L.Close()
+	}
+}
+
 // benchPrepare opens a state, runs 'setup' once and leaves 'chunk'
 // compiled on the stack, ready to be called.
 func benchPrepare(b *testing.B, setup, chunk string) *State {
@@ -74,6 +82,33 @@ func BenchmarkStringKeyTable(b *testing.B) {
 		for i = 1, 100000 do t["key" .. i] = i end
 		local s = 0
 		for i = 1, 100000 do s = s + t["key" .. i] end
+	`)
+	defer L.Close()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchCall(b, L)
+	}
+}
+
+// BenchmarkHashWorkload mirrors bench/suite.lua's hash case: build the
+// keys once per invocation, then spend most of the time repeatedly
+// looking them up. Keep this separate from BenchmarkStringKeyTable,
+// whose lookup loop also measures construction and interning of keys.
+func BenchmarkHashWorkload(b *testing.B) {
+	L := benchPrepare(b, "", `
+		local n = 200000
+		local t = {}
+		local keys = {}
+		for i = 1, n do
+			keys[i] = "k" .. i
+			t[keys[i]] = i
+		end
+		local s = 0
+		for _ = 1, 10 do
+			for i = 1, n do
+				s = s + t[keys[i]]
+			end
+		end
 	`)
 	defer L.Close()
 	b.ResetTimer()

@@ -2,18 +2,22 @@
 -- on the same code.
 --
 --     lua bench/suite.lua fib
+--     lua bench/suite.lua fib 1000
 --     lua bench/suite.lua list
 --
--- Each workload prints its name and one checksum.  The checksum is part
--- of the comparison: a faster run that computed something else is not
--- a faster run.  Timing is deliberately not done in here.  PUC-Lua's
--- os.clock is CPU time and this port's os.clock is wall time since
--- startup, so a number taken inside the script is not comparable.
--- bench/compare.sh times the process from outside.
+-- The second argument is how many times to call the workload in this
+-- process.  bench/compare.sh raises that count until the run is long
+-- enough to time, then repeats the whole process.  Timing is
+-- deliberately not done in here.  PUC-Lua's os.clock is CPU time and
+-- this port's os.clock is wall time since startup, so a number taken
+-- inside the script is not comparable.  bench/compare.sh times the
+-- process from outside.
 --
--- Counts are chosen so that a PUC-Lua run lasts long enough for the
--- process startup not to dominate, and short enough that the whole
--- suite can be repeated.
+-- One call prints the workload's own result.  More than one call prints
+-- a folded sum of every result, so a run that skipped iterations cannot
+-- pass as one that did them.  Counts below are one call's worth of
+-- work: big enough that a single PUC-Lua call is real work, small
+-- enough that compare.sh can stack calls up to a second.
 
 local N = {
 	intloop = 30000000,
@@ -284,9 +288,8 @@ function workloads.alloc()
 	return s
 end
 
--- Script load and dispatch of an empty workload.  Subtracting this
--- from a short run is not meaningful; it is here so the fixed cost is
--- visible on its own row.
+-- An empty function.  Stacked, this is the cost of the call itself,
+-- the floor under every other row.
 function workloads.nop()
 	return 0
 end
@@ -313,4 +316,22 @@ if fn == nil then
 	os.exit(1)
 end
 
-print(name, fn())
+local reps = 1
+if arg[2] ~= nil then
+	reps = tonumber(arg[2])
+	if reps == nil or reps < 1 or reps % 1 ~= 0 or reps > 1000000000 then
+		io.stderr:write("reps must be an integer from 1 to 1000000000\n")
+		os.exit(1)
+	end
+end
+
+if reps == 1 then
+	print(name, fn())
+	return
+end
+
+local h = 0
+for _ = 1, reps do
+	h = (h + fn()) % 1000000007
+end
+print(name, h)
