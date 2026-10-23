@@ -70,8 +70,9 @@ func luaS_hash(str string, seed uint32) uint32 {
 
 // luaS_hashlongstr computes (and caches) the hash of a long string.
 func luaS_hashlongstr(L *State, ts *TString) uint32 {
+	_ = L
 	if ts.extra == 0 { /* no hash? */
-		ts.hash = luaS_hash(ts.val, L.g.seed)
+		ts.hash = luaS_hash(ts.val, ts.hash) /* seed was stored in hash */
 		ts.extra = 1
 	}
 	return ts.hash
@@ -94,14 +95,15 @@ func (L *State) internShort(s string) *TString {
 	if ts := tb.get(s); ts != nil {
 		return ts
 	}
-	ts := &TString{tt: LUA_VSHRSTR, hash: luaS_hash(s, L.g.seed), val: s}
+	ts := &TString{tt: LUA_TSHRSTR, hash: luaS_hash(s, L.g.seed), val: s}
 	tb.put(s, ts)
 	return ts
 }
 
 // luaS_createlngstrobj creates a long string (lstring.c).
 func luaS_createlngstrobj(L *State, s string) *TString {
-	return &TString{tt: LUA_VLNGSTR, val: s}
+	/* createstrobj(..., G(L)->seed): hash field holds the seed until hashed */
+	return &TString{tt: LUA_TLNGSTR, hash: L.g.seed, val: s}
 }
 
 // luaS_newlstr returns the interned (short) or fresh (long) string for s.

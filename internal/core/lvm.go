@@ -61,6 +61,9 @@ func luaV_idiv(L *State, m, n int64) int64 {
 	return luaV_idivcore(m, n)
 }
 
+// luaV_div is the 5.3.4 name for integer division (lvm.c).
+func luaV_div(L *State, m, n int64) int64 { return luaV_idiv(L, m, n) }
+
 func luaV_mod(L *State, m, n int64) int64 {
 	if uint64(n)+1 <= 1 { /* special cases: -1 or 0 */
 		if n == 0 {

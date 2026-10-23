@@ -462,11 +462,10 @@ func luaO_int2fb(x uint32) int {
 
 // luaO_fb2int converts a "floating point byte" back to an integer (lobject.c, 5.3).
 func luaO_fb2int(x int) int {
-	e := (x >> 3) & 0x1f
-	if e == 0 {
+	if x < 8 {
 		return x
 	}
-	return ((x & 7) + 8) << uint(e-1)
+	return ((x & 7) + 8) << uint((x>>3)-1)
 }
 
 // luaO_ceillog2 computes ceil(log2(x)).
@@ -502,7 +501,7 @@ func intarith(L *State, op int, v1, v2 int64) int64 {
 	case LUA_OPMOD:
 		return luaV_mod(L, v1, v2)
 	case LUA_OPIDIV:
-		return luaV_idiv(L, v1, v2)
+		return luaV_div(L, v1, v2)
 	case LUA_OPBAND:
 		return v1 & v2
 	case LUA_OPBOR:
@@ -543,23 +542,20 @@ func numarith(L *State, op int, v1, v2 float64) float64 {
 	panic("invalid float operation")
 }
 
-// luaO_rawarith performs the raw arithmetic operation; it returns false
-// when the operands cannot be coerced to numbers (and a metamethod must
-// be tried).
+// luaO_rawarith is the raw part of luaO_arith (lobject.c 5.3.4).
+// Uses tointeger/tonumber (with string coercion), not the 5.4 *ns helpers.
 func luaO_rawarith(L *State, op int, p1, p2 *Value, res *Value) bool {
 	switch op {
 	case LUA_OPBAND, LUA_OPBOR, LUA_OPBXOR, LUA_OPSHL, LUA_OPSHR, LUA_OPBNOT:
-		// operate only on integers
 		var i1, i2 int64
-		if tointegerns(p1, &i1) && tointegerns(p2, &i2) {
+		if tointeger(L, p1, &i1) && tointeger(L, p2, &i2) {
 			setivalue(res, intarith(L, op, i1, i2))
 			return true
 		}
 		return false
 	case LUA_OPDIV, LUA_OPPOW:
-		// operate only on floats
 		var n1, n2 float64
-		if tonumberns(p1, &n1) && tonumberns(p2, &n2) {
+		if luaV_tonumber_(L, p1, &n1) && luaV_tonumber_(L, p2, &n2) {
 			setfltvalue(res, numarith(L, op, n1, n2))
 			return true
 		}
@@ -569,7 +565,7 @@ func luaO_rawarith(L *State, op int, p1, p2 *Value, res *Value) bool {
 		if ttisinteger(p1) && ttisinteger(p2) {
 			setivalue(res, intarith(L, op, ivalue(p1), ivalue(p2)))
 			return true
-		} else if tonumberns(p1, &n1) && tonumberns(p2, &n2) {
+		} else if luaV_tonumber_(L, p1, &n1) && luaV_tonumber_(L, p2, &n2) {
 			setfltvalue(res, numarith(L, op, n1, n2))
 			return true
 		}

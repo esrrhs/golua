@@ -60,16 +60,19 @@ func luaF_initupvals(L *State, cl *LClosure) {
 	}
 }
 
-// luaF_findupval finds (or creates) the open upvalue for a stack slot.
+// luaF_findupval finds (or creates) the open upvalue for a stack slot (lfunc.c).
+// Open list is kept sorted by ascending stack index (C links by pointer
+// order with v >= level); close walks from the high end.
 func luaF_findupval(L *State, level int) *UpVal {
 	i := 0
 	for i < len(L.openupval) && L.openupval[i].idx < level {
 		i++
 	}
 	if i < len(L.openupval) && L.openupval[i].idx == level {
-		return L.openupval[i]
+		return L.openupval[i] /* found a corresponding upvalue */
 	}
-	uv := &UpVal{open: true, idx: level, L: L, v: L.stack[level]}
+	/* not found: create a new upvalue */
+	uv := &UpVal{open: true, idx: level, L: L}
 	L.openupval = append(L.openupval, nil)
 	copy(L.openupval[i+1:], L.openupval[i:])
 	L.openupval[i] = uv
