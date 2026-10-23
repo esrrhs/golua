@@ -501,8 +501,10 @@ func docall(narg, nres int) error {
 	base := L.GetTop() - narg /* function index */
 	L.PushGoClosure(msghandler, 0)
 	L.Insert(base) /* put the handler under the function and its arguments */
+	enableSIGINT() /* signal(SIGINT, laction) — lua.c docall */
 	status := L.PCall(narg, nres, base)
-	L.Remove(base) /* remove the message handler */
+	disableSIGINT() /* signal(SIGINT, SIG_DFL) */
+	L.Remove(base)  /* remove the message handler */
 	if status != lua.LUA_OK {
 		return lastError()
 	}

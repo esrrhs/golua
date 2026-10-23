@@ -63,7 +63,7 @@ const officialDir = "testdata/official"
 // only what gc.lua asks of it: how much memory it freed, and in what
 // order it ran the finalizers of a long list.
 var officialKnownDiff = map[string]string{
-	"all": "the environment, in four lines: the second PRNG seed, 'total memory' (PUC-Lua's allocator against the Go heap), the elapsed time, and the interpreter's own path",
+	"all": "run with _port=true (else gc.lua dosteps(0) hangs); plus env lines (PRNG seed, total memory, elapsed time, interpreter path) that cannot match PUC",
 	"gc":  "Go GC: no collector pace/debt, no ephemeron chains (weak-key values keep keys alive across stock GC); suite runs it with _port=true so the infinite dosteps(0) / pace loops are skipped",
 }
 
@@ -108,24 +108,11 @@ var officialSkip = map[string]string{
 	// 5.3.4 testes/ has no heavy.lua (that file is 5.4+); keep the key
 	// so a future tree that adds it stays skipped for the same reason.
 	"heavy": "builds 2 MB of tables per iteration, 2 GB overall: it times out on both sides, and a test that takes minutes is not a test",
-	// main.lua's Ctrl-C section (print "testing Ctrl C") spawns a child
-	// lua and sends SIGINT via `kill -INT`. PUC's stand-alone installs
-	// laction/lstop so the child aborts with "interrupted!"; this port
-	// has no equivalent hook yet. CommandContext then kills only the
-	// parent — the child is left unreaped under the 120s suite timeout,
-	// which hangs CI. A Setpgid process-group kill plus a shorter
-	// timeout is possible but still races the golden (signal timing,
-	// shell quoting, dlopen bits for `-l lib2-v2`). main.lua returns
-	// immediately when `_port` is set; forcing `_port` just to un-skip
-	// would yield an empty run, not an identical one. Leave not-run
-	// until stand-alone SIGINT matches PUC (see PORT_STATUS.md).
-	"main": "Ctrl-C / SIGINT stand-alone harness cannot be automated safely (no laction hook; unreaped child under context timeout)",
-	"all":  "driver that dofiles main.lua (same Ctrl-C hang) plus env-sensitive lines already in knownDiff",
 }
 
-// officialTimeout is what one file gets.  The slowest that is run,
-// 'errors', takes two seconds.
-const officialTimeout = 120 * time.Second
+// officialTimeout is what one file gets.  main.lua's Ctrl-C harness
+// is about a second; all.lua with _port is the slowest runnable file.
+const officialTimeout = 180 * time.Second
 
 // officialNormalise takes out what the host decides.  refPath is the
 // path of the reference interpreter these goldens were captured with --
@@ -151,7 +138,9 @@ func officialNormalise(s, binPath, refPath string) string {
 		{regexp.MustCompile(`testing short-circuit optimizations \([01]\)`), "testing short-circuit optimizations (N)"}, // os.time()%2
 		{regexp.MustCompile(`random seeds: [0-9]+, [0-9]+`), "random seeds: S1, S2"},
 		{regexp.MustCompile(`(float|integer) random range in .*`), "$1 random range in ..."},
-		{regexp.MustCompile(`/tmp/lua_[A-Za-z0-9]+`), "/tmp/lua_XXXX"}, // os.tmpname
+		{regexp.MustCompile(`/tmp/lua_[A-Za-z0-9]+`), "/tmp/lua_XXXX"},            // os.tmpname
+		{regexp.MustCompile(`pid [0-9]+`), "pid PID"},                             // main.lua Ctrl-C harness
+		{regexp.MustCompile(`done \(with [0-9]+ kills\)`), "done (with N kills)"}, // signal timing
 		{regexp.MustCompile(`(?m)^Lua 5\.[0-9][^ ]*  Copyright.*$`), "LUA-RELEASE"},
 	} {
 		s = n.re.ReplaceAllString(s, n.repl)
@@ -330,21 +319,44 @@ print(when == "open", os.setlocale("pt_BR") ~= nil, os.setlocale("zz_ZZ.NOPE") =
 // officialRun runs one file through a binary the way the reference
 // interpreter was invoked: "-e" first, then the file, with the case
 // directory as the working directory so chunk names and 'arg' match.
+//
+// The process is started in its own group (Setpgid) so a timeout can
+// SIGKILL the whole tree — main.lua's Ctrl-C tests spawn background
+// `lua -e ... &` children that CommandContext would otherwise leave
+// unreaped under the suite timeout.
 func officialRun(bin, dir, file string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), officialTimeout)
 	defer cancel()
-	/* gc.lua without _port hits dosteps(0): collectgarbage("step",0) is
-	   always false here (a basic step never ends a cycle), so the repeat
-	   loop never terminates. Ports are expected to set _port; doing it
-	   only for gc keeps other files matching their PUC goldens. */
+	/* gc.lua / all.lua without _port hit dosteps(0): collectgarbage("step",0)
+	   never ends a cycle here, so the repeat loop never terminates. Ports
+	   set _port; doing it for these two keeps the rest of the suite matching
+	   PUC goldens. all.lua still dofiles main.lua, but main returns at once
+	   when _port is set — Ctrl-C coverage lives in the main.lua case alone. */
 	preamble := "math.randomseed(1, 1)"
-	if file == "gc.lua" {
+	if file == "gc.lua" || file == "all.lua" {
 		preamble = "_port=true; " + preamble
 	}
-	cmd := exec.CommandContext(ctx, bin, "-e", preamble, file)
+	cmd := exec.Command(bin, "-e", preamble, file)
 	cmd.Dir = dir
-	out, err := cmd.CombinedOutput() /* stdout+stderr, as "2>&1" does */
-	return string(out), err
+	if attr := officialProcAttr(); attr != nil {
+		cmd.SysProcAttr = attr
+	}
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Start(); err != nil {
+		return buf.String(), err
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		return buf.String(), err
+	case <-ctx.Done():
+		officialKillTree(cmd.Process)
+		<-done
+		return buf.String(), ctx.Err()
+	}
 }
 
 // officialCapture writes every golden afresh from the reference

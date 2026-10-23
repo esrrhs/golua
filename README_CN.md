@@ -119,12 +119,11 @@ gofmt -l .        # 必须无输出
 测试就是规格说明：
 
 - **官方套件** —— PUC-Lua 5.3.4 `testes/` 的全部 **28** 个文件与参考解释器
-  逐字节比对。在带 cgo 的构建上 **25** 个完全一致；`gc` 是记录在案的差异
-  （Go GC 与 PUC 收集器的 pace/debt/ephemeron）。`main` 与 `all` 不跑：
-  `main.lua` 的 Ctrl-C / SIGINT 子进程 harness 尚无安全自动化（没有
-  `laction` 钩子；套件超时下会留下未回收的子进程），而 `all.lua` 会驱动
-  `main.lua` 并带几行环境相关输出。`api.lua` 能对上，但一条断言也没执行：
-  正文依赖 Lua 私有的 `T` 模块，而 `T` 是直接操作 C 内部结构的。
+  逐字节比对。在带 cgo 的构建上 **26** 个完全一致；`gc` 与 `all` 是记录在案的
+  差异（Go GC；`all` 以 `_port=true` 跑并带几行环境输出）。`main.lua` 的
+  Ctrl-C harness 通过独立进程的 SIGINT（`laction`/`lstop` 等价物）运行。
+  `api.lua` 能对上，但一条断言也没执行：正文依赖 Lua 私有的 `T` 模块，而
+  `T` 是直接操作 C 内部结构的。
 - **差分套件** —— `internal/core/testdata/diff` 里 83 个手写用例，各带
   golden 答案。
 - **真实扩展** —— LPeg、Lua CJSON、LuaSocket、LuaFileSystem 与 luaposix
@@ -146,24 +145,23 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 ## 性能
 
-一次运行，机器是 AMD EPYC 7551：下表比值测自 **PUC-Lua 5.4.7**（Go 1.24 cgo 构建），而本分支跟踪的是 **5.3.4**；差距主要来自 Go 运行时启动与字节码形状识别，而非 PUC 小版本差异。可用 `sh bench/compare.sh /path/to/lua-5.3.4 ./lua` 重跑刷新。比值是 golua / PUC-Lua，小于 1 表示更快。每一行 `p < 0.0001`。细节见 [bench/README_CN.md](bench/README_CN.md)。
+一次运行，机器是 Intel Xeon（8 核），PUC-Lua **5.3.4** 对比这棵树的 cgo 构建（Go 1.27）。`MIN_MS=600 REPS=7`；每一行 `p < 0.01`。比值是 golua / PUC-Lua，小于 1 表示更快。细节见 [bench/README_CN.md](bench/README_CN.md)。
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 1.72× | fib | 2.29×10⁻⁶ |
-| nop | 1.99× | concat | 2.54×10⁻⁶ |
-| hash | 1.25× | yield | 0.0023× |
-| intloop | 0.060× | pcall | 0.0040× |
-| floatloop | 0.12× | upvalue | 0.012× |
-| bitwise | 0.20× | global | 0.011× |
-| array | 0.48× | ipairs | 0.014× |
-| strings | 0.52× | tailcall | 0.016× |
-| sort | 0.53× | metaindex | 0.016× |
-|  |  | method | 0.015× |
-|  |  | call3 | 0.031× |
-|  |  | alloc | 0.070× |
+| startup | 2.38× | global | 2.32× |
+| nop | 1.23× | array | 2.19× |
+| intloop | 2.16× | hash | 1.75× |
+| floatloop | 2.45× | metaindex | 1.86× |
+| bitwise | 2.63× | ipairs | 2.23× |
+| fib | 1.89× | concat | 1.31× |
+| tailcall | 1.73× | strings | 0.86× |
+| call3 | 1.93× | sort | 0.56× |
+| upvalue | 1.97× | yield | 1.44× |
+| method | 2.06× | alloc | 2.37× |
+| pcall | 1.84× |  |  |
 
-`startup`、`nop`、`hash` 更慢。`intloop` 到 `sort` 该做的计算还在做。`fib` 到 `alloc` 只匹配一种字节码形状；别的程序仍走解释器，校验和相同。
+多数字节码密集行大约 1.7–2.6×。`strings` 与 `sort` 更快（库代码占主导）。`startup` 付的是 Go 运行时的成本。
 
 ## 已知差异
 
@@ -179,7 +177,7 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 - **少量 API 边缘。** 注册表里没有 `_UBOX*` 键；`file:read(n)` 在 `n`
   超过 2 GiB 时按文件末尾处理；负的 `setvbuf` 大小会成功；
   `math.randomseed()` 的第二个种子是 Go 堆地址。
-- **性能。** 见上一节。对上的形状给出同一个校验和。
+- **性能。** 见上一节。每个 bench 负载与 PUC 校验和相同。
 
 ## 许可证
 

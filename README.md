@@ -128,13 +128,11 @@ The tests are the specification:
 
 - **Official suite** — all 28 files of PUC-Lua 5.3.4's `testes/` are
   compared byte for byte against a reference interpreter. On a cgo build
-  **25** match exactly; `gc` is a documented difference (Go GC vs PUC
-  collector pace/debt/ephemerons). `main` and `all` are not run: `main.lua`'s
-  Ctrl-C / SIGINT child harness has no safe automation yet (no `laction`
-  hook; unreaped child under the suite timeout), and `all.lua` drives
-  `main.lua` plus a few environment-sensitive lines. `api.lua` matches but
-  asserts nothing: its body needs Lua's private `T` module, which is built
-  against the C internals.
+  **26** match exactly; `gc` and `all` are documented differences (Go GC;
+  `all` runs with `_port=true` plus a few environment lines). `main.lua`'s
+  Ctrl-C harness runs via stand-alone SIGINT (`laction`/`lstop` equivalent).
+  `api.lua` matches but asserts nothing: its body needs Lua's private `T`
+  module, which is built against the C internals.
 - **Differential suite** — 83 hand-written cases in
   `internal/core/testdata/diff`, each with a golden answer.
 - **Real extensions** — LPeg, Lua CJSON, LuaSocket, LuaFileSystem and
@@ -158,24 +156,23 @@ differential, third-party and fuzz suites with `LUA_REF` pointing at it.
 
 ## Performance
 
-One run on an AMD EPYC 7551: ratios below were measured against **PUC-Lua 5.4.7** (Go 1.24 cgo build) while this branch tracks **5.3.4**; they are dominated by Go runtime startup and bytecode-shape recognition, not PUC minor-version differences. Re-run with `sh bench/compare.sh /path/to/lua-5.3.4 ./lua` to refresh. The ratio is golua / PUC-Lua; below 1 is faster. Every row had `p < 0.0001`. Timing details are in [bench/README.md](bench/README.md).
+One run on an Intel Xeon (8 cores), PUC-Lua **5.3.4** against a cgo build of this tree (Go 1.27). `MIN_MS=600 REPS=7`; every row had `p < 0.01`. The ratio is golua / PUC-Lua; below 1 is faster. Timing details are in [bench/README.md](bench/README.md).
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 1.72× | fib | 2.29×10⁻⁶ |
-| nop | 1.99× | concat | 2.54×10⁻⁶ |
-| hash | 1.25× | yield | 0.0023× |
-| intloop | 0.060× | pcall | 0.0040× |
-| floatloop | 0.12× | upvalue | 0.012× |
-| bitwise | 0.20× | global | 0.011× |
-| array | 0.48× | ipairs | 0.014× |
-| strings | 0.52× | tailcall | 0.016× |
-| sort | 0.53× | metaindex | 0.016× |
-|  |  | method | 0.015× |
-|  |  | call3 | 0.031× |
-|  |  | alloc | 0.070× |
+| startup | 2.38× | global | 2.32× |
+| nop | 1.23× | array | 2.19× |
+| intloop | 2.16× | hash | 1.75× |
+| floatloop | 2.45× | metaindex | 1.86× |
+| bitwise | 2.63× | ipairs | 2.23× |
+| fib | 1.89× | concat | 1.31× |
+| tailcall | 1.73× | strings | 0.86× |
+| call3 | 1.93× | sort | 0.56× |
+| upvalue | 1.97× | yield | 1.44× |
+| method | 2.06× | alloc | 2.37× |
+| pcall | 1.84× |  |  |
 
-`startup`, `nop` and `hash` are slower. `intloop` through `sort` still do the work. `fib` through `alloc` match one bytecode shape; a different program stays on the interpreter, and the checksum is the same.
+Most bytecode-heavy rows sit around 1.7–2.6×. `strings` and `sort` are faster here (library work dominates). `startup` pays for the Go runtime.
 
 ## Known differences
 
@@ -194,7 +191,7 @@ One run on an AMD EPYC 7551: ratios below were measured against **PUC-Lua 5.4.7*
 - **A few API edges.** There is no `_UBOX*` registry key; `file:read(n)`
   with `n` above 2 GiB reads as end of file; a negative `setvbuf` size
   succeeds; `math.randomseed()`'s second seed is a Go heap address.
-- **Performance.** See above. A recognised shape returns the same checksum.
+- **Performance.** See above. Same checksums as PUC on every bench workload.
 
 ## License
 

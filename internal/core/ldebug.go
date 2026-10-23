@@ -844,6 +844,19 @@ func (L *State) SetHook(hook func(L *State, ar *dbAr), mask, count int) {
 	L.installHook(hook, mask, count, true)
 }
 
+// SetInterruptHook installs the stand-alone interpreter's SIGINT hook
+// (lua.c's lstop): the next call, return or count event raises
+// "interrupted!" and clears the hook. laction in cmd/lua arms this from
+// a signal; a second SIGINT uses the default disposition and kills the
+// process, matching PUC when a long unbreakable C/Go call is in flight.
+func (L *State) SetInterruptHook() {
+	L.installHook(func(L *State, ar *dbAr) {
+		L.installHook(nil, 0, 0, false)
+		/* luaL_error(L, "interrupted!") */
+		L.Error2("interrupted!")
+	}, dbMaskCall|dbMaskRet|dbMaskCount, 1, true)
+}
+
 // setHook is the unexported counterpart used by the debug library: the
 // hook it installs is the debug library's own, so 'debug.gethook' names
 // the function in the hook table for it instead of saying "external

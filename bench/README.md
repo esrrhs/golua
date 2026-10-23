@@ -19,48 +19,33 @@ Each workload is one function in `suite.lua`. One call is often a few millisecon
 
 ## The run in the root README
 
-AMD EPYC 7551, **PUC-Lua 5.4.7** against a cgo build of this tree (Go 1.24). **This branch tracks Lua 5.3.4**; the table below is still the older 5.4.7 comparison (ratios are dominated by Go runtime / shape recognition, not PUC 5.3 vs 5.4). Re-run with `sh bench/compare.sh /path/to/lua-5.3.4 ./lua` to refresh against 5.3.4. Every row had `p < 0.0001`. Startup was the widest row: golua's coefficient of variation there was 30%, and the other rows were a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
-
-### Work that still runs
-
-A numeric `for` whose body is straight-line arithmetic is copied into local variables and stepped there, which removes the per-instruction switch. Dense integer arrays are still written and read, one element at a time. `string.format`, `table.concat`, `gmatch` and `table.sort` go through the library, and `table.sort` calls back into Lua on every comparison. String-key lookup walks the same open-addressed hash part as PUC-Lua.
+Intel Xeon (8 cores), **PUC-Lua 5.3.4** against a cgo build of this tree (Go 1.27). `MIN_MS=600 REPS=7`; every row had `p < 0.01`. Startup CV on the golua side was about 10%; other rows a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
 
 | workload | PUC-Lua | golua | ratio | what runs |
 | --- | ---: | ---: | ---: | --- |
-| startup | 4.21 ms | 7.25 ms | 1.72× | a new process, no script body |
-| nop | 34.3 ns | 68.1 ns | 1.99× | `return 0` |
-| hash | 512 ms | 638 ms | 1.25× | short-string key lookup |
-| intloop | 209 ms | 12.4 ms | 0.060× | integer sum |
-| floatloop | 208 ms | 25.7 ms | 0.12× | float multiply-add |
-| bitwise | 261 ms | 53.2 ms | 0.20× | and, xor, shift |
-| array | 253 ms | 121 ms | 0.48× | dense integer keys |
-| strings | 217 ms | 113 ms | 0.52× | format, concat, gmatch |
-| sort | 142 ms | 75.9 ms | 0.53× | `table.sort`, Lua comparator |
+| startup | 1.27 ms | 3.02 ms | 2.38× | a new process, no script body |
+| nop | 23.4 ns | 28.8 ns | 1.23× | `return 0` |
+| intloop | 156 ms | 338 ms | 2.16× | integer sum |
+| floatloop | 225 ms | 549 ms | 2.45× | float multiply-add |
+| bitwise | 233 ms | 613 ms | 2.63× | and, xor, shift |
+| fib | 64.8 ms | 123 ms | 1.89× | recursive Fibonacci |
+| tailcall | 174 ms | 300 ms | 1.73× | countdown tail call |
+| call3 | 231 ms | 445 ms | 1.93× | `return a + b + c` |
+| upvalue | 385 ms | 759 ms | 1.97× | `n = n + 1` |
+| method | 229 ms | 471 ms | 2.06× | `object:add(constant)` |
+| pcall | 108 ms | 199 ms | 1.84× | `pcall` of an identity |
+| global | 175 ms | 407 ms | 2.32× | `_G.g = _G.g + i` |
+| array | 192 ms | 420 ms | 2.19× | dense integer keys |
+| hash | 188 ms | 329 ms | 1.75× | short-string key lookup |
+| metaindex | 141 ms | 263 ms | 1.86× | stable integer field |
+| ipairs | 150 ms | 336 ms | 2.23× | base `ipairs`, dense array |
+| concat | 91.4 ms | 119 ms | 1.31× | loop-invariant `a .. b` |
+| strings | 81.4 ms | 69.6 ms | 0.86× | format, concat, gmatch |
+| sort | 72.1 ms | 40.8 ms | 0.56× | `table.sort`, Lua comparator |
+| yield | 143 ms | 205 ms | 1.44× | `yield` of `1..n`, then sum |
+| alloc | 134 ms | 318 ms | 2.37× | four-element constructor |
 
-A process starts in 7.3 ms against 4.2 ms. Most of that gap is the Go runtime. `return 0` is stored into the caller's slot without a new frame and still costs 68 ns against 34 ns, because the loop that issues the call is dispatched in Go. The hash row builds its keys once and then looks them up. A Go hash node is larger than the C node, and short-string equality and the collector are a large share of a profile of this lookup. The `%d` loop inside `strings` is recognised and still formats one string per index. The array loops reserve the array once and still touch every slot.
-
-### One recognised bytecode shape
-
-These rows match one instruction pattern and evaluate it by a different algorithm. The checksum stays the same. The ratio belongs to that pattern: a hook, an open upvalue, a different callee, or a metamethod that can observe the iteration stays on the interpreter.
-
-| workload | PUC-Lua | golua | ratio | recognised shape |
-| --- | ---: | ---: | ---: | --- |
-| fib | 119 ms | 273 ns | 2.29×10⁻⁶ | direct Fibonacci, `n` in 0..45 |
-| concat | 184 ms | 466 ns | 2.54×10⁻⁶ | loop-invariant `a .. b` |
-| yield | 285 ms | 646 µs | 0.0023× | `yield` of `1..n`, then sum |
-| pcall | 210 ms | 837 µs | 0.0040× | `pcall` of an identity |
-| upvalue | 726 ms | 8.39 ms | 0.012× | `n = n + 1` |
-| global | 314 ms | 3.41 ms | 0.011× | `_G.g = _G.g + i` |
-| ipairs | 371 ms | 5.18 ms | 0.014× | base `ipairs`, dense array |
-| tailcall | 225 ms | 3.51 ms | 0.016× | countdown tail call |
-| metaindex | 223 ms | 3.51 ms | 0.016× | stable integer field |
-| method | 438 ms | 6.65 ms | 0.015× | `object:add(constant)` |
-| call3 | 323 ms | 10.0 ms | 0.031× | `return a + b + c` |
-| alloc | 249 ms | 17.4 ms | 0.070× | four-element constructor |
-
-`fib` matches `n < 2` followed by `fib(n-1) + fib(n-2)` for an integer from 0 to 45 and runs a linear loop. PUC-Lua runs the exponential recursion, so one call is 119 ms there and 273 ns here. `concat` joins two strings the loop never changes, and the join happens once. `yield` matches `coroutine.wrap` of `yield(i)` for `i = 1, n`. The sum is taken directly and the coroutine is left suspended at its last yield, so the loop does not resume once per value.
-
-The other rows drop repeated effects that nothing in the loop can observe. `pcall` of an identity on the loop index cannot fail, so no protected frame is built. A closure whose body is only `n = n + 1` is applied as one addition. `_G.g = _G.g + i` and a stable integer field, including a table `__index`, are resolved once and stored at the end. `object:add(constant)` looks up the method and that raw field once. Base `ipairs` over a dense integer array walks the array directly, and every element is still visited. The countdown `return f(n-1, acc+1)` until `n == 0` is one loop, and the increments still run. `return a + b + c` is inlined, and the additions still run. A four-element constructor that does not escape the iteration is kept as the sum plus the last table; collector debt still advances once per iteration.
+Most rows are interpreter-bound and land between about 1.2× and 2.6×. `strings` and `sort` spend most of their time in library code and come out ahead. Process startup is dominated by the Go runtime.
 
 ## run.sh
 
