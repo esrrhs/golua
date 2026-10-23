@@ -1,4 +1,4 @@
-// Translation of loslib.c (PUC-Lua 5.4): the standard Operating System
+// Translation of loslib.c (PUC-Lua 5.3.4): the standard Operating System
 // library.
 //
 // The strftime-style conversion specifiers of os.date are implemented on

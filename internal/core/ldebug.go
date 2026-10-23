@@ -470,17 +470,8 @@ func luaG_ordererror(L *State, p1, p2 *Value) {
 	luaG_runerror(L, "attempt to compare %s with %s", t1, t2)
 }
 
-// luaG_callerror raises "attempt to call a <type> value" (ldebug.c).
-//
-// Unlike every other type error, it first asks how the *call* came about:
-// a value called while Lua was running a '__close' is reported as
-// "attempt to call a nil value (metamethod 'close')", which is what makes
-// a variable whose '__close' disappeared produce a useful message. Only
-// when the call has no such explanation does it fall back to 'varinfo'.
+// luaG_callerror raises "attempt to call a <type> value" (ldebug.c 5.3.4).
 func luaG_callerror(L *State, o *Value) {
-	/* 5.3.4: same as luaG_typeerror(L, o, "call") — name the
-	   value being called via varinfo, not how the current frame
-	   was entered (that 5.4 path mis-labelled NoSuchName as main). */
 	t := luaT_objtypename(L, o)
 	luaG_runerror(L, "attempt to call a %s value%s", t, varinfo(L, o))
 }

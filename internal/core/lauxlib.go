@@ -1,4 +1,4 @@
-// Translation of lauxlib.h / lauxlib.c (PUC-Lua 5.4).
+// Translation of lauxlib.h / lauxlib.c (PUC-Lua 5.3.4).
 package core
 
 import (

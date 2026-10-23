@@ -1,4 +1,4 @@
-// Translation of lstring.h / lstring.c (PUC-Lua 5.4).
+// Translation of lstring.h / lstring.c (PUC-Lua 5.3.4).
 //
 // Short strings are interned in a strong map. A Go weak map made the miss
 // path several times slower than building the string, which is what

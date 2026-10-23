@@ -1,4 +1,4 @@
-// Translation of ltablib.c (PUC-Lua 5.4): the table manipulation
+// Translation of ltablib.c (PUC-Lua 5.3.4): the table manipulation
 // library, including the quicksort used by table.sort.
 package core
 

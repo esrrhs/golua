@@ -1,4 +1,4 @@
-// Translation of loadlib.c (PUC-Lua 5.4): the package library and the
+// Translation of loadlib.c (PUC-Lua 5.3.4): the package library and the
 // 'require' mechanism.
 //
 // Deviations from the C code (all caused by the fact that a static Go

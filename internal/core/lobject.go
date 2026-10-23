@@ -1,4 +1,4 @@
-// Package lua is a pure-Go port of PUC-Lua 5.4.
+// Package lua is a pure-Go port of PUC-Lua 5.3.4.
 //
 // This file is the translation of lobject.h / lobject.c: the value
 // representation (TValue) and the basic object operations. The garbage
@@ -281,6 +281,9 @@ func getstr(ts *TString) string   { return ts.val }
 // Table (lobject.h)
 // ---------------------------------------------------------------------
 
+/* BITRAS: 5.4 "array size hint" flag. Unused in this 5.3.4 port
+   (alimit always equals real array length / C sizearray). Kept so
+   flags bit 7 stays clear of the metamethod cache mask. */
 const BITRAS = 1 << 7
 
 // node is a hash-table entry, laid out the way lobject.h's union Node
@@ -318,20 +321,19 @@ func setnilkey(n *node) { n.keytt = LUA_VNIL; n.kp = nil; n.ki = 0 }
 
 // Table is a Lua table: an array part plus an open-addressing hash part.
 type Table struct {
-	flags     byte // 1<<p means tagmethod(p) is not present
-	lsizenode byte // log2 of size of 'node' array
-	alimit    uint32
+	flags     byte   // 1<<p means tagmethod(p) is not present
+	lsizenode byte   // log2 of size of 'node' array
+	alimit    uint32 // ≡ 5.3.4 sizearray (always real length here)
 	array     []Value
 	nodes     []node
 	lastfree  int
 	metatable *Table
-	weakMode  byte // 0 or "k"/"v"/"kv" bits, replacing GC-driven weakness
-	finalized bool // a Go finalizer has been set to run its '__gc'
+	weakMode  byte // Go-only: "k"/"v"/"kv" bits (C walks GC weak lists)
+	finalized bool // Go-only: Go finalizer armed for '__gc'
 }
 
 func isrealasize(t *Table) bool { return t.flags&BITRAS == 0 }
 func setrealasize(t *Table)     { t.flags &= ^byte(BITRAS) }
-func setnorealasize(t *Table)   { t.flags |= BITRAS }
 func sizenode(t *Table) int     { return 1 << t.lsizenode }
 func twoto(x byte) int          { return 1 << x }
 

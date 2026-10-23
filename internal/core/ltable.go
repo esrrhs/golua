@@ -1,4 +1,4 @@
-// Translation of ltable.h / ltable.c (PUC-Lua 5.4).
+// Translation of ltable.h / ltable.c (PUC-Lua 5.3.4).
 //
 // The array part and the open-addressing hash part are kept, because
 // 'next' must be able to resume a traversal from a given key; a Go map
@@ -110,7 +110,8 @@ func equalkey(k1 *Value, n *node, deadok bool) bool {
 	}
 }
 
-// luaH_realasize returns the real size of the array part (ltable.c).
+// luaH_realasize returns the array length (5.3.4 sizearray).
+// In this port t.alimit is always the real length (no 5.4 shrink hint).
 func luaH_realasize(t *Table) uint32 {
 	if isrealasize(t) || ispow2u(t.alimit) {
 		return t.alimit

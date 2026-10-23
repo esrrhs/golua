@@ -1,4 +1,4 @@
-// Translation of llex.h / llex.c (PUC-Lua 5.4.9).
+// Translation of llex.h / llex.c (PUC-Lua 5.3.4).
 //
 // Adaptations (same rules as the rest of the package):
 //   - no GC: luaC_fix is gone; reserved words are anchored by a package-level

@@ -1,4 +1,4 @@
-// Translation of luac.c (PUC-Lua 5.4.9): the standalone Lua compiler.
+// Translation of luac.c (PUC-Lua 5.3.4): the standalone Lua compiler.
 //
 // It lives in the library rather than in cmd/luac for one reason: the
 // listing (-l) reads prototypes, and a prototype is not reachable

@@ -1,4 +1,4 @@
-// Translation of lutf8lib.c (PUC-Lua 5.4): the UTF-8 library.
+// Translation of lutf8lib.c (PUC-Lua 5.3.4): the UTF-8 library.
 //
 // The C code works with pointers into the (NUL-terminated) string; here
 // we work with indexes into the Go string and treat "past the end" as

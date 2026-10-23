@@ -1,4 +1,4 @@
-// Translation of ldblib.c (PUC-Lua 5.4): the debug library.
+// Translation of ldblib.c (PUC-Lua 5.3.4): the debug library.
 //
 // The C code calls the debug API of ldebug.c / lapi.c (lua_getstack,
 // lua_getinfo, lua_getlocal, ...); this port has none of it, so the
