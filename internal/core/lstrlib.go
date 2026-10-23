@@ -1060,19 +1060,12 @@ func strGet2Digits(s string, i int) int {
 // strCheckFormat checks whether a conversion specification is valid
 // (checkformat).
 func strCheckFormat(L *State, form, flags string, precision bool) {
-	spec := 1 /* skip '%' */
-	for spec < len(form) && strings.IndexByte(flags, form[spec]) >= 0 {
-		spec++ /* skip flags */
-	}
-	if spec < len(form) && form[spec] != '0' { /* a width cannot start with '0' */
-		spec = strGet2Digits(form, spec) /* skip width */
-		if spec < len(form) && form[spec] == '.' && precision {
-			spec++
-			spec = strGet2Digits(form, spec) /* skip precision */
-		}
-	}
-	if spec >= len(form) || !strIsAlphaChar(form[spec]) {
-		/* did not go to the end? */
+	/* 5.3.4: scanformat already validated width/precision digits and
+	   repeated flags. Per-conversion flag sets are a 5.4 checkformat
+	   addition; keep a light letter check only. */
+	_ = flags
+	_ = precision
+	if len(form) < 2 || !strIsAlphaChar(form[len(form)-1]) {
 		L.Error2("invalid conversion specification: '%s'", form)
 	}
 }
@@ -1241,25 +1234,40 @@ func strFormatUnsigned(f strFmtSpec, n uint64, spec byte) string {
 
 // strGetFormat gets a conversion specification starting at 'i' (just
 // after the '%'); it returns the specification ('%...') and the index
-// of its last character (getformat).
+// of its last character. Matches PUC-Lua 5.3.4 scanformat errors.
 func strGetFormat(L *State, strfrmt string, i int) (string, int) {
-	/* spans flags, width, and precision ('0' is included as a flag) */
-	l := 0
-	for i+l < len(strfrmt) && strings.IndexByte(strFmtFlagsF+strFmtScan, strfrmt[i+l]) >= 0 {
-		l++
+	const flags = "-+ #0" /* FLAGS in lstrlib.c; sizeof includes NUL → 6 */
+	p := i
+	for p < len(strfrmt) && strings.IndexByte(flags, strfrmt[p]) >= 0 {
+		p++
 	}
-	l++ /* adds following character (should be the specifier) */
-	/* still needs space for '%', '\0', plus a length modifier */
-	if l >= strMaxFormat-10 {
+	if p-i >= len(flags)+1 { /* >= sizeof(FLAGS) */
+		L.Error2("invalid format (repeated flags)")
+	}
+	dig := 0
+	for dig < 2 && p < len(strfrmt) && strfrmt[p] >= '0' && strfrmt[p] <= '9' {
+		p++
+		dig++
+	}
+	if p < len(strfrmt) && strfrmt[p] == '.' {
+		p++
+		dig = 0
+		for dig < 2 && p < len(strfrmt) && strfrmt[p] >= '0' && strfrmt[p] <= '9' {
+			p++
+			dig++
+		}
+	}
+	if p < len(strfrmt) && strfrmt[p] >= '0' && strfrmt[p] <= '9' {
+		L.Error2("invalid format (width or precision too long)")
+	}
+	if p >= len(strfrmt) {
+		L.Error2("invalid option '%%' to 'format'")
+	}
+	form := "%" + strfrmt[i:p+1]
+	if len(form) >= strMaxFormat-10 {
 		L.Error2("invalid format (too long)")
 	}
-	var form string
-	if i+l <= len(strfrmt) {
-		form = "%" + strfrmt[i:i+l]
-	} else {
-		form = "%" + strfrmt[i:]
-	}
-	return form, i + l - 1
+	return form, p
 }
 
 // strNumber2StrX is the C99 hexadecimal floating-point formatter
@@ -1783,8 +1791,8 @@ func strFormat(L *State) int {
 					L.Pop(1) /* remove result from 'strToLString' */
 				}
 			}
-		default: /* also treat cases 'pnLlh' */
-			return L.Error2("invalid conversion '%s' to 'format'", form)
+		default: /* also treat cases 'pnLlh' — 5.3.4 wording */
+			return L.Error2("invalid option '%%%c' to 'format'", form[len(form)-1])
 		}
 	}
 	b.PushResult()
@@ -2294,29 +2302,16 @@ var strLib = []Reg{
 	{"unpack", strUnpack},
 }
 
-var strMetaMethods = []Reg{
-	{"__add", strArithAdd},
-	{"__sub", strArithSub},
-	{"__mul", strArithMul},
-	{"__mod", strArithMod},
-	{"__pow", strArithPow},
-	{"__div", strArithDiv},
-	{"__idiv", strArithIDiv},
-	{"__unm", strArithUnm},
-	{"__index", nil}, /* placeholder */
-}
-
 // strCreateMetaTable creates the metatable shared by all strings
-// (createmetatable).
+// (createmetatable). Lua 5.3.4 only sets __index = string library;
+// arithmetic metamethods on strings are a 5.4 addition.
 func strCreateMetaTable(L *State) {
-	/* table to be metatable for strings */
-	L.CreateTable(0, len(strMetaMethods))
-	L.SetFuncs(strMetaMethods, 0)
-	L.PushString("")   /* dummy string */
-	L.PushValue(-2)    /* copy table */
-	L.SetMetaTable(-2) /* set table as metatable for strings */
-	L.Pop(1)           /* pop dummy string */
-	L.PushValue(-2)    /* get string library */
+	L.CreateTable(0, 1) /* table to be metatable for strings */
+	L.PushString("")    /* dummy string */
+	L.PushValue(-2)     /* copy table */
+	L.SetMetaTable(-2)  /* set table as metatable for strings */
+	L.Pop(1)            /* pop dummy string */
+	L.PushValue(-2)     /* get string library */
 	L.SetField(-2, "__index")
 	L.Pop(1) /* pop metatable */
 }

@@ -13,6 +13,7 @@
 - `test_then_block` goto/break path matches PUC 5.3.4 (`jf` skip + no corrupt patch of `v.t`); goto.lua compiles (`TestGotoIfThenElseifLabels`)
 - Bitwise TM errors: `tonumber`/`tointeger` (not `ttisnumber`/`tointegerns`) so `2.3 ~ '0.0'` → no integer representation
 - `math.random` 5.3 empty/too-large interval checks (no `random(0)` full-int); `utf8.char`/`decode` MAXUNICODE; utf8 msgs; `string.unpack` pos 0 via 5.3 `posrelat`
+- `string.format` scanformat errors (too long / repeated flags / invalid option); no 5.4 string arith metamethods (varinfo via trybinTM)
 
 ## Remaining / known gaps
 1. **Official suite** under captured goldens: bitwise/goto/math/utf8/tpack fixed toward identical; remaining diverge (calls, closure, constructs short-circuit count, db, errors, events, main, nextvar, sort comparison counts, strings, vararg, attrib, big, …). Re-measure after each push. Not silent — `TestOfficialSuite` fails until parity improves.
