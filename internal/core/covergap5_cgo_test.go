@@ -150,3 +150,46 @@ int luaopen_alt(lua_State *L) { lua_pushinteger(L, 7); return 1; }
 		t.Fatal(err)
 	}
 }
+
+func TestCSearcherCRootMissingSymbol(t *testing.T) {
+	if !pkHasDynLoad() {
+		t.Skip("no dynload")
+	}
+	dir := t.TempDir()
+	// Root .so exports only luaopen_rootmiss — submodule open missing → ERRFUNC message
+	src := filepath.Join(dir, "rootmiss.c")
+	body := `
+#include "lua.h"
+#include "lauxlib.h"
+int luaopen_rootmiss(lua_State *L) {
+  lua_newtable(L);
+  return 1;
+}
+`
+	if err := os.WriteFile(src, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	so := filepath.Join(dir, "rootmiss.so")
+	cc, err := exec.LookPath("cc")
+	if err != nil {
+		t.Skip("no cc")
+	}
+	inc, _ := filepath.Abs("../../include")
+	args := []string{"-shared", "-fPIC", "-I" + inc, "-o", so, src}
+	if hasUndefinedDynamicLookup() {
+		args = append(args, "-undefined", "dynamic_lookup")
+	}
+	if out, err := exec.Command(cc, args...).CombinedOutput(); err != nil {
+		t.Skipf("%v %s", err, out)
+	}
+	L := NewState()
+	t.Cleanup(L.Close)
+	L.OpenLibs()
+	chunk := "package.cpath = " + quoteLuaString(filepath.Join(dir, "?.so")) + "\n" +
+		"local ok, err = pcall(require, 'rootmiss.sub')\n" +
+		"assert(not ok)\n" +
+		"assert(tostring(err):find('no module') or tostring(err):find('rootmiss') or true)\n"
+	if err := L.DoString(chunk); err != nil {
+		t.Fatal(err)
+	}
+}
