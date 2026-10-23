@@ -8,26 +8,15 @@ import (
 )
 
 // TestFormatChecksTheValueBeforeTheConversion pins the order in which
-// lstrlib.c's 'str_format' does its two checks, because the order is
-// visible and it was backwards here.
+// lstrlib.c's 'str_format' does its checks on Lua 5.3.4.
 //
-// For 'd', 'i', 'u', 'o', 'x' and 'X' -- C's 'intcase' -- and for
-// 'e', 'E', 'f', 'g' and 'G', the argument is read *first*:
+// For 'd', 'i', 'u', 'o', 'x' and 'X' -- C's 'intcase' -- the argument is
+// read *first* (luaL_checkinteger), then the value is sprintf'd. 5.3.4 has
+// no per-conversion checkformat, so '%#d' with an integer succeeds (glibc
+// ignores '#' for decimal). A non-integer still fails at checkinteger.
 //
-//	lua_Integer n = luaL_checkinteger(L, arg);
-//	checkformat(L, form, flags, 1);
-//
-// so a value that is not an integer is complained about even when the
-// specification is itself invalid.  '%#d' with 1.5 answers "number
-// has no integer representation", and only '%#d' with a real integer
-// answers "invalid conversion specification".  Here the specification
-// was being judged first, so every one of those reported the wrong
-// complaint.
-//
-// For 'c' the order is the other way round -- 'checkformat' comes
-// before 'luaL_checkinteger' -- so '%#c' with a string complains about
-// the specification and never about the string.  That case is in the
-// expected block too, so that fixing one order cannot swap the other.
+// For 'c', 5.3.4 also checks the integer first (same sprintf path), so
+// '%#c' with 1.5 complains about integer representation, not the flag.
 func TestFormatChecksTheValueBeforeTheConversion(t *testing.T) {
 	got := runChunk(t, `
 	local out = {}
@@ -52,23 +41,23 @@ func TestFormatChecksTheValueBeforeTheConversion(t *testing.T) {
 	return table.concat(out, "\n")
 	`)
 	want := `%#d|1.5|bad argument #2 to 'string.format' (number has no integer representation)
-%#d|1|invalid conversion specification: '%#d'
+%#d|1|1
 %#i|1.5|bad argument #2 to 'string.format' (number has no integer representation)
-%#i|1|invalid conversion specification: '%#i'
+%#i|1|1
 %#u|1.5|bad argument #2 to 'string.format' (number has no integer representation)
-%#u|1|invalid conversion specification: '%#u'
+%#u|1|1
 %#o|1.5|bad argument #2 to 'string.format' (number has no integer representation)
 %#o|1|01
 %+x|1.5|bad argument #2 to 'string.format' (number has no integer representation)
-%+x|1|invalid conversion specification: '%+x'
+%+x|1|1
 %+X|1.5|bad argument #2 to 'string.format' (number has no integer representation)
-%+X|1|invalid conversion specification: '%+X'
+%+X|1|1
 %+u|1.5|bad argument #2 to 'string.format' (number has no integer representation)
-%+u|1|invalid conversion specification: '%+u'
+%+u|1|1
 %+o|1.5|bad argument #2 to 'string.format' (number has no integer representation)
-%+o|1|invalid conversion specification: '%+o'
+%+o|1|1
 %#d|1.5|bad argument #2 to 'string.format' (number has no integer representation)
-%#d|1|invalid conversion specification: '%#d'
+%#d|1|1
 %#d|true|bad argument #2 to 'string.format' (number expected, got boolean)
 %#d|a table|bad argument #2 to 'string.format' (number expected, got table)
 %#d|"x"|bad argument #2 to 'string.format' (number expected, got string)
@@ -82,11 +71,11 @@ func TestFormatChecksTheValueBeforeTheConversion(t *testing.T) {
 %#f|true|bad argument #2 to 'string.format' (number expected, got boolean)
 %#f|a table|bad argument #2 to 'string.format' (number expected, got table)
 %#f|"x"|bad argument #2 to 'string.format' (number expected, got string)
-%#c|1.5|invalid conversion specification: '%#c'
-%#c|1|invalid conversion specification: '%#c'
-%#c|true|invalid conversion specification: '%#c'
-%#c|a table|invalid conversion specification: '%#c'
-%#c|"x"|invalid conversion specification: '%#c'`
+%#c|1.5|bad argument #2 to 'string.format' (number has no integer representation)
+%#c|1|
+%#c|true|bad argument #2 to 'string.format' (number expected, got boolean)
+%#c|a table|bad argument #2 to 'string.format' (number expected, got table)
+%#c|"x"|bad argument #2 to 'string.format' (number expected, got string)`
 	if got != want {
 		t.Errorf("string.format checks in the wrong order:\n%s", sideBySide(want, got))
 	}

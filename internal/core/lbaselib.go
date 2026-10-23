@@ -1,4 +1,4 @@
-// Translation of lbaselib.c (PUC-Lua 5.4.9): the basic library.
+// Translation of lbaselib.c (PUC-Lua 5.3.4): the basic library.
 //
 // Every luaB_* function keeps its C name prefixed with 'base', and the
 // control flow follows the C source.  Three things are necessarily

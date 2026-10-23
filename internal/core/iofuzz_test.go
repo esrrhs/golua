@@ -490,19 +490,6 @@ func TestIOFuzzDifferential(t *testing.T) {
     io.input(io.stdin)
     return r
   end)`)
-	emit("toclose/write", `pcall(function()
-    do local f <close> = assert(io.open("tc.tmp", "wb")) f:write("hi") end
-    return hex(slurp("tc.tmp"))
-  end)`)
-	emit("toclose/closed", `pcall(function()
-    local f = assert(io.open("tc.tmp", "rb")) f:close()
-    do local g <close> = f end
-  end)`)
-	emit("toclose/error", `pcall(function()
-    do local f <close> = assert(io.open("tc.tmp", "wb"))
-      f:write("hi") error("boom") end
-  end)`)
-	emit("toclose/notfile", `pcall(function() do local f <close> = 12 end end)`)
 	emit("gcclose/write", `pcall(function()
     do local f = assert(io.open("gc.tmp", "wb")) f:write("hi") end
     collectgarbage() collectgarbage()

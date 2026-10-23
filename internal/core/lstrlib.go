@@ -1,4 +1,4 @@
-// Translation of lstrlib.c (PUC-Lua 5.4.9).
+// Translation of lstrlib.c (PUC-Lua 5.3.4).
 //
 // It contains the string library: the basic string functions, the
 // complete Lua pattern-matching engine, string.format, and the
@@ -1059,6 +1059,34 @@ func strGet2Digits(s string, i int) int {
 
 // strCheckFormat checks whether a conversion specification is valid
 // (checkformat).
+
+// strStripSignedFlags removes '+' and ' ' from a printf form. C's sprintf
+// ignores those flags for unsigned conversions (u/o/x/X); Go's fmt does not
+// when we reuse "%d" for the digits.
+func strStripSignedFlags(form string) string {
+	if len(form) < 2 {
+		return form
+	}
+	out := make([]byte, 0, len(form))
+	out = append(out, '%')
+	i := 1
+	for i < len(form)-1 {
+		c := form[i]
+		if c == '+' || c == ' ' {
+			i++
+			continue
+		}
+		if c == '-' || c == '#' || c == '0' || (c >= '1' && c <= '9') || c == '.' {
+			out = append(out, c)
+			i++
+			continue
+		}
+		break
+	}
+	out = append(out, form[i:]...)
+	return string(out)
+}
+
 func strCheckFormat(L *State, form, flags string, precision bool) {
 	/* 5.3.4: scanformat already validated width/precision digits and
 	   repeated flags. Per-conversion flag sets are a 5.4 checkformat
@@ -1747,7 +1775,8 @@ func strFormat(L *State) int {
 		case 'u':
 			n := L.CheckInteger(arg) /* as in 'intcase': value first */
 			strCheckFormat(L, form, strFmtFlagsU, true)
-			b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", uint64(n)))
+			uform := strStripSignedFlags(form)
+			b.AddString(fmt.Sprintf(uform[:len(uform)-1]+"d", uint64(n)))
 		case 'o', 'x', 'X':
 			n := L.CheckInteger(arg) /* as in 'intcase': value first */
 			strCheckFormat(L, form, strFmtFlagsX, true)

@@ -1,4 +1,4 @@
-// Translation of lvm.h / lvm.c (PUC-Lua 5.4).
+// Translation of lvm.h / lvm.c (PUC-Lua 5.3.4).
 //
 // The instruction dispatch loop follows lvm.c closely. Two things are
 // gone: the GC steps, and 'luaV_finishOp' (there is nothing to finish,
@@ -793,6 +793,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 				nresults := i.C - 1
 				if b != 0 {
 					L.top = ra + b
+				}
+				/* 5.3 RK leaf fast path: only when nargs known (B!=0). */
+				if b != 0 && nresults == 1 && L.hookmask == 0 && fastLeafCall(L, ra, b-1) {
+					break
 				}
 				ci.savedpc = pc
 				if newci := luaD_precall(L, ra, nresults); newci != nil {

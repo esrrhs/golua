@@ -1,4 +1,4 @@
-// Translation of lua.h / lapi.h / lapi.c (PUC-Lua 5.4).
+// Translation of lua.h / lapi.h / lapi.c (PUC-Lua 5.3.4).
 //
 // Every lua_* function becomes a method on *State, keeping the same
 // semantics (absolute/negative indices, pseudo-indices, registry, ...).
@@ -593,7 +593,7 @@ func (L *State) CreateTable(narr, nrec int) {
 func (L *State) NewTable() { L.CreateTable(0, 0) }
 
 // NewUserData creates a full userdata wrapping a Go value
-// (lua_newuserdatauv).
+// (lua_newuserdata).
 func (L *State) NewUserData(val any, nuvalue int) any {
 	u := luaS_newudata(L, nuvalue, val)
 	L.checkStack(1)

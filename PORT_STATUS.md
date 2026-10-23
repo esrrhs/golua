@@ -1,30 +1,29 @@
 # Lua 5.3.4 port status (branch `5.3.4`)
 
 ## Alignment goal
-Treat this branch as a line-by-line Go translation of PUC-Lua **5.3.4** C sources
-(`/workspace/lua-sources/lua-5.3.4/src`), same spirit as the original 5.4.9 port.
+Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-5.3.4/src`).
 **Intentional sole exception:** Go GC replaces `lgc` (finalizers/weak tables approximated).
 
 ## Done (matches 5.3.4 C)
-- Version surface: 5.3.4 / 503 / chunk `0x53`, `_VERSION`, package path `5.3`, copyright 1994-2017
-- Full 5.3.4 ISA (47 ops), RK encoding, codegen, parser, VM; dump/undump interchange with PUC
-- `bit32` present; **no** `warn`, **no** `coroutine.close`, **no** `<const>`/`<close>`
-- File handles: `__index = mt`, methods on mt, **no `__close`** (createmeta as in liolib.c)
-- `lua_resume(L, from, nargs)` — 5.3 signature (no nresults out-param)
-- OpenLibs order: …utf8, **debug**, bit32 (matches linit.c with LUA_COMPAT_BITLIB)
-- Public `include/lua.h` is 5.3.4; optional 5.4 names only behind `LUA_COMPAT_54` (off)
-- CGO no longer exports warn/toclose/userdatauv/closeslot/closethread/resetthread/getiuservalue
-- Negative 5.4 opcode stubs and `compat54_stubs.go` removed
-- TBC / to-be-closed runtime paths removed (`luaF_close` = close upvalues only)
-- Official `testes/` = 5.3.4 suite; Linux goldens; suite tip previously **25/28 identical**
+- Version: 5.3.4 / 503 / chunk `0x53`, package path `5.3`, copyright 1994–2017
+- ISA (47 ops) + RK encoding; dump/undump interchange with PUC `luac`
+- No `warn`, no `coroutine.close`, no `<const>`/`<close>`; `bit32` present
+- File MT: `__index = mt`, methods on mt, no `__close`
+- `lua_resume(L, from, nargs)` 5.3 signature; OpenLibs …utf8, debug, bit32
+- CGO: no always-on 5.4 exports (warn/toclose/userdatauv/closeslot/…)
+- Negative opcode stubs / `compat54_stubs` removed; TBC runtime removed
+- `string.format`: `%+u` ignores signed flags like glibc; no 5.4 checkformat
+- Differential tests refreshed for 5.3.4 (format order, coverlib string-arith floats, rkname RKASK)
+- **VM leaf fastpaths** rewritten for 5.3 RK (`lvm_fastcall.go`); wired on `OP_CALL`
+- Official suite (Linux, `LUA_REF` → lua-5.3.4): **25 identical** (1 vacuous), **1 known-diff (gc)**, **2 not-run (all, main)**
 
 ## Remaining / known gaps
-1. **Go GC** (intentional): no collector pace/debt/ephemerons as in `lgc`; `gc.lua` known-diff.
-2. **Official suite**: `main.lua` / `all.lua` not run (SIGINT harness); Darwin goldens may be stale.
-3. **VM fastpaths** stubbed (`lvm_fastcall.go`) — rewrite for 5.3 RK before enabling.
-4. **Edge skips**: varinfo `(constant '…')` for bitwise RK; numeric for + NaN step; some third-party goldens.
-5. Dormant Go helpers may remain for warning/resetthread internals unused by the 5.3 API surface.
-6. `luaD_closeprotected` kept as thin upvalue-close wrapper where call sites still name it.
+1. **Go GC** (intentional): no pace/debt/ephemerons; `gc.lua` known-diff.
+2. **VM for/tail fastpaths** still stubbed (`lvm_fastfor.go`, `lvm_fasttail.go`) — optional perf only; slow path matches PUC (incl. NaN step → 0).
+3. **main/all.lua** not automated (SIGINT harness).
+4. Darwin `*.darwin.expected` may be stale (re-capture with PUC 5.3.4 on macOS).
+5. Thin internals: `luaD_closeprotected` (upvalue-close wrapper), warnf plumbing for `__gc` warnings / tests, `ResetThread` Go helper (not in 5.3 C API).
+6. Further per-file polish still useful on larger Go ports (`lstate`, `liolib`, `lstrlib`, `ldblib`) vs C size ratios.
 
 ## Paths
 - C ref: `/workspace/lua-sources/lua-5.3.4`

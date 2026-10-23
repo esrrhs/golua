@@ -405,7 +405,7 @@ func TestNamesUpvaluesAndWeakClosures(t *testing.T) {
 	if name != "?" {
 		t.Fatalf("rname unknown %q", name)
 	}
-	rkname(proto, 0, newABC(OP_SELF, 0, 0, 0, 1), &name)
+	rkname(proto, 0, newABC(OP_SELF, 0, 0, RKASK(0)), &name)
 	if name != "field" {
 		t.Fatalf("rkname k %q", name)
 	}

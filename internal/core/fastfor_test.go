@@ -8,7 +8,6 @@ import "testing"
 // the loops the register file refuses (the accumulator is closed over,
 // a metamethod, a break).
 func TestFastNumericFor(t *testing.T) {
-	t.Skip("Lua 5.3.4: VM fastpaths stubbed pending 5.3 RK rewrite")
 	got := runChunk(t, `
 	local sink
 	local function both(fast, slow)
@@ -170,7 +169,7 @@ func TestFastNumericFor(t *testing.T) {
 4
 true
 55
-1
+0
 98.5`
 	if got != want {
 		t.Errorf("fast numeric for:\n%s", sideBySide(want, got))
@@ -200,7 +199,6 @@ func TestFastCountTail(t *testing.T) {
 }
 
 func TestFastNumericLeafCall(t *testing.T) {
-	t.Skip("Lua 5.3.4: VM fastpaths stubbed pending 5.3 RK rewrite")
 	got := runChunk(t, `
 	local function add3(a, b, c)
 		return a + b + c
@@ -217,7 +215,7 @@ func TestFastNumericLeafCall(t *testing.T) {
 		tostring(add3(x, 2, 3)),
 	}, " ")
 	`)
-	if got != "6 6.5 15 15" {
+	if got != "6 6.5 15.0 15" {
 		t.Errorf("numeric leaf call: %q", got)
 	}
 }

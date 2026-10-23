@@ -1,4 +1,4 @@
-// Translation of ldo.h / ldo.c (PUC-Lua 5.4).
+// Translation of ldo.h / ldo.c (PUC-Lua 5.3.4).
 //
 // setjmp/longjmp become panic/recover (see State.rawRunProtected in
 // lstate.go) and the allocator is gone.

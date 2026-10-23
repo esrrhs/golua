@@ -244,7 +244,7 @@ type State struct {
 	// lastErr is the error object of a coroutine that ended with an
 	// error. C keeps it on the coroutine's own stack (lua_resume leaves
 	// it there and luaE_resetthread feeds L->status back through
-	// luaD_closeprotected), so 'coroutine.close' can report it again.
+	// luaD_closeprotected).
 	lastErr Value
 	hasErr  bool
 
@@ -327,7 +327,7 @@ const (
 	reqReexec   = 3 // re-execute the current Lua frame on the goroutine
 )
 
-// closeSignal unwinds a coroutine being closed by coroutine.close.
+// closeSignal unwinds a child coroutine goroutine on state Close.
 type closeSignal struct{}
 
 // yieldAbort unwinds a synchronous yield back to Resume. It is not an
@@ -852,7 +852,7 @@ func (L *State) resetThreadStatus(status int) int {
 	return status
 }
 
-// ResetThread resets a coroutine so that it can be reused (lua_resetthread).
+// ResetThread resets a coroutine (Go helper; 5.3.4 C API has no lua_resetthread).
 func (L *State) ResetThread() int {
 	if L.isMain {
 		return LUA_ERRRUN
