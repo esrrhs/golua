@@ -207,3 +207,199 @@ func TestREPLAndInit(t *testing.T) {
 	os.Stderr = oldErr
 	_ = r2.Close()
 }
+
+func TestMainExitFunc(t *testing.T) {
+	oldArgs := os.Args
+	oldExit := exitFunc
+	defer func() {
+		os.Args = oldArgs
+		exitFunc = oldExit
+	}()
+	var code int
+	exitFunc = func(c int) { code = c }
+	os.Args = []string{"lua", "-e", "assert(1+1==2)"}
+	main()
+	if code != 0 {
+		t.Fatalf("main exit %d", code)
+	}
+}
+
+func TestRunStdinNoArgs(t *testing.T) {
+	// Non-TTY stdin + no script/args → runStdin / doReader.
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdin
+	os.Stdin = r
+	go func() {
+		_, _ = w.Write([]byte("print(40+2)\n"))
+		_ = w.Close()
+	}()
+	code := pmainDriver([]string{"lua"})
+	os.Stdin = old
+	_ = r.Close()
+	if code != 0 {
+		t.Fatalf("runStdin => %d", code)
+	}
+}
+
+func TestRunStdinErrorReported(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldIn, oldErr := os.Stdin, os.Stderr
+	os.Stdin = r
+	er, ew, _ := os.Pipe()
+	os.Stderr = ew
+	go func() {
+		_, _ = w.Write([]byte("error('stdin-boom')\n"))
+		_ = w.Close()
+	}()
+	code := pmainDriver([]string{"lua"})
+	_ = ew.Close()
+	os.Stdin, os.Stderr = oldIn, oldErr
+	_ = r.Close()
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, er)
+	_ = er.Close()
+	// lua.c dofile(NULL): report errors but still signal success.
+	if code != 0 {
+		t.Fatalf("expected success with reported error, got %d (%q)", code, buf.String())
+	}
+	if !strings.Contains(buf.String(), "stdin-boom") {
+		t.Fatalf("stderr %q", buf.String())
+	}
+}
+
+func TestREPLMultilineAndEquals(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdin
+	os.Stdin = r
+	go func() {
+		_, _ = w.Write([]byte("=1+2\n"))
+		_, _ = w.Write([]byte("do\n"))
+		_, _ = w.Write([]byte("  return 9\n"))
+		_, _ = w.Write([]byte("end\n"))
+		_, _ = w.Write([]byte("error('repl-err')\n"))
+		_, _ = w.Write([]byte("local x = (\n")) // incomplete then EOF mid-line
+		_ = w.Close()
+	}()
+	oldErr := os.Stderr
+	er, ew, _ := os.Pipe()
+	os.Stderr = ew
+	code := pmainDriver([]string{"lua", "-i", "-e", "print=print"})
+	_ = ew.Close()
+	os.Stdin, os.Stderr = old, oldErr
+	_ = r.Close()
+	var errb bytes.Buffer
+	_, _ = io.Copy(&errb, er)
+	_ = er.Close()
+	if code != 0 {
+		t.Fatalf("-i multiline => %d err=%q", code, errb.String())
+	}
+}
+
+func TestREPLPrintResultsFailure(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdin
+	os.Stdin = r
+	go func() {
+		_, _ = w.Write([]byte("1+1\n"))
+		_ = w.Close()
+	}()
+	oldErr := os.Stderr
+	er, ew, _ := os.Pipe()
+	os.Stderr = ew
+	code := pmainDriver([]string{"lua", "-i", "-e", "print=nil"})
+	_ = ew.Close()
+	os.Stdin, os.Stderr = old, oldErr
+	_ = r.Close()
+	var errb bytes.Buffer
+	_, _ = io.Copy(&errb, er)
+	_ = er.Close()
+	if code != 0 {
+		t.Fatalf("print=nil REPL => %d", code)
+	}
+	if !strings.Contains(errb.String(), "error calling 'print'") {
+		t.Fatalf("expected print error, got %q", errb.String())
+	}
+}
+
+func TestMsghandlerNonString(t *testing.T) {
+	// error with a table → msghandler __tostring / type-name arms
+	if code := pmainDriver([]string{"lua", "-e", `
+local mt={__tostring=function() return "table-err" end}
+error(setmetatable({}, mt))
+`}); code == 0 {
+		t.Fatal("expected failure")
+	}
+	if code := pmainDriver([]string{"lua", "-e", `error({})`}); code == 0 {
+		t.Fatal("expected failure for bare table")
+	}
+}
+
+func TestSkipBOMAndLoadFileError(t *testing.T) {
+	if got := string(skipStdinComment([]byte("\xEF\xBB\xBFreturn 1"))); got != "return 1" {
+		t.Fatalf("BOM %q", got)
+	}
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "nope.lua")
+	if code := pmainDriver([]string{"lua", missing}); code == 0 {
+		t.Fatal("missing script should fail")
+	}
+	t.Setenv("LUA_INIT", "@"+filepath.Join(dir, "missing-init.lua"))
+	if code := pmainDriver([]string{"lua", "-e", "assert(true)"}); code == 0 {
+		t.Fatal("bad LUA_INIT should fail")
+	}
+}
+
+func TestDoLibraryFailure(t *testing.T) {
+	if code := pmainDriver([]string{"lua", "-l", "definitely_missing_mod_xyz", "-e", "1"}); code == 0 {
+		t.Fatal("bad -l should fail")
+	}
+}
+
+func TestReportEmptyProgName(t *testing.T) {
+	oldName := progName
+	progName = ""
+	defer func() { progName = oldName }()
+	old := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+	report(errors.New("bare"))
+	_ = w.Close()
+	os.Stderr = old
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	if buf.String() != "bare\n" {
+		t.Fatalf("%q", buf.String())
+	}
+}
+
+func TestCustomPrompt(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := os.Stdin
+	os.Stdin = r
+	go func() {
+		_, _ = w.Write([]byte("1\n"))
+		_ = w.Close()
+	}()
+	code := pmainDriver([]string{"lua", "-i", "-e", `_PROMPT="P> "; _PROMPT2="P2> "`})
+	os.Stdin = old
+	_ = r.Close()
+	if code != 0 {
+		t.Fatalf("custom prompt => %d", code)
+	}
+}

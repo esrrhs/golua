@@ -25,6 +25,10 @@ import (
 	lua "github.com/esrrhs/golua"
 )
 
+// exitFunc is os.Exit in production; tests replace it to measure main
+// without terminating the process.
+var exitFunc = os.Exit
+
 func main() {
-	os.Exit(lua.Luac(os.Args, os.Stdout, os.Stderr))
+	exitFunc(lua.Luac(os.Args, os.Stdout, os.Stderr))
 }

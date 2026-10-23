@@ -49,8 +49,12 @@ var L *lua.State
 // userdata; this port has no light userdata, so it is a package variable.
 var pmainArgv []string
 
+// exitFunc is os.Exit in production; tests replace it to cover main
+// without terminating the process.
+var exitFunc = os.Exit
+
 func main() {
-	os.Exit(pmainDriver(os.Args))
+	exitFunc(pmainDriver(os.Args))
 }
 
 // pmainDriver is 'main' of lua.c. It creates the state and runs 'pmain'
