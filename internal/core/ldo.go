@@ -39,9 +39,12 @@ func luaD_seterrorobj(L *State, errcode, oldtop int) {
 
 // luaD_throw raises an error with the given status (ldo.c).
 //
-// C longjmps via L->errorJmp or rethrows on the main thread / calls panic.
-// Go adaptation: always panic with the error object copied into luaError
-// so rawRunProtected (setjmp stand-in) can recover it after defers run.
+// C longjmps via L->errorJmp, else marks the thread dead, optionally
+// rethrows on the main thread, else seterrorobj + g->panic + abort.
+// Go: errorJmp nesting (rawRunProtected / resume recover) stands in for
+// the longjmp chain; unprotected path still calls atpanic, then panics
+// (abort stand-in). Mainthread rethrow is omitted — coroutine errors are
+// recovered on the running thread (goroutine SPEC).
 func luaD_throw(L *State, errcode int) {
 	var v Value
 	if L.top > 0 {
@@ -49,12 +52,24 @@ func luaD_throw(L *State, errcode int) {
 	} else {
 		setnilvalue(&v)
 	}
-	/* If there is no recover point, mirror C's last-chance panic hook. */
-	if L.g != nil && L.g.panic != nil {
-		/* Only invoke when we appear unprotected; rawRunProtected recovers
-		   luaError, so the panic function is for truly uncaught throws. */
+	if L.errorJmp > 0 { /* thread has an error handler? */
+		panic(&luaError{status: errcode, value: v})
 	}
-	_ = L
+	/* thread has no error handler */
+	L.status = byte(errcode) /* mark it as dead */
+	g := L.g
+	if g != nil && g.panic != nil { /* panic function? */
+		/* seterrorobj assumes EXTRA_STACK */
+		if L.top >= len(L.stack) {
+			L.reallocStack(L.stackLast + 1)
+		}
+		seterrorobj(L, errcode, L.top) /* assume EXTRA_STACK */
+		if L.ci != nil && L.ci.top < L.top {
+			L.ci.top = L.top /* pushing msg. can break this invariant */
+		}
+		g.panic(L) /* call panic function (last chance to jump out) */
+	}
+	/* C calls abort(); unrecovered panic aborts the process likewise. */
 	panic(&luaError{status: errcode, value: v})
 }
 
@@ -266,7 +281,7 @@ func tryfuncTM(L *State, funcIdx int) {
 	for p := L.top; p > funcIdx; p-- {
 		L.stack[p] = L.stack[p-1]
 	}
-	L.top++ /* slot ensured by caller */
+	L.top++                /* slot ensured by caller */
 	L.stack[funcIdx] = *tm /* tag method is the new function to be called */
 }
 
@@ -394,7 +409,7 @@ retry:
 		return precallC(L, funcIdx, nresults, fvalue(fv))
 	case LUA_VLCL: /* Lua function — C: LUA_TLCL */
 		p := clLvalue(fv).p
-		n := L.top - funcIdx - 1 /* number of real arguments */
+		n := L.top - funcIdx - 1     /* number of real arguments */
 		fsize := int(p.maxstacksize) /* frame size */
 		L.checkStack(fsize)
 		var base int
@@ -451,7 +466,7 @@ func luaD_call(L *State, funcIdx, nResults int) {
 	}
 	if luaD_precall(L, funcIdx, nResults) == 0 { /* is a Lua function? */
 		L.ci.callstatus |= CIST_FRESH /* fresh invocation of luaV_execute */
-		luaV_execute(L, L.ci)        /* call it */
+		luaV_execute(L, L.ci)         /* call it */
 	}
 	L.nCcalls--
 }

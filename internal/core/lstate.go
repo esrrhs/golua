@@ -143,9 +143,9 @@ type globalState struct {
 	// write, and Go's collector pays no attention to any of them --
 	// except 'gcStopped', which has an effect of its own: it gates the
 	// step an allocation drives.
-	gcStopped bool   // 'gcstp & GCSTPUSR': the program stopped the collector
-	gcPause   int    // 'gcpause': LUAI_GCPAUSE, answered by 'setpause'
-	gcStepMul int    // 'gcstepmul': LUAI_GCMUL, answered by 'setstepmul'
+	gcStopped bool // 'gcstp & GCSTPUSR': the program stopped the collector
+	gcPause   int  // 'gcpause': LUAI_GCPAUSE, answered by 'setpause'
+	gcStepMul int  // 'gcstepmul': LUAI_GCMUL, answered by 'setstepmul'
 
 	// gcInFinalizer is 'gcstp & GCSTPGC' while a '__gc' metamethod is
 	// running: PUC-Lua stops the collector for the duration of one, and
@@ -202,10 +202,11 @@ type State struct {
 
 	openupval []*UpVal // open upvalues of this stack
 
-	errfunc int    // current error handling function (stack index)
-	nCcalls uint16 // number of nested C calls (lstate.h 5.3.4)
-	nny     uint16 // number of non-yieldable calls in stack
-	nci     int
+	errfunc  int    // current error handling function (stack index)
+	errorJmp int    // nesting of recover points (C: L->errorJmp chain)
+	nCcalls  uint16 // number of nested C calls (lstate.h 5.3.4)
+	nny      uint16 // number of non-yieldable calls in stack
+	nci      int
 
 	ciPool []*CallInfo
 
@@ -760,7 +761,9 @@ func (L *State) coMain() {
 // result tells whether the run ended because the thread was closed.
 func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 	status = LUA_OK
+	L.errorJmp++ /* lua_resume runs body under luaD_rawrunprotected */
 	defer func() {
+		L.errorJmp--
 		if r := recover(); r != nil {
 			switch x := r.(type) {
 			case *yieldAbort, *migrateAbort:
@@ -825,7 +828,7 @@ func (L *State) resetThreadStatus(status int) int {
 		status = LUA_OK
 	}
 	L.status = LUA_OK
-	L.errfunc = 0     /* stack unwind can "throw away" the error function */
+	L.errfunc = 0 /* stack unwind can "throw away" the error function */
 	luaF_close(L, 1)
 	/* status unchanged: 5.3.4 has no TBC errors from close */
 	if status != LUA_OK { /* errors? */
@@ -1060,7 +1063,9 @@ func (L *State) unroll() {
 // the resume onto the coroutine goroutine and returns that goroutine's
 // response.
 func (L *State) resumeSync(ccalls int) (resp resumeResp) {
+	L.errorJmp++ /* sync resume: same recover role as lua_resume's protected body */
 	defer func() {
+		L.errorJmp--
 		r := recover()
 		if r == nil {
 			return
@@ -1152,7 +1157,9 @@ func (L *State) reexecOnGoroutine(ccalls int) resumeResp {
 
 // reexec is the goroutine side of reexecOnGoroutine.
 func (L *State) reexec() (status int, closed bool) {
+	L.errorJmp++
 	defer func() {
+		L.errorJmp--
 		if r := recover(); r != nil {
 			status, closed = L.recoverCo(r)
 		}
@@ -1177,7 +1184,9 @@ func (L *State) continueOnGoroutine(ccalls int) resumeResp {
 // pushed, then the Lua that called it. Yields inside it park this
 // goroutine the ordinary way.
 func (L *State) finishMigrated() (status int, closed bool) {
+	L.errorJmp++
 	defer func() {
+		L.errorJmp--
 		if r := recover(); r != nil {
 			status, closed = L.recoverCo(r)
 		}
@@ -1347,7 +1356,9 @@ func (L *State) rawRunProtected(f func()) (status int) {
 	   inflated and the next error would be reported as "error in error
 	   handling". */
 	oldNCcalls := L.nCcalls
+	L.errorJmp++ /* chain error handler (C: L->errorJmp = &lj) */
 	defer func() {
+		L.errorJmp-- /* restore previous (C: L->errorJmp = lj.previous) */
 		L.nCcalls = oldNCcalls
 		r := recover()
 		if r == nil {

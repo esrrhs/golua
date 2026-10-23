@@ -57,7 +57,6 @@ func lua_close(p *C.lua_State) { stateOf(p).Close() }
 //export lua_newthread
 func lua_newthread(p *C.lua_State) *C.lua_State { return stateOf(p).NewThread().statePtr() }
 
-
 //export lua_atpanic
 func lua_atpanic(p *C.lua_State, f C.lua_CFunction) C.lua_CFunction {
 	L := stateOf(p)
@@ -215,7 +214,9 @@ func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 		status := LUA_OK
 		n0 := L.nYields
 		func() {
+			L.errorJmp++ /* C: resume's errorJmp covers this unprotected call */
 			defer func() {
+				L.errorJmp--
 				r := recover()
 				if r == nil {
 					return
