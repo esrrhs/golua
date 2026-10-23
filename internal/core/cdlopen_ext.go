@@ -85,10 +85,14 @@ var (
 	panicCPtr = map[*globalState]unsafe.Pointer{}
 )
 
+// luaVersionNumStorage is what lua_version returns a pointer to (lua.h 5.3.4:
+// const lua_Number *lua_version). Kept immortal so C may keep the pointer.
+var luaVersionNumStorage = C.lua_Number(luaVersionNum)
+
 //export lua_version
-func lua_version(p *C.lua_State) C.lua_Number {
+func lua_version(p *C.lua_State) *C.lua_Number {
 	/* the version is a constant in PUC-Lua too; the state is not asked */
-	return C.lua_Number(luaVersionNum)
+	return &luaVersionNumStorage
 }
 
 //export lua_newstate
@@ -153,8 +157,8 @@ func lua_getuservalue(p *C.lua_State, idx C.int) C.int {
 }
 
 //export lua_setuservalue
-func lua_setuservalue(p *C.lua_State, idx C.int) C.int {
-	return C.int(stateOf(p).SetUserValue(idxInt(idx), 1))
+func lua_setuservalue(p *C.lua_State, idx C.int) {
+	stateOf(p).SetUserValue(idxInt(idx), 1)
 }
 
 //export lua_pushthread
@@ -429,7 +433,6 @@ func fillDebug(c *C.lua_Debug, ar *dbAr) {
 	c.namewhat = keepCStr(ar.namewhat)
 	c.what = keepCStr(ar.what)
 	c.source = keepCStr(ar.source)
-	c.srclen = C.size_t(len(ar.source))
 	c.currentline = C.int(ar.currentline)
 	c.linedefined = C.int(ar.linedefined)
 	c.lastlinedefined = C.int(ar.lastlinedefined)
@@ -437,8 +440,6 @@ func fillDebug(c *C.lua_Debug, ar *dbAr) {
 	c.nparams = C.uchar(ar.nparams)
 	c.isvararg = boolChar(ar.isvararg)
 	c.istailcall = boolChar(ar.istailcall)
-	c.ftransfer = C.ushort(ar.ftransfer)
-	c.ntransfer = C.ushort(ar.ntransfer)
 	copyCStr(&c.short_src[0], ar.shortSrc, CDL_IDSIZE)
 	/* i_ci is private to the host. The activation record is found from
 	   the address of the lua_Debug C passed in, not from a handle that

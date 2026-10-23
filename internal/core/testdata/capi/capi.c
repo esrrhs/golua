@@ -2,7 +2,7 @@
 ** tests in this directory do not reach.  It is written the way an
 ** ordinary extension is: compiled against <lua.h>/<lauxlib.h>/<lualib.h>,
 ** opened by luaopen_capi, found by 'require'.  Everything it returns is
-** a number, a boolean or a fixed string, so that PUC-Lua 5.4.9 and this
+** a number, a boolean or a fixed string, so that PUC-Lua 5.3.4 and this
 ** port can be compared line for line.
 **
 ** One thing to remember while reading it: luaL_buffinit pushes a "box"
@@ -399,10 +399,19 @@ static int l_argerr(lua_State *L) {
   luaL_argerror(L, 1, "not what I wanted");
   return 0;
 }
+/* 5.3.4: typeerror is static in lauxlib.c, not a public API. */
+static int typeerror(lua_State *L, int arg, const char *tname) {
+  const char *msg;
+  if (luaL_getmetafield(L, arg, "__name") == LUA_TSTRING)
+    msg = lua_tostring(L, -1);
+  else
+    msg = luaL_typename(L, arg);
+  msg = lua_pushfstring(L, "%s expected, got %s", tname, msg);
+  return luaL_argerror(L, arg, msg);
+}
 static int l_typeerr(lua_State *L) {
   lua_settop(L, 1);
-  luaL_typeerror(L, 1, "capi thing");
-  return 0;
+  return typeerror(L, 1, "capi thing");
 }
 static int l_where(lua_State *L) {
   luaL_where(L, 1);
@@ -611,10 +620,10 @@ static int l_buf(lua_State *L) {
   p = luaL_prepbuffsize(&b, 4);
   memcpy(p, "WXYZ", 4);
   luaL_addsize(&b, 4);
-  len1 = luaL_bufflen(&b);
-  luaL_buffsub(&b, 2);
-  len2 = luaL_bufflen(&b);
-  addr = (const char *)luaL_buffaddr(&b);
+  len1 = b.n;
+  b.n -= 2; /* 5.3.4: no luaL_buffsub; adjust length directly */
+  len2 = b.n;
+  addr = (const char *)b.b;
   luaL_pushresult(&b);
   lua_pushinteger(L, (lua_Integer)len1);
   lua_pushinteger(L, (lua_Integer)len2);
@@ -665,13 +674,16 @@ static int l_limits(lua_State *L) {
   return 1;
 }
 
-/* luaL_addgsub: the same substitution, into a buffer of our own */
+/* Same substitution as luaL_addgsub, via 5.3.4 luaL_gsub + addstring. */
 static int l_addgsub(lua_State *L) {
   luaL_Buffer b;
+  const char *s;
   lua_settop(L, 0);
   luaL_buffinit(L, &b);
   luaL_addstring(&b, "[");
-  luaL_addgsub(&b, "aXbXc", "X", ".");
+  s = luaL_gsub(L, "aXbXc", "X", ".");
+  luaL_addstring(&b, s);
+  lua_pop(L, 1); /* gsub result */
   luaL_addstring(&b, "]");
   luaL_pushresult(&b);
   return 1;

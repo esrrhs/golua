@@ -111,7 +111,6 @@ struct lua_Debug {
   char *namewhat;
   char *what;
   char *source;
-  size_t srclen;
   int currentline;
   int linedefined;
   int lastlinedefined;
@@ -119,8 +118,6 @@ struct lua_Debug {
   unsigned char nparams;
   char isvararg;
   char istailcall;
-  unsigned short ftransfer;
-  unsigned short ntransfer;
   char short_src[CDL_IDSIZE];
   void *i_ci; /* private: what the port's own activation record is */
 };

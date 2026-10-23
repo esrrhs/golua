@@ -28,7 +28,8 @@ const (
 	LUA_TFUNCTION      = 6
 	LUA_TUSERDATA      = 7
 	LUA_TTHREAD        = 8
-	LUA_NUMTYPES       = 9
+	LUA_NUMTAGS        = 9
+	LUA_NUMTYPES       = LUA_NUMTAGS /* Go/internal alias; public C is LUA_NUMTAGS */
 )
 
 // Status codes (lua.h).
@@ -38,7 +39,8 @@ const (
 	LUA_ERRRUN    = 2
 	LUA_ERRSYNTAX = 3
 	LUA_ERRMEM    = 4
-	LUA_ERRERR    = 5
+	LUA_ERRGCMM   = 5 /* unused with Go GC; C raises this from __gc */
+	LUA_ERRERR    = 6
 	LUA_ERRFILE   = LUA_ERRERR + 1 /* 'luaL_loadfilex': a file could not be opened */
 )
 

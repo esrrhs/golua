@@ -8,7 +8,7 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 
 | Area | Match 5.3.4 C? | Notes |
 |------|----------------|-------|
-| Version / chunk / copyright | Yes | 5.3.4 / 503 / `0x53` / 1994–2017 |
+| Version / chunk / copyright | Yes | 5.3.4 / 503 / `0x53` / 1994–2017; public `include/*.h` default surface = 5.3.4 (`LUA_COMPAT_54` gates 5.4-only) |
 | ISA (47 ops) + RK | Yes | No 5.4 opcodes |
 | CallInfo **status bits** | Yes | `lstate.h` layout (`CIST_LUA`…`CIST_FIN`) |
 | `luaH_getn` / `hashint` | Yes | 5.3.4 binary+unbound; `hashpow2` |
@@ -30,6 +30,7 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 
 ## Done highlights
 - No `warn` global, no `coroutine.close`, no `<const>`/`<close>`, no TBC; `bit32` present
+- Public headers: `LUA_ERRGCMM`/`LUA_ERRERR` 5/6, `LUA_NUMTAGS`, `lua_version`→`const lua_Number*`, 5.3 `lua_Debug`; 5.4 names only under `LUA_COMPAT_54`
 - CGO: no always-on 5.4 exports (`toclose`, `setcstacklimit`, `setwarnf`, …)
 - `OP_TAILCALL`→C falls through to `RETURN`; utf8/`require`/io/os/debug edges aligned
 - Dead `setnorealasize` / `CIST_C`/`TRAN`/`CLSRET` / Proto `abslineinfo` removed

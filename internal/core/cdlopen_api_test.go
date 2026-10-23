@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// This test pins the whole C API against PUC-Lua 5.3.9: every line the
+// This test pins the whole C API against PUC-Lua 5.3.4: every line the
 // driver prints was captured from the reference interpreter running the
 // same extension, and the two agree byte for byte.
 //
@@ -94,9 +94,9 @@ static int l_join(lua_State *L) {
   luaL_pushresult(&b);
   return 1;
 }
-static int l_setuv(lua_State *L) { lua_settop(L, 2); lua_setiuservalue(L, 1, 1); return 0; }
+static int l_setuv(lua_State *L) { lua_settop(L, 2); lua_setuservalue(L, 1); return 0; }
 static int l_getuv(lua_State *L) {
-  if (lua_getiuservalue(L, 1, 1) == LUA_TNONE) lua_pushnil(L);
+  lua_getuservalue(L, 1);
   return 1;
 }
 static int l_rawp(lua_State *L) {
@@ -133,7 +133,7 @@ static int l_whereami(lua_State *L) {
   lua_pushnil(L);
   return 1;
 }
-static int l_ver(lua_State *L) { lua_pushnumber(L, lua_version(L)); return 1; }
+static int l_ver(lua_State *L) { lua_pushnumber(L, *lua_version(L)); return 1; }
 static int l_yieldable(lua_State *L) { lua_pushboolean(L, lua_isyieldable(L)); return 1; }
 static int l_tonum(lua_State *L) {
   lua_pushinteger(L, (lua_Integer)lua_stringtonumber(L, luaL_checkstring(L, 1)));
@@ -216,7 +216,7 @@ P("tonum", m.tonum("3.5"), m.tonum("xyz"))
 P("extra", m.extra())
 `
 
-// cExtWant is what PUC-Lua 5.3.9 prints for cExtDriver, line for line.
+// cExtWant is what PUC-Lua 5.3.4 prints for cExtDriver, line for line.
 var cExtWant = []string{
 	"ident\tfalse\ttrue",
 	"box\t41\ttrue\tfalse",
@@ -240,7 +240,7 @@ var cExtWant = []string{
 	"dump\ttrue\ttrue",
 	"gc\tnumber",
 	"where\tcext:31",
-	"ver\t504.0",
+	"ver\t503.0",
 	"yield\tfalse",
 	"tonum\t4\t0",
 	"extra\ttrue\t8",
@@ -376,7 +376,7 @@ P("catch", pcall(m.catch_inside, function() return m.inner() end))
 P("alive", _VERSION)
 `
 
-// cErrWant is what PUC-Lua 5.3.9 prints for cErrDriver.
+// cErrWant is what PUC-Lua 5.3.4 prints for cErrDriver.
 var cErrWant = []string{
 	"inner\tfalse\tfrom inner",
 	"middle\tfalse\tfrom inner",

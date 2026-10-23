@@ -41,6 +41,9 @@ LUAMOD_API int (luaopen_string) (lua_State *L);
 #define LUA_UTF8LIBNAME "utf8"
 LUAMOD_API int (luaopen_utf8) (lua_State *L);
 
+#define LUA_BITLIBNAME  "bit32"
+LUAMOD_API int (luaopen_bit32) (lua_State *L);
+
 #define LUA_MATHLIBNAME "math"
 LUAMOD_API int (luaopen_math) (lua_State *L);
 
@@ -55,8 +58,13 @@ LUAMOD_API int (luaopen_package) (lua_State *L);
 LUALIB_API void (luaL_openlibs) (lua_State *L);
 
 
+#if !defined(lua_assert)
+#define lua_assert(x)	((void)0)
+#endif
+
+
 /*
-** Copyright (C) 1994-2026 Lua.org, PUC-Rio.
+** Copyright (C) 1994-2017 Lua.org, PUC-Rio.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining
 ** a copy of this software and associated documentation files (the
