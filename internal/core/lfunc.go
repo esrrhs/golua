@@ -1,10 +1,13 @@
 // Translation of lfunc.h / lfunc.c (PUC-Lua 5.3.4).
 //
 // Upvalues keep a stack index instead of a pointer, because the Go stack
-// slice may be reallocated.
+// slice may be reallocated. Open list is a slice sorted by ascending stack
+// index (C: descending TValue* linked list); close walks from the high end.
 package core
 
 // UpVal is an upvalue: either open (pointing to a stack slot) or closed.
+// C (lfunc.h): TValue *v + refcount + union { open{next,touched} | value }.
+// Go: index-stack specialization (intentional); no refcount / twups (Go GC).
 type UpVal struct {
 	open bool
 	idx  int
@@ -30,9 +33,11 @@ type LClosure struct {
 }
 
 // luaF_newproto creates a new prototype (lfunc.c).
+// &Proto{} zero-value matches C's explicit NULL/0 field init.
 func luaF_newproto(L *State) *Proto { return &Proto{} }
 
 // luaF_newCclosure creates a closure for a Go function (lfunc.c).
+// Go nil-fills upvalue slots (C leaves them uninitialized until caller fills).
 func luaF_newCclosure(L *State, nupvals int) *CClosure {
 	cl := &CClosure{nupvalues: nupvals}
 	if nupvals > 0 {
@@ -47,22 +52,23 @@ func luaF_newCclosure(L *State, nupvals int) *CClosure {
 // luaF_newLclosure creates a Lua closure (lfunc.c).
 func luaF_newLclosure(L *State, nupvals int) *LClosure {
 	cl := &LClosure{nupvalues: nupvals}
-	cl.upvals = make([]*UpVal, nupvals)
+	cl.upvals = make([]*UpVal, nupvals) /* C: while (n--) c->upvals[n] = NULL */
 	return cl
 }
 
 // luaF_initupvals gives a closure fresh closed upvalues (lfunc.c).
+// Omits C refcount=1 (Go GC).
 func luaF_initupvals(L *State, cl *LClosure) {
 	for i := 0; i < cl.nupvalues; i++ {
-		uv := &UpVal{open: false}
+		uv := &UpVal{open: false} /* closed: value lives in uv.v */
 		setnilvalue(&uv.v)
 		cl.upvals[i] = uv
 	}
 }
 
 // luaF_findupval finds (or creates) the open upvalue for a stack slot (lfunc.c).
-// Open list is kept sorted by ascending stack index (C links by pointer
-// order with v >= level); close walks from the high end.
+// Open list kept sorted by ascending stack index; close walks from the high end.
+// Omits C refcount/touched/twups (Go GC / index-stack Spec).
 func luaF_findupval(L *State, level int) *UpVal {
 	i := 0
 	for i < len(L.openupval) && L.openupval[i].idx < level {
@@ -79,38 +85,25 @@ func luaF_findupval(L *State, level int) *UpVal {
 	return uv
 }
 
-// luaF_unlinkupval removes an upvalue from the open list (lfunc.c).
-func luaF_unlinkupval(L *State, uv *UpVal) {
-	for i, u := range L.openupval {
-		if u == uv {
-			L.openupval = append(L.openupval[:i], L.openupval[i+1:]...)
-			return
-		}
-	}
-	uv.open = false
-	uv.L = nil
-}
-
-// luaF_closeupval closes every upvalue at or above 'level' (lfunc.c).
-func luaF_closeupval(L *State, level int) {
+// luaF_close closes every open upvalue at or above 'level' (lfunc.c, Lua 5.3.4).
+// Ascending index slice: walk from the high end ≡ C head of descending list.
+// Omits C refcount==0 free and luaC_upvalbarrier (Go GC).
+// No luaF_closeupval / luaF_unlinkupval — those are Lua 5.4 APIs, purged here.
+func luaF_close(L *State, level int) {
 	for len(L.openupval) > 0 {
 		uv := L.openupval[len(L.openupval)-1]
 		if uv.idx < level {
 			break
 		}
-		uv.v = L.stack[uv.idx]
-		uv.open = false
+		uv.v = L.stack[uv.idx] /* move value to upvalue slot */
+		uv.open = false        /* now current value lives here */
 		uv.L = nil
 		L.openupval = L.openupval[:len(L.openupval)-1]
 	}
 }
 
-// luaF_close closes every open upvalue at or above 'level' (lfunc.c, Lua 5.3.4).
-func luaF_close(L *State, level int) {
-	luaF_closeupval(L, level)
-}
-
 // luaF_getlocalname returns the name of a local variable (lfunc.c).
+// "" ≡ C NULL (not found).
 func luaF_getlocalname(f *Proto, localNumber, pc int) string {
 	for i := 0; i < len(f.locvars) && f.locvars[i].startpc <= pc; i++ {
 		if pc < f.locvars[i].endpc { /* is variable active? */
@@ -123,17 +116,4 @@ func luaF_getlocalname(f *Proto, localNumber, pc int) string {
 	return "" /* not found */
 }
 
-// getLocalNameAt is a small helper for error messages.
-func (L *State) getLocalNameAt(obj *Value) string {
-	if L.ci != nil && isLua(L.ci) {
-		cl := clLvalue(&L.stack[L.ci.funcIdx])
-		f := cl.p
-		pc := L.ci.savedpc - 1
-		for i := 0; i < len(f.locvars); i++ {
-			if f.locvars[i].startpc <= pc && pc < f.locvars[i].endpc {
-				return f.locvars[i].varname.val
-			}
-		}
-	}
-	return "?"
-}
+// luaF_freeproto omitted — Go GC owns Proto lifetime (intentional).

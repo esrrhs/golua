@@ -1,13 +1,14 @@
-// Translation of lstrlib.c (PUC-Lua 5.3.4).
+// Translation of lstrlib.c (PUC-Lua 5.3.4) — line-faithful C→Go.
 //
-// It contains the string library: the basic string functions, the
-// complete Lua pattern-matching engine, string.format, and the
-// pack/unpack family.
+// Surface: basic string ops, pattern engine, string.format, pack/unpack.
+// Offsets replace C 'const char *'; goto-init match loop → for/continue.
 //
-// Naming: every identifier introduced here is prefixed with 'str' (or
-// 'lStr') to avoid clashes with the other files of the package.  The
-// control flow follows the C source closely; the C pointer arithmetic
-// on 'const char *' becomes integer offsets into a Go string.
+// 5.3.4 (not 5.4): createmetatable is __index only; gmatch SetTop(2) no init;
+// %q → addliteral (no modifier reject; float via %a / num2straux, not quotefloat);
+// %a/%A honor flags/width/prec like non-LUA_USE_C89 luaconf sprintf path.
+//
+// FLAG Go-only: printf-emulation helpers (strFormatS/Unsigned/…); strStringToNumber
+// kept for lbaselib (≅ lua_stringtonumber); pack sizes LP64 hardcode.
 package core
 
 import (
@@ -29,23 +30,8 @@ func strLen(L *State) int {
 	return 1
 }
 
-// strPosRelatI translates a relative initial string position
-// (negative means back from the end); the result is clipped to [1, inf)
-// (posrelatI).
-func strPosRelatI(pos int64, l int) int {
-	if pos > 0 {
-		return int(pos)
-	} else if pos == 0 {
-		return 1
-	} else if pos < -int64(l) { /* inverted comparison */
-		return 1 /* clip to 1 */
-	}
-	return l + int(pos) + 1
-}
-
-// strPosRelat is PUC-Lua 5.3.4 posrelat: zero stays zero (unlike 5.4's
-// posrelatI which maps 0→1). Used by string.unpack so that an initial
-// position of 0 errors as "out of string".
+// strPosRelat translates a relative string position: negative means
+// back from end (posrelat). Zero stays zero (5.3.4; not 5.4 posrelatI).
 func strPosRelat(pos int64, l int) int64 {
 	if pos >= 0 {
 		return pos
@@ -56,25 +42,17 @@ func strPosRelat(pos int64, l int) int64 {
 	return int64(l) + pos + 1
 }
 
-// strGetEndPos gets an optional ending string position from argument
-// 'arg', with default value 'def' (getendpos).
-func strGetEndPos(L *State, arg int, def int64, l int) int {
-	pos := L.OptInteger(arg, def)
-	if pos > int64(l) {
-		return l
-	} else if pos >= 0 {
-		return int(pos)
-	} else if pos < -int64(l) {
-		return 0
-	}
-	return l + int(pos) + 1
-}
-
 func strSub(L *State) int {
 	s := L.CheckString(1)
 	l := len(s)
-	start := strPosRelatI(L.CheckInteger(2), l)
-	end := strGetEndPos(L, 3, -1, l)
+	start := strPosRelat(L.CheckInteger(2), l)
+	end := strPosRelat(L.OptInteger(3, -1), l)
+	if start < 1 {
+		start = 1
+	}
+	if end > int64(l) {
+		end = int64(l)
+	}
 	if start <= end {
 		L.PushString(s[start-1 : end])
 	} else {
@@ -138,7 +116,7 @@ func strRep(L *State) int {
 	lsep := len(sep)
 	if n <= 0 {
 		L.PushString("")
-	} else if l+lsep > math.MaxInt32/int(n) { /* may overflow? */
+	} else if l+lsep < l || l+lsep > math.MaxInt32/int(n) { /* may overflow? */
 		return L.Error2("resulting string too large")
 	} else {
 		var sb strings.Builder
@@ -158,19 +136,24 @@ func strRep(L *State) int {
 func strByte(L *State) int {
 	s := L.CheckString(1)
 	l := len(s)
-	pi := L.OptInteger(2, 1)
-	posi := strPosRelatI(pi, l)
-	pose := strGetEndPos(L, 3, pi, l)
+	posi := strPosRelat(L.OptInteger(2, 1), l)
+	pose := strPosRelat(L.OptInteger(3, posi), l)
+	if posi < 1 {
+		posi = 1
+	}
+	if pose > int64(l) {
+		pose = int64(l)
+	}
 	if posi > pose { /* empty interval; return no values */
 		return 0
 	}
 	if pose-posi >= math.MaxInt32 { /* arithmetic overflow? */
 		return L.Error2("string slice too long")
 	}
-	n := pose - posi + 1
+	n := int(pose-posi) + 1
 	L.CheckStack2(n, "string slice too long")
 	for i := 0; i < n; i++ {
-		L.PushInteger(int64(s[posi+i-1]))
+		L.PushInteger(int64(s[int(posi)+i-1]))
 	}
 	return n
 }
@@ -208,16 +191,12 @@ func strDump(L *State) int {
 }
 
 // ---------------------------------------------------------------------
-// METAMETHODS (arithmetic on strings)
+// FLAG: strStringToNumber — not in 5.3.4 lstrlib.c
+// Placement helper for lbaselib tonumber (≅ lua_stringtonumber / luaO_str2num).
+// 5.4 string-arith metamethods (tonum/trymt/arith*) removed; createmetatable
+// registers __index only.
 // ---------------------------------------------------------------------
 
-// strStringToNumber converts the whole string 's' into a number, pushes
-// it, and reports success.
-//
-// This is 'lua_stringtonumber' (lapi.c), which is exactly 'luaO_str2num':
-// there is only one numeral parser in Lua, and it must be the one that
-// also serves the arithmetic coercions. Keeping a private copy here used
-// to make 'tonumber("0xAA.0")' fail while '"0xAA.0" + 0' worked.
 func strStringToNumber(L *State, s string) bool {
 	var v Value
 	if !luaO_str2num(s, &v) {
@@ -230,65 +209,6 @@ func strStringToNumber(L *State, s string) bool {
 	}
 	return true
 }
-
-// strTonum pushes the value of argument 'arg' as a number, if possible
-// (tonum).
-func strTonum(L *State, arg int) bool {
-	if L.Type(arg) == LUA_TNUMBER { /* already a number? */
-		L.PushValue(arg)
-		return true
-	}
-	/* else check whether it is a numerical string */
-	if s, ok := L.ToString(arg); ok {
-		return strStringToNumber(L, s)
-	}
-	return false
-}
-
-// strTryMt tries a metamethod for the operation 'mtname' (trymt).
-func strTryMt(L *State, mtname string) {
-	L.SetTop(2) /* back to the original arguments */
-	if L.Type(2) == LUA_TSTRING || L.GetMetaField(2, mtname) == LUA_TNIL {
-		L.Error2("attempt to %s a '%s' with a '%s'", mtname[2:],
-			TypeName(L.Type(-2)), TypeName(L.Type(-1)))
-	}
-	/* call the metamethod with the two original arguments */
-	L.PushValue(1)
-	L.PushValue(2)
-	L.Call(2, 1)
-	L.Copy(-1, 1) /* the single result becomes the returned value */
-	L.SetTop(1)
-}
-
-// strArithOp performs 'op' on the two values on the top of the stack,
-// leaving one result (lua_arith).
-func strArithOp(L *State, op int) {
-	if op == LUA_OPUNM || op == LUA_OPBNOT {
-		L.PushValue(-1) /* add fake 2nd operand */
-	}
-	p1 := L.stack[L.top-2]
-	p2 := L.stack[L.top-1]
-	luaO_arith(L, op, &p1, &p2, L.top-2)
-	L.top-- /* remove second operand */
-}
-
-func strArith(L *State, op int, mtname string) int {
-	if strTonum(L, 1) && strTonum(L, 2) {
-		strArithOp(L, op) /* result will be on the top */
-	} else {
-		strTryMt(L, mtname)
-	}
-	return 1
-}
-
-func strArithAdd(L *State) int  { return strArith(L, LUA_OPADD, "__add") }
-func strArithSub(L *State) int  { return strArith(L, LUA_OPSUB, "__sub") }
-func strArithMul(L *State) int  { return strArith(L, LUA_OPMUL, "__mul") }
-func strArithMod(L *State) int  { return strArith(L, LUA_OPMOD, "__mod") }
-func strArithPow(L *State) int  { return strArith(L, LUA_OPPOW, "__pow") }
-func strArithDiv(L *State) int  { return strArith(L, LUA_OPDIV, "__div") }
-func strArithIDiv(L *State) int { return strArith(L, LUA_OPIDIV, "__idiv") }
-func strArithUnm(L *State) int  { return strArith(L, LUA_OPUNM, "__unm") }
 
 // ---------------------------------------------------------------------
 // PATTERN MATCHING
@@ -325,6 +245,7 @@ type strMatchState struct {
 
 func strPrepState(ms *strMatchState, L *State, s string, ls int, p string, lp int) {
 	ms.L = L
+	ms.matchdepth = strMaxCCalls
 	ms.src = s
 	ms.srcInit = 0
 	ms.srcEnd = ls
@@ -333,8 +254,8 @@ func strPrepState(ms *strMatchState, L *State, s string, ls int, p string, lp in
 }
 
 func strReprepState(ms *strMatchState) {
-	ms.matchdepth = strMaxCCalls
 	ms.level = 0
+	/* C: lua_assert(ms->matchdepth == MAXCCALLS); set in prepstate / restored by match */
 }
 
 func strCheckCapture(ms *strMatchState, l int) int {
@@ -777,11 +698,14 @@ func strFindAux(L *State, find bool) int {
 	p := L.CheckString(2)
 	ls := len(s)
 	lp := len(p)
-	init := strPosRelatI(L.OptInteger(3, 1), ls) - 1
-	if init > ls { /* start after string's end? */
+	init64 := strPosRelat(L.OptInteger(3, 1), ls)
+	if init64 < 1 {
+		init64 = 1
+	} else if init64 > int64(ls)+1 { /* start after string's end? */
 		L.PushNil() /* cannot find anything */
 		return 1
 	}
+	init := int(init64) - 1 /* convert to 0-based */
 	/* explicit request or no special characters? */
 	if find && (L.ToBoolean(4) || strNoSpecials(p)) {
 		/* do a plain search */
@@ -904,9 +828,9 @@ func strAddS(ms *strMatchState, b *Buffer, s, e int) {
 	b.AddString(news)
 }
 
-// strAddValue adds the replacement value to the buffer; it returns true
-// when the original string was changed (add_value).
-func strAddValue(ms *strMatchState, b *Buffer, s, e int, tr int) bool {
+// strAddValue adds the replacement value to the buffer (add_value).
+// 5.3.4: void; no "changed" identity flag (that is 5.4).
+func strAddValue(ms *strMatchState, b *Buffer, s, e int, tr int) {
 	L := ms.L
 	switch tr {
 	case LUA_TFUNCTION: /* call the function */
@@ -918,18 +842,16 @@ func strAddValue(ms *strMatchState, b *Buffer, s, e int, tr int) bool {
 		L.GetTable(3)
 	default: /* LUA_TNUMBER or LUA_TSTRING */
 		strAddS(ms, b, s, e) /* add value to the buffer */
-		return true          /* something changed */
+		return
 	}
 	if !L.ToBoolean(-1) { /* nil or false? */
 		L.Pop(1)                 /* remove value */
 		b.AddString(ms.src[s:e]) /* keep original text */
-		return false             /* no changes */
 	} else if !L.IsString(-1) {
 		L.Error2("invalid replacement value (a %s)", TypeName(L.Type(-1)))
-		return false
+	} else {
+		b.AddValue() /* add result to accumulator */
 	}
-	b.AddValue() /* add result to accumulator */
-	return true  /* something changed */
 }
 
 func strGsub(L *State) int {
@@ -951,16 +873,13 @@ func strGsub(L *State) int {
 	b := L.NewBuffer()
 	lastmatch := -1 /* end of last match */
 	pos := 0        /* current position in the subject */
-	var n int64     /* replacement count */
-	changed := false
+	var n int64 /* replacement count */
 	for n < maxS {
 		strReprepState(&ms) /* (re)prepare state for new match */
 		e, ok := strMatch(&ms, pos, 0)
 		if ok && e != lastmatch { /* match? */
 			n++
-			if strAddValue(&ms, b, pos, e, tr) {
-				changed = true
-			}
+			strAddValue(&ms, b, pos, e, tr) /* add replacement to buffer */
 			pos = e
 			lastmatch = e
 		} else if pos < ms.srcEnd { /* otherwise, skip one character */
@@ -973,12 +892,8 @@ func strGsub(L *State) int {
 			break
 		}
 	}
-	if !changed { /* no changes? */
-		L.PushValue(1) /* return original string */
-	} else { /* something changed */
-		b.AddString(src[pos:ms.srcEnd])
-		b.PushResult() /* create and return new string */
-	}
+	b.AddString(src[pos:ms.srcEnd])
+	b.PushResult()   /* 5.3.4: always new buffer string (no changed/identity) */
 	L.PushInteger(n) /* number of substitutions */
 	return 2
 }
@@ -1003,19 +918,8 @@ func strIsAlphaChar(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-// strGet2Digits skips up to two digits (get2digits).
-func strGet2Digits(s string, i int) int {
-	if i < len(s) && s[i] >= '0' && s[i] <= '9' {
-		i++
-		if i < len(s) && s[i] >= '0' && s[i] <= '9' {
-			i++ /* (2 digits at most) */
-		}
-	}
-	return i
-}
-
 // strCheckFormat checks whether a conversion specification is valid
-// (checkformat).
+// (checkformat).  5.3.4 has no separate checkformat; light letter check only.
 
 // strStripSignedFlags removes '+' and ' ' from a printf form. C's sprintf
 // ignores those flags for unsigned conversions (u/o/x/X); Go's fmt does not
@@ -1257,11 +1161,10 @@ func strGetFormat(L *State, strfrmt string, i int) (string, int) {
 
 // strNumber2StrX implements lua_number2strx for this port.
 //
-// 5.3.4 luaconf.h (non-LUA_USE_C89) defines lua_number2strx as sprintf
-// with the full form, so flags/width/precision are honoured — same as
-// a typical Linux PUC build.  The C89 fallback in lstrlib.c rejects
-// non-bare "%a"/"%A"; we match the C99 path used by differential tests
-// and formatfuzz, not that fallback.
+// 5.3.4 luaconf.h (!LUA_USE_C89): lua_number2strx = sprintf(full form) —
+// flags/width/precision honoured (typical Linux PUC). The C89 fallback
+// body inside lstrlib.c rejects non-bare "%a"/"%A"; we match the default
+// non-C89 path, not that fallback. Not a 5.4 bleed.
 func strNumber2StrX(L *State, form string, x float64) string {
 	/* parse the conversion specification: '%[flags][width][.prec]a|A' */
 	var flags string

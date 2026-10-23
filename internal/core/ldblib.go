@@ -1,16 +1,14 @@
 // Translation of ldblib.c (PUC-Lua 5.3.4): the debug library.
 //
-// The C code calls the debug API of ldebug.c / lapi.c (lua_getstack,
-// lua_getinfo, lua_getlocal, ...); this port has none of it, so the
-// counterparts of those functions are translated here (dbGetStack,
-// dbGetInfo, ...) on top of what the core already offers: currentLine,
-// luaG_getfuncline, luaF_getlocalname, luaO_chunkid, upvalValue.
+// C calls the debug API of ldebug.c / lapi.c (lua_getstack, lua_getinfo,
+// lua_getlocal, ...); counterparts are translated here (dbGetStack,
+// dbGetInfo, ...) on top of currentLine, luaG_getfuncline,
+// luaF_getlocalname, luaO_chunkid, upvalValue.
 //
-// Deviations are marked with "deviation" in the comments; the short
-// list: no hook machinery (sethook records the hook but nothing ever
-// calls it), no name/namewhat (the port does not track how a function
-// was called). Lua 5.3.4 has no getinfo option 'r' / transfer info, and
-// no interactive 'debug.debug'.
+// 5.3.4 surface: 16 dblib entries (no setcstacklimit); getinfo default
+// "flnStu"; no option 'r' / transfer info. Hooks, name/namewhat, and
+// debug.debug are implemented. See align-wip/ldblib/NOTES.md for
+// intentional diffs.
 package core
 
 import (
@@ -21,8 +19,9 @@ import (
 	"unsafe"
 )
 
-// dbHookKey is the registry key of the hook table (HOOKKEY).
-const dbHookKey = "_HOOKKEY"
+// dbHookKey's address is the registry key of the hook table (C: static const int HOOKKEY = 0;
+// only the address matters; used with RawGetP/RawSetP like lua_rawgetp/rawsetp).
+var dbHookKey int
 
 // hook masks (lua.h)
 const (
@@ -55,8 +54,6 @@ type dbAr struct {
 	isvararg        bool
 	name            string
 	namewhat        string
-	ftransfer       int
-	ntransfer       int
 	istailcall      bool
 	ci              *CallInfo
 }
@@ -113,8 +110,8 @@ func dbPush(L *State, v *Value) {
 // of the local variable at index 'n' (1-based) of a frame. An empty name
 // means "no such variable".
 //
-// deviation: the core's luaG_findlocal uses 'ci.savedpc' where C uses
-// 'currentpc(ci)' (savedpc - 1); the lookup here follows C.
+// Uses currentpc = savedpc-1 like C currentpc(ci). ci.next nil-guard is defensive
+// (C assumes ci->next when ci != L->ci).
 func dbFindLocal(L *State, ci *CallInfo, n int) (string, int) {
 	/* 5.3.4 findlocal/findvararg: varargs sit between func and base. */
 	if isLua(ci) && n < 0 { /* access to vararg values? */
@@ -195,17 +192,14 @@ func dbFuncInfo(ar *dbAr, fv *Value) {
 			ar.what = "Lua"
 		}
 	}
-	/* deviation: C stores the length of 'source' and calls
-	   luaO_chunkid on it; the port's luaO_chunkid takes the whole
-	   string, which is equivalent. */
+	/* C: luaO_chunkid(ar->short_src, ar->source, LUA_IDSIZE); Go takes the whole string. */
 	ar.shortSrc = luaO_chunkid(ar.source)
 }
 
 // dbCollectValidLines is collectvalidlines: it pushes a table with the
 // active lines of a function (or nil for a non-Lua function).
 //
-// deviation: lineinfo already holds absolute lines, so there is no
-// 'nextline' accumulation (and no 'abslineinfo').
+// 5.3.4 stores absolute lines in lineinfo (no abslineinfo / nextline).
 func dbCollectValidLines(L *State, fv *Value) {
 	if fv == nil || !ttisLclosure(fv) {
 		L.PushNil()
@@ -213,13 +207,10 @@ func dbCollectValidLines(L *State, fv *Value) {
 	}
 	p := clLvalue(fv).p
 	L.NewTable()
-	/* 5.3: no OP_VARARGPREP to skip; every instruction may be active. */
+	/* C: for all lines with code, table[lineinfo[i]] = true (no line>0 filter). */
 	for i := 0; i < len(p.lineinfo); i++ {
-		line := luaG_getfuncline(p, i)
-		if line > 0 {
-			L.PushBoolean(true)
-			L.SetI(-2, int64(line))
-		}
+		L.PushBoolean(true)
+		L.SetI(-2, int64(p.lineinfo[i]))
 	}
 }
 
@@ -464,7 +455,7 @@ func dbGetInfoFunc(L *State) int {
 	var ar dbAr
 	arg := 0
 	L1 := dbGetThread(L, &arg)
-	options := L.OptString(arg+2, "flnStu") /* 5.3.4: no option r */
+	options := L.OptString(arg+2, "flnStu") /* 5.3.4: no option r; no ArgCheck rejecting leading '>' (that is 5.4) */
 	dbCheckStack(L, L1, 3)
 	if L.IsFunction(arg + 1) { /* info about a function? */
 		options = ">" + options /* add '>' to 'options' */
@@ -606,36 +597,29 @@ func dbAuxUpValue(L *State, get bool) int {
 func dbGetUpValueFunc(L *State) int { return dbAuxUpValue(L, true) }
 func dbSetUpValueFunc(L *State) int { L.CheckAny(3); return dbAuxUpValue(L, false) }
 
-// dbCheckUpVal checks whether an upvalue exists and returns its index
-// (checkupval); 'id' is nil when the index is invalid.
-func dbCheckUpVal(L *State, argf, argnup int, pnup *int) unsafe.Pointer {
-	n := int(L.CheckInteger(argnup)) /* upvalue index */
-	L.CheckType(argf, LUA_TFUNCTION) /* closure */
-	id := dbUpvalueID(L, argf, n)
-	/* 5.3.4 checkupval always rejects an invalid index */
-	L.ArgCheck(id != nil, argnup, "invalid upvalue index")
-	if pnup != nil {
-		*pnup = n
-	}
-	return id
+// dbCheckUpVal is checkupval: verify upvalue index and leave the upvalue
+// on the stack (C: lua_getupvalue); callers' return counts discard it.
+func dbCheckUpVal(L *State, argf, argnup int) int {
+	nup := int(L.CheckInteger(argnup)) /* upvalue index */
+	L.CheckType(argf, LUA_TFUNCTION)   /* closure */
+	_, ok := dbGetUpvalue(L, argf, nup)
+	L.ArgCheck(ok, argnup, "invalid upvalue index")
+	return nup
 }
 
 func dbUpValueIDFunc(L *State) int {
-	id := dbCheckUpVal(L, 1, 2, nil)
-	L.PushLightUserData(id)
-	return 1
+	n := dbCheckUpVal(L, 1, 2)
+	L.PushLightUserData(dbUpvalueID(L, 1, n))
+	return 1 /* discards the upvalue left by checkupval */
 }
 
 func dbUpValueJoin(L *State) int {
-	var n1, n2 int
-	dbCheckUpVal(L, 1, 2, &n1)
-	dbCheckUpVal(L, 3, 4, &n2)
+	n1 := dbCheckUpVal(L, 1, 2)
+	n2 := dbCheckUpVal(L, 3, 4)
 	L.ArgCheck(!L.IsGoFunction(1), 1, "Lua function expected")
 	L.ArgCheck(!L.IsGoFunction(3), 3, "Lua function expected")
-	f1 := clLvalue(index2value(L, 1))
-	f2 := clLvalue(index2value(L, 3))
-	f1.upvals[n1-1] = f2.upvals[n2-1]
-	return 0
+	L.UpvalueJoin(1, n1, 3, n2)
+	return 0 /* discards the two upvalues left by checkupval */
 }
 
 // ---------------------------------------------------------------------
@@ -664,27 +648,20 @@ var dbHookNames = []string{"call", "return", "line", "count", "tail call"}
 // dbHookFunc is the hookf of ldblib.c: it calls the Lua function stored
 // in the hook table for the running thread.
 func dbHookFunc(L *State, ar *dbAr) {
-	L.GetField(LUA_REGISTRYINDEX, dbHookKey) /* hook table */
+	L.RawGetP(LUA_REGISTRYINDEX, unsafe.Pointer(&dbHookKey)) /* hook table */
 	L.PushThread()
-	L.RawGet(-2) /* get hooktable[thread] */
-	L.Remove(-2) /* remove hook table */
-	if !L.IsFunction(-1) {
-		L.Pop(1) /* no hook function */
-		return
+	if L.RawGet(-2) == LUA_TFUNCTION { /* is there a hook function? */
+		L.PushString(dbHookNames[ar.event]) /* push event name */
+		if ar.currentline >= 0 {
+			L.PushInteger(int64(ar.currentline)) /* push current line */
+		} else {
+			L.PushNil()
+		}
+		/* C: lua_assert(lua_getinfo(L,"lS",ar)); release assert is ((void)0). */
+		/* lua_call (not pcall): errors propagate; yield across hook is a C-call boundary. */
+		L.Call(2, 0) /* call hook function */
 	}
-	L.PushString(dbHookNames[ar.event]) /* hook event */
-	if ar.currentline >= 0 {
-		L.PushInteger(int64(ar.currentline)) /* current line */
-	} else {
-		L.PushNil()
-	}
-	/* ldblib.c uses lua_call here, not lua_pcall: an error raised by the
-	   hook function leaves the hook and travels to whatever protected
-	   call is underneath (the chunk's, or a coroutine's 'resume').
-	   'lua_call' also means the hook itself is a non-yieldable call, so
-	   'coroutine.yield' inside a hook raises "attempt to yield across a
-	   C-call boundary". */
-	L.Call(2, 0)
+	/* leftover hook table (+ non-function) discarded when luaD_hook restores top */
 }
 
 // dbMakeMask converts a string mask into a bit mask (makemask).
@@ -720,49 +697,42 @@ func dbUnmakeMask(mask int) string {
 	return string(smask)
 }
 
-// dbCreateHookTable creates (and initializes) the hook table.
-func dbCreateHookTable(L *State) {
-	if !L.GetSubTable(LUA_REGISTRYINDEX, dbHookKey) {
-		/* table just created; initialize it */
-		L.PushString("k")
-		L.SetField(-2, "__mode") /* hooktable.__mode = "k" */
-		L.PushValue(-1)
-		L.SetMetaTable(-2) /* metatable(hooktable) = hooktable */
-	}
-}
-
 func dbSetHook(L *State) int {
 	arg := 0
 	L1 := dbGetThread(L, &arg)
 	var (
 		hook  func(*State, *dbAr)
-		smask string
+		mask  int
 		count int
 	)
 	if L.IsNoneOrNil(arg + 1) { /* no hook? */
 		L.SetTop(arg + 1)
+		hook = nil
+		mask = 0
+		count = 0 /* turn off hooks */
 	} else {
-		smask = L.CheckString(arg + 2)
+		smask := L.CheckString(arg + 2)
 		L.CheckType(arg+1, LUA_TFUNCTION)
 		count = int(L.OptInteger(arg+3, 0))
 		hook = dbHookFunc
+		mask = dbMakeMask(smask, count)
 	}
-	mask := dbMakeMask(smask, count)
-	L1.setHook(hook, mask, count)
-	/* Whether a hook was installed is what 'gethook' asks about, and
-	   'lua_sethook' installs none when the mask is empty (ldebug.c):
-	   "turn off hooks" sets both the mask and the function to zero.  A
-	   mask with no recognised character in it -- 'debug.sethook(f, "z")'
-	   -- is such an empty mask, so the function is stored in the hook
-	   table but the hook itself is off, and 'debug.gethook()' answers
-	   nil rather than the function.  Nothing else needs recording: the
-	   mask and the count are on the thread, as in C. */
-	dbCreateHookTable(L)
+	/* ensure hook table at registry[&HOOKKEY]; weak keys "k" */
+	if L.RawGetP(LUA_REGISTRYINDEX, unsafe.Pointer(&dbHookKey)) == LUA_TNIL {
+		L.CreateTable(0, 2) /* create a hook table */
+		L.PushValue(-1)
+		L.RawSetP(LUA_REGISTRYINDEX, unsafe.Pointer(&dbHookKey)) /* set it in position */
+		L.PushString("k")
+		L.SetField(-2, "__mode") /* hooktable.__mode = "k" */
+		L.PushValue(-1)
+		L.SetMetaTable(-2) /* setmetatable(hooktable) = hooktable */
+	}
 	dbCheckStack(L, L1, 1)
-	L1.PushThread()      /* key (thread) */
-	L.XMove(L1, 1)       /* move it to the stack of L */
+	L1.PushThread()
+	L.XMove(L1, 1)       /* key (thread) */
 	L.PushValue(arg + 1) /* value (hook function) */
 	L.RawSet(-3)         /* hooktable[L1] = new Lua hook */
+	L1.setHook(hook, mask, count)
 	return 0
 }
 
@@ -775,7 +745,7 @@ func dbGetHook(L *State) int {
 	} else if L1.hookExternal { /* external hook (C: hook != hookf) */
 		L.PushString("external hook")
 	} else { /* hook table must exist */
-		L.GetField(LUA_REGISTRYINDEX, dbHookKey)
+		L.RawGetP(LUA_REGISTRYINDEX, unsafe.Pointer(&dbHookKey))
 		dbCheckStack(L, L1, 1)
 		L1.PushThread()
 		L.XMove(L1, 1)

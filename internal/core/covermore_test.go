@@ -221,9 +221,9 @@ func TestCallInfoPoolAndThrow(t *testing.T) {
 		t.Fatal("G")
 	}
 	L.extendCI()
-	L.shrinkCI()
+	L.unwindCIToBase()
 	if L.ci != &L.baseCI || L.ci.next != nil || L.nci != 0 {
-		t.Fatal("shrinkCI")
+		t.Fatal("unwindCIToBase")
 	}
 	L.OpenLibs()
 	if err := L.LoadString("return 1", "=test"); err != nil {
@@ -283,14 +283,14 @@ func TestTableStringKeysAndMetatable(t *testing.T) {
 	var key, val Value
 	setsvalue(&key, short)
 	setivalue(&val, 3)
-	luaH_set(L, t0, &key, &val)
+	*luaH_set(L, t0, &key) = val
 	got := luaH_getstr(L, t0, short)
 	if got == nil || !ttisinteger(got) || ivalue(got) != 3 {
 		t.Fatal("short key")
 	}
 	setsvalue(&key, long)
 	setivalue(&val, 4)
-	luaH_set(L, t0, &key, &val)
+	*luaH_set(L, t0, &key) = val
 	got = luaH_getstr(L, t0, long)
 	if got == nil || !ttisinteger(got) || ivalue(got) != 4 {
 		t.Fatal("long key")
@@ -357,34 +357,25 @@ func TestExtraArgAndOrderHelpers(t *testing.T) {
 func TestNamesUpvaluesAndWeakClosures(t *testing.T) {
 	L := NewState()
 	defer L.Close()
-	if L.getLocalNameAt(&Value{}) != "?" {
-		t.Fatal("C frame")
-	}
+	/* getLocalNameAt / luaF_unlinkupval were 5.4 helpers; use luaF_getlocalname. */
 	p := &Proto{locvars: []LocVar{{varname: luaS_new(L, "x"), startpc: 0, endpc: 10}}}
-	setclLvalue(&L.stack[0], &LClosure{p: p})
-	saved := L.ci.callstatus
-	L.ci.callstatus |= CIST_LUA
-	L.ci.savedpc = 1
-	if L.getLocalNameAt(&Value{}) != "x" {
-		t.Fatalf("local %q", L.getLocalNameAt(&Value{}))
+	if luaF_getlocalname(p, 1, 1) != "x" {
+		t.Fatalf("local %q", luaF_getlocalname(p, 1, 1))
 	}
-	L.ci.savedpc = 20
-	if L.getLocalNameAt(&Value{}) != "?" {
+	if luaF_getlocalname(p, 1, 20) != "" {
 		t.Fatal("inactive local")
 	}
-	L.ci.callstatus = saved
-
-	keep := &UpVal{open: true}
-	gone := &UpVal{open: true, L: L, idx: 1}
-	L.openupval = []*UpVal{gone, keep}
-	luaF_unlinkupval(L, gone)
-	if len(L.openupval) != 1 || L.openupval[0] != keep {
-		t.Fatal("unlink")
+	if luaF_getlocalname(p, 2, 1) != "" {
+		t.Fatal("missing local number")
 	}
-	missing := &UpVal{open: true, L: L}
-	luaF_unlinkupval(L, missing)
-	if missing.open || missing.L != nil {
-		t.Fatal("unlink missing")
+
+	/* Open-upval list is ascending by stack index; close from high end (luaF_close). */
+	keep := &UpVal{open: true, L: L, idx: 0}
+	gone := &UpVal{open: true, L: L, idx: 1}
+	L.openupval = []*UpVal{keep, gone}
+	luaF_close(L, 1) /* close level>=1 → gone */
+	if len(L.openupval) != 1 || L.openupval[0] != keep || gone.open {
+		t.Fatal("luaF_close unlink")
 	}
 	L.openupval = nil
 

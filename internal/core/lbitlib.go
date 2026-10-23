@@ -1,47 +1,60 @@
-// Translation of lbitlib.c (PUC-Lua 5.3.4): bit32 library (LUA_COMPAT_BITLIB).
+// Translation of lbitlib.c (PUC-Lua 5.3.4 v1.30): bit32 library (LUA_COMPAT_BITLIB).
 package core
 
+// number of bits to consider in a number (LUA_NBITS; default 32, not overridable here)
 const luaNBits = 32
 
-var allOnes32 = uint64(0xffffffff)
+/*
+** a lua_Unsigned with its first LUA_NBITS bits equal to 1. (Shift must
+** be made in two parts to avoid problems when LUA_NBITS is equal to the
+** number of bits in a lua_Unsigned.)
+** C: #define ALLONES (~(((~(lua_Unsigned)0) << (LUA_NBITS - 1)) << 1))
+** Computed at init: Go rejects the same expression as a typed uint64 constant
+** (intermediate << overflows the const checker).
+ */
+var allOnes = allOnesFromC()
 
-func trim(x uint64) uint64 { return x & allOnes32 }
-
-func maskN(n uint) uint64 {
-	if n >= luaNBits {
-		return allOnes32
-	}
-	return (uint64(1) << n) - 1
+func allOnesFromC() uint64 {
+	ones := ^uint64(0)
+	return ^((ones << (luaNBits - 1)) << 1)
 }
 
-func shift(r uint64, i int) uint64 {
-	if i < 0 {
-		if i <= -luaNBits {
-			return 0
-		}
-		return trim(r) >> uint(-i)
-	}
-	if i >= luaNBits {
-		return 0
-	}
-	return trim(r << uint(i))
+// trim extra bits (C macro trim)
+func trim(x uint64) uint64 { return x & allOnes }
+
+// builds a number with 'n' ones (1 <= n <= LUA_NBITS); C macro mask(n)
+func mask(n int) uint64 {
+	return ^((allOnes << 1) << uint(n-1))
 }
 
+// C: #define checkunsigned(L,i) ((lua_Unsigned)luaL_checkinteger(L,i))
 func checkUnsigned(L *State, arg int) uint64 {
-	return trim(uint64(L.CheckInteger(arg)))
+	return uint64(L.CheckInteger(arg))
 }
 
+// C: #define pushunsigned(L,n) lua_pushinteger(L, (lua_Integer)(n))
 func pushUnsigned(L *State, n uint64) {
-	L.PushInteger(int64(trim(n)))
+	L.PushInteger(int64(n))
 }
 
-func b_and(L *State) int {
+func andaux(L *State) uint64 {
 	n := L.GetTop()
-	r := allOnes32
+	r := ^uint64(0)
 	for i := 1; i <= n; i++ {
 		r &= checkUnsigned(L, i)
 	}
+	return trim(r)
+}
+
+func b_and(L *State) int {
+	r := andaux(L)
 	pushUnsigned(L, r)
+	return 1
+}
+
+func b_test(L *State) int {
+	r := andaux(L)
+	L.PushBoolean(r != 0)
 	return 1
 }
 
@@ -51,7 +64,7 @@ func b_or(L *State) int {
 	for i := 1; i <= n; i++ {
 		r |= checkUnsigned(L, i)
 	}
-	pushUnsigned(L, r)
+	pushUnsigned(L, trim(r))
 	return 1
 }
 
@@ -61,18 +74,34 @@ func b_xor(L *State) int {
 	for i := 1; i <= n; i++ {
 		r ^= checkUnsigned(L, i)
 	}
-	pushUnsigned(L, r)
+	pushUnsigned(L, trim(r))
 	return 1
 }
 
 func b_not(L *State) int {
 	r := ^checkUnsigned(L, 1)
-	pushUnsigned(L, r)
+	pushUnsigned(L, trim(r))
 	return 1
 }
 
 func b_shift(L *State, r uint64, i int64) int {
-	pushUnsigned(L, shift(r, int(i)))
+	if i < 0 { // shift right?
+		i = -i
+		r = trim(r)
+		if i >= luaNBits {
+			r = 0
+		} else {
+			r >>= uint(i)
+		}
+	} else { // shift left
+		if i >= luaNBits {
+			r = 0
+		} else {
+			r <<= uint(i)
+		}
+		r = trim(r)
+	}
+	pushUnsigned(L, r)
 	return 1
 }
 
@@ -90,58 +119,70 @@ func b_arshift(L *State) int {
 	if i < 0 || (r&(uint64(1)<<(luaNBits-1))) == 0 {
 		return b_shift(L, r, -i)
 	}
-	// arithmetic shift: fill with 1s
+	// arithmetic shift for 'negative' number
 	if i >= luaNBits {
-		r = allOnes32
+		r = allOnes
 	} else {
-		r = trim((r >> uint(i)) | ^(allOnes32 >> uint(i)))
+		// C: trim((r >> i) | ~(trim(~(lua_Unsigned)0) >> i))
+		r = trim((r >> uint(i)) | ^(trim(^uint64(0)) >> uint(i)))
 	}
 	pushUnsigned(L, r)
 	return 1
 }
 
-func b_rot(L *State, i int) int {
+func b_rot(L *State, d int64) int {
 	r := checkUnsigned(L, 1)
-	i %= luaNBits
-	if i < 0 {
-		i = -i
-		r = trim((r >> uint(i)) | (r << uint(luaNBits-i)))
-	} else {
-		r = trim((r << uint(i)) | (r >> uint(luaNBits-i)))
+	i := int(d) & (luaNBits - 1) // i = d % NBITS
+	r = trim(r)
+	if i != 0 { // avoid undefined shift of LUA_NBITS when i == 0
+		r = (r << uint(i)) | (r >> uint(luaNBits-i))
 	}
-	pushUnsigned(L, r)
+	pushUnsigned(L, trim(r))
 	return 1
 }
 
-func b_lrot(L *State) int { return b_rot(L, int(L.CheckInteger(2))) }
-func b_rrot(L *State) int { return b_rot(L, -int(L.CheckInteger(2))) }
+func b_lrot(L *State) int {
+	return b_rot(L, L.CheckInteger(2))
+}
 
+func b_rrot(L *State) int {
+	return b_rot(L, -L.CheckInteger(2))
+}
+
+/*
+** get field and width arguments for field-manipulation functions,
+** checking whether they are valid.
+** ('luaL_error' / Error2 called without relying on return to avoid
+** 'width' being used uninitialized.)
+ */
 func fieldArgs(L *State, farg int, width *int) int {
-	f := int(L.CheckInteger(farg))
-	w := int(L.OptInteger(farg+1, 1))
-	L.ArgCheck(f >= 0, farg, "field cannot be negative")
-	L.ArgCheck(w > 0, farg+1, "width must be positive")
-	L.ArgCheck(f+w <= luaNBits, farg, "trying to access non-existent bits")
-	*width = w
-	return f
+	f := L.CheckInteger(farg)
+	w := L.OptInteger(farg+1, 1)
+	L.ArgCheck(0 <= f, farg, "field cannot be negative")
+	L.ArgCheck(0 < w, farg+1, "width must be positive")
+	if f+w > luaNBits {
+		L.Error2("trying to access non-existent bits")
+	}
+	*width = int(w)
+	return int(f)
 }
 
 func b_extract(L *State) int {
-	r := checkUnsigned(L, 1)
 	var w int
+	r := trim(checkUnsigned(L, 1))
 	f := fieldArgs(L, 2, &w)
-	pushUnsigned(L, (r>>uint(f))&maskN(uint(w)))
+	r = (r >> uint(f)) & mask(w)
+	pushUnsigned(L, r)
 	return 1
 }
 
 func b_replace(L *State) int {
-	r := checkUnsigned(L, 1)
-	v := checkUnsigned(L, 2)
 	var w int
+	r := trim(checkUnsigned(L, 1))
+	v := trim(checkUnsigned(L, 2))
 	f := fieldArgs(L, 3, &w)
-	m := maskN(uint(w))
-	v &= m
-	r = (r & ^(m << uint(f))) | (v << uint(f))
+	m := mask(w)
+	r = (r & ^(m << uint(f))) | ((v & m) << uint(f))
 	pushUnsigned(L, r)
 	return 1
 }
@@ -152,7 +193,7 @@ var bitlib = []Reg{
 	{Name: "bnot", Func: b_not},
 	{Name: "bor", Func: b_or},
 	{Name: "bxor", Func: b_xor},
-	{Name: "btest", Func: nil}, // filled below
+	{Name: "btest", Func: b_test},
 	{Name: "extract", Func: b_extract},
 	{Name: "lrotate", Func: b_lrot},
 	{Name: "lshift", Func: b_lshift},
@@ -161,22 +202,9 @@ var bitlib = []Reg{
 	{Name: "rshift", Func: b_rshift},
 }
 
-func b_test(L *State) int {
-	n := L.GetTop()
-	r := allOnes32
-	for i := 1; i <= n; i++ {
-		r &= checkUnsigned(L, i)
-	}
-	L.PushBoolean(r != 0)
-	return 1
-}
-
+// OpenBit32 opens the bit32 library (luaopen_bit32 under LUA_COMPAT_BITLIB).
+// Go always builds the compat body (no deprecated stub).
 func OpenBit32(L *State) int {
-	for i := range bitlib {
-		if bitlib[i].Name == "btest" {
-			bitlib[i].Func = b_test
-		}
-	}
 	L.NewLib(bitlib)
 	return 1
 }

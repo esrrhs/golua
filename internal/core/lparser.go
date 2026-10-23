@@ -1,4 +1,6 @@
 // Translation of lparser.h / lparser.c (PUC-Lua 5.3.4).
+// Aligned WIP: purge 5.4 bleed; restore C hard limits; see NOTES.md.
+// createlabel already absent (5.4 helper; live breaklabel/labelstat are 5.3.4).
 package core
 
 import "fmt"
@@ -26,6 +28,13 @@ const (
 )
 
 func vkisvar(k expkind) bool { return VLOCAL <= k && k <= VINDEXED }
+
+// vkisinreg is from lparser.h; used by lcode.c asserts / discharge paths.
+func vkisinreg(k expkind) bool { return k == VNONRELOC || k == VLOCAL }
+
+// SHRT_MAX matches C <limits.h> short max used by luaM_growvector limits
+// for locvars and labels/gotos in lparser.c.
+const SHRT_MAX = 32767
 
 type expdesc struct {
 	k      expkind
@@ -199,6 +208,8 @@ func checkname(ls *LexState, e *expdesc) {
 func registerlocalvar(ls *LexState, varname *TString) int {
 	fs := ls.fs
 	f := fs.f
+	/* C: luaM_growvector(..., SHRT_MAX, "local variables"); no barrier (Go GC) */
+	checklimit(fs, fs.nlocvars+1, SHRT_MAX, "local variables")
 	if len(f.locvars) <= fs.nlocvars {
 		f.locvars = append(f.locvars, LocVar{})
 	}
@@ -367,8 +378,10 @@ func breaklabel(ls *LexState) {
 }
 
 func undefgoto(ls *LexState, gt *Labeldesc) {
+	/* C: isreserved(gt->name) — reserved goto label can only be "break".
+	   Go: reservedTokens map (llex; TString.extra not used for reserved). */
 	var msg string
-	if gt.name.val[0] == byte('b') { // "break"
+	if _, ok := isreservedToken(gt.name); ok {
 		msg = fmt.Sprintf("<%s> at line %d not inside a loop", gt.name.val, gt.line)
 	} else {
 		msg = fmt.Sprintf("no visible label '%s' for <goto> at line %d", gt.name.val, gt.line)
@@ -453,6 +466,8 @@ func findlabel(ls *LexState, g int) bool {
 
 func newlabelentry(ls *LexState, l *Labellist, name *TString, line, pc int) int {
 	n := l.n
+	/* C: luaM_growvector(..., SHRT_MAX, "labels/gotos") */
+	checklimit(ls.fs, n+1, SHRT_MAX, "labels/gotos")
 	if len(l.arr) <= n {
 		l.arr = append(l.arr, Labeldesc{})
 	}
@@ -540,7 +555,7 @@ func recfield(ls *LexState, cc *ConsControl) {
 	reg := ls.fs.freereg
 	var key, val expdesc
 	if ls.t.token == TK_NAME {
-		checklimit(fs, cc.nh, maxInt/2, "items in a constructor")
+		checklimit(fs, cc.nh, maxInt, "items in a constructor") /* C: MAX_INT */
 		checkname(ls, &key)
 	} else {
 		yindex(ls, &key)
@@ -584,7 +599,7 @@ func lastlistfield(fs *FuncState, cc *ConsControl) {
 
 func listfield(ls *LexState, cc *ConsControl) {
 	expr(ls, &cc.v)
-	checklimit(ls.fs, cc.na, maxInt/2, "items in a constructor")
+	checklimit(ls.fs, cc.na, maxInt, "items in a constructor") /* C: MAX_INT */
 	cc.na++
 	cc.tostore++
 }
@@ -667,6 +682,8 @@ func parlist(ls *LexState) {
 func addprototype(ls *LexState) *Proto {
 	fs := ls.fs
 	f := fs.f
+	/* C: luaM_growvector(..., MAXARG_Bx, "functions"); nil-fill omitted (append) */
+	checklimit(fs, fs.np+1, MAXARG_Bx, "functions")
 	if fs.np >= len(f.p) {
 		f.p = append(f.p, nil)
 	}
@@ -674,6 +691,7 @@ func addprototype(ls *LexState) *Proto {
 	f.p[fs.np] = clp
 	fs.np++
 	f.sizep = fs.np
+	/* no luaC_objbarrier — Go GC */
 	return clp
 }
 

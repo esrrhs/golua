@@ -1,8 +1,10 @@
-// Translation of lua.h / lapi.h / lapi.c (PUC-Lua 5.3.4).
+// Translation of lua.h / lapi.h / lapi.c (PUC-Lua 5.3.4) — line-faithful C→Go.
 //
-// Every lua_* function becomes a method on *State, keeping the same
-// semantics (absolute/negative indices, pseudo-indices, registry, ...).
-// lua_pushcfunction/lua_pushcclosure become PushGoFunc/PushGoClosure.
+// Every lua_* API becomes a method on *State (or a package helper matching
+// a C static). Index model is Go's index stack (SPEC); GC barriers /
+// luaC_checkGC are omitted (Go GC SPEC). Continuations are bool (no
+// lua_KFunction); yieldable pcall recovers at the call site (SPEC).
+// lua_pushcfunction/lua_pushcclosure → PushGoFunc/PushGoClosure.
 package core
 
 import (
@@ -136,42 +138,19 @@ func (L *State) indexToStack(idx int) int {
 	return L.top + idx /* negative index */
 }
 
-// Insert moves the top element to position idx (lua_insert).
-func (L *State) Insert(idx int) {
-	p := L.indexToStack(idx)
-	if p < 0 {
-		panic("invalid index to 'insert'")
-	}
-	// (lapi.c uses the slot *at* L.top as scratch while shifting; here we
-	// simply keep the old top value, which is equivalent and cannot
-	// clobber itself when the shift runs.)
-	top := L.stack[L.top-1]
-	for i := L.top - 1; i > p; i-- {
-		L.stack[i] = L.stack[i-1]
-	}
-	L.stack[p] = top
-}
+// Insert moves the top element to position idx (lua_insert macro → lua_rotate 1).
+func (L *State) Insert(idx int) { L.Rotate(idx, 1) }
 
-// Remove removes the element at idx (lua_remove).
+// Remove removes the element at idx (lua_remove macro → rotate -1, pop 1).
 func (L *State) Remove(idx int) {
-	p := L.indexToStack(idx)
-	if p < 0 {
-		panic("invalid index to 'remove'")
-	}
-	for i := p; i < L.top-1; i++ {
-		L.stack[i] = L.stack[i+1]
-	}
-	L.top--
+	L.Rotate(idx, -1)
+	L.Pop(1)
 }
 
-// Replace moves the top element into position idx (lua_replace).
+// Replace moves the top element into position idx (lua_replace macro → copy, pop).
 func (L *State) Replace(idx int) {
-	p := index2value(L, idx)
-	if !isvalid(L, p) { /* api_checkvalidindex */
-		panic("invalid index")
-	}
-	*p = L.stack[L.top-1]
-	L.top--
+	L.Copy(-1, idx)
+	L.Pop(1)
 }
 
 // Copy copies the value at fromIdx to toIdx (lua_copy).
@@ -184,63 +163,81 @@ func (L *State) Copy(fromIdx, toIdx int) {
 	*t = *f
 }
 
-// Rotate rotates the stack segment [idx, top] by n (lua_rotate).
-func (L *State) Rotate(idx, n int) {
-	absIdx := L.indexToStack(idx)
-	if absIdx < 0 {
-		panic("invalid index to 'rotate'")
-	}
-	// simple rotation using a temporary buffer
-	m := L.top - absIdx // size of the segment
-	if n < 0 {
-		n += m
-	}
-	if n < 0 || n > m {
-		panic("bad rotate")
-	}
-	// (lua_rotate moves the last 'n' elements to the front of the
-	// segment for n > 0, and the first '-n' elements to the end for
-	// n < 0 -- i.e. it is a right rotation by 'n'.)
-	tmp := make([]Value, m)
-	copy(tmp, L.stack[absIdx:L.top])
-	for i := 0; i < m; i++ {
-		L.stack[absIdx+i] = tmp[(i-n+m)%m]
+// reverse reverses stack segment [from, to] inclusive (lapi.c static reverse).
+func reverse(L *State, from, to int) {
+	for from < to {
+		temp := L.stack[from]
+		L.stack[from] = L.stack[to]
+		L.stack[to] = temp
+		from++
+		to--
 	}
 }
 
-// CheckStack ensures that the stack has room for n extra values.
-// CheckStack is lua_checkstack (lapi.c): it makes sure there is room for
-// 'n' more slots, growing the stack if needed, and reports whether that
-// was possible. It never raises -- callers such as 'table.unpack' turn a
-// false result into their own error message.
+// Rotate rotates the stack segment [idx, top] by n (lua_rotate).
+// Let x = AB with |A|=n; rotate gives BA == (A^r . B^r)^r.
+func (L *State) Rotate(idx, n int) {
+	t := L.top - 1           /* end of stack segment being rotated */
+	p := L.indexToStack(idx) /* start of segment */
+	if p < 0 {
+		panic("index not in the stack") /* api_checkstackindex */
+	}
+	seg := t - p + 1
+	if n >= 0 {
+		if n > seg {
+			panic("invalid 'n'")
+		}
+	} else if -n > seg {
+		panic("invalid 'n'")
+	}
+	var m int /* end of prefix */
+	if n >= 0 {
+		m = t - n
+	} else {
+		m = p - n - 1
+	}
+	reverse(L, p, m)   /* reverse the prefix with length 'n' */
+	reverse(L, m+1, t) /* reverse the suffix */
+	reverse(L, p, t)   /* reverse the entire segment */
+}
+
+// CheckStack is lua_checkstack (lapi.c): ensure room for n more slots.
+// Never raises (C grows via luaD_rawrunprotected; Go: growStackNoRaise).
 func (L *State) CheckStack(n int) bool {
+	ci := L.ci
+	var res bool
 	if L.stackLast-L.top > n { /* stack large enough? */
-		return true
+		res = true
+	} else {
+		inuse := L.top + EXTRA_STACK
+		if inuse > LUAI_MAXSTACK-n { /* can grow without overflow? */
+			res = false
+		} else {
+			res = L.growStackNoRaise(n, false)
+		}
 	}
-	inuse := L.top + EXTRA_STACK
-	if inuse > LUAI_MAXSTACK-n { /* can grow without overflow? */
-		return false
-	}
-	res := L.growStackNoRaise(n, false)
-	if res && L.ci != nil && L.ci.top < L.top+n {
-		L.ci.top = L.top + n /* adjust frame top */
+	if res && ci != nil && ci.top < L.top+n {
+		ci.top = L.top + n /* adjust frame top — C does this even if already large */
 	}
 	return res
 }
 
-// XMove moves n values between two states of the same global state
-// (lua_xmove). Same-state is a no-op, matching C's early return.
+// XMove moves n values from 'from' onto L (lua_xmove).
+// C: if (from == to) return; api_check same G; api_check to has room (no grow).
+// Go may grow via checkStack (intentional index-stack SPEC softening).
 func (L *State) XMove(from *State, n int) {
 	if from == L {
 		return
 	}
 	if L.g != from.g {
-		panic("moving values across states")
+		panic("moving among independent states")
 	}
-	L.checkStack(n)
-	copy(L.stack[L.top:], from.stack[from.top-n:from.top])
-	L.top += n
+	L.checkStack(n) /* C: api_check(to->ci->top - to->top >= n) without grow */
 	from.top -= n
+	for i := 0; i < n; i++ {
+		L.stack[L.top] = from.stack[from.top+i]
+		L.top++
+	}
 }
 
 // ---------------------------------------------------------------------
@@ -256,28 +253,34 @@ func (L *State) Type(idx int) int {
 	return ttype(v)
 }
 
-// TypeName returns the name of a type (lua_typename).
-// TypeName returns the type name of the value at idx
-// (luaL_typename: lua_typename(L, lua_type(L, idx))).
-func (L *State) TypeName(idx int) string { return TypeName(L.Type(idx)) }
-
+// TypeName (package) is lua_typename(L, t): name of a type tag.
 func TypeName(tp int) string {
+	if tp < LUA_TNONE || tp >= LUA_NUMTAGS {
+		return "no value" /* C api_check would abort; soft for Go */
+	}
 	if tp < 0 || tp >= len(luaT_typenames)-2 {
 		return "no value"
 	}
 	return luaT_typenames[tp+1]
 }
 
-func (L *State) IsNil(idx int) bool        { return L.Type(idx) == LUA_TNIL }
-func (L *State) IsNone(idx int) bool       { return L.Type(idx) == LUA_TNONE }
-func (L *State) IsNoneOrNil(idx int) bool  { t := L.Type(idx); return t == LUA_TNONE || t == LUA_TNIL }
-func (L *State) IsBoolean(idx int) bool    { return L.Type(idx) == LUA_TBOOLEAN }
+// TypeName (method) is luaL_typename — NOT lua_typename. Kept for
+// call sites; see NOTES (lauxlib bleed living in lapi.go).
+func (L *State) TypeName(idx int) string { return TypeName(L.Type(idx)) }
+
+func (L *State) IsNil(idx int) bool       { return L.Type(idx) == LUA_TNIL }
+func (L *State) IsNone(idx int) bool      { return L.Type(idx) == LUA_TNONE }
+func (L *State) IsNoneOrNil(idx int) bool { t := L.Type(idx); return t == LUA_TNONE || t == LUA_TNIL }
+func (L *State) IsBoolean(idx int) bool   { return L.Type(idx) == LUA_TBOOLEAN }
 func (L *State) IsNumber(idx int) bool {
 	var n float64
 	return luaV_tonumber_(L, index2value(L, idx), &n) /* tonumber: coerce strings */
 }
-func (L *State) IsInteger(idx int) bool    { return ttisinteger(index2value(L, idx)) }
-func (L *State) IsString(idx int) bool     { t := L.Type(idx); return t == LUA_TSTRING || t == LUA_TNUMBER }
+func (L *State) IsInteger(idx int) bool { return ttisinteger(index2value(L, idx)) }
+func (L *State) IsString(idx int) bool {
+	o := index2value(L, idx)
+	return ttisstring(o) || cvt2str(o)
+}
 func (L *State) IsTable(idx int) bool      { return L.Type(idx) == LUA_TTABLE }
 func (L *State) IsFunction(idx int) bool   { return L.Type(idx) == LUA_TFUNCTION }
 func (L *State) IsGoFunction(idx int) bool { return ttiscfunction(index2value(L, idx)) }
@@ -287,8 +290,6 @@ func (L *State) IsUserData(idx int) bool {
 }
 func (L *State) IsThread(idx int) bool        { return L.Type(idx) == LUA_TTHREAD }
 func (L *State) IsLightUserData(idx int) bool { return ttislightuserdata(index2value(L, idx)) }
-
-func nil2() *float64 { var f float64; return &f }
 
 // ToNumber converts the value at idx to a float (lua_tonumberx).
 func (L *State) ToNumber(idx int) (float64, bool) {
@@ -347,7 +348,7 @@ func (L *State) RawLen(idx int) uint64 {
 	v := index2value(L, idx)
 	switch ttypetag(v) {
 	case LUA_VTABLE:
-		return luaH_getn(hvalue(v))
+		return uint64(luaH_getn(hvalue(v)))
 	case LUA_VSHRSTR, LUA_VLNGSTR:
 		return uint64(len(tsvalue(v).val))
 	case LUA_VUSERDATA:
@@ -443,11 +444,31 @@ func (L *State) PushInteger(n int64) {
 
 func (L *State) PushString(s string) {
 	L.checkStack(1)
+	/* Go has no NULL string; C lua_pushstring(NULL) pushes nil — N/A */
 	setsvalue(&L.stack[L.top], luaS_newlstr(L, s))
 	L.top++
 }
 
-func (L *State) PushBytes(b []byte) { L.PushString(string(b)) }
+// PushLString is lua_pushlstring (length-explicit; empty → "").
+func (L *State) PushLString(s string) string {
+	L.checkStack(1)
+	ts := luaS_newlstr(L, s) /* len==0 still interned empty string */
+	setsvalue(&L.stack[L.top], ts)
+	L.top++
+	return ts.val
+}
+
+// PushBytes is a Go convenience ≈ lua_pushlstring for []byte.
+func (L *State) PushBytes(b []byte) { L.PushLString(string(b)) }
+
+// PushFString is lua_pushfstring (formats then pushes; returns the string).
+func (L *State) PushFString(format string, args ...any) string {
+	ts := pushfString(L, format, args...)
+	L.checkStack(1)
+	setsvalue(&L.stack[L.top], ts)
+	L.top++
+	return ts.val
+}
 
 func (L *State) PushBoolean(b bool) {
 	L.checkStack(1)
@@ -506,55 +527,77 @@ func (L *State) PushGlobalTable() {
 }
 
 // ---------------------------------------------------------------------
-// get functions
+// get functions (Lua → stack) — lapi.c
 // ---------------------------------------------------------------------
 
-// GetTable pushes t[k] where t is at idx and k is on top (lua_gettable).
-func (L *State) GetTable(idx int) int {
-	t := index2value(L, idx)
-	key := &L.stack[L.top-1]
-	slot := vmFastGet(L, t, key)
-	if slot != nil && !isempty(slot) {
-		L.stack[L.top-1] = *slot
-		return ttype(&L.stack[L.top-1])
+// luaV_gettable expands the C macro: fastget via luaH_get, else finishget.
+func luaV_gettable(L *State, t *Value, keyIdx, valIdx int) {
+	var slot *Value
+	if ttistable(t) {
+		slot = luaH_get(L, hvalue(t), &L.stack[keyIdx])
+		if !ttisnil(slot) {
+			L.stack[valIdx] = *slot
+			return
+		}
+	} else {
+		slot = nil
 	}
-	L.stack[L.top-1] = *key
+	luaV_finishget(L, t, &L.stack[keyIdx], valIdx, slot)
+}
+
+// auxgetstr is lapi.c auxgetstr: intern k once, fastget via luaH_getstr.
+func auxgetstr(L *State, t *Value, k string) int {
+	str := luaS_newlstr(L, k)
+	var slot *Value
+	if ttistable(t) {
+		slot = luaH_getstr(L, hvalue(t), str)
+		if !ttisnil(slot) {
+			L.checkStack(1)
+			L.stack[L.top] = *slot
+			L.top++
+			return ttype(&L.stack[L.top-1])
+		}
+	} else {
+		slot = nil
+	}
+	L.checkStack(1)
+	setsvalue(&L.stack[L.top], str)
+	L.top++
 	luaV_finishget(L, t, &L.stack[L.top-1], L.top-1, slot)
 	return ttype(&L.stack[L.top-1])
 }
 
-// GetField pushes t[k] for a string key (lua_getfield).
-func (L *State) GetField(idx int, k string) int {
+// GetTable pushes t[k] where t is at idx and k is on top (lua_gettable).
+func (L *State) GetTable(idx int) int {
 	t := index2value(L, idx)
-	L.checkStack(1)
-	var key Value
-	setsvalue(&key, luaS_newlstr(L, k))
-	slot := vmFastGet(L, t, &key)
-	setsvalue(&L.stack[L.top], luaS_newlstr(L, k))
-	if slot != nil && !isempty(slot) {
-		L.stack[L.top] = *slot
-		L.top++
-		return ttype(&L.stack[L.top-1])
-	}
-	luaV_finishget(L, t, &L.stack[L.top], L.top, slot)
-	L.top++
+	luaV_gettable(L, t, L.top-1, L.top-1)
 	return ttype(&L.stack[L.top-1])
+}
+
+// GetField pushes t[k] for a string key (lua_getfield → auxgetstr).
+func (L *State) GetField(idx int, k string) int {
+	return auxgetstr(L, index2value(L, idx), k)
 }
 
 // GetI pushes t[n] for an integer key (lua_geti).
 func (L *State) GetI(idx int, n int64) int {
 	t := index2value(L, idx)
-	L.checkStack(1)
-	slot := vmFastGeti(t, n)
-	if slot != nil && !isempty(slot) {
-		L.stack[L.top] = *slot
-		L.top++
-		return ttype(&L.stack[L.top-1])
+	var slot *Value
+	if ttistable(t) {
+		slot = luaH_getint(hvalue(t), n)
+		if !ttisnil(slot) {
+			L.checkStack(1)
+			L.stack[L.top] = *slot
+			L.top++
+			return ttype(&L.stack[L.top-1])
+		}
+	} else {
+		slot = nil
 	}
-	var key Value
-	setivalue(&key, n)
-	luaV_finishget(L, t, &key, L.top, slot)
+	L.checkStack(1)
+	setivalue(&L.stack[L.top], n)
 	L.top++
+	luaV_finishget(L, t, &L.stack[L.top-1], L.top-1, slot)
 	return ttype(&L.stack[L.top-1])
 }
 
@@ -663,9 +706,9 @@ func (L *State) GetMetaTable(idx int) bool {
 	return true
 }
 
-// GetUserValue is lua_getuservalue (lapi.c 5.3.4: single uservalue).
-// The 'n' argument is kept for API compatibility; only n==1 is valid
-// (C has no n). Out of range / not full userdata → push nil, LUA_TNONE.
+// GetUserValue is lua_getuservalue (lapi.c 5.3.4: single uservalue, no n).
+// Extra 'n' is Go API bleed toward 5.4 multi-uv; only n==1 is the 5.3 path.
+// C api_check(fulluserdata) — Go: n!=1 or not full → push nil, LUA_TNONE.
 func (L *State) GetUserValue(idx, n int) int {
 	v := index2value(L, idx)
 	L.checkStack(1)
@@ -674,57 +717,82 @@ func (L *State) GetUserValue(idx, n int) int {
 		L.top++
 		return LUA_TNONE
 	}
-	L.stack[L.top] = uvalue(v).user
+	L.stack[L.top] = uvalue(v).user /* getuservalue */
 	L.top++
 	return ttype(&L.stack[L.top-1])
 }
 
 // ---------------------------------------------------------------------
-// set functions
+// set functions (stack → Lua) — lapi.c
 // ---------------------------------------------------------------------
+
+// luaV_settable expands the C macro: fastset via luaH_get, else finishset.
+func luaV_settable(L *State, t *Value, keyIdx, valIdx int) {
+	var slot *Value
+	if ttistable(t) {
+		slot = luaH_get(L, hvalue(t), &L.stack[keyIdx])
+		if !ttisnil(slot) {
+			*slot = L.stack[valIdx] /* luaC_barrierback omitted (Go GC) */
+			return
+		}
+	} else {
+		slot = nil
+	}
+	luaV_finishset(L, t, &L.stack[keyIdx], &L.stack[valIdx], slot)
+}
+
+// auxsetstr is lapi.c auxsetstr: intern k once, fastset via luaH_getstr.
+func auxsetstr(L *State, t *Value, k string) {
+	str := luaS_newlstr(L, k)
+	var slot *Value
+	if ttistable(t) {
+		slot = luaH_getstr(L, hvalue(t), str)
+		if !ttisnil(slot) {
+			*slot = L.stack[L.top-1]
+			L.top-- /* pop value */
+			return
+		}
+	} else {
+		slot = nil
+	}
+	L.checkStack(1)
+	setsvalue(&L.stack[L.top], str) /* push 'str' (to make it a TValue) */
+	L.top++
+	luaV_finishset(L, t, &L.stack[L.top-1], &L.stack[L.top-2], slot)
+	L.top -= 2 /* pop value and key */
+}
 
 // SetTable does t[k] = v (lua_settable).
 func (L *State) SetTable(idx int) {
 	t := index2value(L, idx)
-	key := L.stack[L.top-2]
-	val := L.stack[L.top-1]
-	slot := vmFastGet(L, t, &key)
-	if slot != nil && !isempty(slot) {
-		*slot = val
-	} else {
-		luaV_finishset(L, t, &key, &val, slot)
-	}
-	L.top -= 2
+	luaV_settable(L, t, L.top-2, L.top-1)
+	L.top -= 2 /* pop index and value */
 }
 
-// SetField does t[k] = v for a string key (lua_setfield).
+// SetField does t[k] = v for a string key (lua_setfield → auxsetstr).
 func (L *State) SetField(idx int, k string) {
-	t := index2value(L, idx)
-	val := L.stack[L.top-1]
-	var key Value
-	setsvalue(&key, luaS_newlstr(L, k))
-	slot := vmFastGet(L, t, &key)
-	if slot != nil && !isempty(slot) {
-		*slot = val
-	} else {
-		luaV_finishset(L, t, &key, &val, slot)
-	}
-	L.top--
+	auxsetstr(L, index2value(L, idx), k)
 }
 
 // SetI does t[n] = v for an integer key (lua_seti).
 func (L *State) SetI(idx int, n int64) {
 	t := index2value(L, idx)
-	val := L.stack[L.top-1]
-	slot := vmFastGeti(t, n)
-	if slot != nil && !isempty(slot) {
-		*slot = val
+	var slot *Value
+	if ttistable(t) {
+		slot = luaH_getint(hvalue(t), n)
+		if !ttisnil(slot) {
+			*slot = L.stack[L.top-1]
+			L.top-- /* pop value */
+			return
+		}
 	} else {
-		var key Value
-		setivalue(&key, n)
-		luaV_finishset(L, t, &key, &val, slot)
+		slot = nil
 	}
-	L.top--
+	L.checkStack(1)
+	setivalue(&L.stack[L.top], n)
+	L.top++
+	luaV_finishset(L, t, &L.stack[L.top-1], &L.stack[L.top-2], slot)
+	L.top -= 2 /* pop value and key */
 }
 
 // RawSet does t[k] = v without metamethods (lua_rawset).
@@ -735,7 +803,7 @@ func (L *State) RawSet(idx int) {
 	}
 	key := L.stack[L.top-2]
 	val := L.stack[L.top-1]
-	luaH_set(L, hvalue(t), &key, &val)
+	*luaH_set(L, hvalue(t), &key) = val
 	invalidateTMcache(hvalue(t))
 	L.top -= 2
 }
@@ -761,14 +829,14 @@ func (L *State) RawSetP(idx int, p unsafe.Pointer) {
 	val := L.stack[L.top-1]
 	var k Value
 	setpvalue(&k, p)
-	luaH_set(L, hvalue(t), &k, &val)
+	*luaH_set(L, hvalue(t), &k) = val
 	invalidateTMcache(hvalue(t))
 	L.top--
 }
 
-// SetMetaTable sets the metatable of the value at idx
-// (lua_setmetatable).
-func (L *State) SetMetaTable(idx int) {
+// SetMetaTable sets the metatable of the value at idx (lua_setmetatable).
+// Returns 1 like C (always succeeds when api_check passes).
+func (L *State) SetMetaTable(idx int) int {
 	v := index2value(L, idx)
 	mtv := &L.stack[L.top-1]
 	var mt *Table
@@ -780,23 +848,28 @@ func (L *State) SetMetaTable(idx int) {
 		}
 		mt = hvalue(mtv)
 	}
-	switch ttype(v) {
+	switch ttype(v) { /* ttnov */
 	case LUA_TTABLE:
 		hvalue(v).metatable = mt
-		luaC_checkFinalizer(L, v, mt)
-		luaC_checkWeakMode(L, hvalue(v), mt)
+		if mt != nil {
+			luaC_checkFinalizer(L, v, mt)        /* barrier omitted (Go GC) */
+			luaC_checkWeakMode(L, hvalue(v), mt) /* Go weak-table bridge */
+		}
 	case LUA_TUSERDATA:
 		uvalue(v).metatable = mt
-		luaC_checkFinalizer(L, v, mt)
+		if mt != nil {
+			luaC_checkFinalizer(L, v, mt)
+		}
 	default:
 		L.g.mt[ttype(v)] = mt
 	}
 	L.top--
+	return 1
 }
 
-// SetUserValue is lua_setuservalue (lapi.c 5.3.4: single uservalue).
-// The 'n' argument is kept for API compatibility; only n==1 succeeds
-// (C has no n / returns void). Returns 1 on success, 0 otherwise.
+// SetUserValue is lua_setuservalue (lapi.c 5.3.4: void, single uv, no n).
+// Extra 'n' + int return are Go/5.4-shaped; only n==1 is the 5.3 path.
+// Returns 1 on success, 0 otherwise (C would api_check and not return).
 func (L *State) SetUserValue(idx, n int) int {
 	v := index2value(L, idx)
 	val := L.stack[L.top-1]
@@ -804,43 +877,23 @@ func (L *State) SetUserValue(idx, n int) int {
 		L.top--
 		return 0
 	}
-	uvalue(v).user = val
+	uvalue(v).user = val /* setuservalue; barrier omitted (Go GC) */
 	L.top--
 	return 1
 }
 
-// GetGlobal pushes the value of a global (lua_getglobal).
+// GetGlobal pushes the value of a global (lua_getglobal → auxgetstr on _G).
 func (L *State) GetGlobal(name string) int {
-	L.checkStack(2)
-	var key Value
-	setsvalue(&key, luaS_newlstr(L, name))
-	L.stack[L.top] = key
-	L.top++
-	var gv Value
-	sethvalue(&gv, L.rawGetRegistryGlobals())
-	slot := vmFastGet(L, &gv, &key)
-	if slot != nil && !isempty(slot) {
-		L.stack[L.top-1] = *slot
-	} else {
-		luaV_finishget(L, &gv, &key, L.top-1, slot)
-	}
-	return ttype(&L.stack[L.top-1])
+	reg := hvalue(&L.g.registry)
+	gt := luaH_getint(reg, LUA_RIDX_GLOBALS)
+	return auxgetstr(L, gt, name)
 }
 
-// SetGlobal pops a value and assigns it to a global (lua_setglobal).
+// SetGlobal pops a value and assigns it to a global (lua_setglobal → auxsetstr).
 func (L *State) SetGlobal(name string) {
-	var key Value
-	setsvalue(&key, luaS_newlstr(L, name))
-	val := L.stack[L.top-1]
-	var gv Value
-	sethvalue(&gv, L.rawGetRegistryGlobals())
-	slot := vmFastGet(L, &gv, &key)
-	if slot != nil && !isempty(slot) {
-		*slot = val
-	} else {
-		luaV_finishset(L, &gv, &key, &val, slot)
-	}
-	L.top--
+	reg := hvalue(&L.g.registry)
+	gt := luaH_getint(reg, LUA_RIDX_GLOBALS)
+	auxsetstr(L, gt, name)
 }
 
 func (L *State) rawGetRegistryGlobals() *Table {
@@ -858,7 +911,7 @@ func (L *State) SetGlobalValue(name string, v Value) {
 	gt := L.rawGetRegistryGlobals()
 	var key Value
 	setsvalue(&key, luaS_newlstr(L, name))
-	luaH_set(L, gt, &key, &v)
+	*luaH_set(L, gt, &key) = v
 }
 
 // ---------------------------------------------------------------------
@@ -1213,19 +1266,25 @@ func (L *State) UpvalueId(funcindex, n int) unsafe.Pointer {
 	return dbUpvalueID(L, funcindex, n)
 }
 
+// getupvalref is lapi.c getupvalref (Lua closure upvalue pointer).
+func getupvalref(L *State, fidx, n int) **UpVal {
+	fi := index2value(L, fidx)
+	if !ttisLclosure(fi) {
+		panic("Lua function expected")
+	}
+	f := clLvalue(fi)
+	if n < 1 || n > f.nupvalues {
+		panic("invalid upvalue index")
+	}
+	return &f.upvals[n-1]
+}
+
 // UpvalueJoin makes upvalue n1 of f1 refer to upvalue n2 of f2 (lua_upvaluejoin).
+// refcount / touched / upvalbarrier omitted (Go GC SPEC).
 func (L *State) UpvalueJoin(fidx1, n1, fidx2, n2 int) {
-	fv1 := index2value(L, fidx1)
-	fv2 := index2value(L, fidx2)
-	if !ttisLclosure(fv1) || !ttisLclosure(fv2) {
-		return
-	}
-	f1 := clLvalue(fv1)
-	f2 := clLvalue(fv2)
-	if n1 < 1 || n1 > f1.nupvalues || n2 < 1 || n2 > f2.nupvalues {
-		return
-	}
-	f1.upvals[n1-1] = f2.upvals[n2-1]
+	up1 := getupvalref(L, fidx1, n1)
+	up2 := getupvalref(L, fidx2, n2)
+	*up1 = *up2
 }
 
 // ---------------------------------------------------------------------
@@ -1301,6 +1360,20 @@ func (L *State) Next(idx int) bool {
 
 // Status returns the status of the state (lua_status).
 func (L *State) Status() int { return int(L.status) }
+
+// Dump writes the Lua function on top of the stack as a binary chunk
+// (lua_dump). writer returns 0 on success; non-zero aborts. strip drops debug.
+func (L *State) Dump(writer func(L *State, b []byte) int, strip bool) int {
+	return luaDump(L, dumpWriter(writer), strip)
+}
+
+// Version returns LUA_VERSION_NUM (lua_version).
+// C: L==NULL → &static; else G(L)->version. Go has no g.version pointer;
+// both paths return the 5.3.4 constant (503).
+func Version(L *State) float64 {
+	_ = L
+	return float64(luaVersionNumGo)
+}
 
 // IsYieldable reports whether the thread can yield (lua_isyieldable).
 // The main thread and any call made through luaD_callnoyield (a

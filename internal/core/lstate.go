@@ -1,9 +1,13 @@
 // Translation of lstate.h / lstate.c (PUC-Lua 5.3.4).
 //
-// Intentional deviations from the C file:
+// Intentional adaptations (see NOTES.md):
 //   - Go GC replaces lgc (finalizers approximated; warnf path for __gc errors).
 //   - Error handling uses panic/recover instead of setjmp/longjmp.
-//   - Each coroutine runs on its own goroutine so a Go function can yield.
+//   - Index stack (funcIdx / int tops) instead of TValue* / StkId.
+//   - Goroutine (+ sync fast-path) coroutines instead of C-stack longjmp resume.
+//
+// Purged from this unit (unused 5.4 bleed): isLuacode; CallInfo.ftransfer/ntransfer.
+// Kept FLAG (used): WarnFunc/warnf* (Go-GC __gc); CallInfo.trap (hook stop bit).
 package core
 
 import (
@@ -66,9 +70,6 @@ func decnny(L *State) { L.nny-- }
 func yieldable(L *State) bool { return L.nny == 0 }
 
 func isLua(ci *CallInfo) bool { return ci.callstatus&CIST_LUA != 0 }
-func isLuacode(ci *CallInfo) bool {
-	return ci.callstatus&(CIST_LUA|CIST_HOOKED) == CIST_LUA
-}
 
 // CallInfo holds information about a call.
 type CallInfo struct {
@@ -80,18 +81,15 @@ type CallInfo struct {
 	savedpc    int
 	nresults   int
 	callstatus uint16
-	nExtraArgs int // number of vararg extra arguments
+	nExtraArgs int // Go bookkeeping for vararg debug; not in 5.3.4 CI
 	oldErrFunc int
 	/* C CallInfo.extra saves func StkId across yield/hook; index stack
 	   keeps funcIdx stable across realloc, so no separate extra field. */
 
-	// trap is ci->u.l.trap: whether the VM must stop at the next
-	// instruction to check hooks (and to correct a moved stack).
+	// trap: 5.4-shaped hook/stack-correct stop bit (ci->u.l.trap).
+	// FLAG: not in 5.3.4 CallInfo; kept because lvm/ldo honour it for sethook.
 	trap bool
-	// ftransfer/ntransfer: Go-only hook bookkeeping (5.4 transferinfo).
-	// 5.3.4 lua_Debug has neither; getinfo has no 'r'. Not in callstatus.
-	ftransfer int
-	ntransfer int
+	/* purged: ftransfer/ntransfer (5.4 transferinfo; unused by 5.3.4 getinfo) */
 
 	// cK and cCtx are ci->u.c.k and ci->u.c.ctx: the continuation a C
 	// function handed to 'lua_callk', 'lua_pcallk' or 'lua_yieldk', and
@@ -112,9 +110,9 @@ type CallInfo struct {
 	// Tail calls may no longer leave a usable closure in funcIdx, so the
 	// function is recorded explicitly for finishMigrated.
 	migrateFunc GoFunc
-	// ypcall is CIST_YPCALL: this frame is an interrupted 'lua_pcallk'
-	// with a continuation, so an error raised below it is recovered
-	// here instead of killing the coroutine (ldo.c findpcall).
+	// ypcall mirrors CIST_YPCALL for findpcall / pcallk (goroutine port).
+	// FLAG: C uses only the callstatus bit; callers must keep bit ↔ ypcall
+	// in sync (lapi pcallK / cdlopen currently set the bool; apply debt).
 	ypcall bool
 }
 
@@ -126,7 +124,7 @@ type globalState struct {
 	seed       uint32
 	mainthread *State
 	tmNames    [TM_N]*TString
-	mt         [LUA_NUMTYPES]*Table
+	mt         [LUA_NUMTAGS]*Table /* C: mt[LUA_NUMTAGS]; LUA_NUMTYPES aliases */
 	panic      GoFunc
 	warnf      WarnFunc
 	udWarn     any
@@ -476,6 +474,9 @@ func (L *State) shrinkStack() {
 // CallInfo management (lstate.c)
 // ---------------------------------------------------------------------
 
+// extendCI is luaE_extendCI. Go also assigns L.ci = ci (C leaves that to
+// the next_ci macro in ldo.c); callers that use the return value see the
+// same frame either way.
 func (L *State) extendCI() *CallInfo {
 	var ci *CallInfo
 	if n := len(L.ciPool); n > 0 {
@@ -502,7 +503,10 @@ func (L *State) freeCI(ci *CallInfo) {
 	L.nci--
 }
 
-func (L *State) shrinkCI() {
+// unwindCIToBase frees every active CallInfo back to baseCI.
+// NOT luaE_shrinkCI (that frees half of the *unused* tail — see ldo.go).
+// Prior name shrinkCI collided with C; covermore_test must retarget on apply.
+func (L *State) unwindCIToBase() {
 	for L.ci != &L.baseCI && L.ci != nil {
 		prev := L.ci.prev
 		L.freeCI(L.ci)
@@ -552,21 +556,22 @@ func NewState() *State {
 	g.nilValue = Value{tt: LUA_VNIL}
 	g.strt = newStringTable()
 	g.memErrMsg = luaS_new(L, "not enough memory")
-	luaT_init(L)
+	/* f_luaopen order: luaS_init, luaT_init, luaX_init (C lstate.c) */
 	luaS_init(L)
+	luaT_init(L)
 	luaX_init(L)
-	// registry
+	/* init_registry (lstate.c) */
 	sethvalue(&g.registry, luaH_new(L))
-	// registry[1] = main thread, registry[2] = globals table
+	luaH_resize(L, hvalue(&g.registry), LUA_RIDX_LAST, 0)
 	var th Value
 	setthvalue(&th, L)
-	luaH_setint(L, hvalue(&g.registry), 1, &th)
+	luaH_setint(L, hvalue(&g.registry), LUA_RIDX_MAINTHREAD, &th)
 	var gl Value
 	gt := luaH_new(L)
 	sethvalue(&gl, gt)
-	luaH_setint(L, hvalue(&g.registry), 2, &gl)
-	/* Go-only warnf (5.3.4 has no lua_setwarnf / warn()): default off;
-	   used to route Go-GC __gc failures via Warning. */
+	luaH_setint(L, hvalue(&g.registry), LUA_RIDX_GLOBALS, &gl)
+	/* FLAG Go-only warnf (5.3.4 has no lua_setwarnf / warn()): default off;
+	   routes Go-GC __gc failures via Warning (C raises LUA_ERRGCMM). */
 	g.setWarnf(warnfOff)
 	return L
 }
@@ -708,6 +713,9 @@ func (L *State) NewThread() *State {
 	L1.basehookcount = L.basehookcount
 	L1.hookcount = L.basehookcount /* resethookcount(L1) */
 	L1.hookExternal = L.hookExternal
+	/* C memcpy(lua_getextraspace(L1), mainthread, LUA_EXTRASPACE).
+	   Go lazy-allocates cstate on first C hand-off; no extraspace inherit
+	   here (FLAG/Med: cgo extensions relying on inherit break). */
 	L1.co = newCoRuntime()
 	L1.co.sync = true
 	// the thread object goes on the stack of the creating state
@@ -1417,7 +1425,8 @@ func (L *State) rawRunProtected(f func()) (status int) {
 }
 
 // ---------------------------------------------------------------------
-// warnings (lstate.c)
+// warnings — FLAG Go-only / 5.4 (not in 5.3.4 lstate.c / lua.h)
+// Kept for Go-GC __gc failure routing (C raises LUA_ERRGCMM instead).
 // ---------------------------------------------------------------------
 
 // luaE_warning emits one piece of a warning (Go-only; 5.3.4 has no

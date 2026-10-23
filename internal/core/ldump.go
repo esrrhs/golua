@@ -1,4 +1,4 @@
-// Translation of ldump.c (PUC-Lua 5.3.4): save precompiled chunks.
+// Translation of ldump.c (PUC-Lua 5.3.4 v 2.37): save precompiled chunks.
 //
 // Format matches PUC-Lua 5.3.4 byte-for-byte on little-endian hosts:
 // fixed-size ints/size_t, 5.3 string encoding, 5.3 constant tags
@@ -27,14 +27,14 @@ func (D *DumpState) dumpBlock(b []byte) {
 
 func (D *DumpState) dumpByte(y int) { D.dumpBlock([]byte{byte(y)}) }
 
-// dumpInt writes a fixed-size int (4 bytes LE) — 5.3 DumpInt.
+// dumpInt writes a fixed-size int (4 bytes LE) — 5.3 DumpInt / DumpVar(int).
 func (D *DumpState) dumpInt(x int) {
 	var b [4]byte
 	binary.LittleEndian.PutUint32(b[:], uint32(int32(x)))
 	D.dumpBlock(b[:])
 }
 
-// dumpSizeT writes a size_t (8 bytes LE).
+// dumpSizeT writes a size_t (8 bytes LE) — C DumpVar(size) in DumpString.
 func (D *DumpState) dumpSizeT(x uint64) {
 	var b [8]byte
 	binary.LittleEndian.PutUint64(b[:], x)
@@ -60,22 +60,25 @@ func (D *DumpState) dumpString(s *TString) {
 		D.dumpByte(0)
 		return
 	}
-	size := uint64(len(s.val)) + 1
+	size := uint64(len(s.val)) + 1 /* include trailing '\0' */
 	if size < 0xFF {
 		D.dumpByte(int(size))
 	} else {
 		D.dumpByte(0xFF)
 		D.dumpSizeT(size)
 	}
-	D.dumpBlock([]byte(s.val))
+	D.dumpBlock([]byte(s.val)) /* no need to save '\0' */
 }
 
 func (D *DumpState) dumpCode(f *Proto) {
-	n := len(f.code)
+	n := f.sizecode /* C: f->sizecode */
 	D.dumpInt(n)
+	if n <= 0 {
+		return
+	}
 	b := make([]byte, 4*n)
-	for i, ins := range f.code {
-		binary.LittleEndian.PutUint32(b[4*i:], packInstruction(ins))
+	for i := 0; i < n; i++ {
+		binary.LittleEndian.PutUint32(b[4*i:], packInstruction(f.code[i]))
 	}
 	D.dumpBlock(b)
 }
@@ -84,14 +87,14 @@ func (D *DumpState) dumpCode(f *Proto) {
 const (
 	dumpTagNil     = LUA_TNIL
 	dumpTagBoolean = LUA_TBOOLEAN
-	dumpTagNumFlt  = LUA_TNUMFLT
-	dumpTagNumInt  = LUA_TNUMINT
+	dumpTagNumFlt  = LUA_TNUMFLT /* 3 */
+	dumpTagNumInt  = LUA_TNUMINT /* 19 */
 	dumpTagShrStr  = LUA_TSHRSTR
 	dumpTagLngStr  = LUA_TLNGSTR
 )
 
 func (D *DumpState) dumpConstants(f *Proto) {
-	n := len(f.k)
+	n := f.sizek /* C: f->sizek */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
 		o := &f.k[i]
@@ -118,13 +121,14 @@ func (D *DumpState) dumpConstants(f *Proto) {
 			D.dumpByte(dumpTagLngStr)
 			D.dumpString(tsvalue(o))
 		default:
+			/* C: lua_assert(0); Go: emit nil (intentional; see NOTES) */
 			D.dumpByte(dumpTagNil)
 		}
 	}
 }
 
 func (D *DumpState) dumpProtos(f *Proto) {
-	n := len(f.p)
+	n := f.sizep /* C: f->sizep */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
 		D.dumpFunction(f.p[i], f.source)
@@ -132,12 +136,12 @@ func (D *DumpState) dumpProtos(f *Proto) {
 }
 
 func (D *DumpState) dumpUpvalues(f *Proto) {
-	n := len(f.upvalues)
+	n := f.sizeupvalues /* C: f->sizeupvalues */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
 		D.dumpByte(int(f.upvalues[i].instack))
 		D.dumpByte(int(f.upvalues[i].idx))
-		/* 5.3 has no 'kind' byte */
+		/* 5.3 has no 'kind' byte (5.4) */
 	}
 }
 
@@ -156,7 +160,7 @@ func (D *DumpState) dumpDebug(f *Proto) {
 	}
 	n = 0
 	if !D.strip {
-		n = len(f.locvars)
+		n = f.sizelocvars /* C: f->sizelocvars */
 	}
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
@@ -166,7 +170,7 @@ func (D *DumpState) dumpDebug(f *Proto) {
 	}
 	n = 0
 	if !D.strip {
-		n = len(f.upvalues)
+		n = f.sizeupvalues /* C: f->sizeupvalues */
 	}
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
@@ -176,7 +180,7 @@ func (D *DumpState) dumpDebug(f *Proto) {
 
 func (D *DumpState) dumpFunction(f *Proto, psource *TString) {
 	if D.strip || f.source == psource {
-		D.dumpString(nil)
+		D.dumpString(nil) /* no debug info or same source as its parent */
 	} else {
 		D.dumpString(f.source)
 	}
@@ -213,11 +217,12 @@ func luaU_dump(L *State, f *Proto, w dumpWriter, strip bool) int {
 	D.strip = strip
 	D.status = 0
 	D.dumpHeader()
-	D.dumpByte(len(f.upvalues))
+	D.dumpByte(f.sizeupvalues) /* C: DumpByte(f->sizeupvalues) */
 	D.dumpFunction(f, nil)
 	return D.status
 }
 
+/* lua_dump (lapi.c) colocated here — thin API wrapper. */
 func luaDump(L *State, w dumpWriter, strip bool) int {
 	o := index2value(L, -1)
 	if !ttisLclosure(o) {

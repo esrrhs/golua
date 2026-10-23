@@ -1,28 +1,26 @@
-// Translation of lutf8lib.c (PUC-Lua 5.3.4): the UTF-8 library.
+// Translation of lutf8lib.c (PUC-Lua 5.3.4 v 1.16): the UTF-8 library.
 //
 // The C code works with pointers into the (NUL-terminated) string; here
 // we work with indexes into the Go string and treat "past the end" as
-// the terminating NUL.
+// the terminating NUL. Decoder matches 5.3.4 (four-item limits; no lax).
 package core
 
 const utf8MaxUnicode = 0x10FFFF
 
 const utf8MsgInvalid = "invalid UTF-8 code"
 
-// utf8CharPattern is the pattern matching a single UTF-8 character
-// (UTF8PATT). In C it is built with sizeof - 1 because the literal
-// starts with an embedded NUL byte.
+// utf8CharPattern is UTF8PATT. C uses sizeof(UTF8PATT)-1 because the
+// literal starts with an embedded NUL; Go string contains '\x00'.
 const utf8CharPattern = "[\x00-\x7F\xC2-\xF4][\x80-\xBF]*"
 
 func utf8IsCont(c byte) bool { return c&0xC0 == 0x80 }
 
-// utf8IsContAt is the equivalent of 'iscontp(s + i)'.
+// utf8IsContAt is iscont(s + i). Bounds-checks: C relies on trailing NUL.
 func utf8IsContAt(s string, i int) bool {
 	return i < len(s) && utf8IsCont(s[i])
 }
 
-// utf8PosRelat translates a relative string position: negative means
-// back from end (strlib's u_posrelat).
+// utf8PosRelat is u_posrelat: negative means back from end.
 func utf8PosRelat(pos int64, l int) int64 {
 	if pos >= 0 {
 		return pos
@@ -80,7 +78,7 @@ func utf8libDecode(s string, i int) (uint32, int, bool) {
 ** well formed in that interval
  */
 func utf8Len(L *State) int {
-	n := int64(0) /* counter for the number of characters */
+	n := 0 /* C: int n — character counter */
 	s := L.CheckString(1)
 	l := len(s)
 	posi := utf8PosRelat(L.OptInteger(2, 1), l)
@@ -93,14 +91,14 @@ func utf8Len(L *State) int {
 	for posi <= posj {
 		_, next, ok := utf8libDecode(s, int(posi))
 		if !ok { /* conversion error? */
-			L.PushNil()             /* return fail ... */
+			L.PushNil()             /* return nil ... */
 			L.PushInteger(posi + 1) /* ... and current position */
 			return 2
 		}
 		posi = int64(next)
 		n++
 	}
-	L.PushInteger(n)
+	L.PushInteger(int64(n))
 	return 1
 }
 
@@ -118,13 +116,14 @@ func utf8Codepoint(L *State) int {
 	if posi > pose {
 		return 0 /* empty interval; return no values */
 	}
-	if pose-posi >= int64(int(^uint32(0)>>1)) { /* (int64 -> int) overflow? */
+	/* INT_MAX via 32-bit mask so overflow guard matches C even if Go int is 64-bit */
+	if pose-posi >= int64(int(^uint32(0)>>1)) { /* (lua_Integer -> int) overflow? */
 		return L.Error2("string slice too long")
 	}
-	n := int(pose-posi) + 1 /* upper bound for number of returns */
+	n := int(pose-posi) + 1
 	L.CheckStack2(n, "string slice too long")
-	n = 0           /* count the number of returns */
-	se := int(pose) /* string end */
+	n = 0
+	se := int(pose)
 	for i := int(posi) - 1; i < se; {
 		code, next, ok := utf8libDecode(s, i)
 		if !ok {
@@ -140,6 +139,7 @@ func utf8Codepoint(L *State) int {
 func utf8PushChar(L *State, arg int) {
 	code := L.CheckInteger(arg)
 	L.ArgCheck(0 <= code && code <= utf8MaxUnicode, arg, "value out of range")
+	/* C: lua_pushfstring(L, "%U", (long)code); Go: same encoder family */
 	L.PushString(string(luaO_utf8esc(uint32(code))))
 }
 
@@ -219,21 +219,29 @@ func utf8ByteOffset(L *State) int {
 	return 1
 }
 
+// utf8IterAux is iter_aux (lutf8lib.c). Aligned to C: n = tointeger(2)-1;
+// first iter (n<0) → 0; else skip current byte + continuations.
 func utf8IterAux(L *State) int {
 	s := L.CheckString(1)
+	l := len(s)
 	n, _ := L.ToInteger(2)
-	un := uint64(n)
-	for un < uint64(len(s)) && utf8IsContAt(s, int(un)) {
-		un++ /* go to next character */
+	n = n - 1
+	if n < 0 { /* first iteration? */
+		n = 0 /* start from here */
+	} else if n < int64(l) {
+		n++ /* skip current byte */
+		for utf8IsContAt(s, int(n)) { /* and its continuations */
+			n++
+		}
 	}
-	if un >= uint64(len(s)) { /* (also handles original 'n' being negative) */
+	if n >= int64(l) {
 		return 0 /* no more codepoints */
 	}
-	code, next, ok := utf8libDecode(s, int(un))
+	code, next, ok := utf8libDecode(s, int(n))
 	if !ok || utf8IsContAt(s, next) {
 		return L.Error2(utf8MsgInvalid)
 	}
-	L.PushInteger(int64(un) + 1)
+	L.PushInteger(n + 1)
 	L.PushInteger(int64(code))
 	return 2
 }
@@ -250,6 +258,8 @@ func utf8IterCodes(L *State) int {
 // library registration
 // ---------------------------------------------------------------------
 
+// utf8Funcs is funcs[] without the {"charpattern", NULL} placeholder;
+// OpenUTF8 SetFields charpattern after NewLib (same table result as C).
 var utf8Funcs = []Reg{
 	{Name: "offset", Func: utf8ByteOffset},
 	{Name: "codepoint", Func: utf8Codepoint},

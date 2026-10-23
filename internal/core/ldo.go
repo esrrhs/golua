@@ -1,12 +1,14 @@
 // Translation of ldo.h / ldo.c (PUC-Lua 5.3.4), line-by-line.
 //
-// Intentional adaptations only:
+// Intentional adaptations only (see NOTES.md):
 //   - panic/recover instead of setjmp/longjmp (rawRunProtected in lstate.go)
 //   - stack slots are []Value indices, not TValue* pointers
 //   - Go GC (no luaC_checkGC / mark-sweep)
 //   - goroutine coroutines: precallC may migrate/sync-yield (migrateAbort,
-//     fastYield); resume/yield entry points stay coordinated with lstate.go
+//     fastYield); resume/yield/unroll/parser live in lstate.go / lapi.go
 //   - no lua_Alloc / lua_lock / lua_unlock
+//   - setTraps: Go VM hook recheck after lua_sethook (5.3.4 polls hookmask)
+// Stack sizes in luaD_* match C total (incl. EXTRA_STACK); reallocStack is usable.
 package core
 
 const (
@@ -37,14 +39,15 @@ func luaD_seterrorobj(L *State, errcode, oldtop int) {
 	seterrorobj(L, errcode, oldtop)
 }
 
-// luaD_throw raises an error with the given status (ldo.c).
+// luaD_throw raises an error with the given status (ldo.c 5.3.4).
 //
-// C longjmps via L->errorJmp, else marks the thread dead, optionally
-// rethrows on the main thread, else seterrorobj + g->panic + abort.
+// C: if L->errorJmp → set status + longjmp; else mark thread dead, then
+// either copy error to mainthread and rethrow, or seterrorobj + g->panic
+// + abort().
 // Go: errorJmp nesting (rawRunProtected / resume recover) stands in for
-// the longjmp chain; unprotected path still calls atpanic, then panics
-// (abort stand-in). Mainthread rethrow is omitted — coroutine errors are
-// recovered on the running thread (goroutine SPEC).
+// the longjmp chain; unprotected path calls atpanic then panics (abort
+// stand-in). Mainthread rethrow omitted — coroutine errors are recovered
+// on the running thread (goroutine SPEC; see NOTES).
 func luaD_throw(L *State, errcode int) {
 	var v Value
 	if L.top > 0 {
@@ -53,13 +56,14 @@ func luaD_throw(L *State, errcode int) {
 		setnilvalue(&v)
 	}
 	if L.errorJmp > 0 { /* thread has an error handler? */
-		panic(&luaError{status: errcode, value: v})
+		panic(&luaError{status: errcode, value: v}) /* LUAI_THROW */
 	}
 	/* thread has no error handler */
 	L.status = byte(errcode) /* mark it as dead */
 	g := L.g
+	/* C mainthread->errorJmp rethrow path omitted (goroutine SPEC). */
 	if g != nil && g.panic != nil { /* panic function? */
-		/* seterrorobj assumes EXTRA_STACK */
+		/* seterrorobj assumes EXTRA_STACK; grow if somehow exhausted */
 		if L.top >= len(L.stack) {
 			L.reallocStack(L.stackLast + 1)
 		}
@@ -69,7 +73,7 @@ func luaD_throw(L *State, errcode int) {
 		}
 		g.panic(L) /* call panic function (last chance to jump out) */
 	}
-	/* C calls abort(); unrecovered panic aborts the process likewise. */
+	/* C calls abort(); unrecovered panic is the abort stand-in. */
 	panic(&luaError{status: errcode, value: v})
 }
 
@@ -92,11 +96,10 @@ func correctstack(L *State, oldstack []Value) {
 
 // ERRORSTACKSIZE is in lstate.go (shared with grow paths).
 
-// luaD_reallocstack is luaD_reallocstack (ldo.c).
-// 'newsize' matches C: total vector length including EXTRA_STACK margin
-// is newsize; usable last index is newsize - EXTRA_STACK.
+// luaD_reallocstack is luaD_reallocstack (ldo.c 5.3.4).
+// 'newsize' is C's total vector length (including EXTRA_STACK).
+// Go reallocStack takes usable slots (= C stack_last - stack), so convert.
 func luaD_reallocstack(L *State, newsize int) {
-	/* Go adaptation: reallocStack takes usable size (stack_last - stack). */
 	usable := newsize - EXTRA_STACK
 	if usable < 0 {
 		usable = newsize
@@ -104,14 +107,15 @@ func luaD_reallocstack(L *State, newsize int) {
 	L.reallocStack(usable)
 }
 
-// luaD_growstack is luaD_growstack (ldo.c).
+// luaD_growstack is luaD_growstack (ldo.c 5.3.4).
+// All size math uses C's total-stacksize convention, then luaD_reallocstack.
 func luaD_growstack(L *State, n int) {
-	size := L.stackSize()
+	size := L.stackSize() + EXTRA_STACK /* C: L->stacksize (total) */
 	if size > LUAI_MAXSTACK { /* error after extra size? */
 		luaD_throw(L, LUA_ERRERR)
 		return
 	}
-	needed := L.top + n + EXTRA_STACK
+	needed := L.top + n + EXTRA_STACK /* C: (top-stack) + n + EXTRA_STACK */
 	newsize := 2 * size
 	if newsize > LUAI_MAXSTACK {
 		newsize = LUAI_MAXSTACK
@@ -120,11 +124,11 @@ func luaD_growstack(L *State, n int) {
 		newsize = needed
 	}
 	if newsize > LUAI_MAXSTACK { /* stack overflow? */
-		L.reallocStack(ERRORSTACKSIZE)
+		luaD_reallocstack(L, ERRORSTACKSIZE) /* ERRORSTACKSIZE is C-total */
 		luaG_runerror(L, "stack overflow")
 		return
 	}
-	L.reallocStack(newsize)
+	luaD_reallocstack(L, newsize)
 }
 
 // stackinuse is stackinuse (ldo.c).
@@ -138,21 +142,26 @@ func stackinuse(L *State) int {
 	return lim + 1 /* part of stack in use (C: lim - stack + 1) */
 }
 
-// luaD_shrinkstack is luaD_shrinkstack (ldo.c).
+// luaD_shrinkstack is luaD_shrinkstack (ldo.c 5.3.4).
+// goodsize / comparisons use C total-stacksize; realloc via luaD_reallocstack.
 func luaD_shrinkstack(L *State) {
 	inuse := stackinuse(L)
 	goodsize := inuse + (inuse / 8) + 2*EXTRA_STACK
 	if goodsize > LUAI_MAXSTACK {
-		goodsize = LUAI_MAXSTACK
+		goodsize = LUAI_MAXSTACK /* respect stack limit */
 	}
-	if L.stackSize() > LUAI_MAXSTACK { /* had been handling stack overflow? */
+	stacksize := L.stackSize() + EXTRA_STACK /* C: L->stacksize (total) */
+	if stacksize > LUAI_MAXSTACK { /* had been handling stack overflow? */
 		luaE_freeCI(L) /* free all CIs (list grew because of an error) */
 	} else {
 		luaE_shrinkCI(L) /* shrink list */
 	}
-	if inuse <= (LUAI_MAXSTACK-EXTRA_STACK) && goodsize < L.stackSize() {
-		L.reallocStack(goodsize)
+	/* if thread is currently not handling a stack overflow and its
+	   good size is smaller than current size, shrink its stack */
+	if inuse <= (LUAI_MAXSTACK-EXTRA_STACK) && goodsize < stacksize {
+		luaD_reallocstack(L, goodsize)
 	}
+	/* else: C condmovestack debug only — omitted */
 }
 
 // luaD_inctop is luaD_inctop (ldo.c).

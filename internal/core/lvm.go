@@ -1,9 +1,16 @@
-// Translation of lvm.h / lvm.c (PUC-Lua 5.3.4).
+// Translation of lvm.h / lvm.c (PUC-Lua 5.3.4) — line-faithful C→Go.
 //
-// The instruction dispatch loop follows lvm.c closely. Two things are
-// gone: the GC steps, and 'luaV_finishOp' (there is nothing to finish,
-// because a metamethod that yields simply blocks the coroutine's
-// goroutine instead of longjmp-ing out of the interpreter).
+// Opcode dispatch matches 5.3.4's 47 ops (no lvm_fast*.go, no fastLeaf /
+// fastfor / fasttail, no concat cache). Proto.cache / getcached /
+// pushclosure are legitimate 5.3.4 (not a concat cache).
+//
+// Int↔float order: LTintfloat / LEintfloat / LTnum / LEnum use 5.3.4
+// range tests + toward-zero cast (NOT 5.4 luaV_flttointeger ceil/floor).
+//
+// Intentional omissions / adaptations (see NOTES.md):
+//   - GC barriers / checkGC / gcAfterAlloc / migrateNested (Go GC)
+//   - luaV_finishOp absent (yield does not longjmp out of the interpreter)
+//   - vmFastGeti: FLAG Go/5.4-shaped helper for lapi; unused by VM loop
 package core
 
 import (
@@ -142,8 +149,10 @@ func luaV_concat(L *State, total int) {
 	}
 }
 
+// isEmptyStr is C isemptystr: short empty string only (lvm.c).
+// Long empty strings do not short-circuit concat the same way in PUC.
 func isEmptyStr(v *Value) bool {
-	return ttisstring(v) && len(tsvalue(v).val) == 0
+	return ttypetag(v) == LUA_VSHRSTR && len(tsvalue(v).val) == 0
 }
 
 // tostringInPlace converts a number to a string, in place.
@@ -199,7 +208,7 @@ func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 			h := hvalue(t)
 			tm = fasttm(L, h.metatable, TM_NEWINDEX)
 			if tm == nil { /* no metamethod? */
-				luaH_finishset(L, h, key, slot, val)
+				*luaH_set(L, h, key) = *val /* 5.3.4: nilobject→newkey then setobj2t */
 				invalidateTMcache(h)
 				return
 			}
@@ -244,13 +253,17 @@ func vmFastGet(L *State, t, key *Value) *Value {
 	return luaH_get(L, h, key)
 }
 
-// vmFastGeti is the integer specialization of vmFastGet (luaV_fastgeti).
+// vmFastGeti is an integer-key raw get used by lapi (GetI / SetI).
+//
+// FLAG: not in PUC 5.3.4 lvm.h (5.4 has luaV_fastgeti + alimit). The VM
+// opcode loop never calls this; keep for API fast path only. Equivalent
+// to luaH_getint when the key is in the array part (sizearray ≡ alimit).
 func vmFastGeti(t *Value, key int64) *Value {
 	if !ttistable(t) {
 		return nil
 	}
 	h := hvalue(t)
-	if uint64(key)-1 < uint64(h.sizearray) {
+	if uint64(key)-1 < uint64(h.sizearray) { /* array part (5.3 sizearray) */
 		return &h.array[key-1]
 	}
 	return luaH_getint(h, key)
@@ -418,6 +431,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 			}
 			i := code[pc]
 			pc++
+			/* C vmfetch: i = *(ci->u.l.savedpc++); keep savedpc past
+			   the current insn so luaG_runerror/currentline see it
+			   even when the op errors before the loop-end update. */
+			ci.savedpc = pc
 			base := ci.base
 			ra := base + i.A
 
@@ -578,7 +595,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 			case OP_JMP:
 				if i.A != 0 {
-					luaF_closeupval(L, base+i.A-1)
+					luaF_close(L, base+i.A-1)
 				}
 				pc += sBx(i.B)
 			case OP_EQ:
@@ -591,14 +608,14 @@ func luaV_execute(L *State, ci *CallInfo) {
 					ji := code[pc]
 					pc++
 					if ji.A != 0 {
-						luaF_closeupval(L, base+ji.A-1)
+						luaF_close(L, base+ji.A-1)
 					}
 					pc += sBx(ji.B)
 				} else {
 					pc++
 				}
 			case OP_LT, OP_LE:
-				// handled below with corrected EQ — see fix
+				/* 5.3.4 OP_LT / OP_LE: Protect + donextjump (same shape as EQ). */
 				rb := rkVal(L, base, k, i.B)
 				rc := rkVal(L, base, k, i.C)
 				savestate(L, ci, pc)
@@ -613,7 +630,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					ji := code[pc]
 					pc++
 					if ji.A != 0 {
-						luaF_closeupval(L, base+ji.A-1)
+						luaF_close(L, base+ji.A-1)
 					}
 					pc += sBx(ji.B)
 				} else {
@@ -627,7 +644,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					ji := code[pc]
 					pc++
 					if ji.A != 0 {
-						luaF_closeupval(L, base+ji.A-1)
+						luaF_close(L, base+ji.A-1)
 					}
 					pc += sBx(ji.B)
 				}
@@ -641,7 +658,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					ji := code[pc]
 					pc++
 					if ji.A != 0 {
-						luaF_closeupval(L, base+ji.A-1)
+						luaF_close(L, base+ji.A-1)
 					}
 					pc += sBx(ji.B)
 				}
@@ -653,7 +670,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				ci.savedpc = pc
 				if luaD_precall(L, ra, nresults) != 0 { /* C function? */
-					if L.fastYield {
+					if L.fastYield { /* FLAG: Go-only yield early-return; not in 5.3.4 lvm.c */
 						/* yield already set top; do not apply ci.top */
 						return
 					}
@@ -674,7 +691,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				ci.savedpc = pc
 				if luaD_precall(L, ra, LUA_MULTRET) != 0 { /* C function? */
-					if L.fastYield {
+					if L.fastYield { /* FLAG: Go-only; not in 5.3.4 */
 						return
 					}
 					trap = ci.trap || L.hookmask != 0
@@ -700,7 +717,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					oci.top = L.top /* correct top */
 					oci.savedpc = nci.savedpc
 					oci.callstatus |= CIST_TAIL /* function was tail called */
-					oci.nExtraArgs = nci.nExtraArgs
+					oci.nExtraArgs = nci.nExtraArgs /* FLAG: Go CI field; not in 5.3.4 CallInfo */
 					L.ci = oci /* remove new frame */
 					ci = oci
 					restart = true
@@ -1171,10 +1188,10 @@ func lIntfitsf(i int64) bool {
 	return maxIntFitsF+uint64(i) <= 2*maxIntFitsF
 }
 
-// ltIntFloat returns 'i < f' (LTintfloat in PUC Lua 5.3.4 lvm.c).
+// ltIntFloat is LTintfloat (lvm.c:281-293, PUC 5.3.4).
 // When 'i' has an exact float representation, compare as floats.
-// Otherwise use range tests against LUA_MININTEGER / -LUA_MININTEGER
-// and a toward-zero cast — not the 5.4 ceil/floor flttointeger path.
+// Otherwise range-test vs ±LUA_MININTEGER and cast(lua_Integer, f)
+// (toward-zero). NOT the 5.4 LTintfloat that uses luaV_flttointeger.
 func ltIntFloat(i int64, f float64) bool {
 	if !lIntfitsf(i) {
 		if f >= -float64(LUA_MININTEGER) { /* -minint == maxint + 1 */
@@ -1188,7 +1205,7 @@ func ltIntFloat(i int64, f float64) bool {
 	return float64(i) < f /* compare them as floats */
 }
 
-// leIntFloat returns 'i <= f' (LEintfloat in PUC Lua 5.3.4 lvm.c).
+// leIntFloat is LEintfloat (lvm.c:300-312, PUC 5.3.4).
 func leIntFloat(i int64, f float64) bool {
 	if !lIntfitsf(i) {
 		if f >= -float64(LUA_MININTEGER) { /* -minint == maxint + 1 */
@@ -1202,8 +1219,8 @@ func leIntFloat(i int64, f float64) bool {
 	return float64(i) <= f /* compare them as floats */
 }
 
-// ltFloatInt returns 'f < i'. 5.3.4 has no separate helper: LTnum uses
-// !LEintfloat after a NaN check. Kept for tests / callers.
+// ltFloatInt is the float<int side of LTnum (lvm.c:330-333): NaN→false,
+// else !LEintfloat(i,f). 5.3.4 has no named LTfloatint (that is 5.4).
 func ltFloatInt(f float64, i int64) bool {
 	if numIsNaN(f) {
 		return false
@@ -1211,7 +1228,8 @@ func ltFloatInt(f float64, i int64) bool {
 	return !leIntFloat(i, f)
 }
 
-// leFloatInt returns 'f <= i'. 5.3.4 LEnum uses !LTintfloat after NaN.
+// leFloatInt is the float<=int side of LEnum (lvm.c:353-356): NaN→false,
+// else !LTintfloat(i,f). 5.3.4 has no named LEfloatint (that is 5.4).
 func leFloatInt(f float64, i int64) bool {
 	if numIsNaN(f) {
 		return false
@@ -1219,7 +1237,7 @@ func leFloatInt(f float64, i int64) bool {
 	return !ltIntFloat(i, f)
 }
 
-// ltNum returns 'l < r' for two numbers (LTnum in lvm.c 5.3.4).
+// ltNum is LTnum (lvm.c:318-335, PUC 5.3.4).
 func ltNum(l, r *Value) bool {
 	if ttisinteger(l) {
 		li := ivalue(l)
@@ -1238,7 +1256,7 @@ func ltNum(l, r *Value) bool {
 	return !leIntFloat(ivalue(r), lf)
 }
 
-// leNum returns 'l <= r' for two numbers (LEnum in lvm.c 5.3.4).
+// leNum is LEnum (lvm.c:341-358, PUC 5.3.4).
 func leNum(l, r *Value) bool {
 	if ttisinteger(l) {
 		li := ivalue(l)

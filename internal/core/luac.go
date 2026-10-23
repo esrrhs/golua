@@ -1,20 +1,13 @@
-// Translation of luac.c (PUC-Lua 5.3.4): the standalone Lua compiler.
+// Translation of luac.c (PUC-Lua 5.3.4 v 1.75): the standalone Lua compiler
+// (saves bytecodes to files; also lists bytecodes).
 //
-// It lives in the library rather than in cmd/luac for one reason: the
-// listing (-l) reads prototypes, and a prototype is not reachable
-// through the C API. luac.c says so itself -- it includes lobject.h,
-// lopcodes.h and lstate.h and walks f->code, f->k, f->p, f->locvars
-// and f->upvalues directly. cmd/luac is a wrapper over Luac.
+// Library placement (not cmd/luac): listing (-l) walks Proto internals
+// (f->code, f->k, f->p, f->locvars, f->upvalues) — not reachable via the
+// C API. cmd/luac is a thin os.Exit wrapper over Luac (see NOTES).
 //
-// Two things follow the C source even where it is odd:
-//
-//   - '-l' or '-p' with no input files makes luac compile "luac.out"
-//     (doargs rewrites the last argv entry, so that is the file it
-//     reads). It is what the reference compiler does.
-//   - several files are combined by compiling
-//     "(function()end)();" once per file and then replacing each
-//     nested prototype with one of the files', which is how luac packs
-//     them into a single main chunk.
+// Quirks kept from C:
+//   - '-l'/'-p' with no files: doargs rewrites argv so the input is "luac.out"
+//   - multi-file combine: compile "(function()end)();" × n, graft nested protos
 package core
 
 import (
@@ -229,7 +222,7 @@ func (c *luac) combine(L *State, n int) *Proto {
 	f := clLvalue(&L.stack[L.top-1]).p
 	for i := 0; i < n; i++ {
 		f.p[i] = clLvalue(&L.stack[L.top+i-n-1]).p
-		if len(f.p[i].upvalues) > 0 {
+		if f.p[i].sizeupvalues > 0 { /* C: f->p[i]->sizeupvalues>0 */
 			/* the chunk's _ENV was a register of its own frame; as a
 			   nested prototype it is an upvalue of the enclosing one */
 			f.p[i].upvalues[0].instack = 0
@@ -327,10 +320,12 @@ func (c *luac) printString(ts *TString) {
 	fmt.Fprint(c.out, "\"")
 }
 
-// printConstant is PrintConstant.
+// printConstant is PrintConstant (luac.c 5.3.4).
+// Switch uses ttypetag (≡ C ttype, variant bits). Default format is 5.3.4
+// "? type=%d", not 5.4 "?%d".
 func (c *luac) printConstant(f *Proto, i int) {
 	o := &f.k[i]
-	switch ttypetag(o) {
+	switch ttypetag(o) { /* C: switch (ttype(o)) */
 	case LUA_VNIL:
 		fmt.Fprint(c.out, "nil")
 	case LUA_TBOOLEAN:
@@ -349,8 +344,9 @@ func (c *luac) printConstant(f *Proto, i int) {
 		fmt.Fprintf(c.out, "%d", ivalue(o))
 	case LUA_VSHRSTR, LUA_VLNGSTR:
 		c.printString(tsvalue(o))
-	default: /* cannot happen */
-		fmt.Fprintf(c.out, "?%d", ttypetag(o))
+	default: /* cannot happen — C 5.3.4: printf("? type=%d", ttype(o)) */
+		/* Go ttypetag ≡ C ttype (includes variant bits); not 5.4 "?%d" */
+		fmt.Fprintf(c.out, "? type=%d", ttypetag(o))
 	}
 }
 
@@ -390,15 +386,16 @@ func (c *luac) printHeader(f *Proto) {
 		what = "main"
 	}
 	fmt.Fprintf(c.out, "\n%s <%s:%d,%d> (%d instruction%s at %p)\n",
-		what, s, f.linedefined, f.lastlinedefined, len(f.code), ss(len(f.code)), f)
+		what, s, f.linedefined, f.lastlinedefined,
+		f.sizecode, ss(f.sizecode), f) /* C: S(f->sizecode), VOID(f) */
 	fmt.Fprintf(c.out, "%d%s param%s, %d slot%s, %d upvalue%s, ",
 		int(f.numparams), varargMark(f), ss(int(f.numparams)),
 		int(f.maxstacksize), ss(int(f.maxstacksize)),
-		len(f.upvalues), ss(len(f.upvalues)))
+		f.sizeupvalues, ss(f.sizeupvalues))
 	fmt.Fprintf(c.out, "%d local%s, %d constant%s, %d function%s\n",
-		len(f.locvars), ss(len(f.locvars)),
-		len(f.k), ss(len(f.k)),
-		len(f.p), ss(len(f.p)))
+		f.sizelocvars, ss(f.sizelocvars),
+		f.sizek, ss(f.sizek),
+		f.sizep, ss(f.sizep))
 }
 
 // myk is MYK from luac.c: constant indices print as -1-k.
@@ -407,7 +404,8 @@ func myk(x int) int { return -1 - x }
 // printCode is PrintCode (luac.c, Lua 5.3.4).
 func (c *luac) printCode(f *Proto) {
 	code := f.code
-	for pc := 0; pc < len(code); pc++ {
+	n := f.sizecode /* C: n=f->sizecode */
+	for pc := 0; pc < n; pc++ {
 		i := code[pc]
 		op := i.Op
 		a := i.A
@@ -507,8 +505,7 @@ func (c *luac) printCode(f *Proto) {
 			fmt.Fprintf(c.out, "\t; %p", f.p[bx])
 		case OP_SETLIST:
 			if carg == 0 {
-				pc++
-				/* C prints (int)code[++pc] — raw packed Instruction word, not Ax */
+				pc++ /* C: (int)code[++pc] — raw next Instruction word (EXTRAARG) */
 				fmt.Fprintf(c.out, "\t; %d", int(packInstruction(code[pc])))
 			} else {
 				fmt.Fprintf(c.out, "\t; %d", carg)
@@ -523,19 +520,22 @@ func (c *luac) printCode(f *Proto) {
 
 // printDebug is PrintDebug (luac.c 5.3.4: print i+1; no type column).
 func (c *luac) printDebug(f *Proto) {
-	fmt.Fprintf(c.out, "constants (%d) for %p:\n", len(f.k), f)
-	for i := range f.k {
+	n := f.sizek /* C: n=f->sizek; constants indexed i+1 (5.3.4, not 5.4 i) */
+	fmt.Fprintf(c.out, "constants (%d) for %p:\n", n, f)
+	for i := 0; i < n; i++ {
 		fmt.Fprintf(c.out, "\t%d\t", i+1)
 		c.printConstant(f, i)
 		fmt.Fprint(c.out, "\n")
 	}
-	fmt.Fprintf(c.out, "locals (%d) for %p:\n", len(f.locvars), f)
-	for i := range f.locvars {
+	n = f.sizelocvars
+	fmt.Fprintf(c.out, "locals (%d) for %p:\n", n, f)
+	for i := 0; i < n; i++ {
 		fmt.Fprintf(c.out, "\t%d\t%s\t%d\t%d\n", i,
 			f.locvars[i].varname.val, f.locvars[i].startpc+1, f.locvars[i].endpc+1)
 	}
-	fmt.Fprintf(c.out, "upvalues (%d) for %p:\n", len(f.upvalues), f)
-	for i := range f.upvalues {
+	n = f.sizeupvalues
+	fmt.Fprintf(c.out, "upvalues (%d) for %p:\n", n, f)
+	for i := 0; i < n; i++ {
 		fmt.Fprintf(c.out, "\t%d\t%s\t%d\t%d\n", i,
 			c.upvalName(f, i), f.upvalues[i].instack, f.upvalues[i].idx)
 	}
@@ -544,12 +544,13 @@ func (c *luac) printDebug(f *Proto) {
 // printFunction is PrintFunction, which luac.c calls through its
 // 'luaU_print'.
 func (c *luac) printFunction(f *Proto, full bool) {
+	n := f.sizep /* C: n=f->sizep */
 	c.printHeader(f)
 	c.printCode(f)
 	if full {
 		c.printDebug(f)
 	}
-	for i := range f.p {
+	for i := 0; i < n; i++ {
 		c.printFunction(f.p[i], full)
 	}
 }

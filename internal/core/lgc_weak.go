@@ -123,20 +123,15 @@ var (
 	gcWeakCount  atomic.Int32          // nonzero while any weak table exists
 )
 
-// luaC_checkWeakMode is the '__mode' half of 'luaC_checkfinalizer': a
-// table whose metatable has a '__mode' field starts to be swept.
-//
-// C re-reads TM_MODE every mark (traversetable); nil mt / non-weak mode
-// means a strong table. Always clear weakMode first so setmetatable(t, nil)
-// or a metatable without '__mode' stops weak sweeping.
-func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
-	t.weakMode = 0
+// parseWeakMode reads TM_MODE from mt the way traversetable does each mark.
+// Returns 0 for nil mt, non-string __mode, or a mode without 'k'/'v'.
+func parseWeakMode(L *State, mt *Table) byte {
 	if mt == nil {
-		return
+		return 0
 	}
 	tm := luaH_getshortstr(mt, L.g.tmNames[TM_MODE])
-	if !ttisstring(tm) { /* no mode (or not a string) */
-		return
+	if !ttisstring(tm) {
+		return 0
 	}
 	mode := 0
 	s := tsvalue(tm).val
@@ -148,11 +143,29 @@ func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
 			mode |= weakVal
 		}
 	}
-	if mode == 0 {
+	return byte(mode)
+}
+
+// luaC_checkWeakMode is the '__mode' half of setmetatable: a table whose
+// metatable has a weak '__mode' starts to be swept.
+//
+// C re-reads TM_MODE every mark (traversetable); nil mt / non-weak mode
+// means a strong table. Always clear weakMode first so setmetatable(t, nil)
+// or a metatable without '__mode' stops weak sweeping. Dedup list membership
+// so repeated setmetatable does not sweep the same table twice per cycle.
+func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
+	t.weakMode = parseWeakMode(L, mt)
+	if t.weakMode == 0 {
 		return
 	}
-	t.weakMode = byte(mode)
 	gcWeakMu.Lock()
+	for _, wp := range gcWeakTables {
+		if wp.Value() == t {
+			gcWeakMu.Unlock()
+			gcWeakCount.Store(1)
+			return
+		}
+	}
 	gcWeakTables = append(gcWeakTables, weak.Make(t))
 	gcWeakMu.Unlock()
 	gcWeakCount.Store(1)
@@ -170,17 +183,18 @@ type weakSlot struct {
 	w     weakRef
 }
 
-// gcSweepWeak is 'cleartable' (lgc.c): it drops the entries of the weak
-// tables whose object is no longer reachable from anywhere else.  It runs
-// from the collector step, as it does in C.
+// gcSweepWeak is clearkeys/clearvalues (lgc.c): drop weak-table entries whose
+// object is no longer reachable from anywhere else. Runs from the collector
+// step, as in C.
 //
 // Ephemeron note (__mode="k"): C marks a value only when its key is already
-// marked (traverseephemeron). Leaving nd.val strong across runtime.GC lets a
-// value→key cycle keep the key alive, so the entry never clears. During the
-// detach window we therefore also weaken collectable values for weak-key
-// tables. Residual vs full convergeephemerons: a strong value that is only
-// reachable through an alive weak key may be cleared here (Go has no
-// ephemeron map); full parity needs a redesign beyond this bridge.
+// marked (traverseephemeron + convergeephemerons). Leaving nd.val strong
+// across runtime.GC lets a value→key cycle keep the key alive, so the entry
+// never clears. During the detach window we therefore also weaken collectable
+// values for weak-key-only tables. Residual vs full convergeephemerons: a
+// strong value that is only reachable through an alive weak key may be
+// cleared here (Go has no ephemeron map); full parity needs a redesign
+// beyond this bridge — documented INTENTIONAL under Go GC in NOTES.
 func (L *State) gcSweepWeak() {
 	if gcWeakCount.Load() == 0 {
 		return
@@ -202,11 +216,15 @@ func (L *State) gcSweepWeak() {
 		gcWeakCount.Store(0)
 		return
 	}
+	/* Re-parse TM_MODE each sweep (≈ traversetable); note non-weak for prune. */
+	weakStill := make(map[*Table]struct{}, len(tables))
 	for _, t := range tables {
-		mode := t.weakMode
+		mode := parseWeakMode(L, t.metatable)
+		t.weakMode = mode
 		if mode == 0 {
 			continue
 		}
+		weakStill[t] = struct{}{}
 		for i := range t.nodes {
 			nd := &t.nodes[i]
 			if isempty(&nd.val) { /* no entry? */
@@ -218,7 +236,7 @@ func (L *State) gcSweepWeak() {
 				if w := makeWeakRef(&kv); w != nil {
 					slots = append(slots, weakSlot{n: nd, isKey: true, w: w})
 					setnilkey(nd)
-					/* ephemeron: do not leave the value strong across GC */
+					/* ephemeron approx: do not leave the value strong across GC */
 					if mode&weakVal == 0 {
 						if vw := makeWeakRef(&nd.val); vw != nil {
 							slots = append(slots, weakSlot{n: nd, v: &nd.val, w: vw})
@@ -234,8 +252,7 @@ func (L *State) gcSweepWeak() {
 				}
 			}
 		}
-		/* the array part too: 'cache[1] = o' lands there, and PUC-Lua
-		   drops it just the same */
+		/* array part: clearvalues walks sizearray the same way */
 		if mode&weakVal != 0 {
 			for i := range t.array {
 				if w := makeWeakRef(&t.array[i]); w != nil {
@@ -245,6 +262,24 @@ func (L *State) gcSweepWeak() {
 			}
 		}
 	}
+	/* Prune tables that are no longer weak; keep concurrent appends. */
+	gcWeakMu.Lock()
+	filtered := gcWeakTables[:0]
+	for _, wp := range gcWeakTables {
+		t := wp.Value()
+		if t == nil {
+			continue
+		}
+		if _, ok := weakStill[t]; ok || t.weakMode != 0 {
+			/* in this sweep's weak set, or registered after we unlocked */
+			filtered = append(filtered, wp)
+		}
+	}
+	gcWeakTables = filtered
+	if len(filtered) == 0 {
+		gcWeakCount.Store(0)
+	}
+	gcWeakMu.Unlock()
 	if len(slots) == 0 {
 		return
 	}
@@ -274,11 +309,20 @@ func (L *State) gcSweepWeak() {
 			setnilvalue(s.v)
 			continue
 		}
-		/* gone: remove the entry the way lgc.c's 'removeentry' does --
-		   the value goes, and the key is marked dead so that 'next'
-		   steps over the hole without losing the collision chain */
+		if s.isKey {
+			/* clearkeys: nil value + removeentry (dead key) */
+			setnilvalue(&s.n.val)
+			setdeadkey(s.n)
+			continue
+		}
+		/* clearvalues / ephemeron value death: nil the value.
+		   removeentry only deadens unmarked keys — a restored key stays. */
 		setnilvalue(&s.n.val)
-		setdeadkey(s.n)
+		var k Value
+		getnodekey(&k, s.n)
+		if ttisnil(&k) {
+			setdeadkey(s.n)
+		}
 	}
 }
 

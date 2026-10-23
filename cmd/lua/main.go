@@ -1,4 +1,6 @@
-// Command lua is the standalone Lua interpreter, a Go port of lua.c.
+// Command lua is the standalone Lua interpreter, a Go port of lua.c
+// (PUC-Lua 5.3.4). Translation target: full CLI/REPL/docall alignment.
+// Platform SIGINT lives in signal_unix.go / signal_windows.go (see NOTES).
 //
 // Usage:
 //
@@ -7,11 +9,12 @@
 // Options:
 //
 //	-e stat  execute string 'stat'
-//	-l name  require library 'name'
 //	-i       enter interactive mode after executing 'script'
+//	-l name  require library 'name'
 //	-v       show version information
-//	-        stop handling options and execute stdin as a file
+//	-E       ignore environment variables
 //	--       stop handling options
+//	-        stop handling options and execute stdin
 package main
 
 import (
@@ -98,6 +101,7 @@ func pmainDriver(argv []string) int {
 func pmain(L *lua.State) int {
 	argv := pmainArgv
 	args, script := collectArgs(argv)
+	L.CheckVersion() /* luaL_checkversion: interpreter has correct version */
 	if args == hasError { /* bad arg? */
 		printUsage(argv[script]) /* 'script' has the index of the bad arg */
 		L.PushBoolean(false)
@@ -302,7 +306,12 @@ func runArgs(argv []string, optlim int) bool {
 // negative indices hold the interpreter and the options.  'script' is the
 // index of the script in argv, or 0 when there is none.
 func createArgTable(L *lua.State, argv []string, script int) {
-	L.NewTable()
+	/* C: if (script == argc) script = 0; Go already uses script=0 for none */
+	narg := len(argv) - (script + 1) /* number of positive indices */
+	if narg < 0 {
+		narg = 0
+	}
+	L.CreateTable(narg, script+1) /* lua_createtable(narg, script+1) */
 	for i, a := range argv {
 		L.PushString(a)
 		L.RawSetI(-2, int64(i-script))
@@ -383,28 +392,24 @@ func runScript(path string) error {
 	if err := L.LoadFile(path); err != nil {
 		return err
 	}
-	n, err := pushArgs()
-	if err != nil {
-		return err
-	}
+	n := pushArgs() /* may luaL_error; caught by pmain's pcall */
 	return docall(n, lua.LUA_MULTRET)
 }
 
 // pushArgs is 'pushargs': it pushes arg[1..n] -- the arguments given to
 // the script -- and returns how many there are.
-func pushArgs() (int, error) {
+func pushArgs() int {
+	/* pushargs of lua.c: raise via luaL_error / luaL_checkstack (not Go error) */
 	if L.GetGlobal("arg") != lua.LUA_TTABLE {
-		return 0, fmt.Errorf("'arg' is not a table")
+		L.Error2("'arg' is not a table")
 	}
 	n := int(L.Len2(-1)) /* luaL_len */
-	if !L.CheckStack(n + 3) {
-		return 0, fmt.Errorf("too many arguments to script")
-	}
+	L.CheckStack2(n+3, "too many arguments to script")
 	for i := 1; i <= n; i++ {
 		L.RawGetI(-i, int64(i)) /* the table moves down as values are pushed */
 	}
 	L.Remove(-(n + 1)) /* remove the table from the stack */
-	return n, nil
+	return n
 }
 
 func runFile(path string) error {
@@ -428,10 +433,7 @@ func runStdinScript() error {
 	if err := loadStdin(); err != nil {
 		return err
 	}
-	n, err := pushArgs()
-	if err != nil {
-		return err
-	}
+	n := pushArgs() /* may luaL_error; caught by pmain's pcall */
 	return docall(n, lua.LUA_MULTRET)
 }
 
@@ -612,29 +614,30 @@ func replPrompt(first bool) string {
 	return def
 }
 
-// loadLine compiles one REPL line, reading continuation lines from 'in'
-// while the line is unfinished, and leaves the chunk on the stack.  It
-// answers the error to report, if any: the syntax error of a finished
-// line, or -- when input runs out in the middle of one -- the error of
-// the last try, which is what lua.c's 'multiline' returns and 'report'
-// then prints.
-//
-// It is 'addreturn' and 'multiline' of lua.c together: "return <line>"
-// first, so that an expression prints its value, and the line on its own
-// when that does not compile.
+// incomplete is lua.c incomplete: status==LUA_ERRSYNTAX and message ends with <eof>.
+func incomplete(err error) bool {
+	le, ok := err.(*lua.LuaError)
+	if !ok || le.Status != lua.LUA_ERRSYNTAX {
+		return false
+	}
+	return strings.HasSuffix(le.Message, "<eof>")
+}
+
+// loadLine is addreturn + multiline of lua.c: try "return <line>;" first, then
+// the line as a statement with continuation lines while incomplete.
 func loadLine(chunk *string, in *bufio.Scanner) error {
+	/* addreturn: load "return %s;" — trailing semicolon matches C pushfstring */
+	if err := L.LoadBytes([]byte("return "+*chunk+";"), "=stdin"); err == nil {
+		return nil
+	}
+	L.SetTop(0) /* discard failed addreturn attempt (LoadBytes already restored top) */
 	for {
-		if err := L.LoadBytes([]byte("return "+*chunk), "=stdin"); err == nil {
-			return nil
-		}
-		L.SetTop(0)
 		err := L.LoadBytes([]byte(*chunk), "=stdin")
 		if err == nil {
 			return nil
 		}
-		/* lua.c's 'incomplete': the message ends with <eof>. */
-		if !strings.HasSuffix(err.Error(), "<eof>") {
-			return err /* a real syntax error: report it and go on */
+		if !incomplete(err) {
+			return err /* cannot continue: report and go on */
 		}
 		fmt.Print(replPrompt(false))
 		if !in.Scan() {
@@ -655,12 +658,17 @@ func printResults() {
 	if n == 0 { /* any result to be printed? */
 		return
 	}
-	L.CheckStack(lua.LUA_MINSTACK) /* "too many results to print" */
+	L.CheckStack2(lua.LUA_MINSTACK, "too many results to print")
 	L.GetGlobal("print")
 	L.Insert(1)
 	if L.PCall(n, 0, 0) != lua.LUA_OK {
 		msg, _ := L.ToString(-1)
+		/* l_message(progname, ...): progname is NULL in REPL */
+		if progName == "" {
+			fmt.Fprintf(os.Stderr, "error calling 'print' (%s)\n", msg)
+		} else {
+			fmt.Fprintf(os.Stderr, "%s: error calling 'print' (%s)\n", progName, msg)
+		}
 		L.Pop(1)
-		fmt.Fprintf(os.Stderr, "error calling 'print' (%s)\n", msg)
 	}
 }

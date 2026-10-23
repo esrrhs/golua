@@ -46,7 +46,6 @@ func (L *State) ArgError(arg int, extramsg string) int {
 	return L.Error2("bad argument #%d to '%s' (%s)", arg, name, extramsg)
 }
 
-// Error2 raises a Lua error with a formatted message (luaL_error).
 // Error2 raises an error with a formatted message (luaL_error).
 //
 // C is not 'luaG_runerror' here: luaL_error first pushes
@@ -74,10 +73,17 @@ const luaVersionNumGo = 503
 // CheckVersion_ checks that the running core matches the version and
 // numeric type sizes the caller was compiled against (luaL_checkversion_,
 // lauxlib.c). A mismatch raises via Error2 — it must not be a silent no-op.
+//
+// C also compares lua_version(L) != lua_version(NULL) to detect multiple
+// VMs in one process. This port keeps one immortal version number, so that
+// pointer-identity check cannot fire; see NOTES.md.
 func (L *State) CheckVersion_(ver float64, sz uintptr) {
-	if sz != luaLNumSizes {
+	if sz != luaLNumSizes { /* check numeric types */
 		L.Error2("core and library have incompatible numeric types")
-	} else if float64(luaVersionNumGo) != ver {
+	}
+	/* C: if (v != lua_version(NULL)) → "multiple Lua VMs detected"
+	   Go: single version constant; no multi-VM pointer split. */
+	if float64(luaVersionNumGo) != ver {
 		L.Error2("version mismatch: app. needs %f, Lua core provides %f",
 			ver, float64(luaVersionNumGo))
 	}
@@ -152,31 +158,11 @@ func (L *State) OptString(arg int, def string) string {
 	return L.CheckString(arg)
 }
 
-// CheckTable checks that an argument is a table.
-func (L *State) CheckTable(arg int) {
-	if !L.IsTable(arg) {
-		L.tagError(arg, LUA_TTABLE)
-	}
-}
-
-// CheckFunction checks that an argument is a function.
-func (L *State) CheckFunction(arg int) {
-	if !L.IsFunction(arg) {
-		L.tagError(arg, LUA_TFUNCTION)
-	}
-}
-
-// CheckUserData checks that an argument is a full userdata.
-func (L *State) CheckUserData(arg int) *Udata {
-	v := index2value(L, arg)
-	if !ttisfulluserdata(v) {
-		L.tagError(arg, LUA_TUSERDATA)
-	}
-	return uvalue(v)
-}
-
 // CheckOption checks a string argument against a list of options
-// (luaL_checkoption).
+// (luaL_checkoption). When def is non-empty it is the luaL_optstring
+// default; callers that need a required option pass the already-checked
+// string as def (see liolib), matching C's (def ? opt : check) without a
+// NULL pointer in Go.
 func (L *State) CheckOption(arg int, def string, lst []string) int {
 	name := L.OptString(arg, def)
 	for i, s := range lst {
@@ -200,25 +186,19 @@ func (L *State) tagError(arg, tag int) {
 }
 
 func (L *State) typeError(arg int, tname string) {
-	// use a description of the actual value for a better message
+	/* use a description of the actual value for a better message
+	   (static typeerror in lauxlib.c). C leaves __name on the stack;
+	   ArgError never returns. */
 	var typearg string
-	named := false
 	if L.GetMetaField(arg, "__name") == LUA_TSTRING {
-		/* C's luaL_getmetafield leaves the value pushed only when it
-		   finds one, and luaL_typeerror then reads it from there as a
-		   'const char *', which is where a __name with a zero byte in
-		   it is cut short. */
+		/* lua_tostring / %s cuts a __name that contains a zero byte. */
 		typearg = luaCStr(L.ToStringX(-1))
-		named = true
 	} else if L.Type(arg) == LUA_TLIGHTUSERDATA {
 		typearg = "light userdata"
 	} else {
 		typearg = TypeName(L.Type(arg))
 	}
 	msg := fmt.Sprintf("%s expected, got %s", tname, typearg)
-	if named {
-		L.Pop(1)
-	}
 	L.ArgError(arg, msg)
 }
 
@@ -261,20 +241,18 @@ func (L *State) ArgCheck(cond bool, arg int, extramsg string) {
 	}
 }
 
-// ArgExpected raises an error when cond is false, naming the type that
-// was expected and the type that came (luaL_argexpected).  It is what
-// 'setmetatable' and 'debug.setmetatable' use for a second argument that
-// may be one of two types: "nil or table expected, got number".
-func (L *State) ArgExpected(cond bool, arg int, tname string) {
-	if !cond {
-		L.typeError(arg, tname)
-	}
-}
-
-// Where pushes a string with the current position (luaL_where).
+// Where2 pushes a string with the current position (luaL_where).
+// Uses getstack+getinfo("Sl") like C, not a manual ci walk.
 func (L *State) Where2(level int) {
-	s := L.Where(level)
-	L.PushString(s)
+	var ar dbAr
+	if dbGetStack(L, level, &ar) { /* check function at level */
+		dbGetInfo(L, "Sl", &ar) /* get info about it */
+		if ar.currentline > 0 { /* is there info? */
+			L.PushString(fmt.Sprintf("%s:%d: ", ar.shortSrc, ar.currentline))
+			return
+		}
+	}
+	L.PushString("") /* else, no information available... */
 }
 
 // Len2 returns the length of the value at idx as an integer (luaL_len).
@@ -341,7 +319,7 @@ func (L *State) Unref(t, ref int) {
 // SetFuncs registers all functions in l into the table on top of the
 // stack (luaL_setfuncs).
 func (L *State) SetFuncs(l []Reg, nup int) {
-	L.checkStack(nup)
+	L.CheckStack2(nup, "too many upvalues")
 	for _, r := range l {
 		for i := 0; i < nup; i++ { /* copy upvalues to the top */
 			L.PushValue(-nup)
@@ -388,7 +366,7 @@ func (L *State) NewLib(l []Reg) {
 // The content lives in one block, the way it does in PUC-Lua: 'b' is its
 // address, 'n' how much of it is used, 'size' how much it holds, and
 // luaL_addchar is a macro in <lauxlib.h> that writes into 'b[n++]'
-// without calling anything at all. So do luaL_addsize and luaL_buffsub,
+// without calling anything at all. So do luaL_addsize,
 // and so are luaL_bufflen and luaL_buffaddr macros over 'n' and 'b'.
 // An extension compiled against PUC-Lua's own header uses those macros
 // as they are, and they have to describe the content however it was
@@ -437,15 +415,27 @@ func bufFinalize(b *Buffer) {
 }
 
 // NewBuffer creates a new string buffer (luaL_buffinit).
+// C starts on the Buffer's initb[] with nothing on the Lua stack; a
+// userdata "box" appears only when prepbuffsize outgrows initb (or when
+// the cgo path sets cblock and ensureBox). Pure-Go callers therefore see
+// the same stack discipline as PUC-Lua.
 func (L *State) NewBuffer() *Buffer {
-	b := &Buffer{L: L}
-	L.checkStack(2)
+	return &Buffer{L: L}
+}
+
+// ensureBox pushes the UBox userdata C creates in newbox(), and records
+// its address so PushResult / AddValue can find it under the top.
+func (b *Buffer) ensureBox() {
+	if b.boxPtr != 0 {
+		return
+	}
+	L := b.L
+	L.checkStack(1)
 	u := luaS_newudata(L, nil)
 	setuvalue(&L.stack[L.top], u)
 	L.top++
 	b.boxIdx = L.AbsIndex(-1)
 	b.boxPtr = uintptr(unsafe.Pointer(u))
-	return b
 }
 
 // room answers the 'sz' bytes just past the content, making the block
@@ -454,13 +444,21 @@ func (L *State) NewBuffer() *Buffer {
 // much of it it used.
 func (b *Buffer) room(sz int) []byte {
 	need := b.n + sz
+	/* C: if (newsize < B->n || newsize - B->n < sz) luaL_error("buffer too large") */
+	if need < b.n || need-b.n < sz {
+		b.L.Error2("buffer too large")
+	}
 	if !b.cblock || reallocBlock == nil {
 		/* no C memory in this build, and nothing to hand an address to */
 		if len(b.buf) < need {
-			grown := make([]byte, len(b.buf)*2) /* lauxlib.c: size*2 */
-			if len(grown) < need {
-				grown = make([]byte, need)
+			newsize := len(b.buf) * 2 /* lauxlib.c: size*2 */
+			if newsize < need {
+				newsize = need
 			}
+			if newsize < bufInitSize {
+				newsize = bufInitSize
+			}
+			grown := make([]byte, newsize)
 			copy(grown, b.buf[:b.n])
 			b.buf = grown
 		}
@@ -476,45 +474,62 @@ func (b *Buffer) room(sz int) []byte {
 	if newsz < bufInitSize {
 		newsz = bufInitSize
 	}
+	/* first on-stack box, like C newbox() when leaving initb */
+	b.ensureBox()
 	p := reallocBlock(b.scratch, newsz)
 	if p == nil && newsz > 0 {
-		panic("lua: out of memory for a string buffer")
+		/* C: resizebox frees then luaL_error(this message) */
+		b.L.Error2("not enough memory for buffer allocation")
 	}
 	if b.scratch == nil && p != nil {
-		runtime.SetFinalizer(b, bufFinalize)
+		runtime.SetFinalizer(b, bufFinalize) /* Go GC stand-in for UBox.__gc */
 	}
 	b.scratch = p
 	b.slen = newsz
 	return unsafe.Slice((*byte)(p), newsz)[b.n:need]
 }
 
+// AddString is luaL_addstring.
 func (b *Buffer) AddString(s string) {
-	if len(s) > 0 {
-		copy(b.room(len(s)), s)
-		b.n += len(s)
-	}
+	b.AddBytes([]byte(s))
 }
+
+// AddBytes is luaL_addlstring (length-explicit; Go []byte stand-in).
 func (b *Buffer) AddBytes(p []byte) {
-	if len(p) > 0 {
+	if len(p) > 0 { /* avoid copy when p can be empty/nil */
 		copy(b.room(len(p)), p)
-		b.n += len(p)
+		b.AddSize(len(p))
 	}
 }
+
+// AddChar is luaL_addchar.
 func (b *Buffer) AddChar(c byte) {
 	b.room(1)[0] = c
 	b.n++
 }
-func (b *Buffer) AddRune(r rune) { b.AddString(string(r)) }
 
 // AddValue adds the value on top of the stack, converted to a string
-// (luaL_addvalue).
+// (luaL_addvalue). Matches C: lua_tolstring then addlstring; a
+// non-coercible value contributes zero bytes (no Go-only error).
+// When the buffer box is under the value (buffonstack), the value is
+// moved below the box before the copy, then removed — same as C.
 func (b *Buffer) AddValue() {
-	s, ok := b.L.ToString(-1)
-	if !ok {
-		b.L.Error2("cannot convert value to string")
+	L := b.L
+	s, _ := L.ToString(-1)
+	onBox := false
+	if b.boxPtr != 0 && L.GetTop() >= 2 {
+		v := &L.stack[L.top-2]
+		if ttisfulluserdata(v) && uintptr(unsafe.Pointer(uvalue(v))) == b.boxPtr {
+			onBox = true
+			L.Insert(-2) /* put value below buffer */
+		}
 	}
-	b.L.Pop(1)
 	b.AddString(s)
+	if onBox {
+		L.Remove(-2) /* remove value */
+	} else {
+		L.Pop(1)
+	}
 }
 
 func (b *Buffer) Len() int { return b.n }
@@ -531,14 +546,39 @@ func (b *Buffer) String() string {
 }
 
 // PushResult finishes the buffer and pushes the resulting string
-// (luaL_pushresult).
+// (luaL_pushresult). When a box is on the stack it is removed, matching
+// C's buffonstack path (one value out where the box was).
 func (b *Buffer) PushResult() {
-	b.L.PushString(b.String())
+	L := b.L
+	L.PushString(b.String())
 	b.n = 0
+	if b.boxPtr != 0 && L.GetTop() >= 2 {
+		v := &L.stack[L.top-2]
+		if ttisfulluserdata(v) && uintptr(unsafe.Pointer(uvalue(v))) == b.boxPtr {
+			L.Remove(-2) /* remove box header */
+		}
+	}
+	b.boxPtr = 0
+	b.boxIdx = 0
+}
+
+// PushResultSize is luaL_pushresultsize: addsize then pushresult.
+func (b *Buffer) PushResultSize(sz int) {
+	b.AddSize(sz)
+	b.PushResult()
+}
+
+// PrepBuffSize is luaL_prepbuffsize: returns a slice of at least sz free bytes.
+func (b *Buffer) PrepBuffSize(sz int) []byte { return b.room(sz) }
+
+// BuffInitSize is luaL_buffinitsize: buffinit then prepbuffsize.
+func (L *State) BuffInitSize(sz int) (*Buffer, []byte) {
+	b := L.NewBuffer()
+	return b, b.PrepBuffSize(sz)
 }
 
 // AddSize says that 'n' more bytes were written into the room
-// PrepBuffer handed out (luaL_addsize).
+// PrepBuffSize handed out (luaL_addsize).
 func (b *Buffer) AddSize(n int) {
 	if n > 0 {
 		b.n += n
@@ -580,10 +620,11 @@ func (L *State) findField(obj *Value, level int) (string, bool) {
 				return s, true
 			}
 			if _, ok := L.findField(obj, level-1); ok { /* try recursively */
-				/* stack: lib_name, lib_table, field_name (top) */
+				/* stack: lib_name, lib_table, field_name (top) — C: */
+				L.Remove(-2)      /* remove table (but keep name) */
 				L.PushString(".") /* place '.' between the two names */
-				L.Replace(-3)     /* (in the slot occupied by the table) */
-				L.Concat(3)       /* lib_name.field_name */
+				L.Insert(-2)
+				L.Concat(3) /* lib_name.field_name */
 				s, _ := L.ToString(-1)
 				return s, true
 			}
@@ -693,6 +734,155 @@ func (L *State) stackTraceback(L1 *State, msg string, hasMsg bool, level int) st
 		}
 	}
 	return sb.String()
+}
+
+// ---------------------------------------------------------------------
+// userdata metatable helpers (lauxlib.c)
+// ---------------------------------------------------------------------
+
+// NewMetaTable creates a new metatable registered under tname
+// (luaL_newmetatable). Returns false if the name was already in use
+// (previous value left on top).
+func (L *State) NewMetaTable(tname string) bool {
+	if L.GetField(LUA_REGISTRYINDEX, tname) != LUA_TNIL { /* name already in use? */
+		return false /* leave previous value on top, but return false */
+	}
+	L.Pop(1)
+	L.CreateTable(0, 2) /* create metatable */
+	L.PushString(tname)
+	L.SetField(-2, "__name") /* metatable.__name = tname */
+	L.PushValue(-1)
+	L.SetField(LUA_REGISTRYINDEX, tname) /* registry[tname] = metatable */
+	return true
+}
+
+// SetMetaTableByName sets the metatable registered under tname on the
+// value at the top of the stack (luaL_setmetatable).
+func (L *State) SetMetaTableByName(tname string) {
+	L.GetField(LUA_REGISTRYINDEX, tname)
+	L.SetMetaTable(-2)
+}
+
+// TestUserData returns the userdata at ud when it has the metatable
+// registered under tname, otherwise nil (luaL_testudata).
+func (L *State) TestUserData(ud int, tname string) any {
+	p := L.ToUserData(ud)
+	if p != nil { /* value is a userdata? */
+		if L.GetMetaTable(ud) { /* does it have a metatable? */
+			L.GetField(LUA_REGISTRYINDEX, tname) /* get correct metatable */
+			if !L.RawEqual(-1, -2) { /* not the same? */
+				p = nil /* userdata with wrong metatable */
+			}
+			L.Pop(2) /* remove both metatables */
+			return p
+		}
+	}
+	return nil /* not a userdata with a metatable */
+}
+
+// CheckUserData is luaL_checkudata: TestUserData or typeError(tname).
+func (L *State) CheckUserData(ud int, tname string) any {
+	p := L.TestUserData(ud, tname)
+	if p == nil {
+		L.typeError(ud, tname)
+	}
+	return p
+}
+
+// ---------------------------------------------------------------------
+// LUA_COMPAT_MODULE (enabled in PUC 5.3.4 luaconf.h)
+// ---------------------------------------------------------------------
+
+// FindTable finds or creates a dotted table path starting at idx
+// (luaL_findtable). On success it leaves the table on top and returns "".
+// On conflict it returns the problematic name fragment.
+func (L *State) FindTable(idx int, fname string, szhint int) string {
+	if idx != 0 {
+		L.PushValue(idx)
+	}
+	for {
+		e := len(fname)
+		for i := 0; i < len(fname); i++ {
+			if fname[i] == '.' {
+				e = i
+				break
+			}
+		}
+		L.PushString(fname[:e])
+		if L.RawGet(-2) == LUA_TNIL { /* no such field? */
+			L.Pop(1) /* remove this nil */
+			hint := szhint
+			if e < len(fname) && fname[e] == '.' {
+				hint = 1
+			}
+			L.CreateTable(0, hint) /* new table for field */
+			L.PushString(fname[:e])
+			L.PushValue(-2)
+			L.SetTable(-4) /* set new table into field */
+		} else if !L.IsTable(-1) { /* field has a non-table value? */
+			L.Pop(2) /* remove table and value */
+			return fname /* return problematic part of the name */
+		}
+		L.Remove(-2) /* remove previous table */
+		if e >= len(fname) || fname[e] != '.' {
+			return ""
+		}
+		fname = fname[e+1:]
+	}
+}
+
+// PushModule finds or creates a module table with the given name
+// (luaL_pushmodule). Leaves the module table on the stack.
+func (L *State) PushModule(modname string, sizehint int) {
+	L.FindTable(LUA_REGISTRYINDEX, pkLoadedTable, 1)
+	if L.GetField(-1, modname) != LUA_TTABLE { /* no LOADED[modname]? */
+		L.Pop(1) /* remove previous result */
+		/* try global variable (and create one if it does not exist) */
+		L.PushGlobalTable()
+		if L.FindTable(0, modname, sizehint) != "" {
+			L.Error2("name conflict for module '%s'", modname)
+		}
+		L.PushValue(-1)
+		L.SetField(-3, modname) /* LOADED[modname] = new table */
+	}
+	L.Remove(-2) /* remove LOADED table */
+}
+
+// OpenLib opens a library (luaL_openlib / luaL_register).
+func (L *State) OpenLib(libname string, l []Reg, nup int) {
+	L.CheckVersion()
+	if libname != "" {
+		L.PushModule(libname, len(l)) /* get/create library table */
+		L.Insert(-(nup + 1))            /* move library table below upvalues */
+	}
+	if l != nil {
+		L.SetFuncs(l, nup)
+	} else {
+		L.Pop(nup) /* remove upvalues */
+	}
+}
+
+// ---------------------------------------------------------------------
+// GSub (luaL_gsub)
+// ---------------------------------------------------------------------
+
+// GSub replaces every occurrence of p in s with r, pushes the result,
+// and returns it (luaL_gsub).
+func (L *State) GSub(s, p, r string) string {
+	b := L.NewBuffer()
+	for {
+		i := strings.Index(s, p)
+		if i < 0 {
+			break
+		}
+		b.AddString(s[:i]) /* push prefix */
+		b.AddString(r)     /* push replacement in place of pattern */
+		s = s[i+len(p):]   /* continue after p */
+	}
+	b.AddString(s) /* push last suffix */
+	b.PushResult()
+	out, _ := L.ToString(-1)
+	return out
 }
 
 // ---------------------------------------------------------------------

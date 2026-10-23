@@ -1,4 +1,5 @@
 // Translation of lcode.h / lcode.c (PUC-Lua 5.3.4).
+// Aligned WIP: purge 5.4/specializations; see NOTES.md.
 package core
 
 import (
@@ -96,14 +97,11 @@ func luaK_nil(fs *FuncState, from, n int) {
 }
 
 func getjump(fs *FuncState, pc int) int {
-	if pc < 0 || pc >= len(fs.f.code) {
-		return NO_JUMP
-	}
 	offset := sBx(fs.f.code[pc].B)
-	if offset == NO_JUMP {
+	if offset == NO_JUMP { /* point to itself represents end of list */
 		return NO_JUMP
 	}
-	return (pc + 1) + offset
+	return (pc + 1) + offset /* turn offset into absolute position */
 }
 
 func fixjump(fs *FuncState, pc, dest int) {
@@ -326,38 +324,35 @@ func freeexps(fs *FuncState, e1, e2 *expdesc) {
 func addk(fs *FuncState, key, v *Value) int {
 	L := fs.ls.L
 	f := fs.f
-	if fs.ls.h != nil {
-		idx := luaH_get(L, fs.ls.h, key)
-		if ttisinteger(idx) {
-			k := int(ivalue(idx))
-			/* distinguish floats from integers (lcode.c addk) */
-			if k < fs.nk && ttype(&f.k[k]) == ttype(v) && luaV_rawequalobj(&f.k[k], v) {
-				return k
-			}
+	/* C: idx = luaH_set(...); then setivalue(idx, k). */
+	idx := luaH_get(L, fs.ls.h, key) /* index scanner table */
+	if ttisinteger(idx) {            /* is there an index there? */
+		k := int(ivalue(idx))
+		/* correct value? (warning: must distinguish floats from integers!) */
+		if k < fs.nk && ttype(&f.k[k]) == ttype(v) && luaV_rawequalobj(&f.k[k], v) {
+			return k /* reuse index */
 		}
 	}
+	/* constant not found; create a new entry */
 	k := fs.nk
-	if fs.ls.h != nil {
-		var ik Value
-		setivalue(&ik, int64(k))
-		luaH_set(L, fs.ls.h, key, &ik)
-	}
+	var ik Value
+	setivalue(&ik, int64(k))
+	*luaH_set(L, fs.ls.h, key) = ik
 	if len(f.k) <= k {
 		f.k = append(f.k, Value{})
 	}
 	f.k[k] = *v
 	fs.nk++
 	f.sizek = fs.nk
+	/* no luaC_barrier — Go GC (intentional) */
 	return k
 }
 
-func stringK(fs *FuncState, s *TString) int {
+func luaK_stringK(fs *FuncState, s *TString) int {
 	var o Value
 	setsvalue(&o, s)
-	return addk(fs, &o, &o)
+	return addk(fs, &o, &o) /* use string itself as key */
 }
-
-func luaK_stringK(fs *FuncState, s *TString) int { return stringK(fs, s) }
 
 func luaK_intK(fs *FuncState, n int64) int {
 	/* Integers use lightuserdata as keys to avoid collision with floats
@@ -376,18 +371,14 @@ func luaK_numberK(fs *FuncState, r float64) int {
 
 func boolK(fs *FuncState, b bool) int {
 	var o Value
-	if b {
-		setbtvalue(&o)
-	} else {
-		setbfvalue(&o)
-	}
-	return addk(fs, &o, &o)
+	setbvalue(&o, b)
+	return addk(fs, &o, &o) /* use boolean itself as key */
 }
 
 func nilK(fs *FuncState) int {
 	var k, v Value
 	setnilvalue(&v)
-	// key is table itself in C; use a dedicated nil sentinel key
+	/* cannot use nil as key; instead use table itself to represent nil */
 	sethvalue(&k, fs.ls.h)
 	return addk(fs, &k, &v)
 }
@@ -562,35 +553,33 @@ func luaK_exp2val(fs *FuncState, e *expdesc) {
 
 func luaK_exp2RK(fs *FuncState, e *expdesc) int {
 	luaK_exp2val(fs, e)
-	switch e.k {
-	case VTRUE, VFALSE, VNIL:
-		if fs.nk <= MAXINDEXRK {
-			var info int
-			if e.k == VNIL {
-				info = nilK(fs)
-			} else {
-				info = boolK(fs, e.k == VTRUE)
-			}
-			e.k = VK
-			e.info = info
-			return RKASK(e.info)
-		}
+	switch e.k { /* move constants to 'k' */
+	case VTRUE:
+		e.info = boolK(fs, true)
+		goto vk
+	case VFALSE:
+		e.info = boolK(fs, false)
+		goto vk
+	case VNIL:
+		e.info = nilK(fs)
+		goto vk
 	case VKINT:
 		e.info = luaK_intK(fs, e.ival)
-		e.k = VK
-		if e.info <= MAXINDEXRK {
-			return RKASK(e.info)
-		}
+		goto vk
 	case VKFLT:
 		e.info = luaK_numberK(fs, e.nval)
-		e.k = VK
-		if e.info <= MAXINDEXRK {
-			return RKASK(e.info)
-		}
+		goto vk
 	case VK:
-		if e.info <= MAXINDEXRK {
-			return RKASK(e.info)
-		}
+		goto vk
+	default:
+		break
+	}
+	/* not a constant in the right range: put it in a register */
+	return luaK_exp2anyreg(fs, e)
+vk:
+	e.k = VK
+	if e.info <= MAXINDEXRK { /* constant fits in 'argC'? */
+		return RKASK(e.info)
 	}
 	return luaK_exp2anyreg(fs, e)
 }
@@ -628,8 +617,8 @@ func luaK_self(fs *FuncState, e, key *expdesc) {
 	freeexp(fs, key)
 }
 
-/* invertjump is negatecondition (lcode.c): flip A of a comparison jump. */
-func invertjump(fs *FuncState, e *expdesc) {
+/* negatecondition: flip A of a comparison jump (lcode.c). */
+func negatecondition(fs *FuncState, e *expdesc) {
 	pc := getjumpcontrol(fs, e.info)
 	pc.A = bool2int(!(pc.A != 0))
 }
@@ -652,7 +641,7 @@ func luaK_goiftrue(fs *FuncState, e *expdesc) {
 	var pc int
 	switch e.k {
 	case VJMP:
-		invertjump(fs, e)
+		negatecondition(fs, e)
 		pc = e.info
 	case VK, VKFLT, VKINT, VTRUE:
 		pc = NO_JUMP
@@ -688,7 +677,7 @@ func codenot(fs *FuncState, e *expdesc) {
 	case VK, VKFLT, VKINT, VTRUE:
 		e.k = VFALSE
 	case VJMP:
-		invertjump(fs, e)
+		negatecondition(fs, e)
 	case VRELOCABLE, VNONRELOC:
 		discharge2anyreg(fs, e)
 		freeexp(fs, e)
@@ -714,8 +703,10 @@ func luaK_indexed(fs *FuncState, t, k *expdesc) {
 func constfolding(fs *FuncState, op int, e1, e2 *expdesc) bool {
 	var v1, v2, r Value
 	if !tonumeral(e1, &v1) || !tonumeral(e2, &v2) || !validop(op, &v1, &v2) {
-		return false
+		return false /* non-numeric operands or not safe to fold */
 	}
+	/* C: luaO_arith (TM on failure). Go luaO_arith writes a stack slot;
+	   for numerals after validop, luaO_rawarith matches (no TM). */
 	if !luaO_rawarith(fs.ls.L, op, &v1, &v2, &r) {
 		return false
 	}
@@ -735,20 +726,15 @@ func constfolding(fs *FuncState, op int, e1, e2 *expdesc) bool {
 
 func validop(op int, v1, v2 *Value) bool {
 	switch op {
-	case LUA_OPBAND, LUA_OPBOR, LUA_OPBXOR, LUA_OPSHL, LUA_OPSHR, LUA_OPBNOT:
+	case LUA_OPBAND, LUA_OPBOR, LUA_OPBXOR, LUA_OPSHL, LUA_OPSHR, LUA_OPBNOT: /* conversion errors */
 		var i int64
+		/* C tointeger; for tonumeral inputs ≡ tointegerns / F2Ieq (LUA_FLOORN2I) */
 		return tointegerns(v1, &i) && tointegerns(v2, &i)
-	case LUA_OPDIV, LUA_OPIDIV, LUA_OPMOD:
-		return numvalue(v2) != 0
+	case LUA_OPDIV, LUA_OPIDIV, LUA_OPMOD: /* division by 0 */
+		return nvalue(v2) != 0
+	default:
+		return true /* everything else is valid */
 	}
-	return true
-}
-
-func numvalue(v *Value) float64 {
-	if ttisinteger(v) {
-		return float64(ivalue(v))
-	}
-	return fltvalue(v)
 }
 
 func codeunexpval(fs *FuncState, op int, e *expdesc, line int) {
@@ -766,17 +752,6 @@ func codebinexpval(fs *FuncState, op int, e1, e2 *expdesc, line int) {
 	e1.info = luaK_codeABC(fs, op, 0, rk1, rk2)
 	e1.k = VRELOCABLE
 	luaK_fixline(fs, line)
-}
-
-func codearith(fs *FuncState, op int, e1, e2 *expdesc, line int) {
-	if constfolding(fs, op-OP_ADD+LUA_OPADD, e1, e2) {
-		return
-	}
-	if op == OP_UNM || op == OP_BNOT {
-		codeunexpval(fs, op, e1, line)
-	} else {
-		codebinexpval(fs, op, e1, e2, line)
-	}
 }
 
 /* codecomp emits comparison jumps (lcode.c). e1 is already R/K from luaK_infix. */
@@ -863,30 +838,11 @@ func luaK_posfix(fs *FuncState, op BinOpr, e1, e2 *expdesc, line int) {
 			luaK_exp2nextreg(fs, e2)
 			codebinexpval(fs, OP_CONCAT, e1, e2, line)
 		}
-	case OPR_ADD:
-		codearith(fs, OP_ADD, e1, e2, line)
-	case OPR_SUB:
-		codearith(fs, OP_SUB, e1, e2, line)
-	case OPR_MUL:
-		codearith(fs, OP_MUL, e1, e2, line)
-	case OPR_DIV:
-		codearith(fs, OP_DIV, e1, e2, line)
-	case OPR_IDIV:
-		codearith(fs, OP_IDIV, e1, e2, line)
-	case OPR_MOD:
-		codearith(fs, OP_MOD, e1, e2, line)
-	case OPR_POW:
-		codearith(fs, OP_POW, e1, e2, line)
-	case OPR_BAND:
-		codearith(fs, OP_BAND, e1, e2, line)
-	case OPR_BOR:
-		codearith(fs, OP_BOR, e1, e2, line)
-	case OPR_BXOR:
-		codearith(fs, OP_BXOR, e1, e2, line)
-	case OPR_SHL:
-		codearith(fs, OP_SHL, e1, e2, line)
-	case OPR_SHR:
-		codearith(fs, OP_SHR, e1, e2, line)
+	case OPR_ADD, OPR_SUB, OPR_MUL, OPR_DIV, OPR_IDIV, OPR_MOD, OPR_POW,
+		OPR_BAND, OPR_BOR, OPR_BXOR, OPR_SHL, OPR_SHR:
+		if !constfolding(fs, int(op)+LUA_OPADD, e1, e2) {
+			codebinexpval(fs, int(op)+OP_ADD, e1, e2, line)
+		}
 	case OPR_EQ, OPR_LT, OPR_LE, OPR_NE, OPR_GT, OPR_GE:
 		codecomp(fs, op, e1, e2)
 	}
@@ -911,8 +867,4 @@ func luaK_setlist(fs *FuncState, base, nelems, tostore int) {
 		luaX_syntaxerror(fs.ls, "constructor too long")
 	}
 	fs.freereg = base + 1
-}
-
-func luaK_finish(fs *FuncState) {
-	// 5.3 has no extra finish pass like 5.4's RETURN/k closing flags
 }

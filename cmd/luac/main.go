@@ -1,4 +1,8 @@
-// Command luac is the standalone Lua compiler, a Go port of luac.c.
+// Command luac is the standalone Lua compiler (translation of luac.c main).
+//
+// C main: doargs → luaL_newstate → pcall(pmain) → exit.
+// Go: os.Exit(lua.Luac(...)) — Luac lives in the library because -l listing
+// walks Proto internals (not exposed through the public API).
 //
 // Usage:
 //
@@ -13,9 +17,6 @@
 //	-v       show version information
 //	--       stop handling options
 //	-        stop handling options and process stdin
-//
-// The work is done by lua.Luac, which lives in the library because the
-// listing has to read prototypes.
 package main
 
 import (

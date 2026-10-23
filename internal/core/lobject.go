@@ -1,9 +1,12 @@
-// Package lua is a pure-Go port of PUC-Lua 5.3.4.
+// Translation of lobject.h / lobject.c (PUC-Lua 5.3.4): tagged values,
+// collectable object headers, and generic object operations.
 //
-// This file is the translation of lobject.h / lobject.c: the value
-// representation (TValue) and the basic object operations. The garbage
-// collector (lgc.c) is not translated: object lifetime is handled by the
-// Go runtime.
+// Types/values follow 5.3.4 (not 5.4): number variants FLT=0 / INT=1;
+// single boolean tag; empty/absent = nil / &luaO_nilobject; Udata has
+// one uservalue; Table uses sizearray (no alimit/BITRAS); Proto.cache kept.
+//
+// Go GC replaces CommonHeader/gclist/checkliveness (intentional). Closures
+// and UpVal live in lfunc.go; luaO_nilobject in ltm.go.
 package core
 
 import (
@@ -52,7 +55,8 @@ const (
 	LUA_MININTEGER  = int64(math.MinInt64)
 	LUA_MULTRET     = -1
 	LUA_IDSIZE      = 60
-	MAXNUMBER2STR   = 44
+	MAXNUMBER2STR   = 50 /* lobject.c 5.3.4 (5.4 uses 44) */
+	UTF8BUFFSZ      = 8  /* lobject.h: size of buffer for luaO_utf8esc */
 	LUA_INTEGER_FMT = "%d"
 	LUA_NUMBER_FMT  = "%.14g"
 )
@@ -73,8 +77,8 @@ const (
 	BIT_ISCOLLECTABLE = 1 << 6
 )
 
-// makevariant / ctb / novariant, exactly as lobject.h. 'ctb' answers a
-// byte because that is the type a tag has inside a Value.
+// makevariant builds (t | (v<<4)). Name is 5.4; 5.3.4 inlines the same
+// expression in LUA_T* macros. ctb answers a byte (tag inside Value).
 func makevariant(t, v int) int { return t | (v << 4) }
 func ctb(t int) uint8          { return uint8(t) | BIT_ISCOLLECTABLE }
 func novariant(t int) int      { return t & 0x0F }
@@ -181,6 +185,9 @@ type Value struct {
 // tag tests (lobject.h macros)
 // ---------------------------------------------------------------------
 
+// ttype is C 5.3.4 ttnov / public lua_type (bits 0-3).
+// ttypetag is C 5.3.4 ttype (bits 0-5). Names follow the 5.4 rename used
+// across this port; values match 5.3.4.
 func ttype(v *Value) int    { return novariant(int(v.tt)) }
 func ttypetag(v *Value) int { return int(v.tt) & 0x3F }
 
@@ -224,6 +231,7 @@ func ttiscfunction(v *Value) bool { return ttislcf(v) || ttisCclosure(v) }
 func ttisfulluserdata(v *Value) bool  { return v.tt == ctb(LUA_VUSERDATA) }
 func ttislightuserdata(v *Value) bool { return v.tt == LUA_VLIGHTUSERDATA }
 func ttisthread(v *Value) bool        { return v.tt == ctb(LUA_VTHREAD) }
+func ttisdeadkey(v *Value) bool       { return v.tt == LUA_TDEADKEY }
 
 // ---------------------------------------------------------------------
 // value accessors
@@ -246,6 +254,7 @@ func uvalue(v *Value) *Udata          { return (*Udata)(v.p) }
 func pvalue(v *Value) unsafe.Pointer  { return v.p }
 func thvalue(v *Value) *State         { return (*State)(v.p) }
 func gcvalue(v *Value) unsafe.Pointer { return v.p }
+func deadvalue(v *Value) unsafe.Pointer { return v.p } /* ttisdeadkey: gc field only */
 
 func iscollectable(v *Value) bool { return v.tt&BIT_ISCOLLECTABLE != 0 }
 
@@ -287,6 +296,7 @@ func setclLvalue(v *Value, cl *LClosure) { *v = Value{tt: ctb(LUA_VLCL), p: unsa
 func setclCvalue(v *Value, cl *CClosure) { *v = Value{tt: ctb(LUA_VCCL), p: unsafe.Pointer(cl)} }
 
 func setobj(v1, v2 *Value) { *v1 = *v2 }
+func setdeadvalue(v *Value) { *v = Value{tt: LUA_TDEADKEY} }
 
 // ---------------------------------------------------------------------
 // TString (lobject.h)
@@ -332,17 +342,18 @@ func setnodekey(n *node, k *Value) {
 	n.keytt = k.tt
 }
 
-// getnodekey copies a value from a key (lobject.h).
+// getnodekey copies a key into a TValue. Name is 5.4; 5.3.4 reads TKey.nk.
 func getnodekey(dst *Value, n *node) {
 	dst.p = n.kp
 	dst.i = n.ki
 	dst.tt = n.keytt
 }
 
-// setnilkey empties a node's key, as 'setnilvalue(L, gkey(n))' does.
+// setnilkey empties a node's key (≡ setnilvalue on gkey). 5.4 name.
 func setnilkey(n *node) { n.keytt = LUA_VNIL; n.kp = nil; n.ki = 0 }
 
 // Table is a Lua table: an array part plus an open-addressing hash part.
+// 5.3.4 field is sizearray — not 5.4 alimit/BITRAS.
 type Table struct {
 	flags     byte   // 1<<p means tagmethod(p) is not present
 	lsizenode byte   // log2 of size of 'node' array
@@ -363,9 +374,10 @@ func twoto(x byte) int          { return 1 << x }
 // ---------------------------------------------------------------------
 
 // Udata is a full userdata (lobject.h 5.3.4).
-// C lays out a size_t byte blob after the header plus one uservalue
-// (user_/ttuv_). Go keeps val any as the intentional port of that blob
-// (and of cgo malloc blocks via cblock), and a single user Value.
+// C: CommonHeader + ttuv_ + metatable + len + user_ Value, then byte blob.
+// 5.3.4 has exactly one uservalue (user_/ttuv_) — not 5.4 nuvalue/uv[].
+// Go: single user Value; val any / cblock stand in for getudatamem (SPEC);
+// finalized/finSet/finL/bufID are Go-GC bookkeeping (IGNORE for C parity).
 type Udata struct {
 	metatable *Table
 	user      Value          // single uservalue (C user_ + ttuv_)
@@ -377,6 +389,10 @@ type Udata struct {
 	finL      *State         // its state, which the finalizer needs
 	bufID     int            // luaL_Buffer slot, freed with the userdata
 }
+
+// setuservalue / getuservalue (lobject.h 5.3.4 macros).
+func setuservalue(u *Udata, o *Value) { u.user = *o }
+func getuservalue(u *Udata, o *Value) { *o = u.user }
 
 // ---------------------------------------------------------------------
 // Prototypes (lobject.h)
@@ -971,8 +987,10 @@ func luaO_str2num(s string, o *Value) bool {
 // luaO_pushvfstring / luaO_pushfstring (lobject.c)
 // ---------------------------------------------------------------------
 
-// pushfString builds a string on the stack, handling Lua's '%d', '%I',
-// '%f', '%s', '%c', '%p', '%U' and '%%' formats.
+// pushfString is luaO_pushvfstring / luaO_pushfstring (lobject.c 5.3.4).
+// Formats: %s %c %d %I %f %p %U %%. SPEC: builds with strings.Builder
+// instead of pushstr pieces + luaV_concat. %c uses lisprint else "<\d>"
+// (H1 closed). %p is fixed "0x"+hex (C sprintf("%p") is platform).
 func pushfString(L *State, format string, args ...any) *TString {
 	var b strings.Builder
 	i := 0

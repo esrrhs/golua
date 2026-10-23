@@ -1,4 +1,6 @@
-// Translation of the parts of lgc.c that Go's collector cannot express.
+// Translation of the parts of lgc.c that Go's collector cannot express
+// (PUC-Lua 5.3.4 bridge: __gc finalizers + weak tables in lgc_weak.go).
+// Full mark/sweep/colors/barriers/debt are INTENTIONAL omissions — Go GC.
 //
 // The port has no collector of its own: objects live on the Go heap and
 // die when nothing refers to them any more, which is what lets the
@@ -545,11 +547,13 @@ func gcMetatable(v *Value) *Table {
 // gets a metatable with a '__gc' field starts to be watched, so that the
 // metamethod runs when the object becomes unreachable.
 func luaC_checkFinalizer(L *State, v *Value, mt *Table) {
-	if mt == nil || L.g.closing { /* 'g->gcstp & GCSTPCLS': closing state? */
+	if mt == nil || L.g.closing { /* 'g->gcstp & GCSTPCLS': closing (5.4-shaped; keep) */
 		return
 	}
 	tm := luaH_getshortstr(mt, L.g.tmNames[TM_GC])
-	if !ttisfunction(tm) { /* no finalizer (or not callable) */
+	/* 5.3.4: gfasttm != NULL enrolls; GCTM later requires ttisfunction.
+	   Do not require a function here — __gc may be replaced with a function later. */
+	if ttisnil(tm) { /* no finalizer field */
 		return
 	}
 	switch ttypetag(v) {
@@ -715,11 +719,14 @@ func (L *State) callFinalizer(obj Value) {
 	L.allowhook = oldah
 	L.ci.callstatus &= ^uint16(CIST_FIN)
 	if status != LUA_OK {
-		msg := "error object is not a string"
+		/* 5.3.4 GCTM: "error in __gc metamethod (%s)" / "no message", then
+		   LUA_ERRGCMM rethrow when propagateerrors. Warn (not throw) is an
+		   intentional 5.4-shaped adaptation (luaE_warnerror); see NOTES. */
+		msg := "no message"
 		if s, ok := L.ToString(-1); ok {
 			msg = s
 		}
-		L.Warning("error in __gc ("+msg+")", false) /* luaE_warnerror */
+		L.Warning("error in __gc metamethod ("+msg+")", false)
 	}
 	L.SetTop(top)
 }

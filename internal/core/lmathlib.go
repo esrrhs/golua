@@ -3,6 +3,10 @@
 // math.random uses POSIX random()/srandom() (l_rand/l_srand), not the
 // 5.4 xoshiro256** generator — sort.lua comparison counts and any
 // seeded sequence must match PUC.
+//
+// FLAG (Go-only): when !haveLibm, mathExpScaled / mathLog*Scaled and
+// sinh/cosh salvage approximate host libm on amd64 Go math edges.
+// With cgo (haveLibm), those paths are unused — same as PUC.
 package core
 
 import (
@@ -15,11 +19,12 @@ func mathAbs(L *State) int {
 	if L.IsInteger(1) {
 		n, _ := L.ToInteger(1)
 		if n < 0 {
-			n = -n
+			/* C: (lua_Integer)(0u - (lua_Unsigned)n); MININTEGER stays MININTEGER */
+			n = int64(0 - uint64(n))
 		}
 		L.PushInteger(n)
 	} else {
-		L.PushNumber(math.Abs(L.CheckNumber(1)))
+		L.PushNumber(math.Abs(L.CheckNumber(1))) /* C fabs; platform OK */
 	}
 	return 1
 }
@@ -247,14 +252,10 @@ func mathType(L *State) int {
 // ---------------------------------------------------------------------
 // math.random / math.randomseed (5.3.4 l_rand/l_srand)
 // ---------------------------------------------------------------------
-
-// figs is the number of binary digits in the mantissa of a float64.
-const mathFigs = 53
-
-/*
-** 5.3.4 math.random / math.randomseed (lmathlib.c).
-** Uses l_rand/l_srand (POSIX random/srandom when cgo is on).
-*/
+//
+// 5.3.4 math.random / math.randomseed (lmathlib.c).
+// Uses l_rand/l_srand (POSIX random/srandom when cgo is on).
+// (No mathFigs / 5.4 xoshiro — removed as 5.4 leftover.)
 
 func mathRandom(L *State) int {
 	low, up := int64(0), int64(0)
@@ -287,14 +288,6 @@ func mathRandomSeed(L *State) int {
 	return 0
 }
 
-func mathSetRandFunc(L *State) {
-	/* 5.3: no per-state xoshiro userdata; random is process-global. */
-	L.SetFuncs([]Reg{
-		{Name: "random", Func: mathRandom},
-		{Name: "randomseed", Func: mathRandomSeed},
-	}, 0)
-}
-
 // ---------------------------------------------------------------------
 // deprecated functions (for compatibility only)
 // ---------------------------------------------------------------------
@@ -302,16 +295,17 @@ func mathSetRandFunc(L *State) {
 // luaconf.h defines 'LUA_COMPAT_MATHLIB' and the reference build does
 // not turn it off, so 'math.sinh', 'math.cosh', 'math.tanh', 'math.pow',
 // 'math.frexp', 'math.ldexp', 'math.log10' and 'math.atan2' are all
-// there even though Lua 5.4 dropped them from the manual.  A program
-// that calls them cannot be run by a port that leaves them out, so
-// they are all here.
+// there (always compiled in Go; C gates on #if LUA_COMPAT_MATHLIB).
+//
+// FLAG (Go-only scaled helpers below): mathExpScaled / mathHalfExp /
+// mathLogScaled / mathLog2Scaled / mathLog10Scaled and the !haveLibm
+// branches of mathExp / mathSinh / mathCosh. Not in C lmathlib.c.
+// When haveLibm (cgo), those paths are never taken.
 
 const (
-	// mathMaxLog is log(MaxFloat64): the argument at which exp(x)
-	// overflows.  exp(x)/2 holds out for another ln 2 beyond it, up to
-	// log(2 * MaxFloat64) = 710.47586007394386.
-	mathMaxLog  = 7.09782712893383973096e+02
-	mathMaxLog2 = 7.10475860073943863429e+02
+	// unused by production paths when haveLibm; kept for !haveLibm salvage docs
+	mathMaxLog  = 7.09782712893383973096e+02 // log(MaxFloat64)
+	mathMaxLog2 = 7.10475860073943863429e+02 // log(2*MaxFloat64)
 )
 
 // mathLn2Hi and mathLn2Lo are ln 2 split in two, so that 'n * ln 2'
@@ -321,7 +315,7 @@ const (
 	mathLn2Lo = 1.90821492927058770002e-10
 )
 
-// mathExpScaled is exp(x) * 2^shift, worked out so that nothing
+// FLAG (Go-only): mathExpScaled is exp(x) * 2^shift, worked out so that nothing
 // overflows before the answer itself has to.
 //
 // It cannot simply ask math.Exp, because Go's math.Exp is not one
@@ -360,7 +354,7 @@ func mathExpScaled(x float64, shift int) float64 {
 // scaling by 2^-1 overflows and the answer is +Inf, which is right.
 func mathHalfExp(x float64) float64 { return mathExpScaled(x, -1) }
 
-// mathLogScaled is C's 'log'.  It cannot simply ask math.Log, for the
+// FLAG (Go-only): mathLogScaled is C's 'log'.  It cannot simply ask math.Log, for the
 // same reason mathExpScaled cannot ask math.Exp: Go's math.Log is an
 // assembly routine on amd64 and s390x, and that routine loses several
 // digits on a subnormal argument.  1e-308 is one -- the smallest normal
@@ -418,7 +412,7 @@ func mathLog10Of(x float64) float64 {
 	return mathLog10Scaled(x)
 }
 
-// mathLog2Scaled is C's 'log2', which is what math.log(x, 2) asks for --
+// FLAG (Go-only): mathLog2Scaled is C's 'log2', which is what math.log(x, 2) asks for --
 // not math.log(x)/math.log(2), which is what every other base gets.
 //
 // It cannot simply ask math.Log2.  Go's Log2 splits the argument with
@@ -548,11 +542,13 @@ var mathLib = []Reg{
 	{Name: "min", Func: mathMin},
 	{Name: "modf", Func: mathModf},
 	{Name: "rad", Func: mathRad},
+	{Name: "random", Func: mathRandom},         /* in C mathlib[]; not via SetFuncs */
+	{Name: "randomseed", Func: mathRandomSeed},
 	{Name: "sin", Func: mathSin},
 	{Name: "sqrt", Func: mathSqrt},
 	{Name: "tan", Func: mathTan},
 	{Name: "type", Func: mathType},
-	/* the ones 'LUA_COMPAT_MATHLIB' adds (lmathlib.c) */
+	/* LUA_COMPAT_MATHLIB (always on; default luaconf) */
 	{Name: "atan2", Func: mathAtan},
 	{Name: "cosh", Func: mathCosh},
 	{Name: "sinh", Func: mathSinh},
@@ -568,12 +564,11 @@ func OpenMath(L *State) int {
 	L.NewLib(mathLib)
 	L.PushNumber(mathPI)
 	L.SetField(-2, "pi")
-	L.PushNumber(math.Inf(1))
+	L.PushNumber(math.Inf(1)) /* HUGE_VAL */
 	L.SetField(-2, "huge")
 	L.PushInteger(LUA_MAXINTEGER)
 	L.SetField(-2, "maxinteger")
 	L.PushInteger(LUA_MININTEGER)
 	L.SetField(-2, "mininteger")
-	mathSetRandFunc(L)
 	return 1
 }

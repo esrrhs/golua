@@ -1,9 +1,13 @@
 // Translation of liolib.c (PUC-Lua 5.3.4): the standard I/O (and popen)
-// library.
+// library. Fully aligned to PUC 5.3.4 (no 5.4 __close / multi-return lines).
 //
 // A file handle is a full userdata wrapping a *ioStream (the Go
 // counterpart of luaL_Stream); its metatable is registered in the
 // registry under ioFileHandle ("FILE*"), exactly as in C.
+//
+// Platform / Go-only FILE* emulation (bufio, weak uw, cgo luaL_Stream
+// block, popen via os/exec, canR/canW, nobuf std streams) lives here and
+// in liolib_cgo.go — see NOTES.md.
 package core
 
 import (
@@ -73,7 +77,8 @@ type ioStream struct {
 	wr      io.WriteCloser      // popen: the child's standard input
 	cmd     *exec.Cmd           // popen: the child process
 	tmpname string              // io.tmpfile: removed when the handle is closed
-	vbuf    string              // file:setvbuf mode (informational)
+	vbuf    string              // file:setvbuf mode ("no"/"full"/"line")
+	vbufsz  int                 // setvbuf size; 0 → ioBufSize
 	canR    bool                // C's __SRD: the FILE was opened for reading
 	canW    bool                // C's __SWR: the FILE was opened for writing
 	closef  GoFunc              // close function; nil marks a closed handle
@@ -136,7 +141,11 @@ func (s *ioStream) writer() io.Writer {
 		return raw
 	}
 	if s.wbuf == nil {
-		s.wbuf = bufio.NewWriterSize(raw, ioBufSize)
+		sz := s.vbufsz
+		if sz <= 0 {
+			sz = ioBufSize
+		}
+		s.wbuf = bufio.NewWriterSize(raw, sz)
 	}
 	return s.wbuf
 }
@@ -163,7 +172,14 @@ func (s *ioStream) writeString(str string) error {
 		return ioWriteError
 	}
 	_, err := w.Write([]byte(str))
-	return err
+	if err != nil {
+		return err
+	}
+	/* Approximate _IOLBF: flush when the piece contains a newline. */
+	if s.vbuf == "line" && !s.nobuf && strings.IndexByte(str, '\n') >= 0 {
+		return s.flush()
+	}
+	return nil
 }
 
 // ioErrWatch is the reader the read buffer is filled from, with the
@@ -915,11 +931,14 @@ func ioReadChars(L *State, s *ioStream, n int64) bool {
 		   'file:read(-1)' reports "not enough memory for buffer allocation". */
 		luaG_runerror(L, "not enough memory for buffer allocation")
 	}
-	if n > int64(1)<<31 || s.reader() == nil {
-		/* deviation: a count that large is read as end of file instead
-		   of being handed to the allocator, which C would do. */
+	if s.reader() == nil {
 		L.PushString("")
 		return false
+	}
+	/* C: luaL_prepbuffsize(&b, n) then fread of n. Counts too large to
+	   allocate fail with the same OOM message (closer than empty+fail). */
+	if n > int64(1)<<30 {
+		luaG_runerror(L, "not enough memory for buffer allocation")
 	}
 	buf := make([]byte, n)
 	nr, _ := io.ReadFull(s.bufferedReader(), buf)
@@ -1055,7 +1074,7 @@ func ioGetIOFile(L *State, findex string) *ioStream {
 	L.GetField(LUA_REGISTRYINDEX, findex)
 	s := ioToLStreamAt(L, L.AbsIndex(-1))
 	if s.isClosed() {
-		L.Error2("default %s file is closed", findex[len(ioPrefix):])
+		L.Error2("standard %s file is closed", findex[len(ioPrefix):])
 	}
 	return s
 }
@@ -1130,8 +1149,10 @@ func ioClose(L *State) int {
 
 func ioFGc(L *State) int {
 	s := ioToLStream(L)
-	if !s.isClosed() {
-		ioAuxClose(L) /* ignore closed and incompletely open files */
+	/* C: !isclosed(p) && p->f != NULL — ignore closed and incompletely
+	   open files. Popen uses cmd/rd/wr instead of f. */
+	if !s.isClosed() && (s.f != nil || s.cmd != nil || s.rd != nil || s.wr != nil) {
+		ioAuxClose(L)
 	}
 	return 0
 }
@@ -1202,6 +1223,9 @@ func ioPOpen(L *State) int {
 		err = errPopenMode
 	}
 	if err == nil {
+		/* POSIX l_popen: (fflush(NULL), popen(...)) — flush every open
+		   stdio write buffer before the child inherits descriptors. */
+		ioFlushAll()
 		err = cmd.Start()
 	}
 	if err != nil {
@@ -1236,12 +1260,14 @@ func ioTmpFile(L *State) int {
 
 func ioFlush(L *State) int {
 	s := ioGetIOFile(L, ioOutputKey)
-	return ioFileResult(L, s.flush() == nil, nil, nil)
+	err := s.flush()
+	return ioFileResult(L, err == nil, nil, err)
 }
 
 func ioFFlush(L *State) int {
 	s := ioToFile(L)
-	return ioFileResult(L, s.flush() == nil, nil, nil)
+	err := s.flush()
+	return ioFileResult(L, err == nil, nil, err)
 }
 
 // ---------------------------------------------------------------------
@@ -1389,11 +1415,23 @@ func ioFSetVBuf(L *State) int {
 	   so 'f:setvbuf()' reports "string expected, got no value" rather
 	   than "invalid option ''". */
 	op := L.CheckOption(2, L.CheckString(2), modenames)
-	L.OptInteger(3, ioBufSize)
-	s.vbuf = modenames[op]
-	if s.vbuf == "no" {
-		s.buf = nil /* disabling buffering drops the read buffer */
+	sz := L.OptInteger(3, ioBufSize)
+	if sz < 0 {
+		sz = 0
 	}
+	s.vbuf = modenames[op]
+	s.vbufsz = int(sz)
+	switch s.vbuf {
+	case "no": /* _IONBF */
+		s.nobuf = true
+		s.buf = nil
+		s.wbuf = nil
+	case "full", "line": /* _IOFBF / _IOLBF */
+		s.nobuf = false
+		s.buf = nil
+		s.wbuf = nil /* recreate with vbufsz on next write */
+	}
+	/* C setvbuf returns non-zero on failure; Go's bufio always succeeds. */
 	return ioFileResult(L, true, nil, nil)
 }
 
@@ -1470,7 +1508,7 @@ func OpenIO(L *State) int {
 	ioCreateStdFile(L, os.Stdin, ioInputKey, "stdin")
 	ioCreateStdFile(L, os.Stdout, ioOutputKey, "stdout")
 	ioCreateStdFile(L, os.Stderr, "", "stderr")
-	L.PushValue(-1)
-	L.SetGlobal("io")
+	/* C luaopen_io leaves the module on the stack only; the global is
+	   set by luaL_requiref(..., 1) / OpenLibs — not here. */
 	return 1
 }

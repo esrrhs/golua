@@ -1,12 +1,15 @@
-// Translation of llex.h / llex.c (PUC-Lua 5.3.4; systematic pass: tokens,
-// read_numeral, escapes, long strings aligned with src/llex.c).
+// Translation of llex.h / llex.c (PUC-Lua 5.3.4).
+// Fully aligned to lua-5.3.4/src/llex.c + llex.h (not 5.4 token2str / read_numeral /
+// skip_sep return encoding).
 //
 // Adaptations (same rules as the rest of the package):
 //   - no GC: luaC_fix is gone; reserved words are anchored by a package-level
 //     map instead of by TString.extra (which would be lost if the intern
 //     table is flushed);
 //   - the ZIO stream becomes a plain byte slice plus a position;
-//   - Mbuffer becomes a []byte, so NUL terminators are unnecessary.
+//   - Mbuffer becomes a []byte, so NUL terminators are unnecessary;
+//   - luaX_newstring stores t[str]=str (5.4-shaped / addk-safe) instead of
+//     C 5.3.4 t[str]=true + keyfromval; see NOTES.
 package core
 
 import (
@@ -18,9 +21,8 @@ const EOZ = -1
 
 const maxInt = int(^uint(0) >> 1)
 
-// FIRST_RESERVED: single-char tokens are represented by their own numeric
-// code; other tokens start at the following value.
-const FIRST_RESERVED = 257 /* llex.h 5.3.4 */
+// FIRST_RESERVED — llex.h 5.3.4 (#define FIRST_RESERVED 257).
+const FIRST_RESERVED = 257
 
 const maxSize = int(^uint(0) >> 1) /* llimits.h MAX_SIZE ≈ max int */
 
@@ -218,7 +220,7 @@ func isxdigit(c int) bool {
 }
 
 // lisprint reports whether c is a printable ASCII character (lctype.h).
-// Used by pushfString '%c' (5.3.4 luaO_pushvfstring), not by luaX_token2str.
+// Used by pushfString '%c' (5.3.4 luaO_pushvfstring in lobject.go).
 func lisprint(c int) bool {
 	return c >= ' ' && c <= '~'
 }
@@ -249,9 +251,9 @@ func isreservedToken(ts *TString) (int, bool) {
 	return tk, ok
 }
 
-// luaX_token2str returns a printable representation of a token (llex.c).
-// 5.3.4: always "'%c'" for single-byte tokens. Non-printable escaping is in
-// pushfString's '%c' (luaO_pushvfstring), not the 5.4 lisprint branch here.
+// luaX_token2str returns a printable representation of a token (llex.c 5.3.4).
+// Always "'%c'" for token < FIRST_RESERVED (not 5.4's lisprint / "'<\%d>'" branch).
+// Non-printable escaping lives in pushfString '%c' (luaO_pushvfstring), as in C.
 func luaX_token2str(ls *LexState, token int) string {
 	if token < FIRST_RESERVED { /* single-byte symbols? */
 		return pushfString(ls.L, "'%c'", token).val
@@ -307,7 +309,7 @@ func luaX_newstring(ls *LexState, str string) *TString {
 	   the compilation */
 	var key Value
 	setsvalue(&key, ts)
-	luaH_set(L, ls.h, &key, &key)
+	*luaH_set(L, ls.h, &key) = key
 	/* table is not a metatable, so it does not need to invalidate cache */
 	return ts
 }
@@ -366,16 +368,10 @@ func (ls *LexState) checkNext2(set string) bool {
 	return false
 }
 
-// read_numeral reads a numeral (llex.c).
-//
-// This function is quite liberal in what it accepts, as 'luaO_str2num'
-// will reject ill-formed numerals. Roughly, it accepts the following
-// pattern:
-//
-//	%d(%x|%.|([Ee][+-]?))* | 0[Xx](%x|%.|([Pp][+-]?))*
-//
-// The only tricky part is to accept [+-] only after a valid exponent
-// mark, to avoid reading '3-4' or '0xe+1' as a single number.
+// read_numeral reads a numeral (llex.c 5.3.4).
+// Quite liberal: luaO_str2num rejects ill-formed numerals.
+// Loop shape is 5.3.4 (two separate ifs per iteration), not 5.4 else-if.
+// Does not force-save a trailing letter (5.4 does).
 func read_numeral(ls *LexState, seminfo *SemInfo) int {
 	expo := "Ee"
 	first := ls.current
@@ -383,9 +379,8 @@ func read_numeral(ls *LexState, seminfo *SemInfo) int {
 	if first == '0' && ls.checkNext2("xX") { /* hexadecimal? */
 		expo = "Pp"
 	}
-	/* 5.3.4 loop shape (not 5.4 else-if): after optional expo/sign, a separate
-	   digit/'.' check runs in the same iteration so a second expo char that is
-	   not a digit breaks without consuming it (e.g. 0x1Pp; 1ee still consumes 2nd e via lisxdigit). */
+	/* 5.3.4: after optional expo/sign, separate digit/'.' check in same iteration
+	   (not 5.4 else-if). Second expo that is not a digit → break without consume. */
 	for {
 		if ls.checkNext2(expo) { /* exponent part? */
 			ls.checkNext2("-+") /* optional exponent sign */
@@ -398,7 +393,7 @@ func read_numeral(ls *LexState, seminfo *SemInfo) int {
 			break
 		}
 	}
-	/* 5.3.4: do not consume a trailing letter (5.4 does); '0xg' errors near '0x'. */
+	/* 5.3.4: no trailing lislalpha force-save (5.4 only). */
 	var obj Value
 	if !luaO_str2num(ls.buffer(), &obj) { /* format error? */
 		lexerror(ls, "malformed number", TK_FLT)
@@ -411,10 +406,9 @@ func read_numeral(ls *LexState, seminfo *SemInfo) int {
 	return TK_FLT
 }
 
-// skipSep reads a sequence '[=*[' or ']=*]', leaving the last bracket. If
-// the sequence is well formed, it returns its number of '='s + 2;
-// otherwise, it returns 1 if it is a single bracket (no '='s and no 2nd
-// bracket); otherwise (an unfinished '[==...') it returns 0 (llex.c).
+// skipSep skips a sequence '[=*[' or ']=*]'. If well formed, return its
+// number of '='s; otherwise return a negative number (-1 iff there are no
+// '='s after the initial bracket) — llex.c 5.3.4 (not 5.4 count+2/1/0).
 func (ls *LexState) skipSep() int {
 	count := 0
 	s := ls.current
@@ -424,12 +418,9 @@ func (ls *LexState) skipSep() int {
 		count++
 	}
 	if ls.current == s {
-		return count + 2
+		return count
 	}
-	if count == 0 {
-		return 1
-	}
-	return 0
+	return (-count) - 1
 }
 
 // read_long_string reads a long string or a long comment (llex.c).
@@ -470,7 +461,8 @@ endloop:
 		}
 	}
 	if seminfo != nil {
-		seminfo.ts = luaX_newstring(ls, string(ls.buff[sep:len(ls.buff)-sep]))
+		/* C: buffer+(2+sep), len-2*(2+sep) */
+		seminfo.ts = luaX_newstring(ls, string(ls.buff[(2+sep):len(ls.buff)-(2+sep)]))
 	}
 }
 
@@ -646,7 +638,7 @@ func llex(ls *LexState, seminfo *SemInfo) int {
 			if ls.current == '[' { /* long comment? */
 				sep := ls.skipSep()
 				ls.resetbuffer() /* 'skipSep' may dirty the buffer */
-				if sep >= 2 {
+				if sep >= 0 {
 					read_long_string(ls, nil, sep) /* skip long comment */
 					ls.resetbuffer()               /* previous call may dirty the buffer */
 					continue
@@ -658,10 +650,10 @@ func llex(ls *LexState, seminfo *SemInfo) int {
 			}
 		case '[': /* long string or simply '[' */
 			sep := ls.skipSep()
-			if sep >= 2 {
+			if sep >= 0 {
 				read_long_string(ls, seminfo, sep)
 				return TK_STRING
-			} else if sep == 0 { /* '[=...' missing second bracket? */
+			} else if sep != -1 { /* '[=...' missing second bracket */
 				lexerror(ls, "invalid long string delimiter", TK_STRING)
 			}
 			return '['

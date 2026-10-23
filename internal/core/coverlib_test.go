@@ -417,7 +417,7 @@ func TestMathApproximationsAndSmallAPI(t *testing.T) {
 	L.Pop(1)
 
 	L.CreateTable(0, 0)
-	L.CheckTable(-1)
+	L.CheckType(-1, LUA_TTABLE)
 	L.Pop(1)
 	if err := L.LoadString("return function() end", "=f"); err != nil {
 		t.Fatal(err)
@@ -425,16 +425,16 @@ func TestMathApproximationsAndSmallAPI(t *testing.T) {
 	if L.PCall(0, 1, 0) != LUA_OK {
 		t.Fatal("load function")
 	}
-	L.CheckFunction(-1)
+	L.CheckType(-1, LUA_TFUNCTION)
 	L.Pop(1)
 	L.NewUserData(nil, 0)
-	if L.CheckUserData(-1) == nil {
-		t.Fatal("CheckUserData")
+	if !L.IsUserData(-1) {
+		t.Fatal("IsUserData")
 	}
 	L.Pop(1)
 
 	b := L.NewBuffer()
-	b.AddRune('€')
+	b.AddString("€")
 	if b.Len() != 3 {
 		t.Fatalf("buffer len %d", b.Len())
 	}

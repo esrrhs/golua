@@ -1,12 +1,16 @@
 // Translation of loslib.c (PUC-Lua 5.3.4): the standard Operating System
-// library.
+// library.  align-wip deliverable — fully aligned to PUC 5.3.4 loslib.c.
+//
+// Platform pieces live outside this file (see NOTES.md):
+//   - os_cpu_unix.go / os_cpu_other.go — os.clock CPU time
+//   - locale.go + cdlopen_locale.go — os.setlocale / libc strftime (LC_TIME)
 //
 // os.date's strftime-style conversion specifiers call libc strftime when
-// cgo is available (see cdlopen_locale.go), so LC_TIME from os.setlocale
-// is visible the way it is in PUC-Lua.  Without cgo, or when the calendar
-// year would make libc's tm_year+1900 overflow an int, each specifier is
-// formatted on its own through the Go time package so literal text is
-// never mistaken for a layout element.
+// cgo is available (osStrftimeC from cdlopen_locale.go), so LC_TIME from
+// os.setlocale is visible the way it is in PUC-Lua.  Without cgo, or when
+// the calendar year would make libc's tm_year+1900 overflow an int, each
+// specifier is formatted on its own through the Go time package so literal
+// text is never mistaken for a layout element.
 package core
 
 import (
@@ -55,24 +59,31 @@ func osSetField(L *State, key string, value int) {
 	L.SetField(-2, key)
 }
 
-// osSetBoolField sets a boolean field, skipping it when undefined
-// (setboolfield).
-func osSetBoolField(L *State, key string, value bool) {
-	L.PushBoolean(value)
+// osSetBoolField is setboolfield: skip the field when value < 0 (undefined).
+func osSetBoolField(L *State, key string, value int) {
+	if value < 0 { /* undefined? */
+		return /* does not set field */
+	}
+	L.PushBoolean(value != 0)
 	L.SetField(-2, key)
 }
 
 // osSetAllFields fills the table on top of the stack (setallfields).
+// Field write order matches loslib.c 5.3.4: sec,min,hour,day,month,year,wday,yday,isdst.
 func osSetAllFields(L *State, t time.Time) {
-	osSetField(L, "year", t.Year())
-	osSetField(L, "month", int(t.Month()))
-	osSetField(L, "day", t.Day())
-	osSetField(L, "hour", t.Hour())
-	osSetField(L, "min", t.Minute())
 	osSetField(L, "sec", t.Second())
-	osSetField(L, "yday", t.YearDay())
+	osSetField(L, "min", t.Minute())
+	osSetField(L, "hour", t.Hour())
+	osSetField(L, "day", t.Day())
+	osSetField(L, "month", int(t.Month()))
+	osSetField(L, "year", t.Year())
 	osSetField(L, "wday", int(t.Weekday())+1)
-	osSetBoolField(L, "isdst", tIsDST(t))
+	osSetField(L, "yday", t.YearDay())
+	isdst := 0
+	if tIsDST(t) {
+		isdst = 1
+	}
+	osSetBoolField(L, "isdst", isdst)
 }
 
 // tIsDST reports whether t falls in the daylight-saving time of its

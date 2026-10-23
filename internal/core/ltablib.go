@@ -55,16 +55,14 @@ func tableIncr(n *int) int {
 }
 
 func tableInsert(L *State) int {
-	var pos int64 /* where to insert new element */
-	e := tableAuxGetn(L, 1, tabRW)
-	e = e + 1 /* first empty element */
+	e := tableAuxGetn(L, 1, tabRW) + 1 /* first empty element */
+	var pos int64                       /* where to insert new element */
 	switch L.GetTop() {
 	case 2: /* called with only 2 arguments */
 		pos = e /* insert new element at the end */
 	case 3:
 		pos = L.CheckInteger(2) /* 2nd argument is the position */
-		/* check whether 'pos' is in [1, e] */
-		L.ArgCheck(uint64(pos)-1 < uint64(e), 2, "position out of bounds")
+		L.ArgCheck(1 <= pos && pos <= e, 2, "position out of bounds")
 		for i := e; i > pos; i-- { /* move up elements */
 			L.GetI(1, i-1)
 			L.SetI(1, i) /* t[i] = t[i - 1] */
@@ -80,9 +78,8 @@ func tableRemove(L *State) int {
 	size := tableAuxGetn(L, 1, tabRW)
 	pos := L.OptInteger(2, size)
 	if pos != size { /* validate 'pos' if given */
-		/* check whether 'pos' is in [1, size + 1] */
 		/* 5.3.4 tremove: luaL_argcheck(..., 1, ...) — arg index is 1, not 2. */
-		L.ArgCheck(uint64(pos)-1 <= uint64(size), 1, "position out of bounds")
+		L.ArgCheck(1 <= pos && pos <= size+1, 1, "position out of bounds")
 	}
 	L.GetI(1, pos) /* result = t[pos] */
 	for ; pos < size; pos++ {
@@ -90,7 +87,7 @@ func tableRemove(L *State) int {
 		L.SetI(1, pos) /* t[pos] = t[pos + 1] */
 	}
 	L.PushNil()
-	L.SetI(1, pos) /* remove entry t[pos] */
+	L.SetI(1, pos) /* t[pos] = nil */
 	return 1
 }
 
@@ -164,17 +161,15 @@ func tableConcat(L *State) int {
 // ---------------------------------------------------------------------
 
 func tablePack(L *State) int {
-	n := L.GetTop()           /* number of elements to pack */
-	L.CreateTable(n, 1)       /* create result table */
+	n := L.GetTop()     /* number of elements to pack */
+	L.CreateTable(n, 1) /* create result table */
+	L.Insert(1)         /* put it at index 1 */
 	for i := n; i >= 1; i-- { /* assign elements */
-		// The C version pushes the new table below its arguments with
-		// lua_insert; copying them has exactly the same effect.
-		L.PushValue(i)
-		L.SetI(-2, int64(i))
+		L.SetI(1, int64(i))
 	}
 	L.PushInteger(int64(n))
-	L.SetField(-2, "n") /* t.n = number of elements */
-	return 1            /* return table */
+	L.SetField(1, "n") /* t.n = number of elements */
+	return 1           /* return table */
 }
 
 func tableUnpack(L *State) int {
