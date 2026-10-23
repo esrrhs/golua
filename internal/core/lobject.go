@@ -406,6 +406,7 @@ type Proto struct {
 	abslineinfo []AbsLineInfo
 	locvars     []LocVar
 	source      *TString
+	cache       *LClosure /* last-created closure of this proto (5.3 reuse) */
 }
 
 // ---------------------------------------------------------------------

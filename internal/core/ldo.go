@@ -320,20 +320,36 @@ retry:
 		p := clLvalue(fv).p
 		fsize := int(p.maxstacksize)
 		nfixparams := int(p.numparams)
-		L.checkStack(fsize - delta)
+		L.checkStack(fsize - delta + nfixparams + 1)
 		ci.funcIdx -= delta /* restore 'func' (if vararg) */
 		/* move down function and arguments */
 		for i := 0; i < narg1; i++ {
 			L.stack[ci.funcIdx+i] = L.stack[funcIdx+i]
 		}
 		funcIdx = ci.funcIdx /* moved-down function */
-		for ; narg1 <= nfixparams; narg1++ {
-			setnilvalue(&L.stack[funcIdx+narg1]) /* complete missing arguments */
-		}
-		ci.top = funcIdx + 1 + fsize /* top for the new function */
-		ci.savedpc = 0               /* starting point */
-		ci.callstatus |= CIST_TAIL
+		actual := narg1 - 1 /* args without the function */
 		L.top = funcIdx + narg1
+		if p.isVararg != 0 {
+			/* 5.3.4: varargs stay below base; fixed params are copied up */
+			base := adjustVarargs(L, p, actual)
+			nExtra := actual - nfixparams
+			if nExtra < 0 {
+				nExtra = 0
+			}
+			ci.base = base
+			ci.nExtraArgs = nExtra
+			ci.top = base + fsize
+			L.top = ci.top
+		} else {
+			for ; narg1 <= nfixparams; narg1++ {
+				setnilvalue(&L.stack[funcIdx+narg1]) /* complete missing arguments */
+			}
+			ci.base = funcIdx + 1
+			ci.top = funcIdx + 1 + fsize
+			L.top = funcIdx + narg1
+		}
+		ci.savedpc = 0 /* starting point */
+		ci.callstatus |= CIST_TAIL
 		return -1
 	default: /* not a function */
 		tryfuncTM(L, funcIdx) /* try to get '__call' metamethod */

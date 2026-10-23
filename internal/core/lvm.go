@@ -278,7 +278,27 @@ func vmFastGeti(t *Value, key int64) *Value {
 	return luaH_getint(h, key)
 }
 
-// pushclosure creates a new Lua closure and initializes its upvalues.
+// getcached returns p.cache if it has the same upvalues the new closure would.
+func getcached(p *Proto, encup []*UpVal, L *State, base int) *LClosure {
+	c := p.cache
+	if c == nil {
+		return nil
+	}
+	for i := 0; i < p.sizeupvalues; i++ {
+		uv := c.upvals[i]
+		if p.upvalues[i].instack != 0 {
+			level := base + int(p.upvalues[i].idx)
+			if uv == nil || !uv.open || uv.L != L || uv.idx != level {
+				return nil
+			}
+		} else if uv != encup[p.upvalues[i].idx] {
+			return nil
+		}
+	}
+	return c
+}
+
+// pushclosure creates a new Lua closure, initializes upvalues, and caches it.
 func pushclosure(L *State, p *Proto, encup []*UpVal, base, ra int) {
 	nup := p.sizeupvalues
 	uv := p.upvalues
@@ -292,6 +312,7 @@ func pushclosure(L *State, p *Proto, encup []*UpVal, base, ra int) {
 			ncl.upvals[i] = encup[uv[i].idx]
 		}
 	}
+	p.cache = ncl /* 5.3: reuse when upvalues match (no GC color check here) */
 }
 
 // forlimit prepares the limit of a numerical 'for' loop (lvm.c).
@@ -613,6 +634,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 				if b != 0 || c != 0 {
 					luaH_resize(L, t, uint32(luaO_fb2int(b)), uint32(luaO_fb2int(c)))
 				}
+				/* PUC luaC_checkGC after allocation; metamethod may run Lua. */
+				if L.gcAfterAlloc() {
+					continue
+				}
 			case OP_SELF:
 				rb := &L.stack[base+i.B]
 				L.stack[ra+1] = *rb
@@ -682,6 +707,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 				ra = base + i.A
 				L.stack[ra] = L.stack[base+b]
 				L.top = ci.top
+				/* concatenation allocates; programs may wait on the collector */
+				if L.gcAfterAlloc() {
+					continue
+				}
 			case OP_JMP:
 				if i.A != 0 {
 					luaF_closeupval(L, base+i.A-1)
@@ -885,7 +914,14 @@ func luaV_execute(L *State, ci *CallInfo) {
 				L.top = ci.top
 			case OP_CLOSURE:
 				p := cl.p.p[i.B]
-				pushclosure(L, p, cl.upvals, base, ra)
+				if ncl := getcached(p, cl.upvals, L, base); ncl != nil {
+					setclLvalue(&L.stack[ra], ncl)
+				} else {
+					pushclosure(L, p, cl.upvals, base, ra)
+				}
+				if L.gcAfterAlloc() {
+					continue
+				}
 			case OP_VARARG:
 				b := i.B - 1
 				n := (base - ci.funcIdx) - int(cl.p.numparams) - 1

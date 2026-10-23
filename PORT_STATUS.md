@@ -16,9 +16,13 @@
 - `string.format` scanformat errors (too long / repeated flags / invalid option); no 5.4 string arith metamethods (varinfo via trybinTM)
 - `print` calls global `tostring` like 5.3.4 (not luaL_tolstring)
 - `funcname` fieldsel uses `luaK_exp2anyregup` before index (method/table function assign)
+- Restored `gcAfterAlloc` on NEWTABLE/CONCAT/CLOSURE (weak busy-wait)
+- Proto.cache / getcached for closure equality
+- `debug.upvalueid` always ArgChecks invalid index
+- pretailcall sets `ci.base` and runs `adjustVarargs` for 5.3 vararg protos (__call chains)
 
 ## Remaining / known gaps
-1. **Official suite**: **15/28 identical** (was ~7 at tip `8a8f434`). Still diverge: attrib, big, closure, db, errors, events, main, nextvar, sort (comparison counts), vararg. Known-diff: all, gc, literals. Not silent — `TestOfficialSuite` fails until greener.
+1. **Official suite**: measuring after closure/events/vararg cluster. Known remaining candidates: attrib, big, db, errors, main, nextvar, sort. Known-diff: all, gc, literals.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).

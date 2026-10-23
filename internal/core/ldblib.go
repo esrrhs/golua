@@ -633,8 +633,9 @@ func dbCheckUpVal(L *State, argf, argnup int, pnup *int) unsafe.Pointer {
 	n := int(L.CheckInteger(argnup)) /* upvalue index */
 	L.CheckType(argf, LUA_TFUNCTION) /* closure */
 	id := dbUpvalueID(L, argf, n)
+	/* 5.3.4 checkupval always rejects an invalid index */
+	L.ArgCheck(id != nil, argnup, "invalid upvalue index")
 	if pnup != nil {
-		L.ArgCheck(id != nil, argnup, "invalid upvalue index")
 		*pnup = n
 	}
 	return id
@@ -642,11 +643,7 @@ func dbCheckUpVal(L *State, argf, argnup int, pnup *int) unsafe.Pointer {
 
 func dbUpValueIDFunc(L *State) int {
 	id := dbCheckUpVal(L, 1, 2, nil)
-	if id != nil {
-		L.PushLightUserData(id)
-	} else {
-		L.PushNil()
-	}
+	L.PushLightUserData(id)
 	return 1
 }
 
