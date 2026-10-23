@@ -83,12 +83,12 @@ func (D *DumpState) dumpCode(f *Proto) {
 // 5.3 on-disk constant tags (lobject.h) — float/int variants are
 // swapped relative to our internal 5.4-style LUA_VNUM* tags.
 const (
-	dumpTagNil     = LUA_TNIL                    // 0
-	dumpTagBoolean = LUA_TBOOLEAN                // 1
-	dumpTagNumFlt  = LUA_TNUMBER | (0 << 4)      // 3  LUA_TNUMFLT
-	dumpTagNumInt  = LUA_TNUMBER | (1 << 4)      // 19 LUA_TNUMINT
-	dumpTagShrStr  = LUA_TSTRING | (0 << 4)      // 4  LUA_TSHRSTR
-	dumpTagLngStr  = LUA_TSTRING | (1 << 4)      // 20 LUA_TLNGSTR
+	dumpTagNil     = LUA_TNIL               // 0
+	dumpTagBoolean = LUA_TBOOLEAN           // 1
+	dumpTagNumFlt  = LUA_TNUMBER | (0 << 4) // 3  LUA_TNUMFLT
+	dumpTagNumInt  = LUA_TNUMBER | (1 << 4) // 19 LUA_TNUMINT
+	dumpTagShrStr  = LUA_TSTRING | (0 << 4) // 4  LUA_TSHRSTR
+	dumpTagLngStr  = LUA_TSTRING | (1 << 4) // 20 LUA_TLNGSTR
 )
 
 func (D *DumpState) dumpConstants(f *Proto) {
@@ -145,13 +145,13 @@ func (D *DumpState) dumpUpvalues(f *Proto) {
 func (D *DumpState) dumpDebug(f *Proto) {
 	n := 0
 	if !D.strip {
-		n = len(f.lineinfo)
+		n = f.sizelineinfo /* C: f->sizelineinfo (combine may zero this) */
 	}
 	D.dumpInt(n)
 	if n > 0 {
 		b := make([]byte, 4*n)
-		for i, line := range f.lineinfo {
-			binary.LittleEndian.PutUint32(b[4*i:], uint32(line))
+		for i := 0; i < n; i++ {
+			binary.LittleEndian.PutUint32(b[4*i:], uint32(f.lineinfo[i]))
 		}
 		D.dumpBlock(b)
 	}

@@ -12,7 +12,7 @@
 //     (doargs rewrites the last argv entry, so that is the file it
 //     reads). It is what the reference compiler does.
 //   - several files are combined by compiling
-//     "(function()end)();\n" once per file and then replacing each
+//     "(function()end)();" once per file and then replacing each
 //     nested prototype with one of the files', which is how luac packs
 //     them into a single main chunk.
 package core
@@ -33,7 +33,7 @@ const (
 	luacOutput   = luacProgName + ".out"
 	// luacFunction is FUNCTION in luac.c: the skeleton whose nested
 	// prototypes are replaced by the ones being combined.
-	luacFunction = "(function()end)();\n"
+	luacFunction = "(function()end)();"
 )
 
 // luac is the compiler: the options doargs collected, plus where the
@@ -235,6 +235,7 @@ func (c *luac) combine(L *State, n int) *Proto {
 			f.p[i].upvalues[0].instack = 0
 		}
 	}
+	f.sizelineinfo = 0 /* luac.c: dump omits wrapper lineinfo; pointer kept for listing */
 	return f
 }
 
@@ -322,26 +323,6 @@ func (c *luac) printString(ts *TString) {
 		}
 	}
 	fmt.Fprint(c.out, "\"")
-}
-
-// printType is PrintType: the one-letter type of a constant.
-func (c *luac) printType(f *Proto, i int) {
-	o := &f.k[i]
-	switch ttypetag(o) {
-	case LUA_VNIL:
-		fmt.Fprint(c.out, "N")
-	case LUA_VFALSE, LUA_VTRUE:
-		fmt.Fprint(c.out, "B")
-	case LUA_VNUMFLT:
-		fmt.Fprint(c.out, "F")
-	case LUA_VNUMINT:
-		fmt.Fprint(c.out, "I")
-	case LUA_VSHRSTR, LUA_VLNGSTR:
-		fmt.Fprint(c.out, "S")
-	default: /* cannot happen */
-		fmt.Fprintf(c.out, "?%d", ttypetag(o))
-	}
-	fmt.Fprint(c.out, "\t")
 }
 
 // printConstant is PrintConstant.
@@ -535,12 +516,11 @@ func (c *luac) printCode(f *Proto) {
 	}
 }
 
-// printDebug is PrintDebug.
+// printDebug is PrintDebug (luac.c 5.3.4: print i+1; no type column).
 func (c *luac) printDebug(f *Proto) {
 	fmt.Fprintf(c.out, "constants (%d) for %p:\n", len(f.k), f)
 	for i := range f.k {
-		fmt.Fprintf(c.out, "\t%d\t", i)
-		c.printType(f, i)
+		fmt.Fprintf(c.out, "\t%d\t", i+1)
 		c.printConstant(f, i)
 		fmt.Fprint(c.out, "\n")
 	}

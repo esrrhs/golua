@@ -3,11 +3,11 @@ main <(luac):0,0> (7 instructions at 0xPTR)
 0+ params, 2 slots, 1 upvalue, 0 locals, 0 constants, 3 functions
 	1	[1]	CLOSURE  	0 0	; 0xPTR
 	2	[1]	CALL     	0 1 1
-	3	[2]	CLOSURE  	0 1	; 0xPTR
-	4	[2]	CALL     	0 1 1
-	5	[3]	CLOSURE  	0 2	; 0xPTR
-	6	[3]	CALL     	0 1 1
-	7	[3]	RETURN   	0 1
+	3	[1]	CLOSURE  	0 1	; 0xPTR
+	4	[1]	CALL     	0 1 1
+	5	[1]	CLOSURE  	0 2	; 0xPTR
+	6	[1]	CALL     	0 1 1
+	7	[1]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
@@ -185,54 +185,54 @@ main <f1.lua:0,0> (169 instructions at 0xPTR)
 	168	[24]	CALL     	9 0 1
 	169	[24]	RETURN   	0 1
 constants (48) for 0xPTR:
-	0	I	1
-	1	I	2
-	2	I	3
-	3	S	"x"
-	4	S	"y"
-	5	I	10
-	6	I	20
-	7	S	"print"
-	8	S	"pairs"
-	9	S	"rep"
-	10	S	"abc"
-	11	I	0
-	12	S	"e"
-	13	S	"o"
-	14	F	2.5
-	15	F	1024.0
-	16	S	"coroutine"
-	17	S	"wrap"
-	18	S	"setmetatable"
-	19	S	"__index"
-	20	S	"__add"
-	21	S	"__call"
-	22	S	"__tostring"
-	23	S	"__close"
-	24	S	"__gc"
-	25	S	"__len"
-	26	S	"__eq"
-	27	S	"__lt"
-	28	S	"__le"
-	29	S	"__concat"
-	30	S	"__unm"
-	31	S	"__newindex"
-	32	S	"__mod"
-	33	S	"__pow"
-	34	S	"__div"
-	35	S	"__idiv"
-	36	S	"__band"
-	37	S	"__bor"
-	38	S	"__bxor"
-	39	S	"__shl"
-	40	S	"__shr"
-	41	S	"__bnot"
-	42	I	1
-	43	I	4
-	44	S	"tostring"
-	45	S	""
-	46	S	"table"
-	47	S	"unpack"
+	1	1
+	2	2
+	3	3
+	4	"x"
+	5	"y"
+	6	10
+	7	20
+	8	"print"
+	9	"pairs"
+	10	"rep"
+	11	"abc"
+	12	0
+	13	"e"
+	14	"o"
+	15	2.5
+	16	1024.0
+	17	"coroutine"
+	18	"wrap"
+	19	"setmetatable"
+	20	"__index"
+	21	"__add"
+	22	"__call"
+	23	"__tostring"
+	24	"__close"
+	25	"__gc"
+	26	"__len"
+	27	"__eq"
+	28	"__lt"
+	29	"__le"
+	30	"__concat"
+	31	"__unm"
+	32	"__newindex"
+	33	"__mod"
+	34	"__pow"
+	35	"__div"
+	36	"__idiv"
+	37	"__band"
+	38	"__bor"
+	39	"__bxor"
+	40	"__shl"
+	41	"__shr"
+	42	"__bnot"
+	43	1
+	44	4
+	45	"tostring"
+	46	""
+	47	"table"
+	48	"unpack"
 locals (19) for 0xPTR:
 	0	add	2	170
 	1	t	9	170
@@ -275,9 +275,9 @@ function <f1.lua:13,13> (5 instructions at 0xPTR)
 	4	[13]	CALL     	0 2 1
 	5	[13]	RETURN   	0 1
 constants (3) for 0xPTR:
-	0	S	"coroutine"
-	1	S	"yield"
-	2	I	1
+	1	"coroutine"
+	2	"yield"
+	3	1
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
@@ -298,7 +298,7 @@ function <f1.lua:14,14> (3 instructions at 0xPTR)
 	2	[14]	RETURN   	2 2
 	3	[14]	RETURN   	0 1
 constants (1) for 0xPTR:
-	0	I	42
+	1	42
 locals (2) for 0xPTR:
 	0	a	1	4
 	1	b	1	4
@@ -320,7 +320,7 @@ function <f1.lua:15,15> (3 instructions at 0xPTR)
 	2	[15]	RETURN   	0 2
 	3	[15]	RETURN   	0 1
 constants (1) for 0xPTR:
-	0	S	"T"
+	1	"T"
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
@@ -344,7 +344,7 @@ function <f1.lua:16,16> (3 instructions at 0xPTR)
 	2	[16]	RETURN   	0 2
 	3	[16]	RETURN   	0 1
 constants (1) for 0xPTR:
-	0	I	7
+	1	7
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
@@ -411,8 +411,8 @@ function <f1.lua:23,23> (7 instructions at 0xPTR)
 	6	[23]	RETURN   	0 0
 	7	[23]	RETURN   	0 1
 constants (2) for 0xPTR:
-	0	S	"select"
-	1	S	"#"
+	1	"select"
+	2	"#"
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
@@ -481,22 +481,22 @@ main <f2.lua:0,0> (61 instructions at 0xPTR)
 	60	[22]	CALL     	13 0 1
 	61	[22]	RETURN   	0 1
 constants (16) for 0xPTR:
-	0	F	9.007199254741e+15
-	1	F	0.1
-	2	I	0
-	3	I	1
-	4	S	"a\nb\ttab\\q\"z"
-	5	S	"AB"
-	6	S	"\240\159\152\128"
-	7	S	"A"
-	8	S	"\195\169"
-	9	S	"print"
-	10	I	300
-	11	I	10
-	12	S	"method"
-	13	S	"static"
-	14	I	1
-	15	S	"pcall"
+	1	9.007199254741e+15
+	2	0.1
+	3	0
+	4	1
+	5	"a\nb\ttab\\q\"z"
+	6	"AB"
+	7	"\240\159\152\128"
+	8	"A"
+	9	"\195\169"
+	10	"print"
+	11	300
+	12	10
+	13	"method"
+	14	"static"
+	15	1
+	16	"pcall"
 locals (17) for 0xPTR:
 	0	big	2	62
 	1	flt	3	62
@@ -531,8 +531,8 @@ function <f2.lua:12,12> (10 instructions at 0xPTR)
 	9	[12]	RETURN   	1 2
 	10	[12]	RETURN   	0 1
 constants (2) for 0xPTR:
-	0	I	0
-	1	I	1
+	1	0
+	2	1
 locals (1) for 0xPTR:
 	0	k	1	11
 upvalues (1) for 0xPTR:
@@ -554,7 +554,7 @@ function <f2.lua:16,16> (3 instructions at 0xPTR)
 	2	[16]	RETURN   	0 2
 	3	[16]	RETURN   	0 1
 constants (1) for 0xPTR:
-	0	S	"s"
+	1	"s"
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
@@ -566,9 +566,9 @@ function <f2.lua:18,18> (5 instructions at 0xPTR)
 	4	[18]	CALL     	0 3 1
 	5	[18]	RETURN   	0 1
 constants (3) for 0xPTR:
-	0	S	"error"
-	1	S	"boom"
-	2	I	2
+	1	"error"
+	2	"boom"
+	3	2
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
@@ -582,7 +582,7 @@ function <f2.lua:21,21> (6 instructions at 0xPTR)
 	5	[21]	RETURN   	0 2
 	6	[21]	RETURN   	0 1
 constants (1) for 0xPTR:
-	0	I	1
+	1	1
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	up	1	11
@@ -621,9 +621,9 @@ function <f3.lua:1,7> (21 instructions at 0xPTR)
 	20	[6]	RETURN   	3 3
 	21	[7]	RETURN   	0 1
 constants (3) for 0xPTR:
-	0	I	1
-	1	I	0
-	2	S	"ipairs"
+	1	1
+	2	0
+	3	"ipairs"
 locals (12) for 0xPTR:
 	0	a	1	22
 	1	t	2	22
