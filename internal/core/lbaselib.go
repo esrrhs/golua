@@ -663,6 +663,8 @@ var baseFuncs = []Reg{
 	{Name: "ipairs", Func: baseIPairs},
 	{Name: "loadfile", Func: baseLoadFile},
 	{Name: "load", Func: baseLoad},
+	/* LUA_COMPAT_LOADSTRING (default-compat alias of load) */
+	{Name: "loadstring", Func: baseLoad},
 	{Name: "next", Func: baseNext},
 	{Name: "pairs", Func: basePairs},
 	{Name: "pcall", Func: basePCall},
