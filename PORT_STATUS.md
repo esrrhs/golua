@@ -20,7 +20,6 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 | File headers / docs | Yes | Point at 5.3.4; bench tables vs PUC **5.3.4** |
 | **Go GC / `lgc`** | **No (intentional)** | Go runtime + finalizer bridge; `collectgarbage` only `collect`+`count` (other known opts no-op→0; C `lua_gc` may still drive GC) |
 | CallInfo **extra fields** | Go adaptation | `trap`, `ftransfer`/`ntransfer`, `goCont`, … |
-| `Proto.fastLeaf` | Go adaptation | VM leaf fastpath cache |
 | `Table.alimit` name | Go adaptation | ≡ C `sizearray` (always real; no 5.4 shrink) |
 | `Table.weakMode` / `finalized` | Go adaptation | Weak tables / `__gc` without C GC lists |
 | `WarnFunc` / `Warning` | Go adaptation | Not in 5.3.4 `lua.h`; used for `__gc` errors (C: `LUA_ERRGCMM`) |

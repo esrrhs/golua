@@ -833,15 +833,11 @@ type strGMatchState struct {
 	src       int /* current position (offset into the subject) */
 	p         int /* pattern offset (always 0 here) */
 	lastmatch int /* end of last match */
-	plain     byte
 	ms        strMatchState
 }
 
 func strGmatchAux(L *State) int {
 	gm, _ := L.ToUserData(UpvalueIndex(3)).(*strGMatchState)
-	if gm.plain == 'a' {
-		return strGmatchAlpha(L, gm)
-	}
 	gm.ms.L = L
 	for src := gm.src; src <= gm.ms.srcEnd; src++ {
 		strReprepState(&gm.ms)
@@ -852,36 +848,6 @@ func strGmatchAux(L *State) int {
 		}
 	}
 	return 0 /* not found */
-}
-
-// strGmatchAlpha finds the next run of letters. '%a+' cannot match
-// empty, so each success moves the cursor forward.
-func strGmatchAlpha(L *State, gm *strGMatchState) int {
-	src := gm.ms.src
-	end := gm.ms.srcEnd
-	i := gm.src
-	for i < end {
-		c := src[i]
-		if !strIsAlpha(c) {
-			i++
-			continue
-		}
-		start := i
-		i++
-		for i < end {
-			c = src[i]
-			if !strIsAlpha(c) {
-				break
-			}
-			i++
-		}
-		gm.src = i
-		gm.lastmatch = i
-		L.PushString(src[start:i])
-		return 1
-	}
-	gm.src = end + 1
-	return 0
 }
 
 func strGmatch(L *State) int {
@@ -895,11 +861,6 @@ func strGmatch(L *State) int {
 	gm.src = 0
 	gm.p = 0
 	gm.lastmatch = -1
-	/* '%a+' is a scan for letter runs. The general matcher retries the
-	   whole pattern at every byte, and this pattern is most of gmatch. */
-	if p == "%a+" && (ctypeIsC.Load() || ctypeIsAlpha == nil) {
-		gm.plain = 'a'
-	}
 	L.NewUserData(gm, 0)
 	L.PushGoClosure(strGmatchAux, 3)
 	return 1
@@ -1706,22 +1667,6 @@ func strFormat(L *State) int {
 	top := L.GetTop()
 	arg := 1
 	strfrmt := L.CheckString(arg)
-	/* A single unmodified decimal conversion with literal text around it
-	   is the overwhelmingly common logging/serialization form. Going
-	   through luaL_Buffer, the format parser and fmt.Sprintf for
-	   "%d-suffix" costs several allocations. strconv already has the
-	   exact decimal spelling Lua needs. Keep formats with flags, width,
-	   precision or another '%' on the full path below. */
-	if top == 2 {
-		if prefix, suffix, ok := simpleIntFormat(strfrmt); ok {
-			var scratch [128]byte
-			out := append(scratch[:0], prefix...)
-			out = strconv.AppendInt(out, L.CheckInteger(2), 10)
-			out = append(out, suffix...)
-			L.PushString(string(out))
-			return 1
-		}
-	}
 	b := L.NewBuffer()
 	i := 0
 	for i < len(strfrmt) {
@@ -1817,18 +1762,6 @@ func strFormat(L *State) int {
 	}
 	b.PushResult()
 	return 1
-}
-
-func simpleIntFormat(format string) (prefix, suffix string, ok bool) {
-	i := strings.IndexByte(format, '%')
-	if i < 0 || i+1 >= len(format) ||
-		(format[i+1] != 'd' && format[i+1] != 'i') {
-		return "", "", false
-	}
-	if strings.IndexByte(format[i+2:], '%') >= 0 {
-		return "", "", false
-	}
-	return format[:i], format[i+2:], true
 }
 
 // ---------------------------------------------------------------------

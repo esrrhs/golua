@@ -202,11 +202,6 @@ type State struct {
 
 	openupval []*UpVal // open upvalues of this stack
 
-	// Last two-string concatenation. Tight loops commonly join the same
-	// pair on every iteration; short-string interning finds the same
-	// result but only after Go has allocated a temporary a+b string.
-	concatA, concatB, concatR *TString
-
 	errfunc int    // current error handling function (stack index)
 	nCcalls uint16 // number of nested C calls (lstate.h 5.3.4)
 	nny     uint16 // number of non-yieldable calls in stack

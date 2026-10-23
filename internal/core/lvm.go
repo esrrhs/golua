@@ -8,7 +8,6 @@ package core
 
 import (
 	"math"
-	"strconv"
 	"strings"
 )
 
@@ -111,36 +110,12 @@ func luaV_concat(L *State, total int) {
 		n := 2
 		o1 := &L.stack[top-2]
 		o2 := &L.stack[top-1]
-		if total == 2 && ttisstring(o1) && ttisinteger(o2) {
-			/* Formatting an integer directly after the string avoids
-			   interning a temporary decimal string only to copy it into
-			   the concatenation. OP_CONCAT still performs its one GC
-			   check after this returns. */
-			var scratch [128]byte
-			out := append(scratch[:0], tsvalue(o1).val...)
-			out = strconv.AppendInt(out, o2.i, 10)
-			setsvalue(&L.stack[top-2], luaS_newlstr(L, string(out)))
-			n = 2
-		} else if !(ttisstring(o1) || cvt2str(o1)) || !tostringInPlace(L, o2) {
+		if !(ttisstring(o1) || cvt2str(o1)) || !tostringInPlace(L, o2) {
 			luaT_tryconcatTM(L)
 		} else if isEmptyStr(o2) { /* second operand is empty? */
 			tostringInPlace(L, o1) /* result is first operand */
 		} else if isEmptyStr(o1) { /* first operand is empty string? */
 			L.stack[top-2] = L.stack[top-1] /* result is second operand */
-		} else if total == 2 && tostringInPlace(L, o1) {
-			/* Two strings is the common opcode. Joining them directly
-			   skips the slice and the builder the general path needs
-			   when it is gathering an arbitrary run. Remember the last
-			   pair too: interning otherwise discovers the same result
-			   only after a+b has allocated its temporary string. */
-			a, b := tsvalue(o1), tsvalue(o2)
-			r := L.concatR
-			if a != L.concatA || b != L.concatB || r == nil {
-				r = luaS_newlstr(L, a.val+b.val)
-				L.concatA, L.concatB, L.concatR = a, b, r
-			}
-			setsvalue(&L.stack[top-2], r)
-			n = 2
 		} else {
 			/* at least two non-empty string values; get as many as possible */
 			parts := make([]string, 0, total)
@@ -676,10 +651,6 @@ func luaV_execute(L *State, ci *CallInfo) {
 				if b != 0 {
 					L.top = ra + b /* else previous instruction set top */
 				}
-				/* 5.3 RK leaf fast path: only when nargs known (B!=0). */
-				if b != 0 && nresults == 1 && L.hookmask == 0 && fastLeafCall(L, ra, b-1) {
-					break
-				}
 				ci.savedpc = pc
 				if luaD_precall(L, ra, nresults) != 0 { /* C function? */
 					if L.fastYield {
@@ -710,7 +681,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					/* fall through to next opcode (RETURN) like C */
 				} else {
 					/* tail call: put called frame (n) in place of caller one (o) */
-					nci := L.ci /* called frame */
+					nci := L.ci     /* called frame */
 					oci := nci.prev /* caller frame */
 					nfunc := nci.funcIdx
 					ofunc := oci.funcIdx
@@ -1339,7 +1310,6 @@ func luaV_objlen(L *State, ra int, rb *Value) {
 	}
 	luaT_callTMres(L, tm, rb, rb, ra)
 }
-
 
 func luaG_tracecall(L *State, ci *CallInfo) bool {
 	/* 5.3.4: call hooks run from callhook inside luaD_precall, not here.

@@ -407,7 +407,6 @@ type Proto struct {
 	numparams    byte
 	isVararg     byte
 	maxstacksize byte
-	fastLeaf     byte // Go-only: cached straight-line numeric leaf (lvm_fastcall)
 
 	sizeupvalues int
 	sizek        int

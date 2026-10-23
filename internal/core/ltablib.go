@@ -4,7 +4,6 @@ package core
 
 import (
 	"math"
-	"slices"
 	"time"
 )
 
@@ -134,81 +133,6 @@ func tableMove(L *State) int {
 	return 1
 }
 
-// tableConcatRaw joins a dense array of strings without the per-element
-// stack traffic of the general buffer path. Anything that is not a plain
-// table of strings (a metatable, a number that still has to be converted,
-// a hole) falls back so the error and the conversion stay the same.
-func tableConcatRaw(L *State) (string, bool) {
-	top := L.GetTop()
-	if top < 1 || top > 4 {
-		return "", false
-	}
-	base := L.ci.funcIdx + 1
-	tv := &L.stack[base]
-	if tv.tt != ctb(LUA_VTABLE) {
-		return "", false
-	}
-	t := hvalue(tv)
-	if t.metatable != nil {
-		return "", false
-	}
-	sep := ""
-	if top >= 2 && !ttisnil(&L.stack[base+1]) {
-		if !ttisstring(&L.stack[base+1]) {
-			return "", false
-		}
-		sep = tsvalue(&L.stack[base+1]).val
-	}
-	i := int64(1)
-	last := int64(luaH_getn(t))
-	if top >= 3 && !ttisnil(&L.stack[base+2]) {
-		if L.stack[base+2].tt != LUA_VNUMINT {
-			return "", false
-		}
-		i = L.stack[base+2].i
-	}
-	if top >= 4 && !ttisnil(&L.stack[base+3]) {
-		if L.stack[base+3].tt != LUA_VNUMINT {
-			return "", false
-		}
-		last = L.stack[base+3].i
-	}
-	if i > last {
-		return "", true
-	}
-	if i < 1 || last > int64(luaH_realasize(t)) || last-i >= math.MaxInt32 {
-		return "", false
-	}
-	count := last - i + 1
-	total := 0
-	if count > 1 && len(sep) > 0 {
-		if int64(len(sep)) > (int64(math.MaxInt)-1)/(count-1) {
-			return "", false
-		}
-		total = len(sep) * int(count-1)
-	}
-	for k := i; k <= last; k++ {
-		e := &t.array[k-1]
-		if !ttisstring(e) {
-			return "", false
-		}
-		ln := len(tsvalue(e).val)
-		if ln > math.MaxInt-total {
-			return "", false
-		}
-		total += ln
-	}
-	buf := make([]byte, total)
-	p := 0
-	for k := i; k <= last; k++ {
-		if k != i && len(sep) > 0 {
-			p += copy(buf[p:], sep)
-		}
-		p += copy(buf[p:], tsvalue(&t.array[k-1]).val)
-	}
-	return string(buf), true
-}
-
 func tableAddField(L *State, b *Buffer, i int64) {
 	L.GetI(1, i)
 	if !L.IsString(-1) {
@@ -219,10 +143,6 @@ func tableAddField(L *State, b *Buffer, i int64) {
 }
 
 func tableConcat(L *State) int {
-	if s, ok := tableConcatRaw(L); ok {
-		L.PushString(s)
-		return 1
-	}
 	last := tableAuxGetn(L, 1, tabR)
 	sep := L.OptString(2, "")
 	i := L.OptInteger(3, 1)
@@ -458,45 +378,11 @@ func tableSort(L *State) int {
 		L.ArgCheck(n < int64(math.MaxInt32), 1, "array too big")
 		if !L.IsNoneOrNil(2) { /* is there a 2nd argument? */
 			L.CheckType(2, LUA_TFUNCTION) /* must be a function */
-		} else if tableSortRawInts(L, n) {
-			return 0
 		}
 		L.SetTop(2) /* make sure there are two arguments */
 		tableAuxSort(L, 1, uint32(n), 0)
 	}
 	return 0
-}
-
-// tableSortRawInts sorts a dense array of integers without a comparison
-// function. The library sort otherwise pushes every element onto the
-// Lua stack and calls back through '<' ; for plain integers that is a
-// write barrier per comparison and nothing else can observe it. Equal
-// keys stay in an unspecified order, which is what the quicksort above
-// already guarantees.
-func tableSortRawInts(L *State, n int64) bool {
-	t := index2value(L, 1)
-	if !ttistable(t) {
-		return false
-	}
-	h := hvalue(t)
-	if h.metatable != nil || uint64(n) > uint64(luaH_realasize(h)) || int(n) > len(h.array) {
-		return false
-	}
-	arr := h.array[:n]
-	for i := range arr {
-		if arr[i].tt != LUA_VNUMINT {
-			return false
-		}
-	}
-	keys := make([]int64, len(arr))
-	for i := range arr {
-		keys[i] = arr[i].i
-	}
-	slices.Sort(keys)
-	for i := range arr {
-		arr[i].i = keys[i]
-	}
-	return true
 }
 
 // ---------------------------------------------------------------------

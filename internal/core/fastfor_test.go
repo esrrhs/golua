@@ -2,11 +2,10 @@ package core
 
 import "testing"
 
-// The straight-line numeric 'for' runs on a register file instead of the
-// dispatch loop. The same loop with an upvalue assignment cannot: that
-// assignment is the slow path, and the two have to agree, including on
-// the loops the register file refuses (the accumulator is closed over,
-// a metamethod, a break).
+// Regression checks for numeric for-loops and related control flow that
+// previously had Go-only fast paths. They must stay correct on the
+// C-faithful interpreter path (including upvalue assignment, metamethods,
+// break, yield, and plain leaf calls).
 func TestFastNumericFor(t *testing.T) {
 	got := runChunk(t, `
 	local sink
@@ -195,44 +194,6 @@ func TestFastCountTail(t *testing.T) {
 	`)
 	if got != "105 7 1 10 4.0" {
 		t.Errorf("tail countdown: %q", got)
-	}
-}
-
-func TestFastNumericLeafCall(t *testing.T) {
-	got := runChunk(t, `
-	local function add3(a, b, c)
-		return a + b + c
-	end
-	local mt = {__add = function(a, b)
-		return (type(a) == "table" and a.n or a) +
-		       (type(b) == "table" and b.n or b)
-	end}
-	local x = setmetatable({n = 10}, mt)
-	return table.concat({
-		tostring(add3(1, 2, 3)),
-		tostring(add3(1.5, 2, 3)),
-		tostring(add3("4", "5", "6")),
-		tostring(add3(x, 2, 3)),
-	}, " ")
-	`)
-	if got != "6 6.5 15.0 15" {
-		t.Errorf("numeric leaf call: %q", got)
-	}
-}
-
-func TestFastConstantLeafCall(t *testing.T) {
-	got := runChunk(t, `
-	local function zero() return 0 end
-	local function half(ignored) return 0.5 end
-	local function text() return "not numeric" end
-	local s = 0
-	for i = 1, 1000 do
-		s = s + zero() + half(i)
-	end
-	return tostring(s) .. " " .. text()
-	`)
-	if got != "500.0 not numeric" {
-		t.Errorf("constant leaf call: %q", got)
 	}
 }
 
