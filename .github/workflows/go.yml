@@ -105,11 +105,13 @@ jobs:
   # Neither can work from goldens alone: a good many of these answers
   # belong to the machine and not to Lua -- 'os.date' asks the C
   # library, and the NaN that 0/0 produces carries the sign the CPU gave
-  # it, so 'nan' here is '-nan' there.  The goldens in the repository
-  # are darwin, and a platform that has none skips; LUA_REF captures
+  # it, so 'nan' here is '-nan' there.  Committed goldens exist for both
+  # linux and darwin (per-GOOS `*.linux.expected` / `*.darwin.expected`);
+  # a platform that has none for its GOOS skips.  LUA_REF still captures
   # fresh ones seconds before they are compared, which is what makes
   # every run here a real differential one and keeps the committed
-  # goldens from rotting unnoticed.
+  # goldens from rotting unnoticed.  Darwin-only refresh is not done on
+  # Linux hosts; the macos job owns those files.
   #
   # (No Windows: Lua's own makefile is a Unix makefile.)
   official:

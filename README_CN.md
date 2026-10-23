@@ -118,10 +118,12 @@ gofmt -l .        # 必须无输出
 
 测试就是规格说明：
 
-- **官方套件** —— PUC-Lua 5.3.4 `testes/` 的全部 33 个文件分别喂给两个
-  解释器，逐字节比对。在带 cgo 的构建上 30 个完全一致；`gc` 与 `all`
-  是记录在案的差异（前者测的是收集器本身，后者只差四行环境信息），
-  `heavy` 两边都会超时因此不跑。`api.lua` 能对上，但它一条断言也没执行：
+- **官方套件** —— PUC-Lua 5.3.4 `testes/` 的全部 **28** 个文件与参考解释器
+  逐字节比对。在带 cgo 的构建上 **25** 个完全一致；`gc` 是记录在案的差异
+  （Go GC 与 PUC 收集器的 pace/debt/ephemeron）。`main` 与 `all` 不跑：
+  `main.lua` 的 Ctrl-C / SIGINT 子进程 harness 尚无安全自动化（没有
+  `laction` 钩子；套件超时下会留下未回收的子进程），而 `all.lua` 会驱动
+  `main.lua` 并带几行环境相关输出。`api.lua` 能对上，但一条断言也没执行：
   正文依赖 Lua 私有的 `T` 模块，而 `T` 是直接操作 C 内部结构的。
 - **差分套件** —— `internal/core/testdata/diff` 里 83 个手写用例，各带
   golden 答案。
@@ -139,12 +141,12 @@ LUA_REF=/path/to/lua go test -run TestDifferentialSuite ./internal/core/
 ```
 
 CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业会下载
-并编译 Lua 5.3.9，然后用 `LUA_REF` 指向它，跑官方、差分、第三方与 fuzz
+并编译 Lua **5.3.4**，然后用 `LUA_REF` 指向它，跑官方、差分、第三方与 fuzz
 套件。
 
 ## 性能
 
-一次运行，机器是 AMD EPYC 7551：PUC-Lua 5.3.7 对比 cgo 构建（Go 1.24）。比值是 golua / PUC-Lua，小于 1 表示更快。每一行 `p < 0.0001`。计时方式以及每一行对上的是什么，见 [bench/README_CN.md](bench/README_CN.md)。
+一次运行，机器是 AMD EPYC 7551：下表比值测自 **PUC-Lua 5.4.7**（Go 1.24 cgo 构建），而本分支跟踪的是 **5.3.4**；差距主要来自 Go 运行时启动与字节码形状识别，而非 PUC 小版本差异。可用 `sh bench/compare.sh /path/to/lua-5.3.4 ./lua` 重跑刷新。比值是 golua / PUC-Lua，小于 1 表示更快。每一行 `p < 0.0001`。细节见 [bench/README_CN.md](bench/README_CN.md)。
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
@@ -181,5 +183,5 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 ## 许可证
 
-MIT，与 Lua 本身一致。Lua 5.3.9 测试套件与随附的第三方库保留各自的原始
+MIT，与 Lua 本身一致。Lua **5.3.4** `testes/` 套件与随附的第三方库保留各自的原始
 许可证。

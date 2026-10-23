@@ -13,9 +13,10 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 | CallInfo **status bits** | Yes | `lstate.h` layout (`CIST_LUA`…`CIST_FIN`) |
 | `luaH_getn` / `hashint` | Yes | 5.3.4 binary+unbound; `hashpow2` |
 | Stdlibs observable behavior | Yes | Differential **83/83** Linux |
-| Official suite (non-GC) | Yes | **25 identical**; `main`/`all` not-run |
+| Official suite (non-GC) | Yes | **25 identical** of 28; `main`/`all` not-run (SIGINT); `gc` known-diff |
+| Third-party / LPeg | Yes | LPeg goldens re-captured vs PUC **5.3.4**; `TestLPeg` enabled in CI |
 | `lparser` / `lcode` / `llex` | Yes (behavior) | Structure ~1:1 |
-| File headers / docs | Yes | Point at 5.3.4 (sweep done) |
+| File headers / docs | Yes | Point at 5.3.4 (sweep done); README/bench label old 5.4.7 ratios |
 | **Go GC / `lgc`** | **No (intentional)** | Go runtime + finalizer bridge |
 | CallInfo **extra fields** | Go adaptation | `trap`, `ftransfer`/`ntransfer`, `goCont`, … |
 | `Proto.fastLeaf` | Go adaptation | VM leaf fastpath cache |
@@ -31,12 +32,15 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 - CGO: no always-on 5.4 exports (`toclose`, `setcstacklimit`, `setwarnf`, …)
 - `OP_TAILCALL`→C falls through to `RETURN`; utf8/`require`/io/os/debug edges aligned
 - Dead `setnorealasize` / `CIST_C`/`TRAN`/`CLSRET` / Proto `abslineinfo` removed
+- LPeg `expected.txt` re-recorded under PUC 5.3.4; blanket `t.Skip` removed
+- Root / bench READMEs: CI Lua **5.3.4**, official **28** files / **25** identical, license testes 5.3.4; perf tables labeled as older 5.4.7 ratios
 
 ## Still open (do not thrash)
 1. Go GC (pace/debt/ephemerons/`gc.lua` known-diff)
-2. `main`/`all` SIGINT harness (skipped)
-3. Darwin goldens (optional; Linux host)
+2. `main`/`all` SIGINT harness — still skipped; needs stand-alone `laction`-equivalent + safe process-group kill before un-skip (see `officialSkip` in `official_test.go`)
+3. Darwin golden refresh — optional; Linux host cannot rewrite `*.darwin.expected`; macos CI owns them (linux goldens already committed)
 4. Further comment/order polish where behavior already matches
+5. Optional: re-run `bench/compare.sh` vs PUC 5.3.4 and replace the labeled 5.4.7 ratio tables
 
 ## Paths
 - C ref: `/workspace/lua-sources/lua-5.3.4`

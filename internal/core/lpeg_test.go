@@ -21,7 +21,7 @@ package core
 //   - userdata carrying a metatable, a user value, and a C block
 //
 // What it runs is LPeg's own test suite, and every line that suite prints
-// was captured from PUC-Lua 5.4.9 running the same extension, so this is
+// was captured from PUC-Lua 5.3.4 running the same extension, so this is
 // a comparison against the reference interpreter and not against what
 // this port happened to print one day.
 
@@ -45,7 +45,6 @@ var lpegHeaders = []string{
 }
 
 func TestLPeg(t *testing.T) {
-	t.Skip("expected.txt captured from PUC-Lua 5.4.9; re-capture under 5.3.4 before enabling")
 	cc, err := exec.LookPath("cc")
 	if err != nil {
 		t.Skip("no C compiler in PATH")

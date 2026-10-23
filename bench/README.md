@@ -19,7 +19,7 @@ Each workload is one function in `suite.lua`. One call is often a few millisecon
 
 ## The run in the root README
 
-AMD EPYC 7551, PUC-Lua 5.4.7 against a cgo build of this tree (Go 1.24). The port tracks Lua 5.4.9. Every row had `p < 0.0001`. Startup was the widest row: golua's coefficient of variation there was 30%, and the other rows were a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
+AMD EPYC 7551, **PUC-Lua 5.4.7** against a cgo build of this tree (Go 1.24). **This branch tracks Lua 5.3.4**; the table below is still the older 5.4.7 comparison (ratios are dominated by Go runtime / shape recognition, not PUC 5.3 vs 5.4). Re-run with `sh bench/compare.sh /path/to/lua-5.3.4 ./lua` to refresh against 5.3.4. Every row had `p < 0.0001`. Startup was the widest row: golua's coefficient of variation there was 30%, and the other rows were a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
 
 ### Work that still runs
 

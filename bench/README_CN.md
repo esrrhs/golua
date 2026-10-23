@@ -19,7 +19,7 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 
 ## 根 README 里的那一次
 
-机器是 AMD EPYC 7551，PUC-Lua 5.4.7 对比这棵树的 cgo 构建（Go 1.24）。移植本身跟踪 Lua 5.4.9。每一行 `p < 0.0001`。startup 的波动最大：golua 那一侧的变异系数是 30%，其余几行是几个百分点。`CGO_ENABLED=0` 的进程启动另计，不在这次运行里。
+机器是 AMD EPYC 7551，**PUC-Lua 5.4.7** 对比这棵树的 cgo 构建（Go 1.24）。**本分支跟踪 Lua 5.3.4**；下表仍是旧的 5.4.7 对比（比值主要由 Go 运行时 / 形状识别决定，而非 PUC 5.3 与 5.4 的差异）。可用 `sh bench/compare.sh /path/to/lua-5.3.4 ./lua` 对 5.3.4 重跑刷新。每一行 `p < 0.0001`。startup 的波动最大：golua 那一侧的变异系数是 30%，其余几行是几个百分点。`CGO_ENABLED=0` 的进程启动另计，不在这次运行里。
 
 ### 该做的计算还在做
 

@@ -126,12 +126,14 @@ gofmt -l .        # must print nothing
 
 The tests are the specification:
 
-- **Official suite** — all 33 files of PUC-Lua 5.3.4's `testes/` run
-  through both interpreters and are compared byte for byte. On a cgo
-  build 30 match exactly; `gc` and `all` are documented differences (the
-  collector itself, and four environment lines), and `heavy` is not run
-  because it times out on both sides. `api.lua` matches but asserts
-  nothing: its body needs Lua's private `T` module, which is built
+- **Official suite** — all 28 files of PUC-Lua 5.3.4's `testes/` are
+  compared byte for byte against a reference interpreter. On a cgo build
+  **25** match exactly; `gc` is a documented difference (Go GC vs PUC
+  collector pace/debt/ephemerons). `main` and `all` are not run: `main.lua`'s
+  Ctrl-C / SIGINT child harness has no safe automation yet (no `laction`
+  hook; unreaped child under the suite timeout), and `all.lua` drives
+  `main.lua` plus a few environment-sensitive lines. `api.lua` matches but
+  asserts nothing: its body needs Lua's private `T` module, which is built
   against the C internals.
 - **Differential suite** — 83 hand-written cases in
   `internal/core/testdata/diff`, each with a golden answer.
@@ -151,12 +153,12 @@ LUA_REF=/path/to/lua go test -run TestDifferentialSuite ./internal/core/
 ```
 
 CI runs three jobs across Linux, macOS and Windows. The `PUC-Lua suites`
-job downloads and builds Lua 5.3.9, then runs the official,
+job downloads and builds Lua **5.3.4**, then runs the official,
 differential, third-party and fuzz suites with `LUA_REF` pointing at it.
 
 ## Performance
 
-One run on an AMD EPYC 7551: PUC-Lua 5.3.7 against a cgo build (Go 1.24). The ratio is golua / PUC-Lua; below 1 is faster. Every row had `p < 0.0001`. Timing and what each row matches are in [bench/README.md](bench/README.md).
+One run on an AMD EPYC 7551: ratios below were measured against **PUC-Lua 5.4.7** (Go 1.24 cgo build) while this branch tracks **5.3.4**; they are dominated by Go runtime startup and bytecode-shape recognition, not PUC minor-version differences. Re-run with `sh bench/compare.sh /path/to/lua-5.3.4 ./lua` to refresh. The ratio is golua / PUC-Lua; below 1 is faster. Every row had `p < 0.0001`. Timing details are in [bench/README.md](bench/README.md).
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
@@ -196,5 +198,5 @@ One run on an AMD EPYC 7551: PUC-Lua 5.3.7 against a cgo build (Go 1.24). The ra
 
 ## License
 
-MIT, the same as Lua itself. The Lua 5.3.9 test suite and the bundled
+MIT, the same as Lua itself. The Lua **5.3.4** `testes/` suite and the bundled
 third-party libraries keep their original licences.

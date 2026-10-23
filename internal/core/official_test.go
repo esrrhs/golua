@@ -77,9 +77,9 @@ var officialKnownDiffBuild = map[string]struct {
 	needs []string
 	why   string
 }{
-	"attrib":   {[]string{"dlopen", "clibs"}, "loads the C libraries of libs/ through package.loadlib and require"},
-	"main":     {[]string{"dlopen", "clibs"}, "runs 'lua -l lib2-v2' as a subprocess, and the module has to be there"},
-	"strings":  {[]string{"clocale"}, "asks which locales are installed; without the C library's setlocale every name is accepted"},
+	"attrib":  {[]string{"dlopen", "clibs"}, "loads the C libraries of libs/ through package.loadlib and require"},
+	"main":    {[]string{"dlopen", "clibs"}, "runs 'lua -l lib2-v2' as a subprocess, and the module has to be there"},
+	"strings": {[]string{"clocale"}, "asks which locales are installed; without the C library's setlocale every name is accepted"},
 	// literals: pt_BR decimal-point block is skipped identically when the
 	// locale is missing (this box); if a host has pt_BR and Go's locale
 	// decimal point still differs from C setlocale, that host will see a
@@ -105,15 +105,20 @@ var officialNoT = map[string]string{
 
 // officialSkip are the files that are not run at all.
 var officialSkip = map[string]string{
+	// 5.3.4 testes/ has no heavy.lua (that file is 5.4+); keep the key
+	// so a future tree that adds it stays skipped for the same reason.
 	"heavy": "builds 2 MB of tables per iteration, 2 GB overall: it times out on both sides, and a test that takes minutes is not a test",
-	// main.lua's Ctrl-C tests spawn a child lua and send SIGINT. PUC's
-	// stand-alone installs a hook that aborts with "interrupted!"; we do
-	// not, and CommandContext kills only the parent — the child is left
-	// unreaped under the 120s suite timeout. Emulating laction/lstop plus
-	// Setpgid process-group kill is possible but still races the golden
-	// (signal timing, shell quoting, dlopen bits). main.lua already exits
-	// immediately when _port is set; forcing _port just to un-skip would
-	// yield an empty run, not an identical one. Leave it not-run.
+	// main.lua's Ctrl-C section (print "testing Ctrl C") spawns a child
+	// lua and sends SIGINT via `kill -INT`. PUC's stand-alone installs
+	// laction/lstop so the child aborts with "interrupted!"; this port
+	// has no equivalent hook yet. CommandContext then kills only the
+	// parent — the child is left unreaped under the 120s suite timeout,
+	// which hangs CI. A Setpgid process-group kill plus a shorter
+	// timeout is possible but still races the golden (signal timing,
+	// shell quoting, dlopen bits for `-l lib2-v2`). main.lua returns
+	// immediately when `_port` is set; forcing `_port` just to un-skip
+	// would yield an empty run, not an identical one. Leave not-run
+	// until stand-alone SIGINT matches PUC (see PORT_STATUS.md).
 	"main": "Ctrl-C / SIGINT stand-alone harness cannot be automated safely (no laction hook; unreaped child under context timeout)",
 	"all":  "driver that dofiles main.lua (same Ctrl-C hang) plus env-sensitive lines already in knownDiff",
 }
@@ -140,9 +145,9 @@ func officialNormalise(s, binPath, refPath string) string {
 		re   *regexp.Regexp
 		repl string
 	}{
-		{regexp.MustCompile(`(?m)^/[^ :]*: `), "lua: "},                // prog: of an uncaught error
-		{regexp.MustCompile(`0x[0-9a-f]+`), "0xADDR"},                  // heap addresses
-		{regexp.MustCompile(`in [0-9]+(\.[0-9]+)? msec`), "in X msec"}, // timings
+		{regexp.MustCompile(`(?m)^/[^ :]*: `), "lua: "},                                                                 // prog: of an uncaught error
+		{regexp.MustCompile(`0x[0-9a-f]+`), "0xADDR"},                                                                   // heap addresses
+		{regexp.MustCompile(`in [0-9]+(\.[0-9]+)? msec`), "in X msec"},                                                  // timings
 		{regexp.MustCompile(`testing short-circuit optimizations \([01]\)`), "testing short-circuit optimizations (N)"}, // os.time()%2
 		{regexp.MustCompile(`random seeds: [0-9]+, [0-9]+`), "random seeds: S1, S2"},
 		{regexp.MustCompile(`(float|integer) random range in .*`), "$1 random range in ..."},
@@ -181,7 +186,6 @@ func officialReadRefPath() string {
 	}
 	return strings.TrimSpace(string(b))
 }
-
 
 // officialPatchGc replaces GC1/GC2 busy-waits that allocate until __gc fires.
 // After a large heap and live weak tables, allocation-triggered steps alone
@@ -265,7 +269,7 @@ var officialLibs = []struct{ so, src string }{
 	{"lib11.so", "lib11.c"},
 	{"lib2.so", "lib2.c"},
 	{"lib21.so", "lib21.c"},
-	{"lib2-v2.so", "lib2.c"} /* 5.3.4: renamed copy of lib2 */,
+	{"lib2-v2.so", "lib2.c"}, /* 5.3.4: renamed copy of lib2 */
 }
 
 // officialBuildLibs compiles testdata/official/libs/*.c into the work
