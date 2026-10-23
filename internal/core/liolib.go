@@ -1431,7 +1431,12 @@ func ioCreateMeta(L *State) {
 	L.PushValue(-1)                 /* push metatable */
 	L.SetField(-2, "__index")       /* metatable.__index = metatable */
 	L.SetFuncs(ioFlib, 0)           /* add file methods to new metatable */
-	L.Pop(1)                        /* pop metatable */
+	/* C shares the same io_close function pointer between iolib and flib,
+	   so pushglobalfuncname finds "io.close" for file:close errors.
+	   Reuse the module's close closure (module is under the metatable). */
+	L.GetField(-2, "close")
+	L.SetField(-2, "close")
+	L.Pop(1) /* pop metatable */
 }
 
 // ioCreateStdFile adds a standard file to the module and, when k is not

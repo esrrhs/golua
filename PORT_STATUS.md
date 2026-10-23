@@ -20,17 +20,17 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 - `luaD_closeprotected` removed; call sites use `luaF_close` like `ldo.c`
 - Dead 5.4 `ltm` helpers (`trybiniTM` / `adjustvarargs` / …) and unused for/tail fastpath stubs deleted
 - VM leaf fastpaths rewritten for 5.3 RK (`lvm_fastcall.go`); wired on `OP_CALL`
-- Differential Linux goldens: **83/83** from PUC `lua-5.3.4/src/lua` (`LUA_REF`)
+- Differential Linux goldens: **83/83** from PUC `lua-5.3.4/src/lua`; address normalize `<ADDR>`; 15s/case timeout
+- `io` file MT shares `close` closure with `io.close` (C `io_close` pointer identity)
 - Official suite (Linux): **25 identical** (1 vacuous), **1 known-diff (gc)**, **2 not-run (all, main)**
 
 ## Remaining / known gaps
-1. **Go GC** (intentional): no pace/debt/ephemerons; `gc.lua` known-diff; mode names kept only for optional C API surface.
+1. **Go GC** (intentional): no pace/debt/ephemerons; `gc.lua` known-diff.
 2. **main/all.lua** not automated (SIGINT harness).
-3. Darwin `*.darwin.expected` may be stale (re-capture with PUC 5.3.4 on macOS).
-4. Warnf plumbing retained for Go-GC `__gc` error reporting (`luaE_warnerror`-style); not a 5.3 Lua API.
-5. `ResetThread` Go helper (not in 5.3 C API).
-6. Heavy fuzz differentials may still drift (date overflow/isdst, codegen of official `api.lua`, formatfuzz length).
-7. Further per-file polish on larger Go ports (`lstate`, `liolib`, `lstrlib`, `ldblib`, `lparser`) vs C size ratios.
+3. Darwin `*.darwin.expected` may be stale.
+4. Warnf plumbing for Go-GC `__gc` errors; `ResetThread` Go helper (not in 5.3 C API).
+5. Differential suite still has residual diffs (os/date/io locale & DST, debug name quirks, inventory).
+6. Further per-file polish (`lparser`, `lstate`, stdlibs) vs C.
 
 ## Paths
 - C ref: `/workspace/lua-sources/lua-5.3.4`
