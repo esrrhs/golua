@@ -103,7 +103,8 @@ var officialNoT = map[string]string{
 // officialSkip are the files that are not run at all.
 var officialSkip = map[string]string{
 	"heavy": "builds 2 MB of tables per iteration, 2 GB overall: it times out on both sides, and a test that takes minutes is not a test",
-	"main": "Ctrl-C / signal harness hangs (child not killed by context timeout)",
+	"main":  "Ctrl-C / signal harness hangs (child not killed by context timeout)",
+	"all":   "driver that dofiles main.lua (Ctrl-C hang) plus env-sensitive lines already in knownDiff",
 }
 
 // officialTimeout is what one file gets.  The slowest that is run,
