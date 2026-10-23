@@ -145,23 +145,23 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 ## 性能
 
-一次运行，PUC-Lua **5.3.4** 对比这棵树的构建。`MIN_MS=400 REPS=5`；叠跑行均 `p < 0.02`。比值是 golua / PUC-Lua，小于 1 表示更快。细节见 [bench/README_CN.md](bench/README_CN.md)。
+一次运行，机器是 Intel Xeon（8 核），PUC-Lua **5.3.4** 对比这棵树的 cgo 构建（Go 1.27）。`MIN_MS=600 REPS=7`；每一行 `p < 0.01`。比值是 golua / PUC-Lua，小于 1 表示更快。细节见 [bench/README_CN.md](bench/README_CN.md)。
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 7.92× | global | 0.04× |
-| nop | 1.32× | array | 0.44× |
-| intloop | 0.37× | hash | 1.52× |
-| floatloop | 2.26× | metaindex | 1.93× |
-| bitwise | 2.90× | ipairs | 2.31× |
-| fib | 1.56×10⁻⁶ | concat | 0.03× |
-| tailcall | 0.02× | strings | 0.94× |
-| call3 | 2.10× | sort | 0.55× |
-| upvalue | 2.09× | yield | 1.45× |
-| method | 2.22× | alloc | 2.13× |
-| pcall | 1.96× |  |  |
+| startup | 2.38× | global | 2.32× |
+| nop | 1.23× | array | 2.19× |
+| intloop | 2.16× | hash | 1.75× |
+| floatloop | 2.45× | metaindex | 1.86× |
+| bitwise | 2.63× | ipairs | 2.23× |
+| fib | 1.89× | concat | 1.31× |
+| tailcall | 1.73× | strings | 0.86× |
+| call3 | 1.93× | sort | 0.56× |
+| upvalue | 1.97× | yield | 1.44× |
+| method | 2.06× | alloc | 2.37× |
+| pcall | 1.84× |  |  |
 
-可识别的直线形状（`intloop`、`fib`、`tailcall`、`global`、`concat`、`array`）在分发循环外执行，能追上或快过 PUC。其余字节码密集行大约 1.5–2.9×。`strings` 与 `sort` 在 1× 附近或更快（库代码占主导）。`startup` 付的是 Go 运行时的成本，本次波动较大。
+多数字节码密集行大约 1.7–2.6×。`strings` 与 `sort` 更快（库代码占主导）。`startup` 付的是 Go 运行时的成本。
 
 ## 已知差异
 

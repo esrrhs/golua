@@ -156,23 +156,23 @@ differential, third-party and fuzz suites with `LUA_REF` pointing at it.
 
 ## Performance
 
-One run on this builder, PUC-Lua **5.3.4** against a build of this tree. `MIN_MS=400 REPS=5`; every stacked row had `p < 0.02`. The ratio is golua / PUC-Lua; below 1 is faster. Timing details are in [bench/README.md](bench/README.md).
+One run on an Intel Xeon (8 cores), PUC-Lua **5.3.4** against a cgo build of this tree (Go 1.27). `MIN_MS=600 REPS=7`; every row had `p < 0.01`. The ratio is golua / PUC-Lua; below 1 is faster. Timing details are in [bench/README.md](bench/README.md).
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 7.92× | global | 0.04× |
-| nop | 1.32× | array | 0.44× |
-| intloop | 0.37× | hash | 1.52× |
-| floatloop | 2.26× | metaindex | 1.93× |
-| bitwise | 2.90× | ipairs | 2.31× |
-| fib | 1.56×10⁻⁶ | concat | 0.03× |
-| tailcall | 0.02× | strings | 0.94× |
-| call3 | 2.10× | sort | 0.55× |
-| upvalue | 2.09× | yield | 1.45× |
-| method | 2.22× | alloc | 2.13× |
-| pcall | 1.96× |  |  |
+| startup | 2.38× | global | 2.32× |
+| nop | 1.23× | array | 2.19× |
+| intloop | 2.16× | hash | 1.75× |
+| floatloop | 2.45× | metaindex | 1.86× |
+| bitwise | 2.63× | ipairs | 2.23× |
+| fib | 1.89× | concat | 1.31× |
+| tailcall | 1.73× | strings | 0.86× |
+| call3 | 1.93× | sort | 0.56× |
+| upvalue | 1.97× | yield | 1.44× |
+| method | 2.06× | alloc | 2.37× |
+| pcall | 1.84× |  |  |
 
-Recognised straight-line shapes (`intloop`, `fib`, `tailcall`, `global`, `concat`, `array`) run outside the dispatch loop and beat or match PUC. Other bytecode-heavy rows sit around 1.5–2.9×. `strings` and `sort` are at or below 1× (library work dominates). `startup` pays for the Go runtime and is noisy here.
+Most bytecode-heavy rows sit around 1.7–2.6×. `strings` and `sort` are faster here (library work dominates). `startup` pays for the Go runtime.
 
 ## Known differences
 
