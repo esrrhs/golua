@@ -26,9 +26,11 @@
 - `debug.getlocal`/`setlocal` varargs: `(*vararg)` slots between func and base; `(*temporary)` / `(*no name)`
 - `getfuncname` 5.3: CIST_FIN on queried frame; metamethod names keep `__` prefix
 - `luaG_callerror` uses varinfo (5.3), not 5.4 frame-entry naming
+- `math.random`/`randomseed`: POSIX `random()`/`srandom()` (5.3), not xoshiro; sort comparison counts match
+- officialNormalise: short-circuit GLOB1 digit (`os.time()%2`)
 
 ## Remaining / known gaps
-1. **Official suite**: **21/28 identical** target after db+errors+nextvar (was 15 at a9ac67d; 19 after forprep+hooks partial). Remaining fail candidates: **attrib**, **big**, **main**, **sort**. Known-diff: all, gc, literals. Hard walls: attrib C loadlib/CGO; main stand-alone/Ctrl-C harness; sort comparison counts (pivot); big yield-outside-coro.
+1. **Official suite**: aiming **23+/28** after random+hooks (was 15 at a9ac67d). Remaining hard walls: **attrib** (C loadlib ~299), **main** (stand-alone/Ctrl-C harness). Known-diff: all, gc, literals.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).

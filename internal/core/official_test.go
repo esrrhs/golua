@@ -130,6 +130,7 @@ func officialNormalise(s, binPath, refPath string) string {
 		{regexp.MustCompile(`(?m)^/[^ :]*: `), "lua: "},                // prog: of an uncaught error
 		{regexp.MustCompile(`0x[0-9a-f]+`), "0xADDR"},                  // heap addresses
 		{regexp.MustCompile(`in [0-9]+(\.[0-9]+)? msec`), "in X msec"}, // timings
+		{regexp.MustCompile(`testing short-circuit optimizations \([01]\)`), "testing short-circuit optimizations (N)"}, // os.time()%2
 		{regexp.MustCompile(`random seeds: [0-9]+, [0-9]+`), "random seeds: S1, S2"},
 		{regexp.MustCompile(`(float|integer) random range in .*`), "$1 random range in ..."},
 		{regexp.MustCompile(`/tmp/lua_[A-Za-z0-9]+`), "/tmp/lua_XXXX"}, // os.tmpname

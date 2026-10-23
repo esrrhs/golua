@@ -422,11 +422,13 @@ func TestConformanceStandardLibraries(t *testing.T) {
 		assert(math.log(8, 2) == 3)
 		assert(math.ult(1, -1) and not math.ult(-1, 1))
 
-		local seed1, seed2 = math.randomseed(1234, 5678)
-		assert(seed1 == 1234 and seed2 == 5678)
+		-- 5.3.4: randomseed takes one number, returns nothing; uses POSIX random().
+		assert(math.randomseed(1234) == nil)
 		local r1, r2, r3 = math.random(), math.random(10), math.random(-5, 5)
-		assert(math.abs(r1 - 0.2804778795727) < 1e-14 and r2 == 2 and r3 == -5)
-		math.randomseed(1234, 5678)
+		assert(type(r1) == "number" and r1 >= 0 and r1 < 1)
+		assert(r2 >= 1 and r2 <= 10)
+		assert(r3 >= -5 and r3 <= 5)
+		math.randomseed(1234)
 		assert(math.random() == r1 and math.random(10) == r2 and math.random(-5, 5) == r3)
 
 		assert(os.date("!%Y-%m-%d %H:%M:%S", 0) == "1970-01-01 00:00:00")

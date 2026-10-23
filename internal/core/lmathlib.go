@@ -1,15 +1,12 @@
-// Translation of lmathlib.c (PUC-Lua 5.4): the mathematical library.
+// Translation of lmathlib.c (PUC-Lua 5.3.4): the mathematical library.
 //
-// Every lua_CFunction becomes a func(*State) int; the xoshiro256**
-// pseudo-random generator uses uint64 (the port always has 64-bit
-// integers), so only the "standard implementation" branch of the C
-// source is needed.
+// math.random uses POSIX random()/srandom() (l_rand/l_srand), not the
+// 5.4 xoshiro256** generator — sort.lua comparison counts and any
+// seeded sequence must match PUC.
 package core
 
 import (
 	"math"
-	"time"
-	"unsafe"
 )
 
 const mathPI = 3.141592653589793238462643383279502884
@@ -254,161 +251,48 @@ func mathType(L *State) int {
 // figs is the number of binary digits in the mantissa of a float64.
 const mathFigs = 53
 
-// mathRanState is the state of the generator: four 64-bit words
-// (RanState in lmathlib.c).
-type mathRanState struct {
-	s [4]uint64
-}
-
-// mathRotl rotates left 'x' by 'n' bits (the trim64 of the C code is
-// implicit: uint64 already has exactly 64 bits).
-func mathRotl(x uint64, n int) uint64 {
-	return (x << n) | (x >> (64 - n))
-}
-
-func mathNextRand(state *[4]uint64) uint64 {
-	state0 := state[0]
-	state1 := state[1]
-	state2 := state[2] ^ state0
-	state3 := state[3] ^ state1
-	res := mathRotl(state1*5, 7) * 9
-	state[0] = state0 ^ state3
-	state[1] = state1 ^ state2
-	state[2] = state2 ^ (state1 << 17)
-	state[3] = mathRotl(state3, 45)
-	return res
-}
-
 /*
-** Convert bits from a random integer into a float in the interval
-** [0,1), getting the higher 'mathFigs' bits from the random unsigned
-** integer and converting that to a float.
-**
-** The correction below is for a 'lua_Number' wider than 64 bits, which
-** is the case the C source wrote it for: with FIGS == 64 the shift
-** moves nothing and 'sx' can be negative.  Here FIGS is 53, so
-** 'x >> 11' has 53 bits and 'sx' is never negative -- as the C says,
-** "a good compiler will remove the correction".  It is kept because it
-** is a line of lmathlib.c and not a line of this file's own, and it is
-** the one statement of this library that 'go test -cover' will never
-** report as covered.
- */
-func mathI2d(x uint64) float64 {
-	sx := int64(x >> (64 - mathFigs))
-	res := float64(sx) * (0.5 / float64(uint64(1)<<(mathFigs-1)))
-	if sx < 0 {
-		res += 1.0 /* correct the two's complement if negative */
-	}
-	return res
-}
-
-/*
-** Project the random integer 'ran' into the interval [0, n].
-** Because 'ran' has 2^B possible values, the projection can only be
-** uniform when the size of the interval is a power of 2 (exact
-** division). Otherwise, to get a uniform projection into [0, n], we
-** first compute 'lim', the smallest Mersenne number not smaller than
-** 'n'. We then project 'ran' into the interval [0, lim].  If the result
-** is inside [0, n], we are done. Otherwise, we try with another 'ran',
-** until we have a result inside the interval.
- */
-func mathProject(ran, n uint64, state *mathRanState) uint64 {
-	if n&(n+1) == 0 { /* is 'n + 1' a power of 2? */
-		return ran & n /* no bias */
-	}
-	lim := n
-	/* compute the smallest (2^b - 1) not smaller than 'n' */
-	lim |= lim >> 1
-	lim |= lim >> 2
-	lim |= lim >> 4
-	lim |= lim >> 8
-	lim |= lim >> 16
-	lim |= lim >> 32
-	for {
-		ran &= lim
-		if ran <= n { /* project 'ran' into [0..lim] */
-			return ran
-		}
-		ran = mathNextRand(&state.s) /* not inside [0..n]? try again */
-	}
-}
+** 5.3.4 math.random / math.randomseed (lmathlib.c).
+** Uses l_rand/l_srand (POSIX random/srandom when cgo is on).
+*/
 
 func mathRandom(L *State) int {
-	/* Lua 5.3.4 math_random: no 'random(0) -> full int' (that is 5.4). */
-	var low, up int64
-	state, _ := L.ToUserData(UpvalueIndex(1)).(*mathRanState)
-	rv := mathNextRand(&state.s) /* next pseudo-random value */
-	switch L.GetTop() {          /* check number of arguments */
-	case 0: /* no arguments */
-		L.PushNumber(mathI2d(rv)) /* float between 0 and 1 */
+	low, up := int64(0), int64(0)
+	r := float64(lRand()) * (1.0 / (float64(lRandMax) + 1.0))
+	switch L.GetTop() {
+	case 0:
+		L.PushNumber(r)
 		return 1
-	case 1: /* only upper limit */
+	case 1:
 		low = 1
 		up = L.CheckInteger(1)
-	case 2: /* lower and upper limits */
+	case 2:
 		low = L.CheckInteger(1)
 		up = L.CheckInteger(2)
 	default:
 		return L.Error2("wrong number of arguments")
 	}
-	/* random integer in the interval [low, up] */
 	L.ArgCheck(low <= up, 1, "interval is empty")
-	/* low >= 0 || up <= LUA_MAXINTEGER + low  (no overflow in up-low) */
 	L.ArgCheck(low >= 0 || up <= LUA_MAXINTEGER+low, 1, "interval too large")
-	/* project random integer into the interval [0, up - low] */
-	p := mathProject(rv, uint64(up)-uint64(low), state)
-	L.PushInteger(int64(p + uint64(low)))
+	r *= float64(up-low) + 1.0
+	L.PushInteger(int64(r) + low)
 	return 1
 }
 
-func mathSetSeed(L *State, state *[4]uint64, n1, n2 uint64) {
-	state[0] = n1
-	state[1] = 0xff /* avoid a zero state */
-	state[2] = n2
-	state[3] = 0
-	for i := 0; i < 16; i++ {
-		mathNextRand(state) /* discard initial values to "spread" seed */
-	}
-	L.PushInteger(int64(n1))
-	L.PushInteger(int64(n2))
-}
-
-/*
-** Set a "random" seed. To get some randomness, use the current time
-** and the address of 'L' (here, the identity of the state object).
- */
-func mathRandSeed(L *State, state *mathRanState) {
-	seed1 := uint64(time.Now().Unix())
-	seed2 := uint64(ptrID(unsafe.Pointer(L)))
-	mathSetSeed(L, &state.s, seed1, seed2)
-}
-
 func mathRandomSeed(L *State) int {
-	state, _ := L.ToUserData(UpvalueIndex(1)).(*mathRanState)
-	if L.IsNone(1) {
-		mathRandSeed(L, state)
-	} else {
-		n1 := L.CheckInteger(1)
-		n2 := L.OptInteger(2, 0)
-		mathSetSeed(L, &state.s, uint64(n1), uint64(n2))
-	}
-	return 2 /* return seeds */
+	/* 5.3: one number argument; discard first value after srand. */
+	seed := L.CheckNumber(1)
+	lSrand(uint(int64(seed)))
+	_ = lRand()
+	return 0
 }
 
-var mathRandFuncs = []Reg{
-	{Name: "random", Func: mathRandom},
-	{Name: "randomseed", Func: mathRandomSeed},
-}
-
-/*
-** Register the random functions and initialize their state.
- */
 func mathSetRandFunc(L *State) {
-	state := &mathRanState{}
-	L.NewUserData(state, 0)
-	mathRandSeed(L, state) /* initialize with a "random" seed */
-	L.Pop(2)               /* remove pushed seeds */
-	L.SetFuncs(mathRandFuncs, 1)
+	/* 5.3: no per-state xoshiro userdata; random is process-global. */
+	L.SetFuncs([]Reg{
+		{Name: "random", Func: mathRandom},
+		{Name: "randomseed", Func: mathRandomSeed},
+	}, 0)
 }
 
 // ---------------------------------------------------------------------

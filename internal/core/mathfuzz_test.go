@@ -781,102 +781,68 @@ func TestMathInProcess(t *testing.T) {
 		eq(math.sinh(0), 0.0, "sinh 0")
 		eq(math.cosh(0), 1.0, "cosh 0")
 
-		-- 9. The generator, seeded with two integers, which is
-		--    the only seed two programs can be asked about.
-		--    These are PUC-Lua's own draws, and they are one
-		--    stream: the third of them is the one that takes the
-		--    high bit that makes the float in [0,1) a subtraction
-		--    rather than a shift.
-		math.randomseed(1, 2)
-		--    and they are written to seventeen digits, which is one
-		--    more than 'tostring' uses: the float is 53 bits of the
-		--    word, and a corpus that only asked for fourteen would
-		--    not notice a fifty-second.
+		-- 9. 5.3.4 POSIX random()/srandom() (l_rand), seeded once.
+		math.randomseed(1)
 		local draws = {}
 		for i = 1, 6 do
 		  draws[i] = string.format("%.17g", math.random())
 		end
 		eq(table.concat(draws, " "),
-		  "0.44949358084855551 0.22576880156399304 "..
-		  "0.73957236111052194 0.34305203708388043 "..
-		  "0.13902460297941366 0.29598176925959574", "random f")
-		math.randomseed(1, 2)
+		  "0.39438292663544416 0.78309922339394689 "..
+		  "0.7984400331042707 0.91164735751226544 "..
+		  "0.19755136920139194 0.33522275555878878", "random f")
+		math.randomseed(1)
 		draws = {}
 		for i = 1, 6 do draws[i] = tostring(math.random()) end
 		eq(table.concat(draws, " "),
-		  "0.44949358084856 0.22576880156399 0.73957236111052 "..
-		  "0.34305203708388 0.13902460297941 0.2959817692596",
+		  "0.39438292663544 0.78309922339395 0.79844003310427 "..
+		  "0.91164735751227 0.19755136920139 0.33522275555879",
 		  "random f tostring")
 		draws = {}
 		for i = 1, 6 do draws[i] = tostring(math.random(6)) end
-		eq(table.concat(draws, " "), "1 4 6 4 3 4", "random 6")
+		eq(table.concat(draws, " "), "5 2 4 3 4 3", "random 6")
 		draws = {}
 		for i = 1, 6 do draws[i] = tostring(math.random(10, 20)) end
-		eq(table.concat(draws, " "), "11 12 16 13 15 10", "random 10 20")
-		-- 5.3.4: math.random(0) is empty interval (1..0); 5.4 returned a full int
+		eq(table.concat(draws, " "), "15 20 20 16 17 11", "random 10 20")
 		ok, e = pcall(math.random, 0)
 		eq(ok, false, "random 0 empty")
 		eq(string.find(e, "interval is empty") ~= nil, true, "random 0 msg")
-		-- pcall already consumed one nextrand; burn 3 more to match 5.4's four random(0)
 		for _ = 1, 3 do math.random() end
 		draws = {}
 		for i = 1, 3 do draws[i] = tostring(math.random(-5, 5)) end
-		eq(table.concat(draws, " "), "-2 -2 0", "random -5 5")
+		eq(table.concat(draws, " "), "3 -4 -1", "random -5 5")
 		draws = {}
 		for i = 1, 3 do draws[i] = tostring(math.random(1, 1)) end
 		eq(table.concat(draws, " "), "1 1 1", "random 1 1")
-		-- 5.3.4 rejects [minint, maxint] as "interval too large" (5.4 projects it)
 		ok, e = pcall(math.random, math.mininteger, math.maxinteger)
 		eq(ok, false, "random minint maxint")
 		eq(string.find(e, "interval too large") ~= nil, true, "random minint maxint msg")
-		a, b = math.randomseed(7)
-		eq(a, 7, "randomseed 7")
-		eq(b, 0, "randomseed 7 second")
-		a, b = math.randomseed(7, 8)
-		eq(a, 7, "randomseed 7 8")
-		eq(b, 8, "randomseed 7 8 second")
+		-- 5.3: randomseed returns nothing; extra args ignored
+		eq(math.randomseed(7), nil, "randomseed 7")
+		eq(math.randomseed(7, 8), nil, "randomseed 7 8")
 		ok, e = pcall(math.randomseed, "abc")
 		eq(ok, false, "randomseed str")
 		eq(e, "bad argument #1 to 'math.randomseed' "..
 		  "(number expected, got string)", "randomseed str msg")
+		-- second arg is not checked in 5.3
 		ok, e = pcall(math.randomseed, 1, "abc")
-		eq(ok, false, "randomseed str 2")
-		eq(e, "bad argument #2 to 'math.randomseed' "..
-		  "(number expected, got string)", "randomseed str 2 msg")
+		eq(ok, true, "randomseed ignores arg 2")
 		ok, e = pcall(math.random, 2, 1)
 		eq(ok, false, "random empty")
 		eq(e, "bad argument #1 to 'math.random' (interval is empty)",
 		  "random empty msg")
 
-		-- 10. The three shapes that are not shapes: three
-		--     arguments is one more than 'random' takes, and it
-		--     says so with no name and no number in the message,
-		--     which makes it the only message in the library that
-		--     has neither.
+		-- 10. arity errors
 		for _, args in ipairs{{1, 2, 3}, {1, 2, 3, 4}, {0, 0, 0}} do
 		  ok, e = pcall(math.random, table.unpack(args))
 		  eq(ok, false, "random arity")
 		  eq(e, "wrong number of arguments", "random arity msg")
 		end
 
-		-- 11. 'randomseed' with nothing at all, which is the one
-		--     question the grid cannot ask: PUC-Lua takes its
-		--     seed from the clock and from the address of a
-		--     local, so what it answers is two numbers no two
-		--     runs share.  What it answers *is* two integers,
-		--     and the first is the time, which is a thing this
-		--     process can be asked about (§6.8).
-		local s1, s2 = math.randomseed()
-		eq(math.type(s1), "integer", "randomseed none type 1")
-		eq(math.type(s2), "integer", "randomseed none type 2")
-		eq(s1 > 0, true, "randomseed none positive")
-		eq(s2 ~= 0, true, "randomseed none not 0")
-		local t = os.time()
-		math.randomseed()
-		s1, s2 = math.randomseed()
-		eq(s1 >= t, true, "randomseed none is the time")
-		eq(s2 ~= 0, true, "randomseed none addr")
-		-- and the generator it leaves behind still draws
+		-- 11. 5.3 randomseed requires an argument (no clock auto-seed API)
+		ok, e = pcall(math.randomseed)
+		eq(ok, false, "randomseed none")
+		eq(string.find(e, "number expected") ~= nil, true, "randomseed none msg")
 		eq(math.type(math.random(1, 100)), "integer", "random after")
 	`); err != nil {
 		t.Fatal(err)
