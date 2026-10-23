@@ -19,33 +19,33 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 
 ## 根 README 里的那一次
 
-机器是 Intel Xeon（8 核），**PUC-Lua 5.3.4** 对比这棵树的 cgo 构建（Go 1.27）。`MIN_MS=600 REPS=7`；每一行 `p < 0.01`。golua 一侧 startup 的变异系数大约 15%，其余几行是几个百分点。`CGO_ENABLED=0` 的进程启动另计，不在这次运行里。
+机器是 Intel Xeon（8 核），**PUC-Lua 5.3.4** 对比这棵树的 cgo 构建（Go 1.27）。`MIN_MS=600 REPS=7`；每一行 `p < 0.01`。golua 一侧 startup 的变异系数大约 12%，其余几行是几个百分点。`CGO_ENABLED=0` 的进程启动另计，不在这次运行里。
 
 | 负载 | PUC-Lua | golua | 比值 | 实际在做的事 |
 | --- | ---: | ---: | ---: | --- |
-| startup | 1.27 ms | 3.38 ms | 2.67× | 新进程，没有脚本正文 |
-| nop | 24.2 ns | 40.1 ns | 1.66× | `return 0` |
-| intloop | 162 ms | 347 ms | 2.15× | 整数求和 |
-| floatloop | 226 ms | 520 ms | 2.31× | 浮点乘加 |
-| bitwise | 229 ms | 698 ms | 3.05× | 与、异或、移位 |
-| fib | 60.8 ms | 99.6 ms | 1.64× | 递归 Fibonacci |
-| tailcall | 154 ms | 278 ms | 1.80× | 倒计时尾调用 |
-| call3 | 219 ms | 386 ms | 1.76× | `return a + b + c` |
-| upvalue | 385 ms | 693 ms | 1.80× | `n = n + 1` |
-| method | 232 ms | 403 ms | 1.74× | `object:add(常数)` |
-| pcall | 95.5 ms | 170 ms | 1.78× | 对恒等函数做 `pcall` |
-| global | 187 ms | 366 ms | 1.96× | `_G.g = _G.g + i` |
-| array | 189 ms | 435 ms | 2.30× | 稠密整数键 |
-| hash | 219 ms | 400 ms | 1.83× | 短字符串键查找 |
-| metaindex | 140 ms | 259 ms | 1.85× | 稳定的整数字段 |
-| ipairs | 146 ms | 361 ms | 2.47× | 标准 `ipairs`，稠密数组 |
-| concat | 89.8 ms | 230 ms | 2.55× | 循环不改变的 `a .. b` |
-| strings | 81.5 ms | 545 ms | 6.69× | format、concat、gmatch |
-| sort | 72.2 ms | 114 ms | 1.58× | `table.sort`，比较函数是 Lua |
-| yield | 138 ms | 180 ms | 1.30× | `yield` 出 `1..n` 再求和 |
-| alloc | 127 ms | 266 ms | 2.10× | 四元构造器 |
+| startup | 1.38 ms | 3.58 ms | 2.59× | 新进程，没有脚本正文 |
+| nop | 25.7 ns | 38.8 ns | 1.51× | `return 0` |
+| intloop | 169 ms | 338 ms | 2.00× | 整数求和 |
+| floatloop | 228 ms | 538 ms | 2.36× | 浮点乘加 |
+| bitwise | 241 ms | 597 ms | 2.48× | 与、异或、移位 |
+| fib | 63.1 ms | 104 ms | 1.65× | 递归 Fibonacci |
+| tailcall | 155 ms | 310 ms | 2.01× | 倒计时尾调用 |
+| call3 | 234 ms | 390 ms | 1.67× | `return a + b + c` |
+| upvalue | 405 ms | 710 ms | 1.75× | `n = n + 1` |
+| method | 246 ms | 440 ms | 1.79× | `object:add(常数)` |
+| pcall | 94.8 ms | 174 ms | 1.83× | 对恒等函数做 `pcall` |
+| global | 180 ms | 407 ms | 2.26× | `_G.g = _G.g + i` |
+| array | 192 ms | 454 ms | 2.36× | 稠密整数键 |
+| hash | 200 ms | 420 ms | 2.10× | 短字符串键查找 |
+| metaindex | 142 ms | 269 ms | 1.90× | 稳定的整数字段 |
+| ipairs | 155 ms | 352 ms | 2.27× | 标准 `ipairs`，稠密数组 |
+| concat | 89.7 ms | 276 ms | 3.08× | 循环不改变的 `a .. b` |
+| strings | 81.5 ms | 547 ms | 6.70× | format、concat、gmatch |
+| sort | 72.9 ms | 117 ms | 1.61× | `table.sort`，比较函数是 Lua |
+| yield | 139 ms | 195 ms | 1.40× | `yield` 出 `1..n` 再求和 |
+| alloc | 131 ms | 271 ms | 2.08× | 四元构造器 |
 
-多数字节码密集行大约 1.6–2.5×。`yield` 最接近 C；`bitwise` 约 3×。`strings` 是离群值（约 6.7×）：差距几乎全在 `string.format`——每次调用都会在堆上分配 8 KiB 缓冲（C 的 `LUAL_BUFFERSIZE` 在栈上）。进程启动主要是 Go 运行时的成本。
+多数字节码密集行大约 1.5–2.5×。`yield` 最接近 C；`concat`（约 3×）与 `strings`（约 6.7×）是离群值。`strings` 在栈上 `luaL_Buffer`（`initb`）对齐后仍保持该差距：每次 `string.format("%d-…")` 仍走 Go 的 `fmt`/`strconv` 与短串 intern，而不是 C 那样 `sprintf` 写进栈缓冲。进程启动主要是 Go 运行时的成本。
 
 ## run.sh
 
