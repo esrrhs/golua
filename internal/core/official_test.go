@@ -1,7 +1,7 @@
-// The official PUC-Lua 5.4.9 test suite, run the way 'go test' runs
+// The official PUC-Lua 5.3.4 test suite, run the way 'go test' runs
 // everything else.
 //
-// testdata/official holds the 33 files of Lua's own 'testes' directory,
+// testdata/official holds the 28 files of Lua's own 'testes' directory,
 // redistributed under the same MIT licence as Lua itself (Lua.org,
 // PUC-Rio).  Beside each one sits <name>.<goos>.expected: what the
 // reference interpreter, built from source, printed for it.  The suite
@@ -133,7 +133,7 @@ func officialNormalise(s, binPath, refPath string) string {
 		{regexp.MustCompile(`random seeds: [0-9]+, [0-9]+`), "random seeds: S1, S2"},
 		{regexp.MustCompile(`(float|integer) random range in .*`), "$1 random range in ..."},
 		{regexp.MustCompile(`/tmp/lua_[A-Za-z0-9]+`), "/tmp/lua_XXXX"}, // os.tmpname
-		{regexp.MustCompile(`(?m)^Lua 5\.4[^ ]*  Copyright.*$`), "LUA-RELEASE"},
+		{regexp.MustCompile(`(?m)^Lua 5\.[0-9][^ ]*  Copyright.*$`), "LUA-RELEASE"},
 	} {
 		s = n.re.ReplaceAllString(s, n.repl)
 	}
@@ -207,14 +207,13 @@ func officialWorkDir(t *testing.T) (string, bool) {
 
 // officialLibs are the C libraries Lua's own suite loads, in the
 // makefile's own pairs: <object> built from <source>.  lib2-v2 comes
-// from lib22.c and not lib2.c -- that is the point of it, two objects
-// with the same module name and different versions.
+// from lib2.c under a second name (5.3.4 makefile: mv lib2.so lib2-v2.so).
 var officialLibs = []struct{ so, src string }{
 	{"lib1.so", "lib1.c"},
 	{"lib11.so", "lib11.c"},
 	{"lib2.so", "lib2.c"},
 	{"lib21.so", "lib21.c"},
-	{"lib2-v2.so", "lib22.c"},
+	{"lib2-v2.so", "lib2.c"} /* 5.3.4: renamed copy of lib2 */,
 }
 
 // officialBuildLibs compiles testdata/official/libs/*.c into the work
@@ -392,7 +391,7 @@ func TestOfficialSuite(t *testing.T) {
 			}
 			continue
 		}
-		t.Errorf("%s: output differs from PUC-Lua 5.4.9\n%s", base, officialFirstDiff(w, g))
+		t.Errorf("%s: output differs from PUC-Lua 5.3.4\n%s", base, officialFirstDiff(w, g))
 	}
 	if firstDiff != "" {
 		t.Logf("the first line that differs, across the known differences:\n%s", firstDiff)

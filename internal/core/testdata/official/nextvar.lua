@@ -1,4 +1,4 @@
--- $Id: testes/nextvar.lua $
+-- $Id: nextvar.lua,v 1.79 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
 
 print('testing tables, next, and for')
@@ -9,45 +9,16 @@ local function checkerror (msg, f, ...)
 end
 
 
-local function check (t, na, nh)
-  if not T then return end
-  local a, h = T.querytab(t)
-  if a ~= na or h ~= nh then
-    print(na, nh, a, h)
-    assert(nil)
-  end
-end
-
-
 local a = {}
 
 -- make sure table has lots of space in hash part
 for i=1,100 do a[i.."+"] = true end
-for i=1,100 do a[i.."+"] = undef end
+for i=1,100 do a[i.."+"] = nil end
 -- fill hash part with numeric indices testing size operator
 for i=1,100 do
   a[i] = true
   assert(#a == i)
 end
-
-
-do   -- rehash moving elements from array to hash
-  local a = {}
-  for i = 1, 100 do a[i] = i end
-  check(a, 128, 0)
-
-  for i = 5, 95 do a[i] = nil end
-  check(a, 128, 0)
-
-  a.x = 1     -- force a re-hash
-  check(a, 4, 8)
-
-  for i = 1, 4 do assert(a[i] == i) end
-  for i = 5, 95 do assert(a[i] == nil) end
-  for i = 96, 100 do assert(a[i] == i) end
-  assert(a.x == 1)
-end
-
 
 -- testing ipairs
 local x = 0
@@ -72,25 +43,46 @@ assert(i == 4)
 assert(type(ipairs{}) == 'function' and ipairs{} == ipairs{})
 
 
-do   -- overflow (must wrap-around)
-  local f = ipairs{}
-  local k, v = f({[math.mininteger] = 10}, math.maxinteger)
-  assert(k == math.mininteger and v == 10)
-  k, v = f({[math.mininteger] = 10}, k)
-  assert(k == nil)
-end
-
 if not T then
   (Message or print)
     ('\n >>> testC not active: skipping tests for table sizes <<<\n')
 else --[
 -- testing table sizes
 
+local function log2 (x) return math.log(x, 2) end
 
 local function mp2 (n)   -- minimum power of 2 >= n
-  local mp = 2^math.ceil(math.log(n, 2))
+  local mp = 2^math.ceil(log2(n))
   assert(n == 0 or (mp/2 < n and n <= mp))
   return mp
+end
+
+local function fb (n)
+  local r, nn = T.int2fb(n)
+  assert(r < 256)
+  return nn
+end
+
+-- test fb function
+for a = 1, 10000 do   -- all numbers up to 10^4
+  local n = fb(a)
+  assert(a <= n and n <= a*1.125)
+end
+local a = 1024   -- plus a few up to 2 ^30
+local lim = 2^30
+while a < lim do
+  local n = fb(a)
+  assert(a <= n and n <= a*1.125)
+  a = math.ceil(a*1.3)
+end
+
+ 
+local function check (t, na, nh)
+  local a, h = T.querytab(t)
+  if a ~= na or h ~= nh then
+    print(na, nh, a, h)
+    assert(nil)
+  end
 end
 
 
@@ -103,46 +95,30 @@ end
 
 
 -- testing constructor sizes
-local sizes = {0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17,
-  30, 31, 32, 33, 34, 254, 255, 256, 500, 1000}
-
-for _, sa in ipairs(sizes) do    -- 'sa' is size of the array part
-  local arr = {"return {"}
-  for i = 1, sa do arr[1 + i] = "1," end    -- build array part
-  for _, sh in ipairs(sizes) do    -- 'sh' is size of the hash part
-    for j = 1, sh do   -- build hash part
-      arr[1 + sa + j] = string.format('k%x=%d,', j, j)
-    end
-    arr[1 + sa + sh + 1] = "}"
-    local prog = table.concat(arr)
-    local f = assert(load(prog))
-    collectgarbage("stop")
-    f()    -- call once to ensure stack space
-    -- make sure table is not resized after being created
-    if sa == 0 or sh == 0 then
-      T.alloccount(2);  -- header + array or hash part
-    else
-      T.alloccount(3);  -- header + array part + hash part
-    end
-    local t = f()
-    T.alloccount();
-    collectgarbage("restart")
-    assert(#t == sa)
-    check(t, sa, mp2(sh))
+local lim = 40
+local s = 'return {'
+for i=1,lim do
+  s = s..i..','
+  local s = s
+  for k=0,lim do 
+    local t = load(s..'}', '')()
+    assert(#t == i)
+    check(t, fb(i), mp2(k))
+    s = string.format('%sa%d=%d,', s, k, k)
   end
 end
 
 
 -- tests with unknown number of elements
 local a = {}
-for i=1,sizes[#sizes] do a[i] = i end   -- build auxiliary table
-for k in ipairs(sizes) do
-  local t = {table.unpack(a,1,k)}
-  assert(#t == k)
-  check(t, k, 0)
-  t = {1,2,3,table.unpack(a,1,k)}
-  check(t, k+3, 0)
-  assert(#t == k + 3)
+for i=1,lim do a[i] = i end   -- build auxiliary table
+for k=0,lim do
+  local a = {table.unpack(a,1,k)}
+  assert(#a == k)
+  check(a, k, 0)
+  a = {1,2,3,table.unpack(a,1,k)}
+  check(a, k+3, 0)
+  assert(#a == k + 3)
 end
 
 
@@ -169,14 +145,14 @@ a = {}
 for i=1,16 do a[i] = i end
 check(a, 16, 0)
 do
-  for i=1,11 do a[i] = undef end
-  for i=30,50 do a[i] = true; a[i] = undef end   -- force a rehash (?)
-  check(a, 0, 8)   -- 5 elements in the table
+  for i=1,11 do a[i] = nil end
+  for i=30,50 do a[i] = nil end   -- force a rehash (?)
+  check(a, 0, 8)   -- only 5 elements in the table
   a[10] = 1
-  for i=30,50 do a[i] = true; a[i] = undef end   -- force a rehash (?)
+  for i=30,50 do a[i] = nil end   -- force a rehash (?)
   check(a, 0, 8)   -- only 6 elements in the table
-  for i=1,14 do a[i] = true; a[i] = undef end
-  for i=18,50 do a[i] = true; a[i] = undef end   -- force a rehash (?)
+  for i=1,14 do a[i] = nil end
+  for i=18,50 do a[i] = nil end   -- force a rehash (?)
   check(a, 0, 4)   -- only 2 elements ([15] and [16])
 end
 
@@ -189,7 +165,7 @@ end
 
 -- size tests for vararg
 lim = 35
-local function foo (n, ...)
+function foo (n, ...)
   local arg = {...}
   check(arg, n, 0)
   assert(select('#', ...) == n)
@@ -201,31 +177,15 @@ end
 local a = {}
 for i=1,lim do a[i] = true; foo(i, table.unpack(a)) end
 
-
--- Table length with limit smaller than maximum value at array
-local a = {}
-for i = 1,64 do a[i] = true end    -- make its array size 64
-for i = 1,64 do a[i] = nil end     -- erase all elements
-assert(T.querytab(a) == 64)    -- array part has 64 elements
-a[32] = true; a[48] = true;    -- binary search will find these ones
-a[51] = true                   -- binary search will miss this one
-assert(#a == 48)               -- this will set the limit
-assert(select(4, T.querytab(a)) == 48)  -- this is the limit now
-a[50] = true                   -- this will set a new limit
-assert(select(4, T.querytab(a)) == 50)  -- this is the limit now
--- but the size is larger (and still inside the array part)
-assert(#a == 51)
-
 end  --]
 
 
--- test size operation on tables with nils
+-- test size operation on empty tables
 assert(#{} == 0)
 assert(#{nil} == 0)
 assert(#{nil, nil} == 0)
 assert(#{nil, nil, nil} == 0)
 assert(#{nil, nil, nil, nil} == 0)
-assert(#{1, 2, 3, nil, nil} == 3)
 print'+'
 
 
@@ -243,7 +203,7 @@ local function find (name)
   while 1 do
     n,v = next(_G, n)
     if not n then return nofind end
-    assert(_G[n] ~= undef)
+    assert(v ~= nil)
     if n == name then return v end
   end
 end
@@ -261,7 +221,7 @@ assert(_G["print"]==find("print"))
 assert(assert==find1("assert"))
 assert(nofind==find("return"))
 assert(not find1("return"))
-_G["ret" .. "urn"] = undef
+_G["ret" .. "urn"] = nil
 assert(nofind==find("return"))
 _G["xxx"] = 1
 assert(xxx==find("xxx"))
@@ -296,14 +256,14 @@ do   -- clear global table
   for n,v in pairs(a) do
     if not package.loaded[n] and type(v) ~= "function" and
        not string.find(n, "^[%u_]") then
-      _G[n] = undef
+     _G[n] = nil
     end
     collectgarbage()
   end
 end
 
 
---
+-- 
 
 local function checknext (a)
   local b = {}
@@ -320,6 +280,7 @@ checknext{1,2,3,4,5,x=1,y=2,z=3}
 
 assert(#{} == 0)
 assert(#{[-1] = 2} == 0)
+assert(#{1,2,3,nil,nil} == 3)
 for i=0,40 do
   local a = {}
   for j=1,i do a[j]=j end
@@ -351,27 +312,6 @@ assert(a[#a])
 print('+')
 
 
-do    -- testing 'next' with all kinds of keys
-  local a = {
-    [1] = 1,                        -- integer
-    [1.1] = 2,                      -- float
-    ['x'] = 3,                      -- short string
-    [string.rep('x', 1000)] = 4,    -- long string
-    [print] = 5,                    -- C function
-    [checkerror] = 6,               -- Lua function
-    [coroutine.running()] = 7,      -- thread
-    [true] = 8,                     -- boolean
-    [io.stdin] = 9,                 -- userdata
-    [{}] = 10,                      -- table
-  }
-  local b = {}; for i = 1, 10 do b[i] = true end
-  for k, v in pairs(a) do
-    assert(b[v]); b[v] = undef
-  end
-  assert(next(b) == nil)        -- 'b' now is empty
-end
-
-
 -- erasing values
 local t = {[{1}] = 1, [{2}] = 2, [string.rep("x ", 4)] = 3,
            [100.3] = 4, [4] = 5}
@@ -380,43 +320,11 @@ local n = 0
 for k, v in pairs( t ) do
   n = n+1
   assert(t[k] == v)
-  t[k] = undef
+  t[k] = nil
   collectgarbage()
-  assert(t[k] == undef)
+  assert(t[k] == nil)
 end
 assert(n == 5)
-
-
-do
-  print("testing next x GC of deleted keys")
-  -- bug in 5.4.1
-  local co = coroutine.wrap(function (t)
-    for k, v in pairs(t) do
-        local k1 = next(t)    -- all previous keys were deleted
-        assert(k == k1)       -- current key is the first in the table
-        t[k] = nil
-        local expected = (type(k) == "table" and k[1] or
-                          type(k) == "function" and k() or
-                          string.sub(k, 1, 1))
-        assert(expected == v)
-        coroutine.yield(v)
-    end
-  end)
-  local t = {}
-  t[{1}] = 1    -- add several unanchored, collectable keys
-  t[{2}] = 2
-  t[string.rep("a", 50)] = "a"    -- long string
-  t[string.rep("b", 50)] = "b"
-  t[{3}] = 3
-  t[string.rep("c", 10)] = "c"    -- short string
-  t[function () return 10 end] = 10
-  local count = 7
-  while co(t) do
-    collectgarbage("collect")   -- collect dead keys
-    count = count - 1
-  end
-  assert(count == 0 and next(t) == nil)    -- traversed the whole table
-end
 
 
 local function test (a)
@@ -425,8 +333,6 @@ local function test (a)
   table.insert(a, 1, -1); table.insert(a, 40);
   table.insert(a, #a+1, 50)
   table.insert(a, 2, -2)
-  assert(a[2] ~= undef)
-  assert(a["2"] == undef)
   assert(not pcall(table.insert, a, 0, 20));
   assert(not pcall(table.insert, a, #a + 2, 20));
   assert(table.remove(a,1) == -1)
@@ -453,7 +359,7 @@ test(a)
 assert(#a == 0 and table.remove(a) == nil and a[-1] == "ban")
 
 a = {[0] = "ban"}
-assert(#a == 0 and table.remove(a) == "ban" and a[0] == undef)
+assert(#a == 0 and table.remove(a) == "ban" and a[0] == nil)
 
 table.insert(a, 1, 10); table.insert(a, 1, 20); table.insert(a, 1, -1)
 assert(table.remove(a) == 10)
@@ -485,7 +391,7 @@ do   -- testing table library with metamethods
     for i = 1, 10 do
       table.insert(proxy, 1, i)
     end
-    assert(#proxy == 10 and #t == 10 and proxy[1] ~= undef)
+    assert(#proxy == 10 and #t == 10)
     for i = 1, 10 do
       assert(t[i] == 11 - i)
     end
@@ -527,15 +433,6 @@ do   -- testing table library with metamethods
 end
 
 
-do   -- testing overflow in table.insert (must wrap-around)
-
-  local t = setmetatable({},
-            {__len = function () return math.maxinteger end})
-  table.insert(t, 20)
-  local k, v = next(t)
-  assert(k == math.mininteger and v == 20)
-end
-
 if not T then
   (Message or print)
     ('\n >>> testC not active: skipping tests for table library on non-tables <<<\n')
@@ -565,7 +462,7 @@ else --[
   mt.__newindex = nil
   mt.__len = nil
   local tab2 = {}
-  local u2 = T.newuserdata(0)
+  local u2 = T.newuserdata(0) 
   debug.setmetatable(u2, {__newindex = function (_, k, v) tab2[k] = v end})
   table.move(u, 1, 4, 1, u2)
   assert(#tab2 == 4 and tab2[1] == tab[1] and tab2[4] == tab[4])
@@ -576,7 +473,7 @@ print('+')
 
 a = {}
 for i=1,1000 do
-  a[i] = i; a[i - 1] = undef
+  a[i] = i; a[i-1] = nil
 end
 assert(next(a,nil) == 1000 and next(a,1000) == nil)
 
@@ -607,12 +504,6 @@ do
   a = 0; for i=1.0, 0.99999, 1 do a=a+1 end; assert(a==0)
   a = 0; for i=99999, 1e5, -1.0 do a=a+1 end; assert(a==0)
   a = 0; for i=1.0, 0.99999, -1 do a=a+1 end; assert(a==1)
-end
-
-do   -- changing the control variable
-  local a
-  a = 0; for i = 1, 10 do a = a + 1; i = "x" end; assert(a == 10)
-  a = 0; for i = 10.0, 1, -1 do a = a + 1; i = "x" end; assert(a == 10)
 end
 
 -- conversion
@@ -672,69 +563,6 @@ do  -- checking types
 
 end
 
-
-do   -- testing other strange cases for numeric 'for'
-
-  local function checkfor (from, to, step, t)
-    local c = 0
-    for i = from, to, step do
-      c = c + 1
-      assert(i == t[c])
-    end
-    assert(c == #t)
-  end
-
-  local maxi = math.maxinteger
-  local mini = math.mininteger
-
-  checkfor(mini, maxi, maxi, {mini, -1, maxi - 1})
-
-  checkfor(mini, math.huge, maxi, {mini, -1, maxi - 1})
-
-  checkfor(maxi, mini, mini, {maxi, -1})
-
-  checkfor(maxi, mini, -maxi, {maxi, 0, -maxi})
-
-  checkfor(maxi, -math.huge, mini, {maxi, -1})
-
-  checkfor(maxi, mini, 1, {})
-  checkfor(mini, maxi, -1, {})
-
-  checkfor(maxi - 6, maxi, 3, {maxi - 6, maxi - 3, maxi})
-  checkfor(mini + 4, mini, -2, {mini + 4, mini + 2, mini})
-
-  local step = maxi // 10
-  local c = mini
-  for i = mini, maxi, step do
-    assert(i == c)
-    c = c + step
-  end
-
-  c = maxi
-  for i = maxi, mini, -step do
-    assert(i == c)
-    c = c - step
-  end
-
-  checkfor(maxi, maxi, maxi, {maxi})
-  checkfor(maxi, maxi, mini, {maxi})
-  checkfor(mini, mini, maxi, {mini})
-  checkfor(mini, mini, mini, {mini})
-end
-
-
-checkerror("'for' step is zero", function ()
-  for i = 1, 10, 0 do end
-end)
-
-checkerror("'for' step is zero", function ()
-  for i = 1, -10, 0 do end
-end)
-
-checkerror("'for' step is zero", function ()
-  for i = 1.0, -10, 0.0 do end
-end)
-
 collectgarbage()
 
 
@@ -742,8 +570,7 @@ collectgarbage()
 
 local function f (n, p)
   local t = {}; for i=1,p do t[i] = i*10 end
-  return function (_, n, ...)
-           assert(select("#", ...) == 0)  -- no extra arguments
+  return function (_,n)
            if n > 0 then
              n = n-1
              return n, table.unpack(t)
@@ -792,7 +619,7 @@ a[3] = 30
 -- testing ipairs with metamethods
 a = {n=10}
 setmetatable(a, { __index = function (t,k)
-                     if k <= t.n then return k * 10 end
+                     if k <= t.n then return k * 10 end 
                   end})
 i = 0
 for k,v in ipairs(a) do
@@ -800,26 +627,5 @@ for k,v in ipairs(a) do
   assert(k == i and v == i * 10)
 end
 assert(i == a.n)
-
-
--- testing yield inside __pairs
-do
-  local t = setmetatable({10, 20, 30}, {__pairs = function (t)
-    local inc = coroutine.yield()
-    return function (t, i)
-             if i > 1 then return i - inc, t[i - inc]  else return nil end
-           end, t, #t + 1
-  end})
-
-  local res = {}
-  local co = coroutine.wrap(function ()
-    for i,p in pairs(t) do res[#res + 1] = p end
-  end)
-
-  co()     -- start coroutine
-  co(1)    -- continue after yield
-  assert(res[1] == 30 and res[2] == 20 and res[3] == 10 and #res == 3)
-  
-end
 
 print"OK"

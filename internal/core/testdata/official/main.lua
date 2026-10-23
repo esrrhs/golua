@@ -1,5 +1,5 @@
 # testing special comment on first line
--- $Id: testes/main.lua $
+-- $Id: main.lua,v 1.65 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
 
 -- most (all?) tests here assume a reasonable "Unix-like" shell
@@ -13,7 +13,7 @@ print ("testing stand-alone interpreter")
 
 assert(os.execute())   -- machine has a system command
 
-local arg = arg or ARG
+local arg = arg or _ARG
 
 local prog = os.tmpname()
 local otherprog = os.tmpname()
@@ -27,26 +27,22 @@ do
 end
 print("progname: "..progname)
 
-
-local prepfile = function (s, mod, p)
-  mod = mod and "wb" or "w"    -- mod true means binary files
-  p = p or prog                -- file to write the program
-  local f = io.open(p, mod)
-  f:write(s)
-  assert(f:close())
+local prepfile = function (s, p)
+  p = p or prog
+  io.output(p)
+  io.write(s)
+  assert(io.close())
 end
 
 local function getoutput ()
-  local f = io.open(out)
-  local t = f:read("a")
-  f:close()
+  io.input(out)
+  local t = io.read("a")
+  io.input():close()
   assert(os.remove(out))
   return t
 end
 
 local function checkprogout (s)
-  -- expected result must end with new line
-  assert(string.sub(s, -1) == "\n")
   local t = getoutput()
   for line in string.gmatch(s, ".-\n") do
     assert(string.find(t, line, 1, true))
@@ -67,11 +63,10 @@ local function RUN (p, ...)
   assert(os.execute(s))
 end
 
-
 local function NoRun (msg, p, ...)
   p = string.gsub(p, "lua", '"'..progname..'"', 1)
   local s = string.format(p, ...)
-  s = string.format("%s >%s 2>&1", s, out)  -- send output and error to 'out'
+  s = string.format("%s 2> %s", s, out)  -- will send error to 'out'
   assert(not os.execute(s))
   assert(string.find(getoutput(), msg, 1, true))  -- check error message
 end
@@ -90,38 +85,11 @@ prepfile[[
 1, a
 )
 ]]
-RUN('lua - -- < %s > %s', prog, out)
+RUN('lua - < %s > %s', prog, out)
 checkout("1\tnil\n")
 
 RUN('echo "print(10)\nprint(2)\n" | lua > %s', out)
 checkout("10\n2\n")
-
-
--- testing BOM
-prepfile("\xEF\xBB\xBF")
-RUN('lua %s > %s', prog, out)
-checkout("")
-
-prepfile("\xEF\xBB\xBFprint(3)")
-RUN('lua %s > %s', prog, out)
-checkout("3\n")
-
-prepfile("\xEF\xBB\xBF# comment!!\nprint(3)")
-RUN('lua %s > %s', prog, out)
-checkout("3\n")
-
--- bad BOMs
-prepfile("\xEF", true)
-NoRun("unexpected symbol", 'lua %s', prog)
-
-prepfile("\xEF\xBB", true)
-NoRun("unexpected symbol", 'lua %s', prog)
-
-prepfile("\xEFprint(3)", true)
-NoRun("unexpected symbol", 'lua %s', prog)
-
-prepfile("\xEF\xBBprint(3)", true)
-NoRun("unexpected symbol", 'lua %s', prog)
 
 
 -- test option '-'
@@ -133,11 +101,11 @@ checkout("-h\n")
 prepfile("print(package.path)")
 
 -- test LUA_PATH
-RUN('env LUA_INIT= LUA_PATH=x lua --  %s > %s', prog, out)
+RUN('env LUA_INIT= LUA_PATH=x lua %s > %s', prog, out)
 checkout("x\n")
 
 -- test LUA_PATH_version
-RUN('env LUA_INIT= LUA_PATH_5_4=y LUA_PATH=x lua %s > %s', prog, out)
+RUN('env LUA_INIT= LUA_PATH_5_3=y LUA_PATH=x lua %s > %s', prog, out)
 checkout("y\n")
 
 -- test LUA_CPATH
@@ -146,7 +114,7 @@ RUN('env LUA_INIT= LUA_CPATH=xuxu lua %s > %s', prog, out)
 checkout("xuxu\n")
 
 -- test LUA_CPATH_version
-RUN('env LUA_INIT= LUA_CPATH_5_4=yacc LUA_CPATH=x lua %s > %s', prog, out)
+RUN('env LUA_INIT= LUA_CPATH_5_3=yacc LUA_CPATH=x lua %s > %s', prog, out)
 checkout("yacc\n")
 
 -- test LUA_INIT (and its access to 'arg' table)
@@ -156,7 +124,7 @@ checkout("3.2\n")
 
 -- test LUA_INIT_version
 prepfile("print(X)")
-RUN('env LUA_INIT_5_4="X=10" LUA_INIT="X=3" lua %s > %s', prog, out)
+RUN('env LUA_INIT_5_3="X=10" LUA_INIT="X=3" lua %s > %s', prog, out)
 checkout("10\n")
 
 -- test LUA_INIT for files
@@ -174,18 +142,12 @@ do
   prepfile("print(package.path, package.cpath)")
   RUN('env LUA_INIT="error(10)" LUA_PATH=xxx LUA_CPATH=xxx lua -E %s > %s',
        prog, out)
-  local output = getoutput()
-  defaultpath = string.match(output, "^(.-)\t")
-  defaultCpath = string.match(output, "\t(.-)$")
-
-  -- running with an empty environment
-  RUN('env -i lua %s > %s', prog, out)
   local out = getoutput()
-  assert(defaultpath == string.match(output, "^(.-)\t"))
-  assert(defaultCpath == string.match(output, "\t(.-)$"))
+  defaultpath = string.match(out, "^(.-)\t")
+  defaultCpath = string.match(out, "\t(.-)$")
 end
 
--- paths did not change
+-- paths did not changed
 assert(not string.find(defaultpath, "xxx") and
        string.find(defaultpath, "lua") and
        not string.find(defaultCpath, "xxx") and
@@ -198,46 +160,29 @@ local function convert (p)
   RUN('env LUA_PATH="%s" lua %s > %s', p, prog, out)
   local expected = getoutput()
   expected = string.sub(expected, 1, -2)   -- cut final end of line
-  if string.find(p, ";;") then
-    p = string.gsub(p, ";;", ";"..defaultpath..";")
-    p = string.gsub(p, "^;", "")   -- remove ';' at the beginning
-    p = string.gsub(p, ";$", "")   -- remove ';' at the end
-  end
-  assert(p == expected)
+  assert(string.gsub(p, ";;", ";"..defaultpath..";") == expected)
 end
 
 convert(";")
 convert(";;")
-convert("a;;b")
-convert(";;b")
-convert("a;;")
-convert("a;b;;c")
+convert(";;;")
+convert(";;;;")
+convert(";;;;;")
+convert(";;a;;;bc")
 
 
 -- test -l over multiple libraries
 prepfile("print(1); a=2; return {x=15}")
-prepfile(("print(a); print(_G['%s'].x)"):format(prog), false, otherprog)
+prepfile(("print(a); print(_G['%s'].x)"):format(prog), otherprog)
 RUN('env LUA_PATH="?;;" lua -l %s -l%s -lstring -l io %s > %s', prog, otherprog, otherprog, out)
 checkout("1\n2\n15\n2\n15\n")
-
--- test explicit global names in -l
-prepfile("print(str.upper'alo alo', m.max(10, 20))")
-RUN("lua -l 'str=string' '-lm=math' -e 'print(m.sin(0))' %s > %s", prog, out)
-checkout("0.0\nALO ALO\t20\n")
-
-
--- test module names with version sufix ("libs/lib2-v2")
-RUN("env LUA_CPATH='./libs/?.so' lua -l lib2-v2 -e 'print(lib2.id())' > %s",
-    out)
-checkout("true\n")
-
 
 -- test 'arg' table
 local a = [[
   assert(#arg == 3 and arg[1] == 'a' and
          arg[2] == 'b' and arg[3] == 'c')
   assert(arg[-1] == '--' and arg[-2] == "-e " and arg[-3] == '%s')
-  assert(arg[4] == undef and arg[-4] == undef)
+  assert(arg[4] == nil and arg[-4] == nil)
   local a, b, c = ...
   assert(... == 'a' and a == 'a' and b == 'b' and c == 'c')
 ]]
@@ -247,7 +192,7 @@ RUN('lua "-e " -- %s a b c', prog)   -- "-e " runs an empty command
 
 -- test 'arg' availability in libraries
 prepfile"assert(arg)"
-prepfile("assert(arg)", false, otherprog)
+prepfile("assert(arg)", otherprog)
 RUN('env LUA_PATH="?;;" lua -l%s - < %s', prog, otherprog)
 
 -- test messing up the 'arg' table
@@ -262,70 +207,6 @@ assert(string.find(getoutput(), "error calling 'print'"))
 -- test 'debug.debug'
 RUN('echo "io.stderr:write(1000)\ncont" | lua -e "require\'debug\'.debug()" 2> %s', out)
 checkout("lua_debug> 1000lua_debug> ")
-
-
-print("testing warnings")
-
--- no warnings by default
-RUN('echo "io.stderr:write(1); warn[[XXX]]" | lua 2> %s', out)
-checkout("1")
-
-prepfile[[
-warn("@allow")               -- unknown control, ignored
-warn("@off", "XXX", "@off")  -- these are not control messages
-warn("@off")                 -- this one is
-warn("@on", "YYY", "@on")    -- not control, but warn is off
-warn("@off")                 -- keep it off
-warn("@on")                  -- restart warnings
-warn("", "@on")              -- again, no control, real warning
-warn("@on")                  -- keep it "started"
-warn("Z", "Z", "Z")          -- common warning
-]]
-RUN('lua -W %s 2> %s', prog, out)
-checkout[[
-Lua warning: @offXXX@off
-Lua warning: @on
-Lua warning: ZZZ
-]]
-
-prepfile[[
-warn("@allow")
--- create two objects to be finalized when closing state
--- the errors in the finalizers must generate warnings
-u1 = setmetatable({}, {__gc = function () error("XYZ") end})
-u2 = setmetatable({}, {__gc = function () error("ZYX") end})
-]]
-RUN('lua -W %s 2> %s', prog, out)
-checkprogout("ZYX)\nXYZ)\n")
-
--- bug since 5.2: finalizer called when closing a state could
--- subvert finalization order
-prepfile[[
--- should be called last
-print("creating 1")
-setmetatable({}, {__gc = function () print(1) end})
-
-print("creating 2")
-setmetatable({}, {__gc = function ()
-  print("2")
-  print("creating 3")
-  -- this finalizer should not be called, as object will be
-  -- created after 'lua_close' has been called
-  setmetatable({}, {__gc = function () print(3) end})
-  print(collectgarbage())    -- cannot call collector here
-  os.exit(0, true)
-end})
-]]
-RUN('lua -W %s > %s', prog, out)
-checkout[[
-creating 1
-creating 2
-2
-creating 3
-nil
-1
-]]
-
 
 -- test many arguments
 prepfile[[print(({...})[30])]]
@@ -346,48 +227,16 @@ RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
 checkprogout("6\n10\n10\n\n")
 
 prepfile("a = [[b\nc\nd\ne]]\n=a")
-RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i --  < %s > %s]], prog, out)
+RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
 checkprogout("b\nc\nd\ne\n\n")
 
--- input interrupted in continuation line
-prepfile("a.\n")
-RUN([[lua -i < %s > /dev/null 2> %s]], prog, out)
-checkprogout("near <eof>\n")
-
-local prompt = "alo"
+prompt = "alo"
 prepfile[[ --
 a = 2
 ]]
 RUN([[lua "-e_PROMPT='%s'" -i < %s > %s]], prompt, prog, out)
 local t = getoutput()
 assert(string.find(t, prompt .. ".*" .. prompt .. ".*" .. prompt))
-
--- using the prompt default
-prepfile[[ --
-a = 2
-]]
-RUN([[lua -i < %s > %s]], prog, out)
-local t = getoutput()
-prompt = "> "    -- the default
-assert(string.find(t, prompt .. ".*" .. prompt .. ".*" .. prompt))
-
-
--- non-string prompt
-prompt =
-  "local C = 0;\z
-   _PROMPT=setmetatable({},{__tostring = function () \z
-     C = C + 1; return C end})"
-prepfile[[ --
-a = 2
-]]
-RUN([[lua -e "%s" -i < %s > %s]], prompt, prog, out)
-local t = getoutput()
-assert(string.find(t, [[
-1 --
-2a = 2
-3
-]], 1, true))
-
 
 -- test for error objects
 prepfile[[
@@ -405,15 +254,15 @@ NoRun("error object is a table value", [[lua %s]], prog)
 
 
 -- chunk broken in many lines
-local s = [=[ --
-function f ( x )
+s = [=[ -- 
+function f ( x ) 
   local a = [[
 xuxu
 ]]
   local b = "\
 xuxu\n"
   if x == 11 then return 1 + 12 , 2 + 20 end  --[[ test multiple returns ]]
-  return x + 1
+  return x + 1 
   --\\
 end
 return( f( 100 ) )
@@ -423,14 +272,16 @@ s = string.gsub(s, ' ', '\n\n')   -- change all spaces for newlines
 prepfile(s)
 RUN([[lua -e"_PROMPT='' _PROMPT2=''" -i < %s > %s]], prog, out)
 checkprogout("101\n13\t22\n\n")
-
+  
 prepfile[[#comment in 1st line without \n at the end]]
 RUN('lua %s', prog)
-
--- first-line comment with binary file
-prepfile("#comment\n" .. string.dump(load("print(3)")), true)
+  
+prepfile[[#test line number when file starts with comment line
+debug = require"debug"
+print(debug.getinfo(1).currentline)
+]]
 RUN('lua %s > %s', prog, out)
-checkout('3\n')
+checkprogout('3')
 
 -- close Lua with an open file
 prepfile(string.format([[io.output(%q); io.write('alo')]], out))
@@ -455,21 +306,6 @@ NoRun("", "lua %s", prog)   -- no message
 prepfile("os.exit(false, true)")
 NoRun("", "lua %s", prog)   -- no message
 
-
--- to-be-closed variables in main chunk
-prepfile[[
-  local x <close> = setmetatable({},
-        {__close = function (self, err)
-                     assert(err == nil)
-                     print("Ok")
-                   end})
-  local e1 <close> = setmetatable({}, {__close = function () print(120) end})
-  os.exit(true, true)
-]]
-RUN('lua %s > %s', prog, out)
-checkprogout("120\nOk\n")
-
-
 -- remove temporary files
 assert(os.remove(prog))
 assert(os.remove(otherprog))
@@ -478,50 +314,25 @@ assert(not os.remove(out))
 -- invalid options
 NoRun("unrecognized option '-h'", "lua -h")
 NoRun("unrecognized option '---'", "lua ---")
-NoRun("unrecognized option '-Ex'", "lua -Ex --")
+NoRun("unrecognized option '-Ex'", "lua -Ex")
 NoRun("unrecognized option '-vv'", "lua -vv")
 NoRun("unrecognized option '-iv'", "lua -iv")
 NoRun("'-e' needs argument", "lua -e")
 NoRun("syntax error", "lua -e a")
 NoRun("'-l' needs argument", "lua -l")
-NoRun("-i", "lua -- -i")   -- handles -i as a script name
 
 
-
-if T then   -- test library?
+if T then   -- auxiliary library?
   print("testing 'not enough memory' to create a state")
   NoRun("not enough memory", "env MEMLIMIT=100 lua")
-
-  -- testing 'warn'
-  warn("@store")
-  warn("@123", "456", "789")
-  assert(_WARN == "@123456789"); _WARN = false
-
-  warn("zip", "", " ", "zap")
-  assert(_WARN == "zip zap"); _WARN = false
-  warn("ZIP", "", " ", "ZAP")
-  assert(_WARN == "ZIP ZAP"); _WARN = false
-  warn("@normal")
 end
-
-do
-  -- 'warn' must get at least one argument
-  local st, msg = pcall(warn)
-  assert(string.find(msg, "string expected"))
-
-  -- 'warn' does not leave unfinished warning in case of errors
-  -- (message would appear in next warning)
-  st, msg = pcall(warn, "SHOULD NOT APPEAR", {})
-  assert(string.find(msg, "string expected"))
-end
-
 print('+')
 
 print('testing Ctrl C')
 do
   -- interrupt a script
   local function kill (pid)
-    return os.execute(string.format('kill -INT %s 2> /dev/null', pid))
+    return os.execute(string.format('kill -INT %d 2> /dev/null', pid))
   end
 
   -- function to run a script in background, returning its output file

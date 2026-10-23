@@ -26,7 +26,7 @@ import (
 
 // LUA_COPYRIGHT is what '-v' prints (lua.h: LUA_COPYRIGHT). lua.c and
 // luac.c print the same line, and scripts grep it for "PUC-Rio".
-const LUA_COPYRIGHT = "Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio"
+const LUA_COPYRIGHT = "Lua 5.3.4  Copyright (C) 1994-2017 Lua.org, PUC-Rio"
 
 const (
 	luacProgName = "luac"
@@ -416,7 +416,10 @@ func (c *luac) printHeader(f *Proto) {
 		len(f.p), ss(len(f.p)))
 }
 
-// printCode is PrintCode.
+// myk is MYK from luac.c: constant indices print as -1-k.
+func myk(x int) int { return -1 - x }
+
+// printCode is PrintCode (luac.c, Lua 5.3.4).
 func (c *luac) printCode(f *Proto) {
 	code := f.code
 	for pc := 0; pc < len(code); pc++ {
@@ -424,17 +427,10 @@ func (c *luac) printCode(f *Proto) {
 		op := i.Op
 		a := i.A
 		b := i.B
-		carg := i.C /* GETARG_C(i) in C, where the receiver's name is free */
-		ax := i.A   /* GETARG_Ax(i): the A field holds it in this port */
+		carg := i.C
+		ax := i.A /* Ax stored in A for iAx */
 		bx := i.B
-		sb := i.B - OFFSET_sB
-		sc := i.C - OFFSET_sC
-		sbx := i.B - OFFSET_sBx
-		isk := i.K
-		iskMark := ""
-		if isk != 0 {
-			iskMark = "k"
-		}
+		sbx := sBx(i.B)
 		line := luaG_getfuncline(f, pc)
 		fmt.Fprintf(c.out, "\t%d\t", pc+1)
 		if line > 0 {
@@ -443,180 +439,97 @@ func (c *luac) printCode(f *Proto) {
 			fmt.Fprintf(c.out, "[-]\t")
 		}
 		fmt.Fprintf(c.out, "%-9s\t", opName(op))
-		switch op {
-		case OP_MOVE:
-			fmt.Fprintf(c.out, "%d %d", a, b)
-		case OP_LOADI, OP_LOADF:
+		if op < 0 || op >= NUM_OPCODES {
+			fmt.Fprint(c.out, "\n")
+			continue
+		}
+		switch getOpMode(op) {
+		case iABC:
+			fmt.Fprintf(c.out, "%d", a)
+			if getBMode(op) != OpArgN {
+				if ISK(b) {
+					fmt.Fprintf(c.out, " %d", myk(INDEXK(b)))
+				} else {
+					fmt.Fprintf(c.out, " %d", b)
+				}
+			}
+			if getCMode(op) != OpArgN {
+				if ISK(carg) {
+					fmt.Fprintf(c.out, " %d", myk(INDEXK(carg)))
+				} else {
+					fmt.Fprintf(c.out, " %d", carg)
+				}
+			}
+		case iABx:
+			fmt.Fprintf(c.out, "%d", a)
+			if getBMode(op) == OpArgK {
+				fmt.Fprintf(c.out, " %d", myk(bx))
+			}
+			if getBMode(op) == OpArgU {
+				fmt.Fprintf(c.out, " %d", bx)
+			}
+		case iAsBx:
 			fmt.Fprintf(c.out, "%d %d", a, sbx)
+		case iAx:
+			fmt.Fprintf(c.out, "%d", myk(ax))
+		}
+		switch op {
 		case OP_LOADK:
-			fmt.Fprintf(c.out, "%d %d", a, bx)
 			fmt.Fprint(c.out, "\t; ")
 			c.printConstant(f, bx)
-		case OP_LOADKX:
-			fmt.Fprintf(c.out, "%d", a)
-			fmt.Fprint(c.out, "\t; ")
-			c.printConstant(f, code[pc+1].A) /* EXTRAARG */
-		case OP_LOADFALSE, OP_LFALSESKIP, OP_LOADTRUE:
-			fmt.Fprintf(c.out, "%d", a)
-		case OP_LOADNIL:
-			fmt.Fprintf(c.out, "%d %d", a, b)
-			fmt.Fprintf(c.out, "\t; %d out", b+1)
 		case OP_GETUPVAL, OP_SETUPVAL:
-			fmt.Fprintf(c.out, "%d %d", a, b)
 			fmt.Fprintf(c.out, "\t; %s", c.upvalName(f, b))
 		case OP_GETTABUP:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
 			fmt.Fprintf(c.out, "\t; %s", c.upvalName(f, b))
-			fmt.Fprint(c.out, " ")
-			c.printConstant(f, carg)
-		case OP_GETTABLE, OP_GETI:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-		case OP_GETFIELD:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-			fmt.Fprint(c.out, "\t; ")
-			c.printConstant(f, carg)
+			if ISK(carg) {
+				fmt.Fprint(c.out, " ")
+				c.printConstant(f, INDEXK(carg))
+			}
 		case OP_SETTABUP:
-			fmt.Fprintf(c.out, "%d %d %d%s", a, b, carg, iskMark)
 			fmt.Fprintf(c.out, "\t; %s", c.upvalName(f, a))
-			fmt.Fprint(c.out, " ")
-			c.printConstant(f, b)
-			if isk != 0 {
+			if ISK(b) {
 				fmt.Fprint(c.out, " ")
-				c.printConstant(f, carg)
+				c.printConstant(f, INDEXK(b))
 			}
-		case OP_SETTABLE, OP_SETI:
-			fmt.Fprintf(c.out, "%d %d %d%s", a, b, carg, iskMark)
-			if isk != 0 {
-				fmt.Fprint(c.out, "\t; ")
-				c.printConstant(f, carg)
-			}
-		case OP_SETFIELD:
-			fmt.Fprintf(c.out, "%d %d %d%s", a, b, carg, iskMark)
-			fmt.Fprint(c.out, "\t; ")
-			c.printConstant(f, b)
-			if isk != 0 {
+			if ISK(carg) {
 				fmt.Fprint(c.out, " ")
-				c.printConstant(f, carg)
+				c.printConstant(f, INDEXK(carg))
 			}
-		case OP_SELF:
-			fmt.Fprintf(c.out, "%d %d %d%s", a, b, carg, iskMark)
-			if isk != 0 {
+		case OP_GETTABLE, OP_SELF:
+			if ISK(carg) {
 				fmt.Fprint(c.out, "\t; ")
-				c.printConstant(f, carg)
+				c.printConstant(f, INDEXK(carg))
 			}
-		case OP_NEWTABLE:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-			fmt.Fprintf(c.out, "\t; %d", carg+code[pc+1].A*(MAXARG_C+1))
-		case OP_ADDI:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, sc)
-		case OP_ADDK, OP_SUBK, OP_MULK, OP_MODK, OP_POWK, OP_DIVK, OP_IDIVK,
-			OP_BANDK, OP_BORK, OP_BXORK:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-			fmt.Fprint(c.out, "\t; ")
-			c.printConstant(f, carg)
-		case OP_SHRI, OP_SHLI:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, sc)
-		case OP_ADD, OP_SUB, OP_MUL, OP_MOD, OP_POW, OP_DIV, OP_IDIV,
-			OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-		case OP_MMBIN:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-			fmt.Fprintf(c.out, "\t; %s", luaT_eventname[carg])
-		case OP_MMBINI:
-			fmt.Fprintf(c.out, "%d %d %d %d", a, sb, carg, isk)
-			fmt.Fprintf(c.out, "\t; %s", luaT_eventname[carg])
-			if isk != 0 {
-				fmt.Fprint(c.out, " flip")
+		case OP_SETTABLE, OP_ADD, OP_SUB, OP_MUL, OP_POW, OP_DIV, OP_IDIV,
+			OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR, OP_EQ, OP_LT, OP_LE:
+			if ISK(b) || ISK(carg) {
+				fmt.Fprint(c.out, "\t; ")
+				if ISK(b) {
+					c.printConstant(f, INDEXK(b))
+				} else {
+					fmt.Fprint(c.out, "-")
+				}
+				fmt.Fprint(c.out, " ")
+				if ISK(carg) {
+					c.printConstant(f, INDEXK(carg))
+				} else {
+					fmt.Fprint(c.out, "-")
+				}
 			}
-		case OP_MMBINK:
-			fmt.Fprintf(c.out, "%d %d %d %d", a, b, carg, isk)
-			fmt.Fprintf(c.out, "\t; %s ", luaT_eventname[carg])
-			c.printConstant(f, b)
-			if isk != 0 {
-				fmt.Fprint(c.out, " flip")
-			}
-		case OP_UNM, OP_BNOT, OP_NOT, OP_LEN, OP_CONCAT:
-			fmt.Fprintf(c.out, "%d %d", a, b)
-		case OP_CLOSE, OP_TBC:
-			fmt.Fprintf(c.out, "%d", a)
-		case OP_JMP:
-			sj := i.B - OFFSET_sJ
-			fmt.Fprintf(c.out, "%d", sj)
-			fmt.Fprintf(c.out, "\t; to %d", sj+pc+2)
-		case OP_EQ, OP_LT, OP_LE:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, isk)
-		case OP_EQK:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, isk)
-			fmt.Fprint(c.out, "\t; ")
-			c.printConstant(f, b)
-		case OP_EQI, OP_LTI, OP_LEI, OP_GTI, OP_GEI:
-			fmt.Fprintf(c.out, "%d %d %d", a, sb, isk)
-		case OP_TEST:
-			fmt.Fprintf(c.out, "%d %d", a, isk)
-		case OP_TESTSET:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, isk)
-		case OP_CALL:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-			fmt.Fprint(c.out, "\t; ")
-			if b == 0 {
-				fmt.Fprint(c.out, "all in ")
-			} else {
-				fmt.Fprintf(c.out, "%d in ", b-1)
-			}
-			if carg == 0 {
-				fmt.Fprint(c.out, "all out")
-			} else {
-				fmt.Fprintf(c.out, "%d out", carg-1)
-			}
-		case OP_TAILCALL:
-			fmt.Fprintf(c.out, "%d %d %d%s", a, b, carg, iskMark)
-			fmt.Fprintf(c.out, "\t; %d in", b-1)
-		case OP_RETURN:
-			fmt.Fprintf(c.out, "%d %d %d%s", a, b, carg, iskMark)
-			fmt.Fprint(c.out, "\t; ")
-			if b == 0 {
-				fmt.Fprint(c.out, "all out")
-			} else {
-				fmt.Fprintf(c.out, "%d out", b-1)
-			}
-		case OP_RETURN0:
-			/* nothing */
-		case OP_RETURN1:
-			fmt.Fprintf(c.out, "%d", a)
-		case OP_FORLOOP:
-			fmt.Fprintf(c.out, "%d %d", a, bx)
-			fmt.Fprintf(c.out, "\t; to %d", pc-bx+2)
-		case OP_FORPREP:
-			fmt.Fprintf(c.out, "%d %d", a, bx)
-			fmt.Fprintf(c.out, "\t; exit to %d", pc+bx+3)
-		case OP_TFORPREP:
-			fmt.Fprintf(c.out, "%d %d", a, bx)
-			fmt.Fprintf(c.out, "\t; to %d", pc+bx+2)
-		case OP_TFORCALL:
-			fmt.Fprintf(c.out, "%d %d", a, carg)
-		case OP_TFORLOOP:
-			fmt.Fprintf(c.out, "%d %d", a, bx)
-			fmt.Fprintf(c.out, "\t; to %d", pc-bx+2)
-		case OP_SETLIST:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-			if isk != 0 {
-				fmt.Fprintf(c.out, "\t; %d", carg+code[pc+1].A*(MAXARG_C+1))
-			}
+		case OP_JMP, OP_FORLOOP, OP_FORPREP, OP_TFORLOOP:
+			fmt.Fprintf(c.out, "\t; to %d", sbx+pc+2)
 		case OP_CLOSURE:
-			fmt.Fprintf(c.out, "%d %d", a, bx)
 			fmt.Fprintf(c.out, "\t; %p", f.p[bx])
-		case OP_VARARG:
-			fmt.Fprintf(c.out, "%d %d", a, carg)
-			fmt.Fprint(c.out, "\t; ")
+		case OP_SETLIST:
 			if carg == 0 {
-				fmt.Fprint(c.out, "all out")
+				pc++
+				fmt.Fprintf(c.out, "\t; %d", code[pc].A)
 			} else {
-				fmt.Fprintf(c.out, "%d out", carg-1)
+				fmt.Fprintf(c.out, "\t; %d", carg)
 			}
-		case OP_VARARGPREP:
-			fmt.Fprintf(c.out, "%d", a)
 		case OP_EXTRAARG:
-			fmt.Fprintf(c.out, "%d", ax)
+			fmt.Fprint(c.out, "\t; ")
+			c.printConstant(f, ax)
 		}
 		fmt.Fprint(c.out, "\n")
 	}

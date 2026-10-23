@@ -975,7 +975,7 @@ func assignment(ls *LexState, lh *LHS_assign, nvars int) {
 		if nv.v.k != VINDEXED {
 			check_conflict(ls, lh, &nv.v)
 		}
-		checklimit(ls.fs, nvars+int(ls.L.nCcalls), LUAI_MAXCCALLS, "C levels")
+		checklimit(ls.fs, nvars+int(ls.L.nCcalls&0xffff), LUAI_MAXCCALLS, "C levels")
 		assignment(ls, &nv, nvars+1)
 	} else {
 		checknext(ls, '=')

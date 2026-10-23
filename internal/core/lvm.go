@@ -528,7 +528,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 			}
 			i := code[pc]
 			pc++
-			base := ci.funcIdx + 1
+			base := ci.base
 			ra := base + i.A
 
 			switch i.Op {
@@ -564,7 +564,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, upval, rc, ra, slot)
-					base = ci.funcIdx + 1
+					base = ci.base
 				}
 			case OP_GETTABLE:
 				rb := &L.stack[base+i.B]
@@ -575,7 +575,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, rc, ra, slot)
-					base = ci.funcIdx + 1
+					base = ci.base
 				}
 			case OP_SETTABUP:
 				upval := upvalValue(cl.upvals[i.A])
@@ -587,7 +587,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, upval, rb, rc, slot)
-					base = ci.funcIdx + 1
+					base = ci.base
 				}
 			case OP_SETUPVAL:
 				*upvalValue(cl.upvals[i.B]) = L.stack[ra]
@@ -600,7 +600,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, &L.stack[ra], rb, rc, slot)
-					base = ci.funcIdx + 1
+					base = ci.base
 				}
 			case OP_NEWTABLE:
 				b, c := i.B, i.C
@@ -619,7 +619,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, rc, ra, slot)
-					base = ci.funcIdx + 1
+					base = ci.base
 				}
 			case OP_ADD, OP_SUB, OP_MUL, OP_MOD, OP_POW, OP_DIV, OP_IDIV,
 				OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR:
@@ -629,7 +629,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					savestate(L, ci, pc)
 					tm := binOpTM(i.Op)
 					luaT_trybinTM(L, rb, rc, ra, tm)
-					base = ci.funcIdx + 1
+					base = ci.base
 				}
 			case OP_UNM:
 				rb := &L.stack[base+i.B]
@@ -642,7 +642,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					} else {
 						savestate(L, ci, pc)
 						luaT_trybinTM(L, rb, rb, ra, TM_UNM)
-						base = ci.funcIdx + 1
+						base = ci.base
 					}
 				}
 			case OP_BNOT:
@@ -653,7 +653,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					savestate(L, ci, pc)
 					luaT_trybinTM(L, rb, rb, ra, TM_BNOT)
-					base = ci.funcIdx + 1
+					base = ci.base
 				}
 			case OP_NOT:
 				rb := &L.stack[base+i.B]
@@ -665,13 +665,16 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_LEN:
 				savestate(L, ci, pc)
 				luaV_objlen(L, ra, &L.stack[base+i.B])
-				base = ci.funcIdx + 1
+				base = ci.base
 			case OP_CONCAT:
+				/* Like PUC 5.3 Protect / 5.4 ProtectNT: mark operand end in
+				   L.top, save pc, but do NOT reset top to ci.top (savestate
+				   would) before luaV_concat sees the operands. */
 				b, c := i.B, i.C
 				L.top = base + c + 1
-				savestate(L, ci, pc)
+				ci.savedpc = pc
 				luaV_concat(L, c-b+1)
-				base = ci.funcIdx + 1
+				base = ci.base
 				ra = base + i.A
 				L.stack[ra] = L.stack[base+b]
 				L.top = ci.top
@@ -685,7 +688,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				rc := rkVal(L, base, k, i.C)
 				savestate(L, ci, pc)
 				eq := luaV_equalobj(L, rb, rc)
-				base = ci.funcIdx + 1
+				base = ci.base
 				if (eq && i.A != 0) || (!eq && i.A == 0) {
 					ji := code[pc]
 					pc++
@@ -707,7 +710,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					res = luaV_lessequal(L, rb, rc)
 				}
-				base = ci.funcIdx + 1
+				base = ci.base
 				if (res && i.A != 0) || (!res && i.A == 0) {
 					ji := code[pc]
 					pc++
@@ -844,7 +847,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				L.top = cb + 3
 				savestate(L, ci, pc)
 				luaD_call(L, cb, i.C)
-				base = ci.funcIdx + 1
+				base = ci.base
 				L.top = ci.top
 				i = code[pc]
 				pc++
@@ -888,7 +891,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				if b < 0 {
 					b = n
 					L.checkStack(n)
-					base = ci.funcIdx + 1
+					base = ci.base
 					ra = base + i.A
 					L.top = ra + n
 				}
@@ -1023,7 +1026,6 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 	}
 	return false
 }
-
 
 func luaG_tracecall(L *State, ci *CallInfo) bool {
 	p := clLvalue(&L.stack[ci.funcIdx]).p

@@ -93,6 +93,9 @@ func luaK_nil(fs *FuncState, from, n int) {
 }
 
 func getjump(fs *FuncState, pc int) int {
+	if pc < 0 || pc >= len(fs.f.code) {
+		return NO_JUMP
+	}
 	offset := sBx(fs.f.code[pc].B)
 	if offset == NO_JUMP {
 		return NO_JUMP

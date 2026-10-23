@@ -1,17 +1,17 @@
 #!../lua
--- $Id: testes/all.lua $
+-- $Id: all.lua,v 1.95 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice at the end of this file
 
 
-local version = "Lua 5.4"
+local version = "Lua 5.3"
 if _VERSION ~= version then
-  io.stderr:write("This test suite is for ", version,
-                  ", not for ", _VERSION, "\nExiting tests")
+  io.stderr:write("\nThis test suite is for ", version, ", not for ", _VERSION,
+    "\nExiting tests\n")
   return
 end
 
 
-_G.ARG = arg   -- save arg for other tests
+_G._ARG = arg   -- save arg for other tests
 
 
 -- next variables control the execution of some tests
@@ -37,27 +37,19 @@ end
 -- tests should require debug when needed
 debug = nil
 
-
 if usertests then
   T = nil    -- no "internal" tests for user tests
 else
   T = rawget(_G, "T")  -- avoid problems with 'strict' module
 end
 
+math.randomseed(0)
 
 --[=[
   example of a long [comment],
   [[spanning several [lines]]]
 
 ]=]
-
-print("\n\tStarting Tests")
-
-do
-  -- set random seed
-  local random_x, random_y = math.randomseed()
-  print(string.format("random seeds: %d, %d", random_x, random_y))
-end
 
 print("current path:\n****" .. package.path .. "****\n")
 
@@ -100,8 +92,6 @@ local function F (m)
   end
 end
 
-local Cstacklevel
-
 local showmem
 if not T then
   local max = 0
@@ -111,7 +101,6 @@ if not T then
     print(format("    ---- total memory: %s, max memory: %s ----\n",
           F(m), F(max)))
   end
-  Cstacklevel = function () return 0 end   -- no info about stack level
 else
   showmem = function ()
     T.checkmemory()
@@ -125,15 +114,8 @@ else
                  T.totalmem"string", T.totalmem"table", T.totalmem"function",
                  T.totalmem"userdata", T.totalmem"thread"))
   end
-
-  Cstacklevel = function ()
-    local _, _, ncalls = T.stacklevel()
-    return ncalls    -- number of C calls
-  end
 end
 
-
-local Cstack = Cstacklevel()
 
 --
 -- redefine dofile to run files through dump/undump
@@ -154,8 +136,18 @@ end
 
 dofile('main.lua')
 
--- trace GC cycles
-require"tracegc".start()
+do
+  local next, setmetatable, stderr = next, setmetatable, io.stderr
+  -- track collections
+  local mt = {}
+  -- each time a table is collected, remark it for finalization
+  -- on next cycle
+  mt.__gc = function (o)
+     stderr:write'.'    -- mark progress
+     local n = setmetatable(o, mt)   -- remark it
+   end
+   local n = setmetatable({}, mt)    -- create object
+end
 
 report"gc.lua"
 local f = assert(loadfile('gc.lua'))
@@ -163,12 +155,11 @@ f()
 
 dofile('db.lua')
 assert(dofile('calls.lua') == deep and deep)
-_G.deep = nil
 olddofile('strings.lua')
 olddofile('literals.lua')
 dofile('tpack.lua')
 assert(dofile('attrib.lua') == 27)
-dofile('gengc.lua')
+
 assert(dofile('locals.lua') == 5)
 dofile('constructs.lua')
 dofile('code.lua', true)
@@ -178,7 +169,6 @@ if not _G._soft then
   assert(f() == 'b')
   assert(f() == 'a')
 end
-dofile('cstack.lua')
 dofile('nextvar.lua')
 dofile('pm.lua')
 dofile('utf8.lua')
@@ -196,18 +186,12 @@ assert(dofile('verybig.lua', true) == 10); collectgarbage()
 dofile('files.lua')
 
 if #msgs > 0 then
-  local m = table.concat(msgs, "\n  ")
-  warn("#tests not performed:\n  ", m, "\n")
+  print("\ntests not performed:")
+  for i=1,#msgs do
+    print(msgs[i])
+  end
+  print()
 end
-
-print("(there should be two warnings now)")
-warn("@on")
-warn("#This is ", "an expected", " warning")
-warn("@off")
-warn("******** THIS WARNING SHOULD NOT APPEAR **********")
-warn("******** THIS WARNING ALSO SHOULD NOT APPEAR **********")
-warn("@on")
-warn("#This is", " another one")
 
 -- no test module should define 'debug'
 assert(debug == nil)
@@ -222,16 +206,11 @@ debug.sethook(function (a) assert(type(a) == 'string') end, "cr")
 -- to survive outside block
 _G.showmem = showmem
 
-
-assert(Cstack == Cstacklevel(),
-  "should be at the same C-stack level it was when started the tests")
-
 end   --)
 
-local _G, showmem, print, format, clock, time, difftime,
-      assert, open, warn =
+local _G, showmem, print, format, clock, time, difftime, assert, open =
       _G, showmem, print, string.format, os.clock, os.time, os.difftime,
-      assert, io.open, warn
+      assert, io.open
 
 -- file with time of last performed test
 local fname = T and "time-debug.txt" or "time.txt"
@@ -252,7 +231,7 @@ end
 print('cleaning all!!!!')
 for n in pairs(_G) do
   if not ({___Glob = 1, tostring = 1})[n] then
-    _G[n] = undef
+    _G[n] = nil
   end
 end
 
@@ -275,7 +254,7 @@ if not usertests then
   local diff = (clocktime - lasttime) / lasttime
   local tolerance = 0.05    -- 5%
   if (diff >= tolerance or diff <= -tolerance) then
-    warn(format("#time difference from previous test: %+.1f%%",
+    print(format("WARNING: time difference from previous test: %+.1f%%",
                   diff * 100))
   end
   assert(open(fname, "w")):write(clocktime):close()
@@ -287,7 +266,7 @@ print("final OK !!!")
 
 --[[
 *****************************************************************************
-* Copyright (C) 1994-2025 Lua.org, PUC-Rio.
+* Copyright (C) 1994-2016 Lua.org, PUC-Rio.
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the

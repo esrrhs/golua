@@ -503,7 +503,7 @@ func TestBaseCollectGarbageCollects(t *testing.T) {
 func TestBaseGlobals(t *testing.T) {
 	L := baseNew(t)
 	baseCheck(t, L, `r = tostring(_G._G == _G)`, "r", "true")
-	baseCheck(t, L, `r = _VERSION`, "r", "Lua 5.4")
+	baseCheck(t, L, `r = _VERSION`, "r", "Lua 5.3")
 	baseCheck(t, L, `r = tostring(type(_G))`, "r", "table")
 	/* the library functions are visible as globals */
 	baseCheck(t, L, `r = tostring(type(print)) .. tostring(type(pairs)) ..

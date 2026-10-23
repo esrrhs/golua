@@ -1,313 +1,291 @@
 
-main <(luac):0,0> (8 instructions at 0xPTR)
+main <(luac):0,0> (7 instructions at 0xPTR)
 0+ params, 2 slots, 1 upvalue, 0 locals, 0 constants, 3 functions
-	1	[1]	VARARGPREP	0
-	2	[1]	CLOSURE  	0 0	; 0xPTR
-	3	[1]	CALL     	0 1 1	; 0 in 0 out
-	4	[2]	CLOSURE  	0 1	; 0xPTR
-	5	[2]	CALL     	0 1 1	; 0 in 0 out
-	6	[3]	CLOSURE  	0 2	; 0xPTR
-	7	[3]	CALL     	0 1 1	; 0 in 0 out
-	8	[3]	RETURN   	0 1 1	; 0 out
+	1	[1]	CLOSURE  	0 0	; 0xPTR
+	2	[1]	CALL     	0 1 1
+	3	[2]	CLOSURE  	0 1	; 0xPTR
+	4	[2]	CALL     	0 1 1
+	5	[3]	CLOSURE  	0 2	; 0xPTR
+	6	[3]	CALL     	0 1 1
+	7	[3]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	_ENV	1	0
 
-main <f1.lua:0,0> (191 instructions at 0xPTR)
-0+ params, 20 slots, 1 upvalue, 22 locals, 44 constants, 17 functions
-	1	[1]	VARARGPREP	0
-	2	[1]	CLOSURE  	0 0	; 0xPTR
-	3	[2]	NEWTABLE 	1 2 3	; 3
-	4	[2]	EXTRAARG 	0
-	5	[2]	LOADI    	2 1
-	6	[2]	LOADI    	3 2
-	7	[2]	LOADI    	4 3
-	8	[2]	SETFIELD 	1 0 1k	; "x" "y"
-	9	[2]	SETI     	1 10 2k	; 20
-	10	[2]	SETLIST  	1 3 0
-	11	[3]	LOADI    	2 1
-	12	[3]	LEN      	3 1
-	13	[3]	LOADI    	4 1
-	14	[3]	FORPREP  	2 4	; exit to 20
-	15	[3]	GETTABUP 	6 0 3	; _ENV "print"
-	16	[3]	MOVE     	7 5
-	17	[3]	GETTABLE 	8 1 5
-	18	[3]	CALL     	6 3 1	; 2 in 0 out
-	19	[3]	FORLOOP  	2 5	; to 15
-	20	[4]	GETTABUP 	2 0 4	; _ENV "pairs"
-	21	[4]	MOVE     	3 1
-	22	[4]	CALL     	2 2 5	; 1 in 4 out
-	23	[4]	TFORPREP 	2 4	; to 28
-	24	[4]	GETTABUP 	8 0 3	; _ENV "print"
-	25	[4]	MOVE     	9 6
-	26	[4]	MOVE     	10 7
-	27	[4]	CALL     	8 3 1	; 2 in 0 out
-	28	[4]	TFORCALL 	2 2
-	29	[4]	TFORLOOP 	2 6	; to 24
-	30	[4]	CLOSE    	2
-	31	[5]	LOADK    	2 0	; "x"
-	32	[5]	SELF     	2 2 5k	; "rep"
-	33	[5]	LOADI    	4 3
-	34	[5]	CALL     	2 3 2	; 2 in 1 out
-	35	[5]	LOADK    	3 6	; "abc"
-	36	[5]	CONCAT   	2 2
-	37	[6]	LEN      	3 2
-	38	[6]	GTI      	3 2 0
-	39	[6]	JMP      	4	; to 44
-	40	[6]	GETTABUP 	3 0 3	; _ENV "print"
-	41	[6]	MOVE     	4 2
-	42	[6]	CALL     	3 2 1	; 1 in 0 out
-	43	[6]	JMP      	10	; to 54
-	44	[6]	LEN      	3 2
-	45	[6]	EQI      	3 0 0
-	46	[6]	JMP      	4	; to 51
-	47	[6]	GETTABUP 	3 0 3	; _ENV "print"
-	48	[6]	LOADK    	4 7	; "e"
-	49	[6]	CALL     	3 2 1	; 1 in 0 out
-	50	[6]	JMP      	3	; to 54
-	51	[6]	GETTABUP 	3 0 3	; _ENV "print"
-	52	[6]	LOADK    	4 8	; "o"
-	53	[6]	CALL     	3 2 1	; 1 in 0 out
-	54	[7]	LOADFALSE	3
-	55	[7]	TEST     	3 0
-	56	[7]	JMP      	1	; to 58
-	57	[7]	JMP      	-4	; to 54
-	58	[8]	LOADI    	3 1
-	59	[8]	GTI      	3 0 0
-	60	[8]	JMP      	-3	; to 58
-	61	[9]	LOADI    	3 1
-	62	[9]	LOADK    	4 9	; 2.5
-	63	[9]	LOADNIL  	5 0	; 1 out
-	64	[10]	GETTABUP 	6 0 3	; _ENV "print"
-	65	[10]	MOVE     	7 0
-	66	[10]	MOVE     	8 3
-	67	[10]	MOVE     	9 4
-	68	[10]	CALL     	7 3 2	; 2 in 1 out
-	69	[10]	MOVE     	8 5
-	70	[10]	LOADI    	9 0
-	71	[10]	LOADI    	10 1
-	72	[10]	LOADF    	11 1024
-	73	[10]	UNM      	12 3
-	74	[10]	LEN      	13 2
-	75	[10]	NOT      	14 5
-	76	[10]	BANDK    	15 3 10	; 1
-	77	[10]	MMBINK   	3 10 13 0	; __band 1
-	78	[10]	BORK     	16 3 11	; 2
-	79	[10]	MMBINK   	3 11 14 0	; __bor 2
-	80	[10]	BXORK    	17 3 12	; 3
-	81	[10]	MMBINK   	3 12 15 0	; __bxor 3
-	82	[10]	SHRI     	18 3 -1
-	83	[10]	MMBINI   	3 1 16 0	; __shl
-	84	[10]	SHRI     	19 3 1
-	85	[10]	MMBINI   	3 1 17 0	; __shr
-	86	[10]	CALL     	6 14 1	; 13 in 0 out
-	87	[11]	JMP      	0	; to 88
-	88	[13]	GETTABUP 	6 0 13	; _ENV "coroutine"
-	89	[13]	GETFIELD 	6 6 14	; "wrap"
-	90	[13]	CLOSURE  	7 1	; 0xPTR
-	91	[13]	CALL     	6 2 2	; 1 in 1 out
-	92	[14]	GETTABUP 	7 0 15	; _ENV "setmetatable"
-	93	[14]	NEWTABLE 	8 0 0	; 0
-	94	[14]	EXTRAARG 	0
-	95	[14]	NEWTABLE 	9 6 0	; 0
-	96	[14]	EXTRAARG 	0
-	97	[14]	CLOSURE  	10 2	; 0xPTR
-	98	[14]	SETFIELD 	9 16 10	; "__index"
-	99	[14]	CLOSURE  	10 3	; 0xPTR
-	100	[14]	SETFIELD 	9 17 10	; "__add"
-	101	[15]	CLOSURE  	10 4	; 0xPTR
-	102	[15]	SETFIELD 	9 18 10	; "__call"
-	103	[15]	CLOSURE  	10 5	; 0xPTR
-	104	[15]	SETFIELD 	9 19 10	; "__tostring"
-	105	[16]	CLOSURE  	10 6	; 0xPTR
-	106	[16]	SETFIELD 	9 20 10	; "__close"
-	107	[16]	CLOSURE  	10 7	; 0xPTR
-	108	[16]	SETFIELD 	9 21 10	; "__gc"
-	109	[16]	CLOSURE  	10 8	; 0xPTR
-	110	[16]	SETFIELD 	9 22 10	; "__len"
-	111	[17]	CLOSURE  	10 9	; 0xPTR
-	112	[17]	SETFIELD 	9 23 10	; "__eq"
-	113	[17]	CLOSURE  	10 10	; 0xPTR
-	114	[17]	SETFIELD 	9 24 10	; "__lt"
-	115	[17]	CLOSURE  	10 11	; 0xPTR
-	116	[17]	SETFIELD 	9 25 10	; "__le"
-	117	[18]	CLOSURE  	10 12	; 0xPTR
-	118	[18]	SETFIELD 	9 26 10	; "__concat"
-	119	[18]	CLOSURE  	10 13	; 0xPTR
-	120	[18]	SETFIELD 	9 27 10	; "__unm"
-	121	[19]	CLOSURE  	10 14	; 0xPTR
-	122	[19]	SETFIELD 	9 28 10	; "__newindex"
-	123	[19]	SETFIELD 	9 29 0	; "__mod"
-	124	[19]	SETFIELD 	9 30 0	; "__pow"
-	125	[19]	SETFIELD 	9 31 0	; "__div"
-	126	[19]	SETFIELD 	9 32 0	; "__idiv"
-	127	[20]	SETFIELD 	9 33 0	; "__band"
-	128	[20]	SETFIELD 	9 34 0	; "__bor"
-	129	[20]	SETFIELD 	9 35 0	; "__bxor"
-	130	[20]	SETFIELD 	9 36 0	; "__shl"
-	131	[20]	SETFIELD 	9 37 0	; "__shr"
-	132	[20]	SETFIELD 	9 38 0	; "__bnot"
-	133	[14]	CALL     	7 3 2	; 2 in 1 out
-	134	[21]	GETTABUP 	8 0 3	; _ENV "print"
-	135	[21]	GETFIELD 	9 7 0	; "x"
-	136	[21]	ADDI     	10 7 1
-	137	[21]	MMBINI   	7 1 6 0	; __add
-	138	[21]	MOVE     	11 7
-	139	[21]	LOADI    	12 4
-	140	[21]	CALL     	11 2 2	; 1 in 1 out
-	141	[21]	GETTABUP 	12 0 39	; _ENV "tostring"
-	142	[21]	MOVE     	13 7
-	143	[21]	CALL     	12 2 2	; 1 in 1 out
-	144	[21]	LEN      	13 7
-	145	[21]	EQ       	7 7 1
-	146	[21]	JMP      	1	; to 148
-	147	[21]	LFALSESKIP	14
-	148	[21]	LOADTRUE 	14
-	149	[21]	LT       	7 7 1
-	150	[21]	JMP      	1	; to 152
-	151	[21]	LFALSESKIP	15
-	152	[21]	LOADTRUE 	15
-	153	[21]	LE       	7 7 1
-	154	[21]	JMP      	1	; to 156
-	155	[21]	LFALSESKIP	16
-	156	[21]	LOADTRUE 	16
-	157	[21]	MOVE     	17 7
-	158	[21]	LOADK    	18 40	; ""
-	159	[21]	CONCAT   	17 2
-	160	[21]	UNM      	18 7
-	161	[21]	CALL     	8 11 1	; 10 in 0 out
-	162	[22]	GETTABUP 	8 0 15	; _ENV "setmetatable"
-	163	[22]	NEWTABLE 	9 0 0	; 0
-	164	[22]	EXTRAARG 	0
-	165	[22]	NEWTABLE 	10 1 0	; 0
-	166	[22]	EXTRAARG 	0
-	167	[22]	CLOSURE  	11 15	; 0xPTR
-	168	[22]	SETFIELD 	10 20 11	; "__close"
-	169	[22]	CALL     	8 3 2	; 2 in 1 out
-	170	[22]	TBC      	8
-	171	[24]	LOADI    	9 42
-	172	[25]	GETTABUP 	9 0 41	; _ENV "print"
-	173	[25]	GETTABUP 	10 0 42	; _ENV "table"
-	174	[25]	GETFIELD 	10 10 43	; "unpack"
-	175	[25]	NEWTABLE 	11 0 3	; 3
-	176	[25]	EXTRAARG 	0
-	177	[25]	LOADI    	12 1
-	178	[25]	LOADI    	13 2
-	179	[25]	LOADI    	14 3
-	180	[25]	SETLIST  	11 3 0
-	181	[25]	CALL     	10 2 0	; 1 in all out
-	182	[25]	CALL     	9 0 1	; all in 0 out
-	183	[26]	CLOSURE  	9 16	; 0xPTR
-	184	[27]	GETTABUP 	10 0 41	; _ENV "print"
-	185	[27]	MOVE     	11 9
-	186	[27]	LOADI    	12 1
-	187	[27]	LOADNIL  	13 0	; 1 out
-	188	[27]	LOADI    	14 3
-	189	[27]	CALL     	11 4 0	; 3 in all out
-	190	[27]	CALL     	10 0 1	; all in 0 out
-	191	[27]	RETURN   	10 1 1k	; 0 out
-constants (44) for 0xPTR:
-	0	S	"x"
-	1	S	"y"
-	2	I	20
-	3	S	"print"
-	4	S	"pairs"
-	5	S	"rep"
-	6	S	"abc"
-	7	S	"e"
-	8	S	"o"
-	9	F	2.5
-	10	I	1
-	11	I	2
-	12	I	3
-	13	S	"coroutine"
-	14	S	"wrap"
-	15	S	"setmetatable"
-	16	S	"__index"
-	17	S	"__add"
-	18	S	"__call"
-	19	S	"__tostring"
-	20	S	"__close"
-	21	S	"__gc"
-	22	S	"__len"
-	23	S	"__eq"
-	24	S	"__lt"
-	25	S	"__le"
-	26	S	"__concat"
-	27	S	"__unm"
-	28	S	"__newindex"
-	29	S	"__mod"
-	30	S	"__pow"
-	31	S	"__div"
-	32	S	"__idiv"
-	33	S	"__band"
-	34	S	"__bor"
-	35	S	"__bxor"
-	36	S	"__shl"
-	37	S	"__shr"
-	38	S	"__bnot"
-	39	S	"tostring"
-	40	S	""
-	41	S	"print"
-	42	S	"table"
-	43	S	"unpack"
-locals (22) for 0xPTR:
-	0	add	3	192
-	1	t	11	192
-	2	(for state)	14	20
-	3	(for state)	14	20
-	4	(for state)	14	20
-	5	i	15	19
-	6	(for state)	23	30
-	7	(for state)	23	30
-	8	(for state)	23	30
-	9	(for state)	23	30
-	10	k	24	28
-	11	v	24	28
-	12	s	37	192
-	13	z	59	61
-	14	a	64	192
-	15	b	64	192
-	16	c	64	192
-	17	co	92	192
-	18	mt	134	192
-	19	x	170	192
-	20	inner	172	172
-	21	f	184	192
+main <f1.lua:0,0> (169 instructions at 0xPTR)
+0+ params, 20 slots, 1 upvalue, 19 locals, 48 constants, 16 functions
+	1	[1]	CLOSURE  	0 0	; 0xPTR
+	2	[2]	NEWTABLE 	1 3 2
+	3	[2]	LOADK    	2 -1	; 1
+	4	[2]	LOADK    	3 -2	; 2
+	5	[2]	LOADK    	4 -3	; 3
+	6	[2]	SETTABLE 	1 -4 -5	; "x" "y"
+	7	[2]	SETTABLE 	1 -6 -7	; 10 20
+	8	[2]	SETLIST  	1 3 1	; 1
+	9	[3]	LOADK    	2 -1	; 1
+	10	[3]	LEN      	3 1
+	11	[3]	LOADK    	4 -1	; 1
+	12	[3]	FORPREP  	2 4	; to 17
+	13	[3]	GETTABUP 	6 0 -8	; _ENV "print"
+	14	[3]	MOVE     	7 5
+	15	[3]	GETTABLE 	8 1 5
+	16	[3]	CALL     	6 3 1
+	17	[3]	FORLOOP  	2 -5	; to 13
+	18	[4]	GETTABUP 	2 0 -9	; _ENV "pairs"
+	19	[4]	MOVE     	3 1
+	20	[4]	CALL     	2 2 4
+	21	[4]	JMP      	0 4	; to 26
+	22	[4]	GETTABUP 	7 0 -8	; _ENV "print"
+	23	[4]	MOVE     	8 5
+	24	[4]	MOVE     	9 6
+	25	[4]	CALL     	7 3 1
+	26	[4]	TFORCALL 	2 2
+	27	[4]	TFORLOOP 	4 -6	; to 22
+	28	[5]	LOADK    	2 -4	; "x"
+	29	[5]	SELF     	2 2 -10	; "rep"
+	30	[5]	LOADK    	4 -3	; 3
+	31	[5]	CALL     	2 3 2
+	32	[5]	LOADK    	3 -11	; "abc"
+	33	[5]	CONCAT   	2 2 3
+	34	[6]	LEN      	3 2
+	35	[6]	LT       	0 -2 3	; 2 -
+	36	[6]	JMP      	0 4	; to 41
+	37	[6]	GETTABUP 	3 0 -8	; _ENV "print"
+	38	[6]	MOVE     	4 2
+	39	[6]	CALL     	3 2 1
+	40	[6]	JMP      	0 10	; to 51
+	41	[6]	LEN      	3 2
+	42	[6]	EQ       	0 3 -12	; - 0
+	43	[6]	JMP      	0 4	; to 48
+	44	[6]	GETTABUP 	3 0 -8	; _ENV "print"
+	45	[6]	LOADK    	4 -13	; "e"
+	46	[6]	CALL     	3 2 1
+	47	[6]	JMP      	0 3	; to 51
+	48	[6]	GETTABUP 	3 0 -8	; _ENV "print"
+	49	[6]	LOADK    	4 -14	; "o"
+	50	[6]	CALL     	3 2 1
+	51	[7]	LOADBOOL 	3 0 0
+	52	[7]	TEST     	3 0
+	53	[7]	JMP      	0 1	; to 55
+	54	[7]	JMP      	0 -4	; to 51
+	55	[8]	LOADK    	3 -1	; 1
+	56	[8]	LT       	0 -12 3	; 0 -
+	57	[8]	JMP      	0 -3	; to 55
+	58	[9]	LOADK    	3 -1	; 1
+	59	[9]	LOADK    	4 -15	; 2.5
+	60	[9]	LOADNIL  	5 0
+	61	[10]	GETTABUP 	6 0 -8	; _ENV "print"
+	62	[10]	MOVE     	7 0
+	63	[10]	MOVE     	8 3
+	64	[10]	MOVE     	9 4
+	65	[10]	CALL     	7 3 2
+	66	[10]	MOVE     	8 5
+	67	[10]	LOADK    	9 -12	; 0
+	68	[10]	LOADK    	10 -1	; 1
+	69	[10]	LOADK    	11 -16	; 1024.0
+	70	[10]	UNM      	12 3
+	71	[10]	LEN      	13 2
+	72	[10]	NOT      	14 5
+	73	[10]	BAND     	15 3 -1	; - 1
+	74	[10]	BOR      	16 3 -2	; - 2
+	75	[10]	BXOR     	17 3 -3	; - 3
+	76	[10]	SHL      	18 3 -1	; - 1
+	77	[10]	SHR      	19 3 -1	; - 1
+	78	[10]	CALL     	6 14 1
+	79	[10]	JMP      	0 0	; to 80
+	80	[13]	GETTABUP 	6 0 -17	; _ENV "coroutine"
+	81	[13]	GETTABLE 	6 6 -18	; "wrap"
+	82	[13]	CLOSURE  	7 1	; 0xPTR
+	83	[13]	CALL     	6 2 2
+	84	[14]	GETTABUP 	7 0 -19	; _ENV "setmetatable"
+	85	[14]	NEWTABLE 	8 0 0
+	86	[14]	NEWTABLE 	9 0 20
+	87	[14]	CLOSURE  	10 2	; 0xPTR
+	88	[14]	SETTABLE 	9 -20 10	; "__index" -
+	89	[14]	CLOSURE  	10 3	; 0xPTR
+	90	[14]	SETTABLE 	9 -21 10	; "__add" -
+	91	[15]	CLOSURE  	10 4	; 0xPTR
+	92	[15]	SETTABLE 	9 -22 10	; "__call" -
+	93	[15]	CLOSURE  	10 5	; 0xPTR
+	94	[15]	SETTABLE 	9 -23 10	; "__tostring" -
+	95	[16]	CLOSURE  	10 6	; 0xPTR
+	96	[16]	SETTABLE 	9 -24 10	; "__close" -
+	97	[16]	CLOSURE  	10 7	; 0xPTR
+	98	[16]	SETTABLE 	9 -25 10	; "__gc" -
+	99	[16]	CLOSURE  	10 8	; 0xPTR
+	100	[16]	SETTABLE 	9 -26 10	; "__len" -
+	101	[17]	CLOSURE  	10 9	; 0xPTR
+	102	[17]	SETTABLE 	9 -27 10	; "__eq" -
+	103	[17]	CLOSURE  	10 10	; 0xPTR
+	104	[17]	SETTABLE 	9 -28 10	; "__lt" -
+	105	[17]	CLOSURE  	10 11	; 0xPTR
+	106	[17]	SETTABLE 	9 -29 10	; "__le" -
+	107	[18]	CLOSURE  	10 12	; 0xPTR
+	108	[18]	SETTABLE 	9 -30 10	; "__concat" -
+	109	[18]	CLOSURE  	10 13	; 0xPTR
+	110	[18]	SETTABLE 	9 -31 10	; "__unm" -
+	111	[19]	CLOSURE  	10 14	; 0xPTR
+	112	[19]	SETTABLE 	9 -32 10	; "__newindex" -
+	113	[19]	SETTABLE 	9 -33 0	; "__mod" -
+	114	[19]	SETTABLE 	9 -34 0	; "__pow" -
+	115	[19]	SETTABLE 	9 -35 0	; "__div" -
+	116	[19]	SETTABLE 	9 -36 0	; "__idiv" -
+	117	[20]	SETTABLE 	9 -37 0	; "__band" -
+	118	[20]	SETTABLE 	9 -38 0	; "__bor" -
+	119	[20]	SETTABLE 	9 -39 0	; "__bxor" -
+	120	[20]	SETTABLE 	9 -40 0	; "__shl" -
+	121	[20]	SETTABLE 	9 -41 0	; "__shr" -
+	122	[20]	SETTABLE 	9 -42 0	; "__bnot" -
+	123	[14]	CALL     	7 3 2
+	124	[21]	GETTABUP 	8 0 -8	; _ENV "print"
+	125	[21]	GETTABLE 	9 7 -4	; "x"
+	126	[21]	ADD      	10 7 -43	; - 1
+	127	[21]	MOVE     	11 7
+	128	[21]	LOADK    	12 -44	; 4
+	129	[21]	CALL     	11 2 2
+	130	[21]	GETTABUP 	12 0 -45	; _ENV "tostring"
+	131	[21]	MOVE     	13 7
+	132	[21]	CALL     	12 2 2
+	133	[21]	LEN      	13 7
+	134	[21]	EQ       	1 7 7
+	135	[21]	JMP      	0 1	; to 137
+	136	[21]	LOADBOOL 	14 0 1
+	137	[21]	LOADBOOL 	14 1 0
+	138	[21]	LT       	1 7 7
+	139	[21]	JMP      	0 1	; to 141
+	140	[21]	LOADBOOL 	15 0 1
+	141	[21]	LOADBOOL 	15 1 0
+	142	[21]	LE       	1 7 7
+	143	[21]	JMP      	0 1	; to 145
+	144	[21]	LOADBOOL 	16 0 1
+	145	[21]	LOADBOOL 	16 1 0
+	146	[21]	MOVE     	17 7
+	147	[21]	LOADK    	18 -46	; ""
+	148	[21]	CONCAT   	17 17 18
+	149	[21]	UNM      	18 7
+	150	[21]	CALL     	8 11 1
+	151	[22]	GETTABUP 	8 0 -8	; _ENV "print"
+	152	[22]	GETTABUP 	9 0 -47	; _ENV "table"
+	153	[22]	GETTABLE 	9 9 -48	; "unpack"
+	154	[22]	NEWTABLE 	10 3 0
+	155	[22]	LOADK    	11 -43	; 1
+	156	[22]	LOADK    	12 -2	; 2
+	157	[22]	LOADK    	13 -3	; 3
+	158	[22]	SETLIST  	10 3 1	; 1
+	159	[22]	CALL     	9 2 0
+	160	[22]	CALL     	8 0 1
+	161	[23]	CLOSURE  	8 15	; 0xPTR
+	162	[24]	GETTABUP 	9 0 -8	; _ENV "print"
+	163	[24]	MOVE     	10 8
+	164	[24]	LOADK    	11 -43	; 1
+	165	[24]	LOADNIL  	12 0
+	166	[24]	LOADK    	13 -3	; 3
+	167	[24]	CALL     	10 4 0
+	168	[24]	CALL     	9 0 1
+	169	[24]	RETURN   	0 1
+constants (48) for 0xPTR:
+	0	I	1
+	1	I	2
+	2	I	3
+	3	S	"x"
+	4	S	"y"
+	5	I	10
+	6	I	20
+	7	S	"print"
+	8	S	"pairs"
+	9	S	"rep"
+	10	S	"abc"
+	11	I	0
+	12	S	"e"
+	13	S	"o"
+	14	F	2.5
+	15	F	1024.0
+	16	S	"coroutine"
+	17	S	"wrap"
+	18	S	"setmetatable"
+	19	S	"__index"
+	20	S	"__add"
+	21	S	"__call"
+	22	S	"__tostring"
+	23	S	"__close"
+	24	S	"__gc"
+	25	S	"__len"
+	26	S	"__eq"
+	27	S	"__lt"
+	28	S	"__le"
+	29	S	"__concat"
+	30	S	"__unm"
+	31	S	"__newindex"
+	32	S	"__mod"
+	33	S	"__pow"
+	34	S	"__div"
+	35	S	"__idiv"
+	36	S	"__band"
+	37	S	"__bor"
+	38	S	"__bxor"
+	39	S	"__shl"
+	40	S	"__shr"
+	41	S	"__bnot"
+	42	I	1
+	43	I	4
+	44	S	"tostring"
+	45	S	""
+	46	S	"table"
+	47	S	"unpack"
+locals (19) for 0xPTR:
+	0	add	2	170
+	1	t	9	170
+	2	(for index)	12	18
+	3	(for limit)	12	18
+	4	(for step)	12	18
+	5	i	13	17
+	6	(for generator)	21	28
+	7	(for state)	21	28
+	8	(for control)	21	28
+	9	k	22	26
+	10	v	22	26
+	11	s	34	170
+	12	z	56	58
+	13	a	61	170
+	14	b	61	170
+	15	c	61	170
+	16	co	84	170
+	17	mt	124	170
+	18	f	162	170
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
 
-function <f1.lua:1,1> (4 instructions at 0xPTR)
+function <f1.lua:1,1> (3 instructions at 0xPTR)
 2 params, 3 slots, 0 upvalues, 2 locals, 0 constants, 0 functions
 	1	[1]	ADD      	2 0 1
-	2	[1]	MMBIN    	0 1 6	; __add
-	3	[1]	RETURN1  	2
-	4	[1]	RETURN0  	
+	2	[1]	RETURN   	2 2
+	3	[1]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (2) for 0xPTR:
-	0	a	1	5
-	1	b	1	5
+	0	a	1	4
+	1	b	1	4
 upvalues (0) for 0xPTR:
 
 function <f1.lua:13,13> (5 instructions at 0xPTR)
-0 params, 2 slots, 1 upvalue, 0 locals, 2 constants, 0 functions
-	1	[13]	GETTABUP 	0 0 0	; _ENV "coroutine"
-	2	[13]	GETFIELD 	0 0 1	; "yield"
-	3	[13]	LOADI    	1 1
-	4	[13]	CALL     	0 2 1	; 1 in 0 out
-	5	[13]	RETURN0  	
-constants (2) for 0xPTR:
+0 params, 2 slots, 1 upvalue, 0 locals, 3 constants, 0 functions
+	1	[13]	GETTABUP 	0 0 -1	; _ENV "coroutine"
+	2	[13]	GETTABLE 	0 0 -2	; "yield"
+	3	[13]	LOADK    	1 -3	; 1
+	4	[13]	CALL     	0 2 1
+	5	[13]	RETURN   	0 1
+constants (3) for 0xPTR:
 	0	S	"coroutine"
 	1	S	"yield"
+	2	I	1
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
 
 function <f1.lua:14,14> (2 instructions at 0xPTR)
 2 params, 2 slots, 0 upvalues, 2 locals, 0 constants, 0 functions
-	1	[14]	RETURN1  	1
-	2	[14]	RETURN0  	
+	1	[14]	RETURN   	1 2
+	2	[14]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (2) for 0xPTR:
 	0	_	1	3
@@ -315,11 +293,12 @@ locals (2) for 0xPTR:
 upvalues (0) for 0xPTR:
 
 function <f1.lua:14,14> (3 instructions at 0xPTR)
-2 params, 3 slots, 0 upvalues, 2 locals, 0 constants, 0 functions
-	1	[14]	LOADI    	2 42
-	2	[14]	RETURN1  	2
-	3	[14]	RETURN0  	
-constants (0) for 0xPTR:
+2 params, 3 slots, 0 upvalues, 2 locals, 1 constant, 0 functions
+	1	[14]	LOADK    	2 -1	; 42
+	2	[14]	RETURN   	2 2
+	3	[14]	RETURN   	0 1
+constants (1) for 0xPTR:
+	0	I	42
 locals (2) for 0xPTR:
 	0	a	1	4
 	1	b	1	4
@@ -327,8 +306,8 @@ upvalues (0) for 0xPTR:
 
 function <f1.lua:15,15> (2 instructions at 0xPTR)
 2 params, 2 slots, 0 upvalues, 2 locals, 0 constants, 0 functions
-	1	[15]	RETURN1  	1
-	2	[15]	RETURN0  	
+	1	[15]	RETURN   	1 2
+	2	[15]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (2) for 0xPTR:
 	0	self	1	3
@@ -337,9 +316,9 @@ upvalues (0) for 0xPTR:
 
 function <f1.lua:15,15> (3 instructions at 0xPTR)
 0 params, 2 slots, 0 upvalues, 0 locals, 1 constant, 0 functions
-	1	[15]	LOADK    	0 0	; "T"
-	2	[15]	RETURN1  	0
-	3	[15]	RETURN0  	
+	1	[15]	LOADK    	0 -1	; "T"
+	2	[15]	RETURN   	0 2
+	3	[15]	RETURN   	0 1
 constants (1) for 0xPTR:
 	0	S	"T"
 locals (0) for 0xPTR:
@@ -347,58 +326,59 @@ upvalues (0) for 0xPTR:
 
 function <f1.lua:16,16> (1 instruction at 0xPTR)
 0 params, 2 slots, 0 upvalues, 0 locals, 0 constants, 0 functions
-	1	[16]	RETURN0  	
+	1	[16]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
 function <f1.lua:16,16> (1 instruction at 0xPTR)
 0 params, 2 slots, 0 upvalues, 0 locals, 0 constants, 0 functions
-	1	[16]	RETURN0  	
+	1	[16]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
 function <f1.lua:16,16> (3 instructions at 0xPTR)
+0 params, 2 slots, 0 upvalues, 0 locals, 1 constant, 0 functions
+	1	[16]	LOADK    	0 -1	; 7
+	2	[16]	RETURN   	0 2
+	3	[16]	RETURN   	0 1
+constants (1) for 0xPTR:
+	0	I	7
+locals (0) for 0xPTR:
+upvalues (0) for 0xPTR:
+
+function <f1.lua:17,17> (3 instructions at 0xPTR)
 0 params, 2 slots, 0 upvalues, 0 locals, 0 constants, 0 functions
-	1	[16]	LOADI    	0 7
-	2	[16]	RETURN1  	0
-	3	[16]	RETURN0  	
+	1	[17]	LOADBOOL 	0 1 0
+	2	[17]	RETURN   	0 2
+	3	[17]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
 function <f1.lua:17,17> (3 instructions at 0xPTR)
 0 params, 2 slots, 0 upvalues, 0 locals, 0 constants, 0 functions
-	1	[17]	LOADTRUE 	0
-	2	[17]	RETURN1  	0
-	3	[17]	RETURN0  	
+	1	[17]	LOADBOOL 	0 1 0
+	2	[17]	RETURN   	0 2
+	3	[17]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
 function <f1.lua:17,17> (3 instructions at 0xPTR)
 0 params, 2 slots, 0 upvalues, 0 locals, 0 constants, 0 functions
-	1	[17]	LOADTRUE 	0
-	2	[17]	RETURN1  	0
-	3	[17]	RETURN0  	
-constants (0) for 0xPTR:
-locals (0) for 0xPTR:
-upvalues (0) for 0xPTR:
-
-function <f1.lua:17,17> (3 instructions at 0xPTR)
-0 params, 2 slots, 0 upvalues, 0 locals, 0 constants, 0 functions
-	1	[17]	LOADTRUE 	0
-	2	[17]	RETURN1  	0
-	3	[17]	RETURN0  	
+	1	[17]	LOADBOOL 	0 1 0
+	2	[17]	RETURN   	0 2
+	3	[17]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
 function <f1.lua:18,18> (2 instructions at 0xPTR)
 2 params, 2 slots, 0 upvalues, 2 locals, 0 constants, 0 functions
-	1	[18]	RETURN1  	0
-	2	[18]	RETURN0  	
+	1	[18]	RETURN   	0 2
+	2	[18]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (2) for 0xPTR:
 	0	a	1	3
@@ -407,8 +387,8 @@ upvalues (0) for 0xPTR:
 
 function <f1.lua:18,18> (2 instructions at 0xPTR)
 1 param, 2 slots, 0 upvalues, 1 local, 0 constants, 0 functions
-	1	[18]	RETURN1  	0
-	2	[18]	RETURN0  	
+	1	[18]	RETURN   	0 2
+	2	[18]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (1) for 0xPTR:
 	0	a	1	3
@@ -416,34 +396,20 @@ upvalues (0) for 0xPTR:
 
 function <f1.lua:19,19> (1 instruction at 0xPTR)
 0 params, 2 slots, 0 upvalues, 0 locals, 0 constants, 0 functions
-	1	[19]	RETURN0  	
+	1	[19]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
-function <f1.lua:22,22> (4 instructions at 0xPTR)
-0 params, 2 slots, 1 upvalue, 0 locals, 2 constants, 0 functions
-	1	[22]	GETTABUP 	0 0 0	; _ENV "print"
-	2	[22]	LOADK    	1 1	; "closed"
-	3	[22]	CALL     	0 2 1	; 1 in 0 out
-	4	[22]	RETURN0  	
-constants (2) for 0xPTR:
-	0	S	"print"
-	1	S	"closed"
-locals (0) for 0xPTR:
-upvalues (1) for 0xPTR:
-	0	_ENV	0	0
-
-function <f1.lua:26,26> (8 instructions at 0xPTR)
+function <f1.lua:23,23> (7 instructions at 0xPTR)
 0+ params, 3 slots, 1 upvalue, 0 locals, 2 constants, 0 functions
-	1	[26]	VARARGPREP	0
-	2	[26]	GETTABUP 	0 0 0	; _ENV "select"
-	3	[26]	LOADK    	1 1	; "#"
-	4	[26]	VARARG   	2 0	; all out
-	5	[26]	CALL     	0 0 2	; all in 1 out
-	6	[26]	VARARG   	1 0	; all out
-	7	[26]	RETURN   	0 0 1	; all out
-	8	[26]	RETURN   	0 1 1	; 0 out
+	1	[23]	GETTABUP 	0 0 -1	; _ENV "select"
+	2	[23]	LOADK    	1 -2	; "#"
+	3	[23]	VARARG   	2 0
+	4	[23]	CALL     	0 0 2
+	5	[23]	VARARG   	1 0
+	6	[23]	RETURN   	0 0
+	7	[23]	RETURN   	0 1
 constants (2) for 0xPTR:
 	0	S	"select"
 	1	S	"#"
@@ -451,136 +417,131 @@ locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
 
-main <f2.lua:0,0> (70 instructions at 0xPTR)
-0+ params, 16 slots, 1 upvalue, 17 locals, 12 constants, 5 functions
-	1	[1]	VARARGPREP	0
-	2	[3]	LOADK    	0 0	; 9.007199254741e+15
-	3	[4]	LOADK    	1 1	; 0.1
-	4	[5]	LOADI    	2 0
-	5	[5]	DIVK     	2 2 2	; 0
-	6	[5]	MMBINK   	2 2 11 0	; __div 0
-	7	[6]	LOADI    	3 1
-	8	[6]	DIVK     	3 3 2	; 0
-	9	[6]	MMBINK   	3 2 11 0	; __div 0
-	10	[7]	NEWTABLE 	4 0 5	; 5
-	11	[7]	EXTRAARG 	0
-	12	[7]	LOADK    	5 3	; "a\nb\ttab\\q\"z"
-	13	[7]	LOADK    	6 4	; "AB"
-	14	[7]	LOADK    	7 5	; "\240\159\152\128"
-	15	[7]	LOADK    	8 6	; "A"
-	16	[7]	LOADK    	9 7	; "\195\169"
-	17	[7]	SETLIST  	4 5 0
-	18	[8]	GETTABUP 	5 0 8	; _ENV "print"
-	19	[8]	MOVE     	6 0
-	20	[8]	MOVE     	7 1
-	21	[8]	MOVE     	8 2
-	22	[8]	MOVE     	9 3
-	23	[8]	LEN      	10 4
-	24	[8]	CALL     	5 6 1	; 5 in 0 out
-	25	[9]	LOADI    	5 300
-	26	[10]	NEWTABLE 	6 0 0	; 0
-	27	[10]	EXTRAARG 	0
-	28	[11]	LOADI    	7 1
-	29	[11]	MOVE     	8 5
-	30	[11]	LOADI    	9 1
-	31	[11]	FORPREP  	7 3	; exit to 36
-	32	[11]	MUL      	11 10 10
-	33	[11]	MMBIN    	10 10 8	; __mul
-	34	[11]	SETTABLE 	6 10 11
-	35	[11]	FORLOOP  	7 4	; to 32
-	36	[12]	CLOSURE  	7 0	; 0xPTR
-	37	[13]	GETTABUP 	8 0 8	; _ENV "print"
-	38	[13]	MOVE     	9 7
-	39	[13]	LOADI    	10 10
-	40	[13]	CALL     	9 2 0	; 1 in all out
-	41	[13]	CALL     	8 0 1	; all in 0 out
-	42	[14]	NEWTABLE 	8 0 0	; 0
-	43	[14]	EXTRAARG 	0
-	44	[15]	CLOSURE  	9 1	; 0xPTR
-	45	[15]	SETFIELD 	8 9 9	; "method"
-	46	[16]	CLOSURE  	9 2	; 0xPTR
-	47	[16]	SETFIELD 	8 10 9	; "static"
-	48	[17]	GETTABUP 	9 0 8	; _ENV "print"
-	49	[17]	SELF     	10 8 9k	; "method"
-	50	[17]	LOADI    	12 1
-	51	[17]	CALL     	10 3 2	; 2 in 1 out
-	52	[17]	GETFIELD 	11 8 10	; "static"
-	53	[17]	CALL     	11 1 0	; 0 in all out
-	54	[17]	CALL     	9 0 1	; all in 0 out
-	55	[18]	GETTABUP 	9 0 11	; _ENV "pcall"
-	56	[18]	CLOSURE  	10 3	; 0xPTR
-	57	[18]	CALL     	9 2 3	; 1 in 2 out
-	58	[19]	GETTABUP 	11 0 8	; _ENV "print"
-	59	[19]	MOVE     	12 9
-	60	[19]	MOVE     	13 10
-	61	[19]	CALL     	11 3 1	; 2 in 0 out
-	62	[20]	LOADI    	11 1
-	63	[21]	CLOSURE  	12 4	; 0xPTR
-	64	[22]	GETTABUP 	13 0 8	; _ENV "print"
-	65	[22]	MOVE     	14 12
-	66	[22]	CALL     	14 1 2	; 0 in 1 out
-	67	[22]	MOVE     	15 12
-	68	[22]	CALL     	15 1 0	; 0 in all out
-	69	[22]	CALL     	13 0 1	; all in 0 out
-	70	[22]	RETURN   	13 1 1k	; 0 out
-constants (12) for 0xPTR:
+main <f2.lua:0,0> (61 instructions at 0xPTR)
+0+ params, 16 slots, 1 upvalue, 17 locals, 16 constants, 5 functions
+	1	[3]	LOADK    	0 -1	; 9.007199254741e+15
+	2	[4]	LOADK    	1 -2	; 0.1
+	3	[5]	DIV      	2 -3 -3	; 0 0
+	4	[6]	DIV      	3 -4 -3	; 1 0
+	5	[7]	NEWTABLE 	4 5 0
+	6	[7]	LOADK    	5 -5	; "a\nb\ttab\\q\"z"
+	7	[7]	LOADK    	6 -6	; "AB"
+	8	[7]	LOADK    	7 -7	; "\240\159\152\128"
+	9	[7]	LOADK    	8 -8	; "A"
+	10	[7]	LOADK    	9 -9	; "\195\169"
+	11	[7]	SETLIST  	4 5 1	; 1
+	12	[8]	GETTABUP 	5 0 -10	; _ENV "print"
+	13	[8]	MOVE     	6 0
+	14	[8]	MOVE     	7 1
+	15	[8]	MOVE     	8 2
+	16	[8]	MOVE     	9 3
+	17	[8]	LEN      	10 4
+	18	[8]	CALL     	5 6 1
+	19	[9]	LOADK    	5 -11	; 300
+	20	[10]	NEWTABLE 	6 0 0
+	21	[11]	LOADK    	7 -4	; 1
+	22	[11]	MOVE     	8 5
+	23	[11]	LOADK    	9 -4	; 1
+	24	[11]	FORPREP  	7 2	; to 27
+	25	[11]	MUL      	11 10 10
+	26	[11]	SETTABLE 	6 10 11
+	27	[11]	FORLOOP  	7 -3	; to 25
+	28	[12]	CLOSURE  	7 0	; 0xPTR
+	29	[13]	GETTABUP 	8 0 -10	; _ENV "print"
+	30	[13]	MOVE     	9 7
+	31	[13]	LOADK    	10 -12	; 10
+	32	[13]	CALL     	9 2 0
+	33	[13]	CALL     	8 0 1
+	34	[14]	NEWTABLE 	8 0 0
+	35	[15]	CLOSURE  	9 1	; 0xPTR
+	36	[15]	SETTABLE 	8 -13 9	; "method" -
+	37	[16]	CLOSURE  	9 2	; 0xPTR
+	38	[16]	SETTABLE 	8 -14 9	; "static" -
+	39	[17]	GETTABUP 	9 0 -10	; _ENV "print"
+	40	[17]	SELF     	10 8 -13	; "method"
+	41	[17]	LOADK    	12 -15	; 1
+	42	[17]	CALL     	10 3 2
+	43	[17]	GETTABLE 	11 8 -14	; "static"
+	44	[17]	CALL     	11 1 0
+	45	[17]	CALL     	9 0 1
+	46	[18]	GETTABUP 	9 0 -16	; _ENV "pcall"
+	47	[18]	CLOSURE  	10 3	; 0xPTR
+	48	[18]	CALL     	9 2 3
+	49	[19]	GETTABUP 	11 0 -10	; _ENV "print"
+	50	[19]	MOVE     	12 9
+	51	[19]	MOVE     	13 10
+	52	[19]	CALL     	11 3 1
+	53	[20]	LOADK    	11 -15	; 1
+	54	[21]	CLOSURE  	12 4	; 0xPTR
+	55	[22]	GETTABUP 	13 0 -10	; _ENV "print"
+	56	[22]	MOVE     	14 12
+	57	[22]	CALL     	14 1 2
+	58	[22]	MOVE     	15 12
+	59	[22]	CALL     	15 1 0
+	60	[22]	CALL     	13 0 1
+	61	[22]	RETURN   	0 1
+constants (16) for 0xPTR:
 	0	F	9.007199254741e+15
 	1	F	0.1
 	2	I	0
-	3	S	"a\nb\ttab\\q\"z"
-	4	S	"AB"
-	5	S	"\240\159\152\128"
-	6	S	"A"
-	7	S	"\195\169"
-	8	S	"print"
-	9	S	"method"
-	10	S	"static"
-	11	S	"pcall"
+	3	I	1
+	4	S	"a\nb\ttab\\q\"z"
+	5	S	"AB"
+	6	S	"\240\159\152\128"
+	7	S	"A"
+	8	S	"\195\169"
+	9	S	"print"
+	10	I	300
+	11	I	10
+	12	S	"method"
+	13	S	"static"
+	14	I	1
+	15	S	"pcall"
 locals (17) for 0xPTR:
-	0	big	3	71
-	1	flt	4	71
-	2	nan	7	71
-	3	inf	10	71
-	4	strs	18	71
-	5	n	26	71
-	6	t	28	71
-	7	(for state)	31	36
-	8	(for state)	31	36
-	9	(for state)	31	36
-	10	i	32	35
-	11	rec	37	71
-	12	cls	44	71
-	13	ok	58	71
-	14	err	58	71
-	15	up	63	71
-	16	useup	64	71
+	0	big	2	62
+	1	flt	3	62
+	2	nan	4	62
+	3	inf	5	62
+	4	strs	12	62
+	5	n	20	62
+	6	t	21	62
+	7	(for index)	24	28
+	8	(for limit)	24	28
+	9	(for step)	24	28
+	10	i	25	27
+	11	rec	29	62
+	12	cls	35	62
+	13	ok	49	62
+	14	err	49	62
+	15	up	54	62
+	16	useup	55	62
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
 
-function <f2.lua:12,12> (12 instructions at 0xPTR)
-1 param, 3 slots, 1 upvalue, 1 local, 0 constants, 0 functions
-	1	[12]	EQI      	0 0 0
-	2	[12]	JMP      	2	; to 5
-	3	[12]	LOADI    	1 0
-	4	[12]	RETURN1  	1
+function <f2.lua:12,12> (10 instructions at 0xPTR)
+1 param, 3 slots, 1 upvalue, 1 local, 2 constants, 0 functions
+	1	[12]	EQ       	0 0 -1	; - 0
+	2	[12]	JMP      	0 2	; to 5
+	3	[12]	LOADK    	1 -1	; 0
+	4	[12]	RETURN   	1 2
 	5	[12]	GETUPVAL 	1 0	; rec
-	6	[12]	ADDI     	2 0 -1
-	7	[12]	MMBINI   	0 1 7 0	; __sub
-	8	[12]	CALL     	1 2 2	; 1 in 1 out
-	9	[12]	ADDI     	1 1 1
-	10	[12]	MMBINI   	1 1 6 1	; __add flip
-	11	[12]	RETURN1  	1
-	12	[12]	RETURN0  	
-constants (0) for 0xPTR:
+	6	[12]	SUB      	2 0 -2	; - 1
+	7	[12]	CALL     	1 2 2
+	8	[12]	ADD      	1 -2 1	; 1 -
+	9	[12]	RETURN   	1 2
+	10	[12]	RETURN   	0 1
+constants (2) for 0xPTR:
+	0	I	0
+	1	I	1
 locals (1) for 0xPTR:
-	0	k	1	13
+	0	k	1	11
 upvalues (1) for 0xPTR:
 	0	rec	1	7
 
 function <f2.lua:15,15> (2 instructions at 0xPTR)
 2 params, 2 slots, 0 upvalues, 2 locals, 0 constants, 0 functions
-	1	[15]	RETURN1  	1
-	2	[15]	RETURN0  	
+	1	[15]	RETURN   	1 2
+	2	[15]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (2) for 0xPTR:
 	0	self	1	3
@@ -589,95 +550,92 @@ upvalues (0) for 0xPTR:
 
 function <f2.lua:16,16> (3 instructions at 0xPTR)
 0 params, 2 slots, 0 upvalues, 0 locals, 1 constant, 0 functions
-	1	[16]	LOADK    	0 0	; "s"
-	2	[16]	RETURN1  	0
-	3	[16]	RETURN0  	
+	1	[16]	LOADK    	0 -1	; "s"
+	2	[16]	RETURN   	0 2
+	3	[16]	RETURN   	0 1
 constants (1) for 0xPTR:
 	0	S	"s"
 locals (0) for 0xPTR:
 upvalues (0) for 0xPTR:
 
 function <f2.lua:18,18> (5 instructions at 0xPTR)
-0 params, 3 slots, 1 upvalue, 0 locals, 2 constants, 0 functions
-	1	[18]	GETTABUP 	0 0 0	; _ENV "error"
-	2	[18]	LOADK    	1 1	; "boom"
-	3	[18]	LOADI    	2 2
-	4	[18]	CALL     	0 3 1	; 2 in 0 out
-	5	[18]	RETURN0  	
-constants (2) for 0xPTR:
+0 params, 3 slots, 1 upvalue, 0 locals, 3 constants, 0 functions
+	1	[18]	GETTABUP 	0 0 -1	; _ENV "error"
+	2	[18]	LOADK    	1 -2	; "boom"
+	3	[18]	LOADK    	2 -3	; 2
+	4	[18]	CALL     	0 3 1
+	5	[18]	RETURN   	0 1
+constants (3) for 0xPTR:
 	0	S	"error"
 	1	S	"boom"
+	2	I	2
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
 
-function <f2.lua:21,21> (7 instructions at 0xPTR)
-0 params, 2 slots, 1 upvalue, 0 locals, 0 constants, 0 functions
+function <f2.lua:21,21> (6 instructions at 0xPTR)
+0 params, 2 slots, 1 upvalue, 0 locals, 1 constant, 0 functions
 	1	[21]	GETUPVAL 	0 0	; up
-	2	[21]	ADDI     	0 0 1
-	3	[21]	MMBINI   	0 1 6 0	; __add
-	4	[21]	SETUPVAL 	0 0	; up
-	5	[21]	GETUPVAL 	0 0	; up
-	6	[21]	RETURN1  	0
-	7	[21]	RETURN0  	
-constants (0) for 0xPTR:
+	2	[21]	ADD      	0 0 -1	; - 1
+	3	[21]	SETUPVAL 	0 0	; up
+	4	[21]	GETUPVAL 	0 0	; up
+	5	[21]	RETURN   	0 2
+	6	[21]	RETURN   	0 1
+constants (1) for 0xPTR:
+	0	I	1
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	up	1	11
 
-main <f3.lua:0,0> (4 instructions at 0xPTR)
+main <f3.lua:0,0> (3 instructions at 0xPTR)
 0+ params, 2 slots, 1 upvalue, 0 locals, 0 constants, 1 function
-	1	[1]	VARARGPREP	0
-	2	[7]	CLOSURE  	0 0	; 0xPTR
-	3	[7]	RETURN   	0 2 1	; 1 out
-	4	[7]	RETURN   	0 1 1	; 0 out
+	1	[7]	CLOSURE  	0 0	; 0xPTR
+	2	[7]	RETURN   	0 2
+	3	[7]	RETURN   	0 1
 constants (0) for 0xPTR:
 locals (0) for 0xPTR:
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0
 
-function <f3.lua:1,7> (25 instructions at 0xPTR)
-1 param, 10 slots, 1 upvalue, 13 locals, 1 constant, 0 functions
-	1	[2]	NEWTABLE 	1 0 0	; 0
-	2	[2]	EXTRAARG 	0
-	3	[3]	LOADI    	2 1
-	4	[3]	MOVE     	3 0
-	5	[3]	LOADI    	4 1
-	6	[3]	FORPREP  	2 4	; exit to 12
-	7	[3]	LEN      	6 1
-	8	[3]	ADDI     	6 6 1
-	9	[3]	MMBINI   	6 1 6 0	; __add
-	10	[3]	SETTABLE 	1 6 5
-	11	[3]	FORLOOP  	2 5	; to 7
-	12	[4]	LOADI    	2 0
-	13	[5]	GETTABUP 	3 0 0	; _ENV "ipairs"
-	14	[5]	MOVE     	4 1
-	15	[5]	CALL     	3 2 5	; 1 in 4 out
-	16	[5]	TFORPREP 	3 2	; to 19
-	17	[5]	ADD      	2 2 8
-	18	[5]	MMBIN    	2 8 6	; __add
-	19	[5]	TFORCALL 	3 2
-	20	[5]	TFORLOOP 	3 4	; to 17
-	21	[5]	CLOSE    	3
-	22	[6]	MOVE     	3 2
-	23	[6]	LEN      	4 1
-	24	[6]	RETURN   	3 3 0k	; 2 out
-	25	[7]	RETURN   	3 1 0k	; 0 out
-constants (1) for 0xPTR:
-	0	S	"ipairs"
-locals (13) for 0xPTR:
-	0	a	1	26
-	1	t	3	26
-	2	(for state)	6	12
-	3	(for state)	6	12
-	4	(for state)	6	12
-	5	i	7	11
-	6	sum	13	26
-	7	(for state)	16	21
-	8	(for state)	16	21
-	9	(for state)	16	21
-	10	(for state)	16	21
-	11	_	17	19
-	12	v	17	19
+function <f3.lua:1,7> (21 instructions at 0xPTR)
+1 param, 9 slots, 1 upvalue, 12 locals, 3 constants, 0 functions
+	1	[2]	NEWTABLE 	1 0 0
+	2	[3]	LOADK    	2 -1	; 1
+	3	[3]	MOVE     	3 0
+	4	[3]	LOADK    	4 -1	; 1
+	5	[3]	FORPREP  	2 3	; to 9
+	6	[3]	LEN      	6 1
+	7	[3]	ADD      	6 6 -1	; - 1
+	8	[3]	SETTABLE 	1 6 5
+	9	[3]	FORLOOP  	2 -4	; to 6
+	10	[4]	LOADK    	2 -2	; 0
+	11	[5]	GETTABUP 	3 0 -3	; _ENV "ipairs"
+	12	[5]	MOVE     	4 1
+	13	[5]	CALL     	3 2 4
+	14	[5]	JMP      	0 1	; to 16
+	15	[5]	ADD      	2 2 7
+	16	[5]	TFORCALL 	3 2
+	17	[5]	TFORLOOP 	5 -3	; to 15
+	18	[6]	MOVE     	3 2
+	19	[6]	LEN      	4 1
+	20	[6]	RETURN   	3 3
+	21	[7]	RETURN   	0 1
+constants (3) for 0xPTR:
+	0	I	1
+	1	I	0
+	2	S	"ipairs"
+locals (12) for 0xPTR:
+	0	a	1	22
+	1	t	2	22
+	2	(for index)	5	10
+	3	(for limit)	5	10
+	4	(for step)	5	10
+	5	i	6	9
+	6	sum	11	22
+	7	(for generator)	14	18
+	8	(for state)	14	18
+	9	(for control)	14	18
+	10	_	15	16
+	11	v	15	16
 upvalues (1) for 0xPTR:
 	0	_ENV	0	0

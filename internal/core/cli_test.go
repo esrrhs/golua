@@ -52,7 +52,7 @@ func TestCLIVersionOnly(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("lua -v exited %d, stderr %q", code, errb)
 	}
-	if !strings.HasPrefix(out, "Lua 5.4") {
+	if !strings.HasPrefix(out, "Lua 5.3") {
 		t.Errorf("lua -v printed %q", out)
 	}
 	if n := strings.Count(out, "\n"); n != 1 {
@@ -247,7 +247,7 @@ func TestCLIREPLPrintsOneResult(t *testing.T) {
 	out, _, _ := cliRunStdin(t, "1+1\n", "-i")
 	/* "> 2\n" and then the "> " of a line that never came, and the
 	   newline doREPL writes on the way out. */
-	if out != "Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio\n> 2\n> \n" {
+	if out != "Lua 5.3.4  Copyright (C) 1994-2017 Lua.org, PUC-Rio\n> 2\n> \n" {
 		t.Errorf("REPL printed %q", out)
 	}
 }

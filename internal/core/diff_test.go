@@ -2,7 +2,7 @@
 //
 // Every testdata/diff/*.lua case is run through this port and its output is
 // compared byte for byte against a golden file captured from the reference
-// interpreter (PUC-Lua 5.4.9, built from source).  The cases cover the
+// interpreter (PUC-Lua 5.3.4, built from source).  The cases cover the
 // virtual machine, the standard libraries, error messages and their
 // positions -- the things a "drop-in Lua" has to get exactly right.
 //
@@ -280,7 +280,7 @@ func TestDifferentialSuite(t *testing.T) {
 		}
 		/* normalised on the way out as well: a heap address in the
 		   message reads as a difference that is not one */
-		t.Errorf("%s: output differs from PUC-Lua 5.4.9\n--- want ---\n%s\n--- got ---\n%s",
+		t.Errorf("%s: output differs from PUC-Lua 5.3.4\n--- want ---\n%s\n--- got ---\n%s",
 			filepath.Base(path), w, g)
 	}
 	t.Logf("differential suite: %d identical, %d known difference, of %d", same, differ, len(files))

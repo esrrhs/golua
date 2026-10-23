@@ -1,4 +1,4 @@
-// Translation of ldebug.h / ldebug.c (PUC-Lua 5.4), minus the debug hooks.
+// Translation of ldebug.h / ldebug.c (PUC-Lua 5.3.4), minus the debug hooks.
 package core
 
 import (
@@ -159,8 +159,7 @@ func upvalName(p *Proto, uv int) string {
 	return p.upvalues[uv].name.val
 }
 
-// kname finds a "name" for the constant 'index' (ldebug.c). It returns ""
-// (C's NULL) when the constant is not a string.
+// kname finds a "name" for the constant at 'index' (plain K index).
 func kname(p *Proto, index int, name *string) string {
 	if index < 0 || index >= len(p.k) || !ttisstring(&p.k[index]) {
 		*name = "?"
@@ -168,6 +167,21 @@ func kname(p *Proto, index int, name *string) string {
 	}
 	*name = tsvalue(&p.k[index]).val
 	return "constant"
+}
+
+// knameRK finds a name for an RK operand 'c' (ldebug.c kname).
+func knameRK(p *Proto, pc, c int, name *string) {
+	if ISK(c) { /* is 'c' a constant? */
+		if kname(p, INDEXK(c), name) != "" {
+			return
+		}
+	} else { /* 'c' is a register */
+		what := getobjname(p, pc, c, name)
+		if len(what) > 0 && what[0] == 'c' { /* found a constant name? */
+			return
+		}
+	}
+	*name = "?" /* no reasonable name found */
 }
 
 // basicgetobjname is 'basicgetobjname' (ldebug.c). 'ppc' is both the pc to
@@ -213,12 +227,7 @@ func rname(p *Proto, pc, c int, name *string) {
 
 // rkname finds a "name" for a 'C' value in an RK instruction (ldebug.c).
 func rkname(p *Proto, pc int, i Instruction, name *string) {
-	c := i.C /* key index */
-	if i.K != 0 {
-		kname(p, c, name) /* 'c' is a constant */
-	} else {
-		rname(p, pc, c, name) /* 'c' is a register */
-	}
+	knameRK(p, pc, i.C, name)
 }
 
 // isEnv checks whether the table indexed by instruction 'i' is the
@@ -240,37 +249,53 @@ func isEnv(p *Proto, pc int, i Instruction, isup bool) string {
 	return "field"
 }
 
-// getobjname is 'getobjname' (ldebug.c): extends basicgetobjname to handle
-// table accesses.
+// getobjname is 'getobjname' (ldebug.c, Lua 5.3.4).
 func getobjname(p *Proto, lastpc, reg int, name *string) string {
-	kind := basicgetobjname(p, &lastpc, reg, name)
-	if kind != "" {
-		return kind
-	} else if lastpc != -1 { /* could find instruction? */
-		i := p.code[lastpc]
+	*name = luaF_getlocalname(p, reg+1, lastpc)
+	if *name != "" { /* is a local? */
+		return "local"
+	}
+	pc := findsetreg(p, lastpc, reg)
+	if pc != -1 { /* could find instruction? */
+		i := p.code[pc]
 		switch i.Op {
-		case OP_GETTABUP:
-			kname(p, i.C, name) /* key index */
-			return isEnv(p, lastpc, i, true)
-		case OP_GETTABLE:
-			rname(p, lastpc, i.C, name) /* key index */
-			return isEnv(p, lastpc, i, false)
-		case OP_GETI:
-			*name = "integer index"
+		case OP_MOVE:
+			b := i.B /* move from 'b' to 'a' */
+			if b < i.A {
+				return getobjname(p, pc, b, name) /* get name for 'b' */
+			}
+		case OP_GETTABUP, OP_GETTABLE:
+			k := i.C /* key index */
+			t := i.B /* table index */
+			var vn string
+			if i.Op == OP_GETTABLE {
+				vn = luaF_getlocalname(p, t+1, pc)
+			} else {
+				vn = upvalName(p, t)
+			}
+			knameRK(p, pc, k, name)
+			if vn != "" && vn == LUA_ENV {
+				return "global"
+			}
 			return "field"
-		case OP_GETFIELD:
-			kname(p, i.C, name) /* key index */
-			return isEnv(p, lastpc, i, false)
+		case OP_GETUPVAL:
+			*name = upvalName(p, i.B)
+			return "upvalue"
+		case OP_LOADK:
+			return kname(p, i.B, name)
+		case OP_LOADKX:
+			if pc+1 < len(p.code) {
+				return kname(p, p.code[pc+1].A, name)
+			}
 		case OP_SELF:
-			rkname(p, lastpc, i, name)
+			knameRK(p, pc, i.C, name)
 			return "method"
 		}
 	}
 	return "" /* could not find reasonable name */
 }
 
-// funcNameFromCode is 'funcnamefromcode' (ldebug.c): it inspects the
-// calling instruction to find a name for the function being called.
+// funcNameFromCode is 'funcnamefromcode' (ldebug.c, Lua 5.3.4).
 func funcNameFromCode(L *State, p *Proto, pc int, name *string) string {
 	if pc < 0 || pc >= len(p.code) {
 		return ""
@@ -283,13 +308,14 @@ func funcNameFromCode(L *State, p *Proto, pc int, name *string) string {
 	case OP_TFORCALL: /* for iterator */
 		*name = "for iterator"
 		return "for iterator"
-	/* other instructions can do calls through metamethods */
-	case OP_SELF, OP_GETTABUP, OP_GETTABLE, OP_GETI, OP_GETFIELD:
+	case OP_SELF, OP_GETTABUP, OP_GETTABLE:
 		tm = TM_INDEX
-	case OP_SETTABUP, OP_SETTABLE, OP_SETI, OP_SETFIELD:
+	case OP_SETTABUP, OP_SETTABLE:
 		tm = TM_NEWINDEX
-	case OP_MMBIN, OP_MMBINI, OP_MMBINK:
-		tm = TMS(i.C)
+	case OP_ADD, OP_SUB, OP_MUL, OP_MOD, OP_POW, OP_DIV, OP_IDIV,
+		OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR:
+		/* ORDER OP / ORDER TM */
+		tm = TMS(int(i.Op) - OP_ADD + int(TM_ADD))
 	case OP_UNM:
 		tm = TM_UNM
 	case OP_BNOT:
@@ -300,17 +326,13 @@ func funcNameFromCode(L *State, p *Proto, pc int, name *string) string {
 		tm = TM_CONCAT
 	case OP_EQ:
 		tm = TM_EQ
-	/* no cases for OP_EQI and OP_EQK, as they don't call metamethods */
-	case OP_LT, OP_LTI, OP_GTI:
+	case OP_LT:
 		tm = TM_LT
-	case OP_LE, OP_LEI, OP_GEI:
+	case OP_LE:
 		tm = TM_LE
-	case OP_CLOSE, OP_RETURN:
-		tm = TM_CLOSE
 	default:
 		return "" /* cannot find a reasonable name */
 	}
-	/* C stores the event names with the '__' prefix and skips it here */
 	*name = strings.TrimPrefix(luaT_eventname[tm], "__")
 	return "metamethod"
 }

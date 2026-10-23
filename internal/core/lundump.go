@@ -1,28 +1,5 @@
 // Translation of lundump.c / lundump.h (PUC-Lua 5.3.4): load precompiled
-// chunks.
-//
-// The file format is *the official one*, byte for byte, so chunks dumped
-// by this package can be loaded by PUC-Lua (and vice versa, as long as
-// the host is little-endian, which is what 'luac' produces on x86/ARM).
-// Three things are necessarily different from C:
-//
-//  1. There is no GC, so the luaC_objbarrier calls and the "anchor the
-//     string on the stack while reading" dance are gone (Go's GC sees
-//     the TString through the slice).
-//
-//  2. C raises read errors with luaD_throw (setjmp); here the panic
-//     unwinds the Go stack and is caught by rawRunProtected in
-//     luaU_loadBinary, which turns it into 'nil, message' exactly like
-//     'lua_load' does.
-//
-//  3. An Instruction here is a struct, not a packed 32-bit word, so
-//     every instruction is unpacked with 'unpackInstruction' (see the
-//     bit layout from lopcodes.h at the bottom of this file).
-//
-// The fourth difference is not in this file but matters here: Proto.lineinfo
-// holds *absolute* lines (see lobject.go), while the file format stores
-// signed byte deltas plus an 'abslineinfo' array. loadLineInfo converts
-// the on-disk form back into absolute lines, mirroring luaG_getfuncline.
+// chunks. Format matches PUC-Lua 5.3.4 (fixed ints, 5.3 strings/tags).
 package core
 
 import (
@@ -31,25 +8,15 @@ import (
 	"strings"
 )
 
-// Constants from lua.h / lundump.h.
 const (
-	dmpSignature = "\x1bLua"            // LUA_SIGNATURE
-	dmpData      = "\x19\x93\r\n\x1a\n" // LUAC_DATA
-	dmpInt       = 0x5678               // LUAC_INT
-	dmpNum       = 370.5                // LUAC_NUM
-	// LUAC_VERSION for Lua 5.3: major*16+minor = 0x53
-	dmpVersion = 0x53
-	dmpFormat  = 0 // LUAC_FORMAT: the official format
+	dmpSignature = "\x1bLua"
+	dmpData      = "\x19\x93\r\n\x1a\n"
+	dmpInt       = 0x5678
+	dmpNum       = 370.5
+	dmpVersion   = 0x53
+	dmpFormat    = 0
 )
 
-// Line-info constants (ldebug.h / lcode.c).
-const (
-	absLineInfo = -0x80 // ABSLINEINFO
-	limLineDiff = 0x80  // LIMLINEDIFF
-	maxIwthAbs  = 128   // MAXIWTHABS
-)
-
-// LoadState is the Go counterpart of the C struct of the same name.
 type LoadState struct {
 	L    *State
 	data []byte
@@ -57,106 +24,67 @@ type LoadState struct {
 	name string
 }
 
-// loadError raises "name: bad binary format (why)" (lundump.c error).
 func (S *LoadState) loadError(why string) {
-	ts := pushfString(S.L, "%s: bad binary format (%s)", S.name, why)
+	ts := pushfString(S.L, "%s: %s precompiled chunk", S.name, why)
 	S.L.checkStack(1)
 	setsvalue(&S.L.stack[S.L.top], ts)
 	S.L.top++
 	luaD_throw(S.L, LUA_ERRSYNTAX)
 }
 
-// loadBlock reads 'n' bytes (loadBlock in lundump.c).
 func (S *LoadState) loadBlock(n int) []byte {
 	if n < 0 || S.pos+n > len(S.data) {
-		S.loadError("truncated chunk")
+		S.loadError("truncated")
 	}
 	b := S.data[S.pos : S.pos+n]
 	S.pos += n
 	return b
 }
 
-// loadByte reads a single byte (loadByte).
-func (S *LoadState) loadByte() byte {
-	return S.loadBlock(1)[0]
+func (S *LoadState) loadByte() byte { return S.loadBlock(1)[0] }
+
+// loadInt reads a fixed 4-byte little-endian int (5.3 LoadInt).
+func (S *LoadState) loadInt() int {
+	return int(int32(binary.LittleEndian.Uint32(S.loadBlock(4))))
 }
 
-// loadUnsigned reads a 7-bits-per-byte integer (loadUnsigned).
-func (S *LoadState) loadUnsigned(limit int64) int64 {
-	var x int64
-	limit >>= 7
-	for {
-		b := int64(S.loadByte())
-		if x >= limit {
-			S.loadError("integer overflow")
-		}
-		x = (x << 7) | (b & 0x7f)
-		if b&0x80 != 0 { /* last byte */
-			break
-		}
-	}
-	return x
+func (S *LoadState) loadSizeT() uint64 {
+	return binary.LittleEndian.Uint64(S.loadBlock(8))
 }
 
-// loadSize reads a size_t (loadSize).
-func (S *LoadState) loadSize() int64 { return S.loadUnsigned(math.MaxInt64) }
-
-// loadInt reads an int (loadInt).
-func (S *LoadState) loadInt() int { return int(S.loadUnsigned(math.MaxInt32)) }
-
-// loadCount reads a count and checks that 'unit' bytes per element are
-// still available, so that a corrupted size cannot make us allocate an
-// absurd slice (C would fail inside luaM_newvectorchecked instead).
-func (S *LoadState) loadCount(unit int) int {
-	n := S.loadInt()
-	if n < 0 {
-		S.loadError("integer overflow")
-	}
-	if n > (len(S.data)-S.pos)/unit {
-		S.loadError("truncated chunk")
-	}
-	return n
-}
-
-// loadInteger reads a lua_Integer (8 bytes, host byte order).
 func (S *LoadState) loadInteger() int64 {
 	return int64(binary.LittleEndian.Uint64(S.loadBlock(8)))
 }
 
-// loadNumber reads a lua_Number (8 bytes, host byte order).
 func (S *LoadState) loadNumber() float64 {
 	return math.Float64frombits(binary.LittleEndian.Uint64(S.loadBlock(8)))
 }
 
-// loadStringN loads a nullable string (loadStringN).
-func (S *LoadState) loadStringN(p *Proto) *TString {
-	size := S.loadSize()
-	if size == 0 { /* no string? */
+// loadString is 5.3 LoadString.
+func (S *LoadState) loadString() *TString {
+	size := uint64(S.loadByte())
+	if size == 0xFF {
+		size = S.loadSizeT()
+	}
+	if size == 0 {
 		return nil
 	}
 	size--
-	if size < 0 || size > math.MaxInt32 {
-		S.loadError("integer overflow")
+	if size > math.MaxInt32 {
+		S.loadError("truncated")
 	}
 	b := S.loadBlock(int(size))
-	if size <= LUAI_MAXSHORTLEN { /* short string? */
+	if int(size) <= LUAI_MAXSHORTLEN {
 		return luaS_newlstr(S.L, string(b))
 	}
-	return luaS_createlngstrobj(S.L, string(b)) /* long string */
+	return luaS_createlngstrobj(S.L, string(b))
 }
 
-// loadString loads a non-nullable string (loadString).
-func (S *LoadState) loadString(p *Proto) *TString {
-	ts := S.loadStringN(p)
-	if ts == nil {
-		S.loadError("bad format for constant string")
-	}
-	return ts
-}
-
-// loadCode loads the bytecode of a function (loadCode).
 func (S *LoadState) loadCode(f *Proto) {
-	n := S.loadCount(4)
+	n := S.loadInt()
+	if n < 0 || n > (len(S.data)-S.pos)/4 {
+		S.loadError("truncated")
+	}
 	f.code = make([]Instruction, n)
 	f.sizecode = n
 	for i := 0; i < n; i++ {
@@ -164,35 +92,41 @@ func (S *LoadState) loadCode(f *Proto) {
 	}
 }
 
-// loadConstants loads the constant table (loadConstants).
 func (S *LoadState) loadConstants(f *Proto) {
-	n := S.loadCount(1)
+	n := S.loadInt()
+	if n < 0 {
+		S.loadError("truncated")
+	}
 	f.k = make([]Value, n)
 	f.sizek = n
 	for i := 0; i < n; i++ {
 		o := &f.k[i]
 		switch S.loadByte() {
-		case LUA_VNIL:
+		case dumpTagNil:
 			setnilvalue(o)
-		case LUA_VFALSE:
-			setbfvalue(o)
-		case LUA_VTRUE:
-			setbtvalue(o)
-		case LUA_VNUMFLT:
+		case dumpTagBoolean:
+			if S.loadByte() != 0 {
+				setbtvalue(o)
+			} else {
+				setbfvalue(o)
+			}
+		case dumpTagNumFlt:
 			setfltvalue(o, S.loadNumber())
-		case LUA_VNUMINT:
+		case dumpTagNumInt:
 			setivalue(o, S.loadInteger())
-		case LUA_VSHRSTR, LUA_VLNGSTR:
-			setsvalue(o, S.loadString(f))
+		case dumpTagShrStr, dumpTagLngStr:
+			setsvalue(o, S.loadString())
 		default:
-			S.loadError("bad constant type")
+			S.loadError("corrupted")
 		}
 	}
 }
 
-// loadProtos loads the nested prototypes (loadProtos).
 func (S *LoadState) loadProtos(f *Proto) {
-	n := S.loadCount(1)
+	n := S.loadInt()
+	if n < 0 {
+		S.loadError("truncated")
+	}
 	f.p = make([]*Proto, n)
 	f.sizep = n
 	for i := 0; i < n; i++ {
@@ -201,74 +135,59 @@ func (S *LoadState) loadProtos(f *Proto) {
 	}
 }
 
-// loadUpvalues loads the upvalue descriptions (loadUpvalues).
 func (S *LoadState) loadUpvalues(f *Proto) {
-	n := S.loadCount(3)
+	n := S.loadInt()
+	if n < 0 {
+		S.loadError("truncated")
+	}
 	f.upvalues = make([]Upvaldesc, n)
 	f.sizeupvalues = n
 	for i := 0; i < n; i++ {
 		f.upvalues[i].instack = S.loadByte()
 		f.upvalues[i].idx = S.loadByte()
-		f.upvalues[i].kind = S.loadByte()
 	}
 }
 
-// loadLineInfo reads the line information and converts the on-disk
-// (delta + abslineinfo) form into the absolute lines used by Proto.
-func (S *LoadState) loadLineInfo(f *Proto) {
-	n := S.loadCount(1)
-	raw := S.loadBlock(n)
-	nabs := S.loadCount(2)
-	abs := make([]AbsLineInfo, nabs)
-	for i := 0; i < nabs; i++ {
-		abs[i].pc = S.loadInt()
-		abs[i].line = S.loadInt()
-	}
-	/* convert to absolute lines, the way luaG_getfuncline does it */
-	lines := make([]int32, n)
-	baseline := f.linedefined
-	ai := 0
-	for pc := 0; pc < n; pc++ {
-		if ai < nabs && abs[ai].pc <= pc {
-			/* the delta here is ABSLINEINFO; the line is absolute */
-			baseline = abs[ai].line
-			ai++
-			lines[pc] = int32(baseline)
-			continue
-		}
-		baseline += int(int8(raw[pc]))
-		lines[pc] = int32(baseline)
-	}
-	f.lineinfo = lines
-	f.sizelineinfo = n
-	f.abslineinfo = abs
-}
-
-// loadDebug loads the debug information (loadDebug).
 func (S *LoadState) loadDebug(f *Proto) {
-	S.loadLineInfo(f)
-	n := S.loadCount(1)
+	n := S.loadInt()
+	if n < 0 {
+		S.loadError("truncated")
+	}
+	f.lineinfo = make([]int32, n)
+	f.sizelineinfo = n
+	for i := 0; i < n; i++ {
+		f.lineinfo[i] = int32(S.loadInt())
+	}
+	n = S.loadInt()
+	if n < 0 {
+		S.loadError("truncated")
+	}
 	f.locvars = make([]LocVar, n)
 	f.sizelocvars = n
 	for i := 0; i < n; i++ {
-		f.locvars[i].varname = S.loadStringN(f)
+		f.locvars[i].varname = S.loadString()
 		f.locvars[i].startpc = S.loadInt()
 		f.locvars[i].endpc = S.loadInt()
 	}
 	n = S.loadInt()
-	if n != 0 { /* does it have debug information? */
-		n = len(f.upvalues) /* must be this many */
+	if n < 0 {
+		S.loadError("truncated")
+	}
+	if n != 0 && n != len(f.upvalues) {
+		/* debug info present: names for each upvalue */
+		if n != len(f.upvalues) {
+			S.loadError("corrupted")
+		}
 	}
 	for i := 0; i < n; i++ {
-		f.upvalues[i].name = S.loadStringN(f)
+		f.upvalues[i].name = S.loadString()
 	}
 }
 
-// loadFunction loads one function prototype (loadFunction).
 func (S *LoadState) loadFunction(f *Proto, psource *TString) {
-	f.source = S.loadStringN(f)
-	if f.source == nil { /* no source in dump? */
-		f.source = psource /* reuse parent's source */
+	f.source = S.loadString()
+	if f.source == nil {
+		f.source = psource
 	}
 	f.linedefined = S.loadInt()
 	f.lastlinedefined = S.loadInt()
@@ -282,46 +201,40 @@ func (S *LoadState) loadFunction(f *Proto, psource *TString) {
 	S.loadDebug(f)
 }
 
-// checkLiteral compares the next bytes with a literal (checkliteral).
 func (S *LoadState) checkLiteral(s, msg string) {
 	if string(S.loadBlock(len(s))) != s {
 		S.loadError(msg)
 	}
 }
 
-// checkSize checks the size of a C type recorded in the header
-// (fchecksize).
 func (S *LoadState) checkSize(size int, tname string) {
 	if int(S.loadByte()) != size {
-		S.loadError(pushfString(S.L, "%s size mismatch", tname).val)
+		S.loadError(pushfString(S.L, "%s size mismatch in", tname).val)
 	}
 }
 
-// checkHeader validates the chunk header (checkHeader).
 func (S *LoadState) checkHeader() {
-	/* skip 1st char (already checked by the caller) */
-	S.checkLiteral(dmpSignature[1:], "not a binary chunk")
+	S.checkLiteral(dmpSignature[1:], "not a")
 	if S.loadByte() != dmpVersion {
-		S.loadError("version mismatch")
+		S.loadError("version mismatch in")
 	}
 	if S.loadByte() != dmpFormat {
-		S.loadError("format mismatch")
+		S.loadError("format mismatch in")
 	}
-	S.checkLiteral(dmpData, "corrupted chunk")
+	S.checkLiteral(dmpData, "corrupted")
+	S.checkSize(4, "int")
+	S.checkSize(8, "size_t")
 	S.checkSize(4, "Instruction")
 	S.checkSize(8, "lua_Integer")
 	S.checkSize(8, "lua_Number")
 	if S.loadInteger() != dmpInt {
-		S.loadError("integer format mismatch")
+		S.loadError("endianness mismatch in")
 	}
 	if S.loadNumber() != dmpNum {
-		S.loadError("float format mismatch")
+		S.loadError("float format mismatch in")
 	}
 }
 
-// luaU_undump loads a precompiled chunk (lundump.c luaU_undump).
-// The returned closure has no upvalues yet: the caller must call
-// luaF_initupvals, as ldo.c f_parser does.
 func luaU_undump(L *State, data []byte, name string) *LClosure {
 	var S LoadState
 	switch {
@@ -334,10 +247,8 @@ func luaU_undump(L *State, data []byte, name string) *LClosure {
 	}
 	S.L = L
 	S.data = data
-	/* the first byte is the one 'lua_load' looked at to recognize a
-	   binary chunk (ldo.c f_parser); checkHeader skips it */
 	if len(data) == 0 || data[0] != dmpSignature[0] {
-		S.loadError("not a binary chunk")
+		S.loadError("not a")
 	}
 	S.pos = 1
 	S.checkHeader()
@@ -347,9 +258,6 @@ func luaU_undump(L *State, data []byte, name string) *LClosure {
 	return cl
 }
 
-// checkLoadMode is checkmode from ldo.c: the 'mode' argument of 'load'
-// must allow the kind of chunk being loaded ("binary" needs 'b', "text"
-// needs 't').
 func checkLoadMode(L *State, mode, x string) {
 	if !strings.ContainsRune(mode, rune(x[0])) {
 		ts := pushfString(L, "attempt to load a %s chunk (mode is '%s')", x, mode)
@@ -360,10 +268,6 @@ func checkLoadMode(L *State, mode, x string) {
 	}
 }
 
-// luaU_loadBinary is what C does for a precompiled chunk inside
-// lua_load: undump it, initialise its upvalues, set the globals table
-// as its first upvalue (the _ENV) and push it on the stack. Errors are
-// turned into a Go error, so that 'load' returns nil plus a message.
 func luaU_loadBinary(L *State, data []byte, chunkname, mode string) error {
 	oldtop := L.top
 	status := L.rawRunProtected(func() {
@@ -371,7 +275,6 @@ func luaU_loadBinary(L *State, data []byte, chunkname, mode string) error {
 		cl := luaU_undump(L, data, chunkname)
 		luaF_initupvals(L, cl)
 		if cl.nupvalues >= 1 {
-			/* set the globals table as the first upvalue (the _ENV) */
 			var gt Value
 			sethvalue(&gt, L.rawGetRegistryGlobals())
 			setobj(&cl.upvals[0].v, &gt)
@@ -390,10 +293,6 @@ func luaU_loadBinary(L *State, data []byte, chunkname, mode string) error {
 	}
 	return nil
 }
-
-// ---------------------------------------------------------------------
-// instruction (un)packing (lopcodes.h)
-// ---------------------------------------------------------------------
 
 // Instruction formats used by pack/unpack (5.3: dmpIABC, dmpIABx, dmpIAsBx, dmpIAx — no isJ).
 const (
@@ -523,4 +422,3 @@ func unpackInstruction(w uint32) Instruction {
 		}
 	}
 }
-

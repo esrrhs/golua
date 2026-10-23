@@ -1,15 +1,15 @@
--- $Id: testes/vararg.lua $
+-- $Id: vararg.lua,v 1.25 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
 
 print('testing vararg')
 
-local function f (a, ...)
-  local x = {n = select('#', ...), ...}
-  for i = 1, x.n do assert(a[i] == x[i]) end
-  return x.n
+function f(a, ...)
+  local arg = {n = select('#', ...), ...}
+  for i=1,arg.n do assert(a[i]==arg[i]) end
+  return arg.n
 end
 
-local function c12 (...)
+function c12 (...)
   assert(arg == _G.arg)    -- no local 'arg'
   local x = {...}; x.n = #x
   local res = (x.n==2 and x[1] == 1 and x[2] == 2)
@@ -17,7 +17,7 @@ local function c12 (...)
   return res, 2
 end
 
-local function vararg (...) return {n = select('#', ...), ...} end
+function vararg (...) return {n = select('#', ...), ...} end
 
 local call = function (f, args) return f(table.unpack(args, 1, args.n)) end
 
@@ -25,11 +25,8 @@ assert(f() == 0)
 assert(f({1,2,3}, 1, 2, 3) == 3)
 assert(f({"alo", nil, 45, f, nil}, "alo", nil, 45, f, nil) == 5)
 
-assert(vararg().n == 0)
-assert(vararg(nil, nil).n == 2)
-
 assert(c12(1,2)==55)
-local a,b = assert(call(c12, {1,2}))
+a,b = assert(call(c12, {1,2}))
 assert(a == 55 and b == 2)
 a = call(c12, {1,2;n=2})
 assert(a == 55 and b == 2)
@@ -49,7 +46,7 @@ function t:f (...) local arg = {...}; return self[...]+#arg end
 assert(t:f(1,4) == 3 and t:f(2) == 11)
 print('+')
 
-local lim = 20
+lim = 20
 local i, a = 1, {}
 while i <= lim do a[i] = i+0.3; i=i+1 end
 
@@ -59,7 +56,7 @@ function f(a, b, c, d, ...)
          more[lim-4] == lim+0.3 and not more[lim-3])
 end
 
-local function g (a,b,c)
+function g(a,b,c)
   assert(a == 1.3 and b == 2.3 and c == 3.3)
 end
 
@@ -76,7 +73,7 @@ print("+")
 
 -- new-style varargs
 
-local function oneless (a, ...) return ... end
+function oneless (a, ...) return ... end
 
 function f (n, a, ...)
   local b
@@ -99,15 +96,15 @@ assert(a==nil and b==nil and c==nil and d==nil and e==nil)
 
 
 -- varargs for main chunks
-local f = load[[ return {...} ]]
-local x = f(2,3)
-assert(x[1] == 2 and x[2] == 3 and x[3] == undef)
+f = load[[ return {...} ]]
+x = f(2,3)
+assert(x[1] == 2 and x[2] == 3 and x[3] == nil)
 
 
 f = load[[
   local x = {...}
   for i=1,select('#', ...) do assert(x[i] == select(i, ...)) end
-  assert(x[select('#', ...)+1] == undef)
+  assert(x[select('#', ...)+1] == nil)
   return true
 ]]
 
@@ -119,9 +116,9 @@ assert(#a == 2 and a[1] == 30 and a[2] == 40)
 a = {select(1)}
 assert(next(a) == nil)
 a = {select(-1, 3, 5, 7)}
-assert(a[1] == 7 and a[2] == undef)
+assert(a[1] == 7 and a[2] == nil)
 a = {select(-2, 3, 5, 7)}
-assert(a[1] == 5 and a[2] == 7 and a[3] == undef)
+assert(a[1] == 5 and a[2] == 7 and a[3] == nil)
 pcall(select, 10000)
 pcall(select, -10000)
 
@@ -140,12 +137,6 @@ end
 -- assertion fail here
 f()
 
--- missing arguments in tail call
-do
-  local function f(a,b,c) return c, b end
-  local function g() return f(1,2) end
-  local a, b = g()
-  assert(a == nil and b == 2)
-end
+
 print('OK')
 

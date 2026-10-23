@@ -303,14 +303,15 @@ func TestTableStringKeysAndMetatable(t *testing.T) {
 }
 
 func TestExtraArgAndOrderHelpers(t *testing.T) {
-	fs := &FuncState{ls: &LexState{}, f: &Proto{}}
+	fs := &FuncState{ls: &LexState{}, f: &Proto{}, jpc: NO_JUMP, lasttarget: -1}
 	luaK_codek(fs, 0, MAXARG_Bx+1)
 	if len(fs.f.code) != 2 || fs.f.code[0].Op != OP_LOADKX || fs.f.code[1].Op != OP_EXTRAARG || fs.f.code[1].A != MAXARG_Bx+1 {
 		t.Fatalf("codek %#v", fs.f.code)
 	}
-	fs = &FuncState{ls: &LexState{}, f: &Proto{}}
-	luaK_setlist(fs, 0, MAXARG_C+1, 1)
-	if len(fs.f.code) != 2 || fs.f.code[0].Op != OP_SETLIST || fs.f.code[0].K != 1 || fs.f.code[1].Op != OP_EXTRAARG || fs.f.code[1].A != 1 {
+	/* 5.3: C counts flush batches; EXTRAARG only when C would exceed MAXARG_C */
+	fs = &FuncState{ls: &LexState{}, f: &Proto{}, jpc: NO_JUMP, lasttarget: -1}
+	luaK_setlist(fs, 0, MAXARG_C*LFIELDS_PER_FLUSH+1, 1)
+	if len(fs.f.code) != 2 || fs.f.code[0].Op != OP_SETLIST || fs.f.code[0].C != 0 || fs.f.code[1].Op != OP_EXTRAARG {
 		t.Fatalf("setlist %#v", fs.f.code)
 	}
 

@@ -67,6 +67,7 @@ func isLuacode(ci *CallInfo) bool { return ci.callstatus&(CIST_C|CIST_HOOKED) ==
 // CallInfo holds information about a call.
 type CallInfo struct {
 	funcIdx    int // function index in the stack
+	base       int // first register (after varargs in 5.3)
 	top        int // top for this function
 	prev       *CallInfo
 	next       *CallInfo

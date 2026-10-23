@@ -317,6 +317,11 @@ int  lua_isyieldable(lua_State *L);
 int  lua_yieldk(lua_State *L, int nresults, lua_KContext ctx, lua_KFunction k);
 int  lua_yield(lua_State *L, int nresults);
 
+/* ---- warnings / to-be-closed / multi-uservalue (5.4 API stubs) ----
+ * Retained so existing C extensions that link against this header keep
+ * compiling. Lua 5.3.4 has none of these; the Go runtime treats them as
+ * no-ops or single-uservalue aliases.
+ */
 /* ---- warnings ---- */
 void lua_warning(lua_State *L, const char *msg, int tocont);
 void lua_setwarnf(lua_State *L, lua_WarnFunction f, void *ud);

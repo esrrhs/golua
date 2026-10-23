@@ -101,6 +101,7 @@ func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
 		ci = L.extendCI()
 	}
 	ci.funcIdx = funcIdx
+	ci.base = funcIdx + 1
 	ci.nresults = nret
 	ci.callstatus = mask
 	ci.top = top
@@ -230,6 +231,27 @@ func setTraps(L *State) {
 // luaD_precall prepares a call; it returns the CallInfo when the callee
 // is a Lua function (the caller must then run luaV_execute), or nil when
 // the callee was a Go function and the results are already on the stack.
+
+// adjustVarargs is adjust_varargs (ldo.c, Lua 5.3.4): leave the original
+// arguments in place as the vararg list and copy the fixed parameters to
+// a final position that becomes the function's base.
+func adjustVarargs(L *State, p *Proto, actual int) int {
+	nfixargs := int(p.numparams)
+	fixed := L.top - actual /* first fixed argument */
+	base := L.top           /* final position of first argument */
+	i := 0
+	for ; i < nfixargs && i < actual; i++ {
+		L.stack[L.top] = L.stack[fixed+i]
+		L.top++
+		setnilvalue(&L.stack[fixed+i]) /* erase original copy (for GC) */
+	}
+	for ; i < nfixargs; i++ {
+		setnilvalue(&L.stack[L.top])
+		L.top++
+	}
+	return base
+}
+
 func luaD_precall(L *State, funcIdx, nresults int) *CallInfo {
 retry:
 	fv := &L.stack[funcIdx]
@@ -246,12 +268,28 @@ retry:
 		narg := L.top - funcIdx - 1
 		nfixparams := int(p.numparams)
 		fsize := int(p.maxstacksize)
-		L.checkStack(fsize)
-		ci := prepCallInfo(L, funcIdx, nresults, 0, funcIdx+1+fsize)
+		L.checkStack(fsize + nfixparams + 1) /* room for adjust_varargs */
+		var base int
+		if p.isVararg != 0 {
+			base = adjustVarargs(L, p, narg)
+			nExtra := narg - nfixparams
+			if nExtra < 0 {
+				nExtra = 0
+			}
+			ci := prepCallInfo(L, funcIdx, nresults, 0, base+fsize)
+			ci.base = base
+			ci.nExtraArgs = nExtra
+			L.top = ci.top
+			return ci
+		}
 		for ; narg < nfixparams; narg++ {
 			setnilvalue(&L.stack[L.top])
 			L.top++
 		}
+		base = funcIdx + 1
+		ci := prepCallInfo(L, funcIdx, nresults, 0, base+fsize)
+		ci.base = base
+		L.top = ci.top
 		return ci
 	default: /* not a function: retry with '__call' */
 		tryfuncTM(L, funcIdx)
