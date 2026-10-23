@@ -1232,10 +1232,12 @@ func localstat(ls *LexState) {
 }
 
 func funcname(ls *LexState, v *expdesc) bool {
+	/* funcname -> NAME {fieldsel} [':' NAME] — fieldsel does exp2anyregup */
 	ismethod := false
 	singlevar(ls, v)
 	for ls.t.token == '.' {
 		var key expdesc
+		luaK_exp2anyregup(ls.fs, v)
 		luaX_next(ls)
 		checkname(ls, &key)
 		luaK_indexed(ls.fs, v, &key)
@@ -1243,6 +1245,7 @@ func funcname(ls *LexState, v *expdesc) bool {
 	if ls.t.token == ':' {
 		var key expdesc
 		ismethod = true
+		luaK_exp2anyregup(ls.fs, v)
 		luaX_next(ls)
 		checkname(ls, &key)
 		luaK_indexed(ls.fs, v, &key)

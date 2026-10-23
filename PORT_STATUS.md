@@ -15,9 +15,10 @@
 - `math.random` 5.3 empty/too-large interval checks (no `random(0)` full-int); `utf8.char`/`decode` MAXUNICODE; utf8 msgs; `string.unpack` pos 0 via 5.3 `posrelat`
 - `string.format` scanformat errors (too long / repeated flags / invalid option); no 5.4 string arith metamethods (varinfo via trybinTM)
 - `print` calls global `tostring` like 5.3.4 (not luaL_tolstring)
+- `funcname` fieldsel uses `luaK_exp2anyregup` before index (method/table function assign)
 
 ## Remaining / known gaps
-1. **Official suite** under captured goldens: bitwise/goto/math/utf8/tpack fixed toward identical; remaining diverge (calls, closure, constructs short-circuit count, db, errors, events, main, nextvar, sort comparison counts, strings, vararg, attrib, big, …). Re-measure after each push. Not silent — `TestOfficialSuite` fails until parity improves.
+1. **Official suite**: ~14/28 identical after this stretch (was ~7). Still diverge: attrib, big, calls (further), closure, db, errors (partial), events, main, nextvar, sort comparison counts, vararg. Not silent — `TestOfficialSuite` fails until greener.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).
