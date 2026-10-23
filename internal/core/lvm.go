@@ -1171,83 +1171,90 @@ func lIntfitsf(i int64) bool {
 	return maxIntFitsF+uint64(i) <= 2*maxIntFitsF
 }
 
-// ltIntFloat returns 'i < f' (LTintfloat). When 'i' has no exact float
-// representation, the two cannot be compared as floats: use the
-// equivalence 'i < f <=> i < ceil(f)'.
+// ltIntFloat returns 'i < f' (LTintfloat in PUC Lua 5.3.4 lvm.c).
+// When 'i' has an exact float representation, compare as floats.
+// Otherwise use range tests against LUA_MININTEGER / -LUA_MININTEGER
+// and a toward-zero cast — not the 5.4 ceil/floor flttointeger path.
 func ltIntFloat(i int64, f float64) bool {
-	if lIntfitsf(i) {
-		return float64(i) < f
+	if !lIntfitsf(i) {
+		if f >= -float64(LUA_MININTEGER) { /* -minint == maxint + 1 */
+			return true /* f >= maxint + 1 > i */
+		} else if f > float64(LUA_MININTEGER) { /* minint < f <= maxint ? */
+			return i < int64(f) /* compare them as integers */
+		}
+		/* f <= minint <= i (or 'f' is NaN) --> not(i < f) */
+		return false
 	}
-	var fi int64
-	if luaV_flttointeger(f, &fi, F2Iceil) { /* fi = ceil(f) */
-		return i < fi
-	}
-	return f > 0 /* 'f' is either greater or less than all integers */
+	return float64(i) < f /* compare them as floats */
 }
 
+// leIntFloat returns 'i <= f' (LEintfloat in PUC Lua 5.3.4 lvm.c).
 func leIntFloat(i int64, f float64) bool {
-	if lIntfitsf(i) {
-		return float64(i) <= f
+	if !lIntfitsf(i) {
+		if f >= -float64(LUA_MININTEGER) { /* -minint == maxint + 1 */
+			return true /* f >= maxint + 1 > i */
+		} else if f >= float64(LUA_MININTEGER) { /* minint <= f <= maxint ? */
+			return i <= int64(f) /* compare them as integers */
+		}
+		/* f < minint <= i (or 'f' is NaN) --> not(i <= f) */
+		return false
 	}
-	var fi int64
-	if luaV_flttointeger(f, &fi, F2Ifloor) { /* fi = floor(f) */
-		return i <= fi
-	}
-	return f > 0
+	return float64(i) <= f /* compare them as floats */
 }
 
+// ltFloatInt returns 'f < i'. 5.3.4 has no separate helper: LTnum uses
+// !LEintfloat after a NaN check. Kept for tests / callers.
 func ltFloatInt(f float64, i int64) bool {
-	if lIntfitsf(i) {
-		return f < float64(i)
+	if numIsNaN(f) {
+		return false
 	}
-	var fi int64
-	if luaV_flttointeger(f, &fi, F2Ifloor) { /* fi = floor(f) */
-		return fi < i
-	}
-	return f < 0
+	return !leIntFloat(i, f)
 }
 
+// leFloatInt returns 'f <= i'. 5.3.4 LEnum uses !LTintfloat after NaN.
 func leFloatInt(f float64, i int64) bool {
-	if lIntfitsf(i) {
-		return f <= float64(i)
+	if numIsNaN(f) {
+		return false
 	}
-	var fi int64
-	if luaV_flttointeger(f, &fi, F2Iceil) { /* fi = ceil(f) */
-		return fi <= i
-	}
-	return f < 0
+	return !ltIntFloat(i, f)
 }
 
-// ltNum returns 'l < r' for two numbers (LTnum in lvm.c).
+// ltNum returns 'l < r' for two numbers (LTnum in lvm.c 5.3.4).
 func ltNum(l, r *Value) bool {
 	if ttisinteger(l) {
 		li := ivalue(l)
 		if ttisinteger(r) {
-			return li < ivalue(r)
+			return li < ivalue(r) /* both are integers */
 		}
-		return ltIntFloat(li, fltvalue(r))
+		return ltIntFloat(li, fltvalue(r)) /* l is int and r is float */
 	}
-	lf := fltvalue(l)
+	lf := fltvalue(l) /* l must be float */
 	if ttisfloat(r) {
-		return lf < fltvalue(r)
+		return lf < fltvalue(r) /* both are float */
+	} else if numIsNaN(lf) { /* r is int and l is float */
+		return false /* NaN < i is always false */
 	}
-	return ltFloatInt(lf, ivalue(r))
+	/* without NaN, (l < r) <--> not(r <= l) */
+	return !leIntFloat(ivalue(r), lf)
 }
 
-// leNum returns 'l <= r' for two numbers (LEnum in lvm.c).
+// leNum returns 'l <= r' for two numbers (LEnum in lvm.c 5.3.4).
 func leNum(l, r *Value) bool {
 	if ttisinteger(l) {
 		li := ivalue(l)
 		if ttisinteger(r) {
-			return li <= ivalue(r)
+			return li <= ivalue(r) /* both are integers */
 		}
-		return leIntFloat(li, fltvalue(r))
+		return leIntFloat(li, fltvalue(r)) /* l is int and r is float */
 	}
-	lf := fltvalue(l)
+	lf := fltvalue(l) /* l must be float */
 	if ttisfloat(r) {
-		return lf <= fltvalue(r)
+		return lf <= fltvalue(r) /* both are float */
+	} else if numIsNaN(lf) { /* r is int and l is float */
+		return false /* NaN <= i is always false */
 	}
-	return leFloatInt(lf, ivalue(r))
+	/* without NaN, (l <= r) <--> not(r < l) */
+	return !ltIntFloat(ivalue(r), lf)
 }
 
 // luaV_lessthan is the main operation 'l < r' (lvm.c 5.3.4).
