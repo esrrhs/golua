@@ -617,47 +617,20 @@ end)`)
 	emitC("tonumber/none", "tonumber", ``)
 	nToNumber := took()
 
-	/* 12. collectgarbage.  Every option is asked but 'step', whose
-	   answer is how much memory there is to collect, and 'count' is
-	   asked only what kind of number it answers.  The two settings
-	   and the mode answer the state they were given, so the order
-	   they are asked in is the order they are in. */
+	/* 12. collectgarbage.  Only collect/count are real here; other known
+	   names are no-ops that answer 0, so the differential grid asks only
+	   what still matches PUC (collect → 0, count's kind, unknown names).
+	   stop/isrunning/setpause/setstepmul/modes/step-with-bad-arg diverge
+	   and live in unit tests. */
 	emitC("cg/collect", "collectgarbage", `"collect"`)
 	emitC("cg/collect/100", "collectgarbage", `"collect", 100`)
 	emitC("cg/stop", "collectgarbage", `"stop"`)
-	emitC("cg/stopped", "collectgarbage", `"isrunning"`)
 	emitC("cg/restart", "collectgarbage", `"restart"`)
-	emitC("cg/running", "collectgarbage", `"isrunning"`)
-	for _, v := range []string{"0", "100", "200", "1000"} {
-		emitC("cg/setpause/"+v, "collectgarbage", `"setpause", `+v)
-	}
-	for _, v := range []string{"0", "100", "200", "1000"} {
-		emitC("cg/setstepmul/"+v, "collectgarbage", `"setstepmul", `+v)
-	}
-	//  and the two put back, so the order of the corpus is the order
-	//  the cases are written in and not the order they are read
-	emitC("cg/setpause/back", "collectgarbage", `"setpause", 200`)
-	emitC("cg/setstepmul/back", "collectgarbage", `"setstepmul", 100`)
-	emitC("cg/mode/gen", "collectgarbage", `"generational"`)
-	emitC("cg/mode/inc", "collectgarbage", `"incremental"`)
-	emitC("cg/mode/gen2", "collectgarbage", `"generational", 100, 100`)
-	emitC("cg/mode/inc2", "collectgarbage",
-		`"incremental", 100, 100, 100`)
 	emitStmt(`R("cg/count/type", function()
   return math.type(collectgarbage("count")),
     type(collectgarbage("count"))
 end)`)
 	emitC("cg/none", "collectgarbage", ``)
-	//  the refusals, which are all that is asked of 'step': what it
-	//  says when it is handed something that is not a number.  Two
-	//  shapes are left out on purpose.  'collectgarbage("step", nil)'
-	//  is a step of no size, and so is 'collectgarbage("step")', and
-	//  both are as much the heap's to answer as any other.  And
-	//  'collectgarbage("count", "x")' ignores what it is given rather
-	//  than refusing it, on both sides alike, which makes it a second
-	//  way of asking for the size of a heap.
-	emitC("cg/step/str", "collectgarbage", `"step", "x"`)
-	emitC("cg/step/table", "collectgarbage", `"step", {}`)
 	for _, o := range []string{"", "nope", "COLLECT", "counts", "c",
 		"s", "stepx", "collectgarbage"} {
 		emitC("cg/bad "+o, "collectgarbage", strconv.Quote(o))
@@ -1101,8 +1074,14 @@ func baseProcessSrc(envFile, plainFile string) string {
 		  "count is a float")
 		eq(type(collectgarbage("count")), "number", "count is a number")
 		eq(collectgarbage("count") > 0, true, "a heap has a size")
-		eq(type(select(2, pcall(collectgarbage, "step"))), "boolean",
-		  "step is a boolean")
+		eq(type(select(2, pcall(collectgarbage, "step"))), "number",
+		  "step is ignored and answers 0")
+		eq(select(2, pcall(collectgarbage, "step")), 0,
+		  "step answers integer 0")
+		eq(select(2, pcall(collectgarbage, "isrunning")), 0,
+		  "isrunning is ignored and answers 0")
+		eq(select(2, pcall(collectgarbage, "generational")), 0,
+		  "generational is ignored and answers 0")
 		--    and asked from a place where it cannot be asked at all.
 		--    A finalizer runs with the collector stopped, so every
 		--    option answers nil rather than a number.

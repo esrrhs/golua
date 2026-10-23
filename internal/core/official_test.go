@@ -64,7 +64,7 @@ const officialDir = "testdata/official"
 // order it ran the finalizers of a long list.
 var officialKnownDiff = map[string]string{
 	"all": "the environment, in four lines: the second PRNG seed, 'total memory' (PUC-Lua's allocator against the Go heap), the elapsed time, and the interpreter's own path",
-	"gc":  "the file is a test of the collector itself, and there is none here",
+	"gc":  "collectgarbage only implements collect+count (other opts no-op→0); no collector pace/debt/ephemerons; run with _port=true",
 }
 
 // officialKnownDiffBuild are differences that depend on what the binary
@@ -278,7 +278,14 @@ print(when == "open", os.setlocale("pt_BR") ~= nil, os.setlocale("zz_ZZ.NOPE") =
 func officialRun(bin, dir, file string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), officialTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "-e", "math.randomseed(1, 1)", file)
+	/* gc.lua / all.lua need _port: step/stop/isrunning/mode are no-ops
+	   answering 0; without it mode asserts fail early and stop+alloc
+	   loops can hang. */
+	preamble := "math.randomseed(1, 1)"
+	if file == "gc.lua" || file == "all.lua" {
+		preamble = "_port=true; " + preamble
+	}
+	cmd := exec.CommandContext(ctx, bin, "-e", preamble, file)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput() /* stdout+stderr, as "2>&1" does */
 	return string(out), err

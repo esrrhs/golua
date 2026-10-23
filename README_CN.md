@@ -164,8 +164,10 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 ## 已知差异
 
-- **没有自己的收集器。** `collectgarbage` 驱动的是 Go 的 GC，作用范围是
-  整个进程而非单个 state，`collectgarbage("count")` 报的也是 Go 堆。
+- **没有自己的收集器。** `collectgarbage` 只实现 `"collect"` 与 `"count"`
+  （其余已知选项名接受但忽略并返回 `0`；未知名仍报错）。驱动的是 Go 的
+  GC，作用范围是整个进程而非单个 state，`collectgarbage("count")` 报的也是
+  Go 堆。C API `lua_gc` 仍可能真正驱动收集——Lua 与 C 可能不一致。
   弱表条目与终结器在周期边界处理，而不是在某一次分配中途处理。
 - **C 模块需要 cgo。** 没有 cgo 就没有 `dlopen`，也没有 C 的 `setlocale`
   （小数点由内置表提供）；Windows 目前没有动态加载后端。

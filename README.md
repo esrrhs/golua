@@ -177,10 +177,14 @@ One run on an AMD EPYC 7551: PUC-Lua 5.4.7 against a cgo build (Go 1.24). The ra
 
 ## Known differences
 
-- **No collector of its own.** `collectgarbage` drives Go's GC, which
-  covers the whole process rather than one state; `collectgarbage("count")`
-  reports the Go heap. Weak entries and finalizers are handled at cycle
-  boundaries, not during an individual allocation.
+- **No collector of its own.** `collectgarbage` only implements
+  `"collect"` and `"count"` (other known option names are accepted but
+  ignored and push `0`; unknown names still error). It drives Go's GC,
+  which covers the whole process rather than one state;
+  `collectgarbage("count")` reports the Go heap. The C API `lua_gc` may
+  still drive a real cycle — Lua and C can diverge. Weak entries and
+  finalizers are handled at cycle boundaries, not during an individual
+  allocation.
 - **C modules need cgo.** Without cgo there is no `dlopen` and no C
   `setlocale` (a built-in table supplies the decimal point); Windows has
   no dynamic-loader backend at all.
