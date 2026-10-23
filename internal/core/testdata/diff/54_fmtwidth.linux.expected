@@ -72,8 +72,8 @@ false|"bad argument #2 to 'string.format' (string contains zeros)"
 "[ 3.14]"
 "[    a1]"
 "[ab你好]"
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/54_fmtwidth.lua:85: invalid option '%$' to 'format'
+lua: 54_fmtwidth.lua:85: invalid option '%$' to 'format'
 stack traceback:
 	[C]: in function 'string.format'
-	internal/core/testdata/diff/54_fmtwidth.lua:85: in main chunk
+	54_fmtwidth.lua:85: in main chunk
 	[C]: in ?

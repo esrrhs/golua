@@ -2,14 +2,14 @@
 false|"x"
 false|"x"
 false|"x"
-false|"internal/core/testdata/diff/59_baselib.lua:29: x"
-false|"internal/core/testdata/diff/59_baselib.lua:36: x"
+false|"59_baselib.lua:29: x"
+false|"59_baselib.lua:36: x"
 false|"x"
 false|nil
 false|nil
 false|42
 false|42
-false|table: 0x559254631d40
+false|table: <ADDR>
 false|!
 false|true
 false|"x"
@@ -21,11 +21,11 @@ true|false|nil
 true|false|42
 false|"bad argument #1 to 'pcall' (value expected)"
 true|false|"attempt to call a number value"
-true|false|"internal/core/testdata/diff/59_baselib.lua:55: a"
-true|false|table: 0x55925462fc90
+true|false|"59_baselib.lua:55: a"
+true|false|table: <ADDR>
 true|false|"y"
-true|false|"H:internal/core/testdata/diff/59_baselib.lua:58: a"
-true|false|"internal/core/testdata/diff/59_baselib.lua:59: a"
+true|false|"H:59_baselib.lua:58: a"
+true|false|"59_baselib.lua:59: a"
 true|false|"nil"
 true|true|3
 false|"bad argument #2 to 'xpcall' (function expected, got number)"
@@ -34,12 +34,12 @@ false|"bad argument #2 to 'xpcall' (function expected, got no value)"
 false|"bad argument #2 to 'xpcall' (function expected, got no value)"
 true|false|"error in error handling"
 false|"T"
-"internal/core/testdata/diff/59_baselib.lua:69: a\
+"59_baselib.lua:69: a\
 stack traceback:\
 \9[C]: in function 'error'\
-\9internal/core/testdata/diff/59_baselib.lua:69: in function <internal/core/testdata/diff/59_baselib.lua:69>\
+\00959_baselib.lua:69: in function <59_baselib.lua:69>\
 \9[C]: in function 'xpcall'\
-\9internal/core/testdata/diff/59_baselib.lua:69: in main chunk\
+\00959_baselib.lua:69: in main chunk\
 \9[C]: in ?"|0
 == select ==
 true|0
@@ -58,14 +58,14 @@ true|"a"
 true
 == tonumber ==
 "10"	true|10
-"0x10"	true|16
+"<ADDR>"	true|16
 " 10 "	true|10
 "10a"	true|nil
 ""	true|nil
 "1e2"	true|100.0
 ".5"	true|0.5
 "5."	true|5.0
-"0x1p4"	true|16.0
+"<ADDR>p4"	true|16.0
 "10"	true|10
 base	2	true|nil	true|2	true|nil
 base	8	true|nil	true|8	true|nil
@@ -87,13 +87,13 @@ true|"42"
 false|"'__tostring' must return a string"
 false|"attempt to call a number value"
 false|"bad argument #1 to 'tostring' (value expected)"
-"inf"|"-inf"|"-nan"
+"inf"|"-inf"|"nan"
 == rawlen rawget rawset rawequal ==
 3	3	0
 false|"bad argument #1 to 'rawlen' (table or string expected)"	false|"bad argument #1 to 'rawlen' (table or string expected)"	false|"bad argument #1 to 'rawlen' (table or string expected)"
 1	nil
 false|"bad argument #1 to 'rawget' (table expected, got number)"	true|nil
-table: 0x559254631de0	"v"	false|"bad argument #1 to 'rawset' (table expected, got number)"
+table: <ADDR>	"v"	false|"bad argument #1 to 'rawset' (table expected, got number)"
 false|"table index is nil"	false|"table index is NaN"
 true|true|true|false|true
 false|"bad argument #2 to 'rawequal' (value expected)"	false|"bad argument #1 to 'rawequal' (value expected)"
@@ -101,14 +101,14 @@ false|"bad argument #2 to 'rawequal' (value expected)"	false|"bad argument #1 to
 "a"|1	nil	false|"invalid key to 'next'"
 false|"bad argument #1 to 'next' (table expected, got number)"	false|"bad argument #1 to 'next' (table expected, got no value)"	true|nil
 1|10	2|20	nil	nil
-true|function: 0x55922b6941e0|5|0	false|"bad argument #1 to 'ipairs' (value expected)"	true|function: 0x55922b6941e0|nil|0
-true|function: 0x55922b6941e0|table: 0x559254637630|0
+true|function: <ADDR>|5|0	false|"bad argument #1 to 'ipairs' (value expected)"	true|function: <ADDR>|nil|0
+true|function: <ADDR>|table: <ADDR>|0
 == metatables ==
 "locked"	false|"cannot change a protected metatable"
 false|"bad argument #1 to 'setmetatable' (table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected)"	false|"bad argument #2 to 'setmetatable' (nil or table expected)"
-nil	table: 0x559254623e50	nil
+nil	table: <ADDR>	nil
 false|"bad argument #1 to 'getmetatable' (value expected)"
-table: 0x55925462f360
+table: <ADDR>
 == require through package.preload ==
 "_xy"|true
 true
@@ -135,7 +135,7 @@ false|"module '5' not found:\
 \9no file '/usr/local/lib/lua/5.3/5.so'\
 \9no file '/usr/local/lib/lua/5.3/loadall.so'\
 \9no file './5.so'"
-false|"internal/core/testdata/diff/59_baselib.lua:147: boom"
+false|"59_baselib.lua:147: boom"
 42
 == collectgarbage ==
 true|0

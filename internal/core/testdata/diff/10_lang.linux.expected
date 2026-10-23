@@ -1,8 +1,8 @@
 1	2	3
 1	2	1
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/10_lang.lua:15: bad argument #1 to 'select' (index out of range)
+lua: 10_lang.lua:15: bad argument #1 to 'select' (index out of range)
 stack traceback:
 	[C]: in function 'select'
-	internal/core/testdata/diff/10_lang.lua:15: in local 'f'
-	internal/core/testdata/diff/10_lang.lua:17: in main chunk
+	10_lang.lua:15: in local 'f'
+	10_lang.lua:17: in main chunk
 	[C]: in ?

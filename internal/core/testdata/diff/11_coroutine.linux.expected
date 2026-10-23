@@ -22,9 +22,9 @@ true	iter:2
 loop	3	20
 true	iter:3
 true	iterdone
-false	internal/core/testdata/diff/11_coroutine.lua:64: boom
+false	11_coroutine.lua:64: boom
 dead
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/11_coroutine.lua:68: attempt to call a nil value (field 'close')
+lua: 11_coroutine.lua:68: attempt to call a nil value (field 'close')
 stack traceback:
-	internal/core/testdata/diff/11_coroutine.lua:68: in main chunk
+	11_coroutine.lua:68: in main chunk
 	[C]: in ?

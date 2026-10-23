@@ -45,7 +45,7 @@ x	"01/01/70 01/01/70 01/01/70 01/02/70 02/29/00 09/09/01 02/13/09 01/19/38 01/01
 X	"00:00:00 00:00:01 00:00:59 00:00:00 00:00:00 01:46:40 23:31:30 03:14:07 00:00:00 23:59:59 00:00:00 00:00:00"
 y	"70 70 70 70 00 01 09 38 00 69 69 00"
 Y	"1970 1970 1970 1970 2000 2001 2009 2038 2100 1969 1969 1900"
-Z	"GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT"
+Z	"UTC UTC UTC UTC UTC UTC UTC UTC UTC UTC UTC UTC"
 %	"% % % % % % % % % % % %"
 == combined ==
 "!%Y-%m-%d"	"2009-02-13"
@@ -56,8 +56,8 @@ Z	"GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT"
 "!%X"	"23:31:30"
 "!%I:%M %p"	"11:31 PM"
 "!%j %U %W"	"044 06 06"
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/53_date.lua:51: bad argument #1 to 'date' (invalid conversion specifier '%s')
+lua: 53_date.lua:51: bad argument #1 to 'date' (invalid conversion specifier '%s')
 stack traceback:
 	[C]: in function 'os.date'
-	internal/core/testdata/diff/53_date.lua:51: in main chunk
+	53_date.lua:51: in main chunk
 	[C]: in ?

@@ -1,15 +1,15 @@
 == __name ==
-false|"internal/core/testdata/diff/48_keys.lua:23: attempt to perform arithmetic on a Point value (upvalue 't')"
-false|"internal/core/testdata/diff/48_keys.lua:24: attempt to perform arithmetic on a Point value (upvalue 't')"
+false|"48_keys.lua:23: attempt to perform arithmetic on a Point value (upvalue 't')"
+false|"48_keys.lua:24: attempt to perform arithmetic on a Point value (upvalue 't')"
 true|0
-false|"internal/core/testdata/diff/48_keys.lua:26: attempt to index a nil value (field 'x')"
-false|"internal/core/testdata/diff/48_keys.lua:27: attempt to call a Point value (upvalue 't')"
-false|"internal/core/testdata/diff/48_keys.lua:28: attempt to concatenate a Point value (upvalue 't')"
-false|"internal/core/testdata/diff/48_keys.lua:29: attempt to compare two Point values"
+false|"48_keys.lua:26: attempt to index a nil value (field 'x')"
+false|"48_keys.lua:27: attempt to call a Point value (upvalue 't')"
+false|"48_keys.lua:28: attempt to concatenate a Point value (upvalue 't')"
+false|"48_keys.lua:29: attempt to compare two Point values"
 true|false
-false|"internal/core/testdata/diff/48_keys.lua:31: attempt to call a nil value (method 'foo')"
+false|"48_keys.lua:31: attempt to call a nil value (method 'foo')"
 "Point"
-false|"internal/core/testdata/diff/48_keys.lua:33: attempt to concatenate a Point value (upvalue 't')"
+false|"48_keys.lua:33: attempt to concatenate a Point value (upvalue 't')"
 "S"
 "tabl"
 == protected metatables ==
@@ -20,8 +20,8 @@ false|"cannot change a protected metatable"
 false
 true
 == keys ==
-false|"internal/core/testdata/diff/48_keys.lua:51: table index is nil"
-false|"internal/core/testdata/diff/48_keys.lua:52: table index is NaN"
+false|"48_keys.lua:51: table index is nil"
+false|"48_keys.lua:52: table index is NaN"
 true|nil
 true|nil
 true|nil
@@ -57,17 +57,17 @@ false|nil
 false|nil
 false|false
 false|nil
-false|table: 0x558e466a6780
+false|table: <ADDR>
 false|E
 false|"m"
-false|"internal/core/testdata/diff/48_keys.lua:18: m"
-false|"internal/core/testdata/diff/48_keys.lua:126: m"
+false|"48_keys.lua:18: m"
+false|"48_keys.lua:126: m"
 false|"m"
 false|"m"
-false|"internal/core/testdata/diff/48_keys.lua:129: x"
+false|"48_keys.lua:129: x"
 false|"assertion failed!"
 false|"msg"
-false|table: 0x558e466a7480
+false|table: <ADDR>
 false|nil
 1|2
 false|"bad argument #1 to 'assert' (value expected)"

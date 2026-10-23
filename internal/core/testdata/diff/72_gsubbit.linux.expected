@@ -53,7 +53,7 @@ true|"11111"|5
 true|"1.51.51.51.51.5"|5
 false|"invalid replacement value (a boolean)"
 false|"invalid replacement value (a table)"
-false|"internal/core/testdata/diff/72_gsubbit.lua:82: no"
+false|"72_gsubbit.lua:82: no"
 true|"HELLO"|5
 true|"HELLO"|5
 true|"HELLO"|5
@@ -82,8 +82,8 @@ gmatch1	a1,b2,c3
 gmatch pos	1,2,3,4
 gmatch empty	<>,<>,<>,<>
 false|"bad argument #1 to 'string.gmatch' (string expected, got no value)"
-true|function: 0x5555d2f99120
-true|function: 0x5555d2f99510
+true|function: <ADDR>
+true|function: <ADDR>
 it	a	b	c
 true|3|3
 true|4|4
@@ -125,29 +125,29 @@ shr big	0
 chain	f
 args0	1
 true|1
-false|"internal/core/testdata/diff/72_gsubbit.lua:180: number (local 'b') has no integer representation"
-false|"internal/core/testdata/diff/72_gsubbit.lua:181: number (local 'a') has no integer representation"
+false|"72_gsubbit.lua:180: number (local 'b') has no integer representation"
+false|"72_gsubbit.lua:181: number (local 'a') has no integer representation"
 true|0
 true|0
-false|"internal/core/testdata/diff/72_gsubbit.lua:184: attempt to perform bitwise operation on a string value (local 'b')"
-false|"internal/core/testdata/diff/72_gsubbit.lua:185: attempt to perform bitwise operation on a nil value (local 'b')"
-false|"internal/core/testdata/diff/72_gsubbit.lua:186: attempt to perform bitwise operation on a nil value (local 'a')"
-false|"internal/core/testdata/diff/72_gsubbit.lua:187: attempt to perform bitwise operation on a nil value"
-false|"internal/core/testdata/diff/72_gsubbit.lua:188: attempt to perform bitwise operation on a string value (constant 'x')"
-false|"internal/core/testdata/diff/72_gsubbit.lua:189: number has no integer representation"
+false|"72_gsubbit.lua:184: attempt to perform bitwise operation on a string value (local 'b')"
+false|"72_gsubbit.lua:185: attempt to perform bitwise operation on a nil value (local 'b')"
+false|"72_gsubbit.lua:186: attempt to perform bitwise operation on a nil value (local 'a')"
+false|"72_gsubbit.lua:187: attempt to perform bitwise operation on a nil value"
+false|"72_gsubbit.lua:188: attempt to perform bitwise operation on a string value (constant 'x')"
+false|"72_gsubbit.lua:189: number has no integer representation"
 true|9223372036854775807
-false|"internal/core/testdata/diff/72_gsubbit.lua:191: number has no integer representation"
-false|"internal/core/testdata/diff/72_gsubbit.lua:192: number (local 'a') has no integer representation"
+false|"72_gsubbit.lua:191: number has no integer representation"
+false|"72_gsubbit.lua:192: number (local 'a') has no integer representation"
 true|4611686018427387904
 true|-9223372036854775808
-false|"internal/core/testdata/diff/72_gsubbit.lua:195: number (local 'a') has no integer representation"
+false|"72_gsubbit.lua:195: number (local 'a') has no integer representation"
 no args	true|0
 coerce	8	true
 float int	1	integer
-huge	false|"internal/core/testdata/diff/72_gsubbit.lua:201: number has no integer representation"
-nan	false|"internal/core/testdata/diff/72_gsubbit.lua:202: number has no integer representation"
+huge	false|"72_gsubbit.lua:201: number has no integer representation"
+nan	false|"72_gsubbit.lua:202: number has no integer representation"
 mm	band	band	bor	bor	bxor	bxor	bnot	shl	shl	shr	shr
 mm both	band	bor	bxor
 true|"band"
 true|"band"
-false|"internal/core/testdata/diff/72_gsubbit.lua:218: attempt to perform bitwise operation on a table value"
+false|"72_gsubbit.lua:218: attempt to perform bitwise operation on a table value"

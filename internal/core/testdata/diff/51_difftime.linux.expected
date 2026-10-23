@@ -20,8 +20,8 @@
 9.2233720368548e+18
 9.2233720368548e+18
 -9.2233720368548e+18
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/51_difftime.lua:50: bad argument #1 to 'difftime' (number has no integer representation)
+lua: 51_difftime.lua:50: bad argument #1 to 'difftime' (number has no integer representation)
 stack traceback:
 	[C]: in function 'os.difftime'
-	internal/core/testdata/diff/51_difftime.lua:50: in main chunk
+	51_difftime.lua:50: in main chunk
 	[C]: in ?

@@ -35,7 +35,7 @@ ok|
 "10.0":string
 "0.5":string
 "inf":string
-"-nan":string
+"nan":string
 "9223372036854775807":string
 "-9223372036854775808":string
 ok|
@@ -50,7 +50,7 @@ integer	float	nil	nil
 2147483648:float	9.2233720368547758e+18:float	0.5:float
 1000000000000000:float	10000000000000000:float	9.2233720368547758e+18:float
 1:integer	1:float	1:integer	-1:integer
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/70_coerce.lua:82: number has no integer representation
+lua: 70_coerce.lua:82: number has no integer representation
 stack traceback:
-	internal/core/testdata/diff/70_coerce.lua:82: in main chunk
+	70_coerce.lua:82: in main chunk
 	[C]: in ?

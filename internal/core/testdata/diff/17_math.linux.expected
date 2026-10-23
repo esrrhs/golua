@@ -18,8 +18,8 @@ integer
 true	false	false	false
 false
 true	true
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/17_math.lua:22: bad argument #2 to 'fmod' (zero)
+lua: 17_math.lua:22: bad argument #2 to 'fmod' (zero)
 stack traceback:
 	[C]: in function 'math.fmod'
-	internal/core/testdata/diff/17_math.lua:22: in main chunk
+	17_math.lua:22: in main chunk
 	[C]: in ?

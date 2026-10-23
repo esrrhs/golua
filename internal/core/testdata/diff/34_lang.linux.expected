@@ -69,13 +69,13 @@ empty loops	1
 4	1.0,1.5,2.0,2.5
 3	1.0,2.0,3.0
 false|"internal/core/testdata/diff/34_lang.lua:171: 'for' initial value must be a number"
-true|function: 0x557b81761c10
+true|function: 0x55e45a5a6c10
 1:10,2:20,3:30
 false|"internal/core/testdata/diff/34_lang.lua:184: attempt to call a number value"
 false|"internal/core/testdata/diff/34_lang.lua:185: bad argument #1 to 'for iterator' (table expected, got nil)"
 99	true
-shadow	function: 0x557b43cf3c50
-true|function: 0x557b81762b30
+shadow	function: 0x55e43e1c5c50
+true|function: 0x55e45a5a7b30
 true|nil|"attempt to load a text chunk (mode is 'b')"
 true
 locked

@@ -50,8 +50,8 @@ false
 true|true
 true|true	true
 true|1
-false|"internal/core/testdata/diff/40_modules.lua:75: module boom"
-false|"internal/core/testdata/diff/40_modules.lua:75: module boom"
+false|"40_modules.lua:75: module boom"
+false|"40_modules.lua:75: module boom"
 nil
 false|"plain"
 true|42
@@ -131,14 +131,14 @@ false|"module 'a.b.c' not found:\
 \9no file '/usr/local/lib/lua/5.3/a.so'\
 \9no file '/usr/local/lib/lua/5.3/loadall.so'\
 \9no file './a.so'"
-true|table: 0x5600eb777b40
-true|table: 0x5600eb773bc0
+true|table: <ADDR>
+true|table: <ADDR>
 == searchers can be replaced ==
 true|"from searcher:custom"
 false|"attempt to call a number value"
 false|"module 'whatever' not found:"
 false|"module 'whatever' not found:42"
-false|"internal/core/testdata/diff/40_modules.lua:136: searcher says no"
+false|"40_modules.lua:136: searcher says no"
 == loadlib ==
 true|nil|string|string
 false|string

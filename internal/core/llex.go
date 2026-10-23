@@ -382,9 +382,7 @@ func read_numeral(ls *LexState, seminfo *SemInfo) int {
 			break
 		}
 	}
-	if lislalpha(ls.current) { /* is numeral touching a letter? */
-		ls.saveAndNext() /* force an error */
-	}
+	/* 5.3.4: do not consume a trailing letter (5.4 does); '0xg' errors near '0x'. */
 	var obj Value
 	if !luaO_str2num(ls.buffer(), &obj) { /* format error? */
 		lexerror(ls, "malformed number", TK_FLT)

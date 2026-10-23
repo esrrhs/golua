@@ -55,13 +55,13 @@ nil@C:sethook:field:-1 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:m
 "count"|nil
 == hooks and coroutines ==
 true	4
-true	function: 0x55d236042100	cr	0
-false|"internal/core/testdata/diff/63_hook.lua:162: from hook"
-false|"internal/core/testdata/diff/63_hook.lua:162: from hook"
-false|"internal/core/testdata/diff/63_hook.lua:162: from hook"
-false|"internal/core/testdata/diff/63_hook.lua:162: from hook"
-false|table: 0x55d236042b50
-function: 0x55d236042b90	l	0
+true	function: <ADDR>	cr	0
+false|"63_hook.lua:162: from hook"
+false|"63_hook.lua:162: from hook"
+false|"63_hook.lua:162: from hook"
+false|"63_hook.lua:162: from hook"
+false|table: <ADDR>
+function: <ADDR>	l	0
 == sethook argument checking ==
 true
 true

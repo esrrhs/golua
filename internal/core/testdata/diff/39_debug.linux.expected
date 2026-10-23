@@ -1,35 +1,35 @@
 == getinfo 'what' ==
 ""	
 "n"	namewhat=
-"S"	lastlinedefined=34 linedefined=34 short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=Lua
+"S"	lastlinedefined=34 linedefined=34 short_src=39_debug.lua source=@39_debug.lua what=Lua
 "l"	currentline=-1
 "u"	isvararg=false nparams=2 nups=0
-"f"	func=function: 0x563f3039bb00
-"L"	activelines=table: 0x563f303a3eb0
+"f"	func=function: <ADDR>
+"L"	activelines=table: <ADDR>
 "t"	istailcall=false
-"nSl"	currentline=-1 lastlinedefined=34 linedefined=34 namewhat= short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=Lua
-"nSlu"	currentline=-1 isvararg=false lastlinedefined=34 linedefined=34 namewhat= nparams=2 nups=0 short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=Lua
-"nSluf"	currentline=-1 func=function: 0x563f3039bb00 isvararg=false lastlinedefined=34 linedefined=34 namewhat= nparams=2 nups=0 short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=Lua
-"nSlufL"	activelines=table: 0x563f303a52e0 currentline=-1 func=function: 0x563f3039bb00 isvararg=false lastlinedefined=34 linedefined=34 namewhat= nparams=2 nups=0 short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=Lua
-"nSlufLt"	activelines=table: 0x563f303a5950 currentline=-1 func=function: 0x563f3039bb00 istailcall=false isvararg=false lastlinedefined=34 linedefined=34 namewhat= nparams=2 nups=0 short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=Lua
-"Sln"	currentline=-1 lastlinedefined=34 linedefined=34 namewhat= short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=Lua
-"x"	ERR:internal/core/testdata/diff/39_debug.lua:20: bad argument #2 to 'getinfo' (invalid option)
+"nSl"	currentline=-1 lastlinedefined=34 linedefined=34 namewhat= short_src=39_debug.lua source=@39_debug.lua what=Lua
+"nSlu"	currentline=-1 isvararg=false lastlinedefined=34 linedefined=34 namewhat= nparams=2 nups=0 short_src=39_debug.lua source=@39_debug.lua what=Lua
+"nSluf"	currentline=-1 func=function: <ADDR> isvararg=false lastlinedefined=34 linedefined=34 namewhat= nparams=2 nups=0 short_src=39_debug.lua source=@39_debug.lua what=Lua
+"nSlufL"	activelines=table: <ADDR> currentline=-1 func=function: <ADDR> isvararg=false lastlinedefined=34 linedefined=34 namewhat= nparams=2 nups=0 short_src=39_debug.lua source=@39_debug.lua what=Lua
+"nSlufLt"	activelines=table: <ADDR> currentline=-1 func=function: <ADDR> istailcall=false isvararg=false lastlinedefined=34 linedefined=34 namewhat= nparams=2 nups=0 short_src=39_debug.lua source=@39_debug.lua what=Lua
+"Sln"	currentline=-1 lastlinedefined=34 linedefined=34 namewhat= short_src=39_debug.lua source=@39_debug.lua what=Lua
+"x"	ERR:39_debug.lua:20: bad argument #2 to 'getinfo' (invalid option)
 lastlinedefined=-1 linedefined=-1 namewhat= short_src=[C] source==[C] what=C
-currentline=21 func=function: 0x563f3039b250 isvararg=false lastlinedefined=31 linedefined=19 name=fields namewhat=local nparams=2 nups=1 short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=Lua
-currentline=42 lastlinedefined=0 linedefined=0 namewhat= short_src=internal/core/testdata/diff/39_debug.lua source=@internal/core/testdata/diff/39_debug.lua what=main
+currentline=21 func=function: <ADDR> isvararg=false lastlinedefined=31 linedefined=19 name=fields namewhat=local nparams=2 nups=1 short_src=39_debug.lua source=@39_debug.lua what=Lua
+currentline=42 lastlinedefined=0 linedefined=0 namewhat= short_src=39_debug.lua source=@39_debug.lua what=main
 nil
 currentline=-1 lastlinedefined=-1 linedefined=-1 name=getinfo namewhat=field short_src=[C] source==[C] what=C
 false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
 true|nil
 false|"bad argument #2 to 'debug.getinfo' (invalid option)"
-true|table: 0x563f303a7f20
+true|table: <ADDR>
 == getinfo of callers ==
 main		nil	1	0	true
 outer2
 method	method
 nil
 == locals ==
-a=1,b=2,c=3,d=dee,out=table: 0x563f303a6040,(for index)=6,(for limit)=10,(for step)=1,i=9
+a=1,b=2,c=3,d=dee,out=table: <ADDR>,(for index)=6,(for limit)=10,(for step)=1,i=9
 x	99
 true|nil
 false|"bad argument #1 to 'debug.getlocal' (level out of range)"
@@ -56,7 +56,7 @@ true
 
 true
 == metatables ==
-nil	table: 0x563f30393e50	nil
+nil	table: <ADDR>	nil
 nil	true
 true	7
 true
@@ -74,8 +74,8 @@ true
 true|"42\
 stack traceback:\
 \9[C]: in function 'pcall'\
-\9internal/core/testdata/diff/39_debug.lua:17: in local 'rec'\
-\9internal/core/testdata/diff/39_debug.lua:161: in main chunk\
+\00939_debug.lua:17: in local 'rec'\
+\00939_debug.lua:161: in main chunk\
 \9[C]: in ?"
 false|"bad argument #2 to 'debug.traceback' (number expected, got string)"
 true|"a\
@@ -84,24 +84,24 @@ true|"a\
 stack traceback:\
 \9[C]: in function 'debug.traceback'\
 \9[C]: in function 'pcall'\
-\9internal/core/testdata/diff/39_debug.lua:17: in local 'rec'\
-\9internal/core/testdata/diff/39_debug.lua:164: in main chunk\
+\00939_debug.lua:17: in local 'rec'\
+\00939_debug.lua:164: in main chunk\
 \9[C]: in ?"
 true|"a\
 stack traceback:"
 true|"stack traceback:\
 \9[C]: in function 'pcall'\
-\9internal/core/testdata/diff/39_debug.lua:166: in main chunk\
+\00939_debug.lua:166: in main chunk\
 \9[C]: in ?"
 true	false
 string	true
 true|"42\
 stack traceback:\
 \9[C]: in function 'pcall'\
-\9internal/core/testdata/diff/39_debug.lua:17: in local 'rec'\
-\9internal/core/testdata/diff/39_debug.lua:178: in main chunk\
+\00939_debug.lua:17: in local 'rec'\
+\00939_debug.lua:178: in main chunk\
 \9[C]: in ?"
-true|table: 0x563f303a2db0
+true|table: <ADDR>
 == sethook ==
 return,call,return,call
 count hook fired	true	50005000
@@ -118,7 +118,7 @@ coroutine hook	true
 false|"bad argument #2 to 'debug.setmetatable' (nil or table expected)"
 true|nil
 string
-internal/core/testdata/diff/39_debug.lua
+39_debug.lua
 [C]
 C
 nil

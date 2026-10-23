@@ -1,4 +1,4 @@
-internal/core/testdata/diff/19_argtable.lua
-/workspace/lua-sources/lua-5.3.4/src/lua
+19_argtable.lua
+lua
 0	nil	nil
 table	string	nil

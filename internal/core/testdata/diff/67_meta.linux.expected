@@ -1,1 +1,1 @@
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/67_meta.lua:162: unexpected symbol near '<'
+lua: 67_meta.lua:162: unexpected symbol near '<'

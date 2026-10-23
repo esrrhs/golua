@@ -7,30 +7,30 @@ true|nil
 3,2,1
 []
 0.0,0.5,1.0
-true|function: 0x55ae5f96c950
-true|function: 0x55ae5f96cce0
-true|function: 0x55ae5f96ce50
-true|function: 0x55ae5f96d1b0
-true|function: 0x55ae5f96d510
-true|function: 0x55ae5f96d870
-true|function: 0x55ae5f96dde0
-true|function: 0x55ae5f96e350
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
 "3,3,2,3,0,0,0"
 55
 == generic for ==
 a1,b2
 1:10,2:20,3:30
-true|function: 0x55ae5f9709f0
-true|function: 0x55ae5f970b60
+true|function: <ADDR>
+true|function: <ADDR>
 0
 == goto and labels ==
 "1,2,4,5"
 true|nil|"[string \"goto nowhere\"]:1: no visible label 'nowhere' for <goto> at line 1"
 true|nil|"[string \"::x:: ::x::\"]:1: label 'x' already defined on line 1"
-true|function: 0x55ae5f9723e0
-true|function: 0x55ae5f972bb0
-true|function: 0x55ae5f963db0
-true|function: 0x55ae5f963f70
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
 4
 == closures in loops ==
 1|2|3

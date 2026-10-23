@@ -1,28 +1,28 @@
 msg
 stack traceback:
-	internal/core/testdata/diff/05_traceback.lua:1: in main chunk
+	05_traceback.lua:1: in main chunk
 	[C]: in ?
 in-inner
 stack traceback:
-	internal/core/testdata/diff/05_traceback.lua:3: in function <internal/core/testdata/diff/05_traceback.lua:2>
+	05_traceback.lua:3: in function <05_traceback.lua:2>
 	(...tail calls...)
-	internal/core/testdata/diff/05_traceback.lua:8: in main chunk
+	05_traceback.lua:8: in main chunk
 	[C]: in ?
 true	via-pcall
 stack traceback:
-	internal/core/testdata/diff/05_traceback.lua:9: in function <internal/core/testdata/diff/05_traceback.lua:9>
+	05_traceback.lua:9: in function <05_traceback.lua:9>
 	[C]: in function 'pcall'
-	internal/core/testdata/diff/05_traceback.lua:9: in main chunk
+	05_traceback.lua:9: in main chunk
 	[C]: in ?
 in-co
 stack traceback:
-	internal/core/testdata/diff/05_traceback.lua:11: in function <internal/core/testdata/diff/05_traceback.lua:10>
+	05_traceback.lua:11: in function <05_traceback.lua:10>
 true
-false	internal/core/testdata/diff/05_traceback.lua:14: kaboom
-internal/core/testdata/diff/05_traceback.lua:14: kaboom
+false	05_traceback.lua:14: kaboom
+05_traceback.lua:14: kaboom
 deep
 stack traceback:
-	internal/core/testdata/diff/05_traceback.lua:22: in function <internal/core/testdata/diff/05_traceback.lua:21>
+	05_traceback.lua:22: in function <05_traceback.lua:21>
 	(...tail calls...)
-	internal/core/testdata/diff/05_traceback.lua:25: in main chunk
+	05_traceback.lua:25: in main chunk
 	[C]: in ?

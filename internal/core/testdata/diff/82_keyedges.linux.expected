@@ -10,12 +10,12 @@ nil	0
 100
 101
 99
-false	internal/core/testdata/diff/82_keyedges.lua:58: table index is NaN
+false	82_keyedges.lua:58: table index is NaN
 true	nil
-false	internal/core/testdata/diff/82_keyedges.lua:60: table index is nil
-false	internal/core/testdata/diff/82_keyedges.lua:61: table index is nil
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/82_keyedges.lua:66: bad argument #1 to 'rawlen' (table or string expected)
+false	82_keyedges.lua:60: table index is nil
+false	82_keyedges.lua:61: table index is nil
+lua: 82_keyedges.lua:66: bad argument #1 to 'rawlen' (table or string expected)
 stack traceback:
 	[C]: in function 'rawlen'
-	internal/core/testdata/diff/82_keyedges.lua:66: in main chunk
+	82_keyedges.lua:66: in main chunk
 	[C]: in ?

@@ -1,4 +1,4 @@
-/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/20_warnings.lua:4: attempt to call a nil value (global 'warn')
+lua: 20_warnings.lua:4: attempt to call a nil value (global 'warn')
 stack traceback:
-	internal/core/testdata/diff/20_warnings.lua:4: in main chunk
+	20_warnings.lua:4: in main chunk
 	[C]: in ?
