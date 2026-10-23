@@ -1,6 +1,6 @@
 // Translation of llex.h / llex.c (PUC-Lua 5.3.4).
-// Fully aligned to lua-5.3.4/src/llex.c + llex.h (not 5.4 token2str / read_numeral /
-// skip_sep return encoding).
+// Aligned to lua-5.3.4/src/llex.c + llex.h (not 5.4 token2str / read_numeral /
+// skip_sep return encoding / luaX_newstring t[str]=str).
 //
 // Adaptations (same rules as the rest of the package):
 //   - no GC: luaC_fix is gone; reserved words are anchored by a package-level
@@ -8,13 +8,9 @@
 //     table is flushed);
 //   - the ZIO stream becomes a plain byte slice plus a position;
 //   - Mbuffer becomes a []byte, so NUL terminators are unnecessary;
-//   - luaX_newstring stores t[str]=str (5.4-shaped / addk-safe) instead of
-//     C 5.3.4 t[str]=true + keyfromval; see NOTES.
+//   - luaX_newstring uses C 5.3.4 t[str]=true + key reuse (via luaH_getstrkey ≡
+//     keyfromval); addk may overwrite the value with a constant index.
 package core
-
-import (
-	"fmt"
-)
 
 // EOZ marks the end of the input stream (lzio.h).
 const EOZ = -1
@@ -215,7 +211,9 @@ func lisdigit(c int) bool {
 	return c >= '0' && c <= '9'
 }
 
-func isxdigit(c int) bool {
+// lisxdigitInt is lctype.h lisxdigit for lexer charint (EOZ-safe).
+// Distinct from lobject.lisxdigit(byte) — Go has no overloads (lctype folded).
+func lisxdigitInt(c int) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
 
@@ -225,6 +223,8 @@ func lisprint(c int) bool {
 	return c >= ' ' && c <= '~'
 }
 
+// lisspaceByte is lctype.h lisspace for lexer charint (EOZ → false).
+// Distinct from lobject.lisspace(byte).
 func lisspaceByte(c int) bool {
 	switch byte(c) {
 	case ' ', '\t', '\n', '\v', '\f', '\r':
@@ -239,9 +239,11 @@ func lisspaceByte(c int) bool {
 
 // luaX_init creates the reserved words (llex.c).
 func luaX_init(L *State) {
+	luaS_new(L, LUA_ENV) /* C: create env name + luaC_fix; no fix under Go GC */
 	for i := 0; i < NUM_RESERVED; i++ {
 		luaS_new(L, luaX_tokens[i])
 		reservedTokens[luaX_tokens[i]] = FIRST_RESERVED + i
+		/* C: ts->extra = i+1; reserved via reservedTokens map (no TString.extra) */
 	}
 }
 
@@ -268,7 +270,8 @@ func luaX_token2str(ls *LexState, token int) string {
 func txtToken(ls *LexState, token int) string {
 	switch token {
 	case TK_NAME, TK_STRING, TK_FLT, TK_INT:
-		return "'" + ls.buffer() + "'"
+		/* C: save('\0'); return luaO_pushfstring(L, "'%s'", buffer) — no NUL on []byte */
+		return pushfString(ls.L, "'%s'", ls.buffer()).val
 	default:
 		return luaX_token2str(ls, token)
 	}
@@ -278,8 +281,9 @@ func txtToken(ls *LexState, token int) string {
 func lexerror(ls *LexState, msg string, token int) {
 	msg = luaG_addinfo(ls.L, msg, ls.source, ls.linenumber)
 	if token != 0 {
-		msg = fmt.Sprintf("%s near %s", msg, txtToken(ls, token))
-		ls.L.PushString(msg)
+		/* C: luaO_pushfstring(L, "%s near %s", msg, txtToken(...)) */
+		ts := pushfString(ls.L, "%s near %s", msg, txtToken(ls, token))
+		ls.L.pushMessage(ts) /* pushMessage: no checkStack (error path) */
 	}
 	luaD_throw(ls.L, LUA_ERRSYNTAX)
 }
@@ -290,27 +294,26 @@ func luaX_syntaxerror(ls *LexState, msg string) {
 }
 
 // luaX_newstring creates a new string and anchors it in the scanner's table
-// so that it will not be reused until the end of the compilation (llex.c).
+// so that it will not be collected/reused until the end of the compilation
+// (llex.c 5.3.4).
 func luaX_newstring(ls *LexState, str string) *TString {
 	L := ls.L
-	ts := luaS_newlstr(L, str)
-	/* PUC-Lua takes the string back out of the *key* of the entry, not
-	   out of its value (llex.c: keystrval), and it has to: 'addk' turns
-	   the value into the index of a constant the moment the string is
-	   used as one (lcode.c), so reading the value here would answer an
-	   integer for every string that has been a constant already. Every
-	   later occurrence of that literal would then be a new object, and
-	   two equal long literals in one chunk would stop being the same
-	   string -- which is what 'literals.lua' asserts. */
+	ts := luaS_newlstr(L, str) /* create new string */
+	/* C: setsvalue2s(L, L->top++, ts); o = luaH_set(...);
+	   if ttisnil(o) setbvalue(o,1); else ts = tsvalue(keyfromval(o));
+	   L->top--.
+	   Go: no stack anchor (Go GC). Reuse via key (luaH_getstrkey ≡ keyfromval):
+	   addk may overwrite the *value* with a constant index, so never read value. */
 	if saved := luaH_getstrkey(L, ls.h, ts); saved != nil {
-		return saved
+		return saved /* string already present — re-use key */
 	}
-	/* not in use yet: t[string] = string, to anchor it for the rest of
-	   the compilation */
+	/* not in use yet? */
 	var key Value
 	setsvalue(&key, ts)
-	*luaH_set(L, ls.h, &key) = key
-	/* table is not a metatable, so it does not need to invalidate cache */
+	o := luaH_set(L, ls.h, &key)
+	/* boolean value does not need GC barrier;
+	   table has no metatable, so it does not need to invalidate cache */
+	setbvalue(o, true) /* t[string] = true — C 5.3.4 (not 5.4 t[str]=str) */
 	return ts
 }
 
@@ -385,7 +388,7 @@ func read_numeral(ls *LexState, seminfo *SemInfo) int {
 		if ls.checkNext2(expo) { /* exponent part? */
 			ls.checkNext2("-+") /* optional exponent sign */
 		}
-		if isxdigit(ls.current) {
+		if lisxdigitInt(ls.current) {
 			ls.saveAndNext()
 		} else if ls.current == '.' {
 			ls.saveAndNext()
@@ -439,7 +442,7 @@ endloop:
 			if seminfo == nil {
 				what = "comment"
 			}
-			msg := fmt.Sprintf("unfinished long %s (starting at line %d)", what, line)
+			msg := pushfString(ls.L, "unfinished long %s (starting at line %d)", what, line).val
 			lexerror(ls, msg, TK_EOS)
 		case ']':
 			if ls.skipSep() == sep {
@@ -478,7 +481,7 @@ func esccheck(ls *LexState, c bool, msg string) {
 
 func gethexa(ls *LexState) int {
 	ls.saveAndNext()
-	esccheck(ls, isxdigit(ls.current), "hexadecimal digit expected")
+	esccheck(ls, lisxdigitInt(ls.current), "hexadecimal digit expected")
 	return luaO_hexavalue(byte(ls.current))
 }
 
@@ -497,7 +500,7 @@ func readutf8esc(ls *LexState) uint32 {
 	r = uint32(gethexa(ls)) /* must have at least one digit */
 	for {
 		ls.saveAndNext()
-		if !isxdigit(ls.current) {
+		if !lisxdigitInt(ls.current) {
 			break
 		}
 		i++

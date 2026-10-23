@@ -8,6 +8,12 @@
 //
 // Purged from this unit (unused 5.4 bleed): isLuacode; CallInfo.ftransfer/ntransfer.
 // Kept FLAG (used): WarnFunc/warnf* (Go-GC __gc); CallInfo.trap (hook stop bit).
+//
+// Re-review fixes vs prior golua lstate.go:
+//   - stack_init usable = BASIC_STACK_SIZE-EXTRA_STACK (C total BASIC)
+//   - growStackNoRaise uses C total-stacksize math (+ ERRORSTACKSIZE total)
+//   - shrinkStack delegates to luaD_shrinkstack (was a divergent heuristic)
+//   - f_luaopen order: init_registry before luaS_init / luaT_init / luaX_init
 package core
 
 import (
@@ -26,7 +32,16 @@ const (
 	BASIC_STACK_SIZE = 2 * LUA_MINSTACK
 	// ERRORSTACKSIZE is the size the stack is grown to when it overflows,
 	// so that there is still room to run the error message (ldo.c).
+	// C defines this in ldo.c; value is a *total* stacksize (incl. EXTRA_STACK).
 	ERRORSTACKSIZE = LUAI_MAXSTACK + 200
+
+	/* kinds of Garbage Collection (lstate.h) — unused under Go GC (FLAG). */
+	KGC_NORMAL    = 0
+	KGC_EMERGENCY = 1 /* gc was forced by an allocation failure */
+
+	/* defaults from lstate.c (overridable in C via LUAI_* macros) */
+	LUAI_GCPAUSE = 200 /* 200% */
+	LUAI_GCMUL   = 200 /* GC runs twice the speed of allocation */
 )
 
 // GoFunc is the Go equivalent of lua_CFunction: it receives the state and
@@ -398,10 +413,10 @@ func typeName(v *Value) string {
 
 func (L *State) stackSize() int { return L.stackLast }
 
-// reallocStack is 'luaD_reallocstack' (ldo.c).  'newsize' is the number of
-// *usable* slots, exactly C's 'stack_last - stack': the buffer itself gets
-// EXTRA_STACK more, which is the room C reserves so that an error message
-// can still be pushed after a stack overflow.
+// reallocStack is the index-stack form of luaD_reallocstack (ldo.c).
+// 'newsize' is the number of *usable* slots (= C's stack_last - stack).
+// The backing slice is newsize+EXTRA_STACK long (C's L->stacksize).
+// Zero Values are nil (tt==0), matching C's setnilvalue on new slots.
 func (L *State) reallocStack(newsize int) {
 	ns := make([]Value, newsize+EXTRA_STACK)
 	copy(ns, L.stack)
@@ -409,65 +424,50 @@ func (L *State) reallocStack(newsize int) {
 	L.stackLast = newsize
 }
 
-// growStackNoRaise is 'luaD_growstack' (ldo.c). It grows the stack to hold
-// 'n' more slots and reports whether that was possible; when 'raise' is
-// false it never raises an error -- C's callers such as 'lua_checkstack'
-// rely on getting a 0 back instead of a longjmp.
+// growStackNoRaise is luaD_growstack (ldo.c) with an optional non-raising
+// mode for lua_checkstack (C wraps growstack in luaD_rawrunprotected).
+// Size math uses C's *total* stacksize (= usable + EXTRA_STACK).
 func (L *State) growStackNoRaise(n int, raise bool) bool {
-	size := L.stackSize()
-	if size > LUAI_MAXSTACK {
-		/* The stack is already at ERRORSTACKSIZE, that is, the thread is
-		   using the extra space reserved for errors: it is handling a
-		   stack error and cannot grow any further. */
+	size := L.stackSize() + EXTRA_STACK /* C: L->stacksize */
+	if size > LUAI_MAXSTACK { /* error after extra size? */
 		if raise {
-			luaD_throw(L, LUA_ERRERR) /* error inside message handler */
+			luaD_throw(L, LUA_ERRERR)
 		}
 		return false
 	}
-	if n < LUAI_MAXSTACK { /* avoids arithmetic overflows */
-		newsize := 2 * size          /* tentative new size */
-		needed := L.top + n          /* what was asked for, in absolute slots */
-		if newsize > LUAI_MAXSTACK { /* cannot cross the limit */
-			newsize = LUAI_MAXSTACK
-		}
-		if newsize < needed { /* but must respect what was asked for */
-			newsize = needed
-		}
-		if newsize <= LUAI_MAXSTACK {
-			L.reallocStack(newsize)
-			return true
-		}
+	needed := L.top + n + EXTRA_STACK /* C: (top-stack) + n + EXTRA_STACK */
+	newsize := 2 * size               /* tentative new total */
+	if newsize > LUAI_MAXSTACK {
+		newsize = LUAI_MAXSTACK
 	}
-	/* else stack overflow: add extra size to be able to handle the
-	   error message, so that the message handler can still run */
-	L.reallocStack(ERRORSTACKSIZE)
-	if raise {
-		luaG_runerror(L, "stack overflow")
+	if newsize < needed {
+		newsize = needed
 	}
-	return false
+	if newsize > LUAI_MAXSTACK { /* stack overflow? */
+		/* grow to ERRORSTACKSIZE (C total) so the error handler can run */
+		L.reallocStack(ERRORSTACKSIZE - EXTRA_STACK)
+		if raise {
+			luaG_runerror(L, "stack overflow")
+		}
+		return false
+	}
+	L.reallocStack(newsize - EXTRA_STACK)
+	return true
 }
 
 func (L *State) growStack(n int) { L.growStackNoRaise(n, true) }
 
+// checkStack is luaD_checkstack (ldo.h): grow if stack_last - top <= n.
 func (L *State) checkStack(n int) {
 	if L.stackLast-L.top <= n {
 		L.growStack(n)
 	}
 }
 
+// shrinkStack is luaD_shrinkstack (ldo.c). Implementation lives under the
+// C name in ldo.go (also frees/shrinks unused CallInfo).
 func (L *State) shrinkStack() {
-	size := L.stackSize()
-	used := L.top + EXTRA_STACK
-	if size > BASIC_STACK_SIZE && used < size/4 {
-		newsize := size / 2
-		if newsize < used {
-			newsize = used
-		}
-		if newsize < BASIC_STACK_SIZE {
-			newsize = BASIC_STACK_SIZE
-		}
-		L.reallocStack(newsize)
-	}
+	luaD_shrinkstack(L)
 }
 
 // ---------------------------------------------------------------------
@@ -537,30 +537,35 @@ func NewState() *State {
 	L.status = LUA_OK
 	L.allowhook = 1
 	L.errfunc = 0
+	/* preinit_thread also: stack=nil, ci=nil, nci=0, twups=L, errorJmp=nil,
+	   hook=nil, hookmask=0, basehookcount=0, openupval=nil; zero values OK.
+	   Go has no twups list (FLAG Go GC / index-stack openupval slice). */
 
-	L.reallocStack(BASIC_STACK_SIZE)
-	L.top = 1
+	/* stack_init: C sets L->stacksize = BASIC_STACK_SIZE (total, incl.
+	   EXTRA_STACK); usable = BASIC_STACK_SIZE - EXTRA_STACK. */
+	L.reallocStack(BASIC_STACK_SIZE - EXTRA_STACK)
+	L.top = 1 /* after nil 'function' entry for base_ci (stack_init) */
 	L.ci = &L.baseCI
 	L.baseCI.funcIdx = 0
 	L.baseCI.top = L.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
 	L.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
 	L.baseCI.nresults = 0
+	L.baseCI.prev = nil
+	L.baseCI.next = nil
 	gcTrackThread(L) /* so that the collector can clear its stale slots */
 
 	/* LUAI_GCPAUSE and LUAI_GCMUL: 'setpause' and 'setstepmul' answer
 	   with the value they replaced, so the two are remembered even
 	   though Go's collector pays no attention to them.  5.3.4 has no
 	   generational/incremental mode switch. */
-	g.gcPause = 200
-	g.gcStepMul = 200 /* LUAI_GCMUL */
+	g.gcPause = LUAI_GCPAUSE
+	g.gcStepMul = LUAI_GCMUL
 	g.nilValue = Value{tt: LUA_VNIL}
 	g.strt = newStringTable()
-	g.memErrMsg = luaS_new(L, "not enough memory")
-	/* f_luaopen order: luaS_init, luaT_init, luaX_init (C lstate.c) */
-	luaS_init(L)
-	luaT_init(L)
-	luaX_init(L)
-	/* init_registry (lstate.c) */
+	/* f_luaopen (lstate.c): stack_init, init_registry, luaS_init,
+	   luaT_init, luaX_init. C wraps this in luaD_rawrunprotected and
+	   close_state on failure — Go has no lua_Alloc OOM path (FLAG). */
+	/* init_registry */
 	sethvalue(&g.registry, luaH_new(L))
 	luaH_resize(L, hvalue(&g.registry), LUA_RIDX_LAST, 0)
 	var th Value
@@ -570,6 +575,11 @@ func NewState() *State {
 	gt := luaH_new(L)
 	sethvalue(&gl, gt)
 	luaH_setint(L, hvalue(&g.registry), LUA_RIDX_GLOBALS, &gl)
+	/* C creates memerrmsg inside luaS_init; Go keeps it on globalState. */
+	g.memErrMsg = luaS_new(L, "not enough memory")
+	luaS_init(L)
+	luaT_init(L)
+	luaX_init(L)
 	/* FLAG Go-only warnf (5.3.4 has no lua_setwarnf / warn()): default off;
 	   routes Go-GC __gc failures via Warning (C raises LUA_ERRGCMM). */
 	g.setWarnf(warnfOff)
@@ -690,18 +700,26 @@ func (L *State) NewThread() *State {
 	L1 := &State{g: g}
 	L1.isMain = false
 	L1.allowhook = 1
+	/* FLAG: C preinit_thread leaves status=LUA_OK; Go uses LUA_YIELD so
+	   coroutine.status sees "suspended" before first resume (C reaches
+	   the same label via LUA_OK + gettop!=0 after coroutine.create).
+	   lua_status / State.Status therefore differs from C on a bare
+	   lua_newthread with an empty stack. */
 	L1.status = LUA_YIELD
 	L1.started = false
 	L1.nCcalls = 0
 	L1.nny = 1 /* preinit_thread: non-yieldable until lua_resume clears it */
 	L1.errfunc = 0
-	L1.reallocStack(BASIC_STACK_SIZE)
+	/* stack_init: usable = BASIC_STACK_SIZE - EXTRA_STACK (C total BASIC) */
+	L1.reallocStack(BASIC_STACK_SIZE - EXTRA_STACK)
 	L1.top = 1
 	L1.ci = &L1.baseCI
 	L1.baseCI.funcIdx = 0
 	L1.baseCI.top = L1.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
 	L1.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
 	L1.baseCI.nresults = 0
+	L1.baseCI.prev = nil
+	L1.baseCI.next = nil
 	gcTrackThread(L1) /* so that the collector can clear its stale slots */
 	/* a new thread inherits the hook of the creating thread: C copies
 	   'hook', 'hookmask' and 'basehookcount' in 'lua_newthread', so a

@@ -1,18 +1,22 @@
 // Translation of linit.c (PUC-Lua 5.3.4): initialization of standard libraries.
 //
 // C surface: static loadedlibs[] + luaL_openlibs.
-// Adaptation: luaL_requiref (lauxlib.c) is spelled out here as (*State).RequireF
-// because the lauxlib translation does not host it; body matches C.
+// Adaptation: luaL_requiref (lauxlib.c:971-988) is spelled out here as
+// (*State).RequireF because the lauxlib translation does not host it;
+// body matches C line-for-line.
 //
 // Go-only (not in linit.c): (*State).Open(name) — single-library open helper.
 package core
 
 // loadedLibs is C linit.c loadedlibs[]: (name, open function).
-// Names are the LUA_*LIBNAME string values from lualib.h.
-// bit32 is always registered: matches default LUA_COMPAT_BITLIB in 5.3.4 luaconf.h.
+// Names are the LUA_*LIBNAME string values from lualib.h
+// ("_G" is a string literal in C 5.3.4; LUA_GNAME does not exist there).
+// bit32 is always registered: matches default LUA_COMPAT_BITLIB in
+// 5.3.4 luaconf.h (#define LUA_COMPAT_BITLIB). Go has no compile-time
+// off switch for a non-default C build that undefines the macro.
 var loadedLibs = []struct {
 	name string
-	open func(*State) int
+	open GoFunc
 }{
 	{"_G", OpenBase},             // {"_G", luaopen_base}
 	{"package", OpenPackage},     // {LUA_LOADLIBNAME, luaopen_package}
@@ -31,17 +35,17 @@ var loadedLibs = []struct {
 // RequireF is luaL_requiref (lauxlib.c:971-988), placed here (see file header).
 // Adds module 'modname' to package.loaded, calling 'openf' if not already
 // loaded; when 'glb' is set also assigns the module to the global of the
-// same name.
+// same name. Leaves resulting module on the top.
 func (L *State) RequireF(modname string, openf GoFunc, glb bool) {
 	L.GetSubTable(LUA_REGISTRYINDEX, pkLoadedTable) /* LOADED table */
 	L.GetField(-1, modname)                         /* LOADED[modname] */
 	if !L.ToBoolean(-1) {                           /* package not already loaded? */
 		L.Pop(1) /* remove field */
-		L.PushGoClosure(openf, 0)
-		L.PushString(modname) /* argument to open function */
-		L.Call(1, 1)          /* call 'openf' to open module */
-		L.PushValue(-1)       /* make copy of module (call result) */
-		L.SetField(-3, modname) /* LOADED[modname] = module */
+		L.PushGoClosure(openf, 0)                    /* ≡ lua_pushcfunction */
+		L.PushString(modname)                       /* argument to open function */
+		L.Call(1, 1)                                /* call 'openf' to open module */
+		L.PushValue(-1)                             /* make copy of module (call result) */
+		L.SetField(-3, modname)                     /* LOADED[modname] = module */
 	}
 	L.Remove(-2) /* remove LOADED table */
 	if glb {
@@ -51,11 +55,11 @@ func (L *State) RequireF(modname string, openf GoFunc, glb bool) {
 }
 
 // OpenLibs opens all standard libraries (luaL_openlibs).
-// "require" each entry of loadedLibs and set results into the global table.
+// "require" functions from loadedLibs and set results to global table.
 func (L *State) OpenLibs() {
 	for _, lib := range loadedLibs {
-		L.RequireF(lib.name, lib.open, true)
-		L.Pop(1) /* remove lib */
+		L.RequireF(lib.name, lib.open, true) /* glb == 1 */
+		L.Pop(1)                             /* remove lib */
 	}
 }
 

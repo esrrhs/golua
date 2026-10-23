@@ -1,5 +1,5 @@
 // Translation of liolib.c (PUC-Lua 5.3.4): the standard I/O (and popen)
-// library. Fully aligned to PUC 5.3.4 (no 5.4 __close / multi-return lines).
+// library. Re-reviewed vs PUC 5.3.4 (no 5.4 __close / multi-return lines).
 //
 // A file handle is a full userdata wrapping a *ioStream (the Go
 // counterpart of luaL_Stream); its metatable is registered in the
@@ -661,11 +661,6 @@ func ioSetDirection(s *ioStream, flag int) {
 	s.canW = flag&(os.O_RDWR|os.O_WRONLY) != 0
 }
 
-// ioCheckModeP checks a mode for 'popen': only "r" or "w" are valid.
-func ioCheckModeP(mode string) bool {
-	return (mode == "r" || mode == "w")
-}
-
 // ioFlags translates a Lua open mode into os.OpenFile flags.
 func ioFlags(mode string) int {
 	var flag int
@@ -1026,7 +1021,8 @@ func ioGWrite(L *State, s *ioStream, arg int) int {
 				str = fmt.Sprintf(LUA_INTEGER_FMT, v)
 			} else {
 				v, _ := L.ToNumber(arg)
-				str = fmtFloat(v)
+				/* C fprintf(LUA_NUMBER_FMT) uses the C locale decimal point */
+				str = num2strLocale(fmtFloat(v))
 			}
 		} else {
 			str = L.CheckString(arg)
@@ -1201,10 +1197,8 @@ func ioPOpen(L *State) int {
 	/* 'popen' takes a C string, so it is the bytes before the first
 	   zero that are handed to the shell. */
 	filename := luaCStr(L.CheckString(1))
-	mode := "r"
-	if !L.IsNoneOrNil(2) {
-		mode = luaCStr(L.ToStringX(2)) /* luaL_optstring tostring coercion */
-	}
+	/* C: luaL_optstring(L, 2, "r") — coerces number, typeerrors otherwise */
+	mode := luaCStr(L.OptString(2, "r"))
 	/* glibc popen accepts only "r"/"w" (+optional e); others → EINVAL. */
 	s := ioNewPreFile(L)
 	cmd := ioShellCommand(filename)

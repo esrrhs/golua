@@ -112,37 +112,38 @@ func getGenericNode(L *State, t *Table, key *Value) int {
 	}
 }
 
-// arrayindex returns the index for 'k' if it may live in the array part
-// (ltable.c: arrayindex on integer keys; 0 < k && k <= MAXASIZE).
-func arrayindex(k int64) uint32 {
-	if uint64(k)-1 < MAXASIZE {
-		return uint32(k)
+// arrayindex returns the index for 'key' if it is an appropriate key to
+// live in the array part of the table, 0 otherwise (ltable.c).
+func arrayindex(key *Value) uint32 {
+	if ttisinteger(key) {
+		k := ivalue(key)
+		if uint64(k)-1 < MAXASIZE { /* 0 < k && (lua_Unsigned)k <= MAXASIZE */
+			return uint32(k) /* 'key' is an appropriate array index */
+		}
 	}
-	return 0
+	return 0 /* 'key' did not match some condition */
 }
 
 // findIndex returns the traversal index of a key (ltable.c 5.3.4 findindex).
-// Dead keys matched inline: rawequalobj OR (deadkey && collectable &&
-// deadvalue==gcvalue). No 5.4 equalkey(deadok).
+// First array part (via sizearray), then hash. Dead keys matched inline:
+// rawequalobj OR (deadkey && collectable && deadvalue==gcvalue).
+// No 5.4 equalkey(deadok).
 func findIndex(L *State, t *Table, key *Value) uint32 {
 	if ttisnil(key) {
 		return 0 /* first iteration */
 	}
-	var i uint32
-	if ttisinteger(key) {
-		i = arrayindex(ivalue(key))
-	}
+	i := arrayindex(key)
 	if i != 0 && i <= t.sizearray { /* is 'key' inside array part? */
 		return i /* yes; that's the index */
 	}
 	n := mainpositionTV(L, t, key)
-	for {
+	for { /* check whether 'key' is somewhere in the chain */
 		nd := &t.nodes[n]
 		var nk Value
 		getnodekey(&nk, nd)
 		/* key may be dead already, but it is ok to use it in 'next' */
 		if luaV_rawequalobj(&nk, key) ||
-			(nd.keytt == LUA_TDEADKEY && iscollectable(key) && nd.kp == gcvalue(key)) {
+			(ttisdeadkey(&nk) && iscollectable(key) && deadvalue(&nk) == gcvalue(key)) {
 			/* hash elements are numbered after array ones */
 			return uint32(n+1) + t.sizearray
 		}
@@ -215,11 +216,14 @@ func setnodevector(L *State, t *Table, size uint32) {
 }
 
 // getfreepos returns a free position in the hash part (ltable.c).
+// Free = nil key (ttisnil(gkey)); dead keys are not free.
 func getfreepos(t *Table) int {
 	if !isdummy(t) {
 		for t.lastfree > 0 {
 			t.lastfree--
-			if t.nodes[t.lastfree].keytt == LUA_VNIL {
+			var k Value
+			getnodekey(&k, &t.nodes[t.lastfree])
+			if ttisnil(&k) {
 				return t.lastfree
 			}
 		}
@@ -317,10 +321,10 @@ func computesizes(nums *[MAXABITS + 1]uint32, pna *uint32) uint32 {
 	return optimal
 }
 
-func countint(key int64, nums *[MAXABITS + 1]uint32) int {
+func countint(key *Value, nums *[MAXABITS + 1]uint32) int {
 	k := arrayindex(key)
 	if k != 0 { /* is 'key' an appropriate array index? */
-		nums[luaO_ceillog2(k)]++
+		nums[luaO_ceillog2(k)]++ /* count as such */
 		return 1
 	}
 	return 0
@@ -351,16 +355,16 @@ func numusearray(t *Table, nums *[MAXABITS + 1]uint32) uint32 {
 }
 
 func numusehash(t *Table, nums *[MAXABITS + 1]uint32, pna *uint32) int {
-	totaluse := 0
-	ause := 0
+	totaluse := 0 /* total number of elements */
+	ause := 0     /* elements added to 'nums' (can go to array part) */
 	i := sizenode(t)
 	for i > 0 {
 		i--
 		n := &t.nodes[i]
 		if !ttisnil(&n.val) {
-			if n.keytt == LUA_VNUMINT {
-				ause += countint(n.ki, nums)
-			}
+			var k Value
+			getnodekey(&k, n)
+			ause += countint(&k, nums)
 			totaluse++
 		}
 	}
@@ -371,15 +375,18 @@ func numusehash(t *Table, nums *[MAXABITS + 1]uint32, pna *uint32) int {
 // rehash recomputes sizes of both parts (ltable.c 5.3.4; no setlimittosize).
 func rehash(L *State, t *Table, ek *Value) {
 	var nums [MAXABITS + 1]uint32
+	for i := 0; i <= MAXABITS; i++ {
+		nums[i] = 0 /* reset counts (Go make-zero already; mirror C) */
+	}
 	na := numusearray(t, &nums)           /* count keys in array part */
 	totaluse := int(na)                   /* all those keys are integer keys */
 	totaluse += numusehash(t, &nums, &na) /* count keys in hash part */
 	/* count extra key */
-	if ttisinteger(ek) {
-		na += uint32(countint(ivalue(ek), &nums))
-	}
+	na += uint32(countint(ek, &nums))
 	totaluse++
-	asize := computesizes(&nums, &na) /* compute new size for array part */
+	/* compute new size for array part */
+	asize := computesizes(&nums, &na)
+	/* resize the table to new computed sizes */
 	luaH_resize(L, t, asize, uint32(totaluse)-na)
 }
 

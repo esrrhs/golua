@@ -131,6 +131,14 @@ func luaD_growstack(L *State, n int) {
 	luaD_reallocstack(L, newsize)
 }
 
+// luaD_checkstack is luaD_checkstack (ldo.h). Indices need no pre/pos;
+// condmovestack debug path omitted.
+func luaD_checkstack(L *State, n int) {
+	if L.stackLast-L.top <= n {
+		luaD_growstack(L, n)
+	}
+}
+
 // stackinuse is stackinuse (ldo.c).
 func stackinuse(L *State) int {
 	lim := L.top
@@ -166,7 +174,7 @@ func luaD_shrinkstack(L *State) {
 
 // luaD_inctop is luaD_inctop (ldo.c).
 func luaD_inctop(L *State) {
-	L.checkStack(1)
+	luaD_checkstack(L, 1)
 	L.top++
 }
 
@@ -211,7 +219,7 @@ func luaD_hook(L *State, event, line int) {
 		top := L.top
 		ciTop := ci.top
 		ar := &dbAr{event: event, currentline: line, ci: ci}
-		L.checkStack(LUA_MINSTACK) /* ensure minimum stack size */
+		luaD_checkstack(L, LUA_MINSTACK) /* ensure minimum stack size */
 		ci.top = L.top + LUA_MINSTACK
 		L.allowhook = 0 /* cannot call hooks inside a hook */
 		ci.callstatus |= CIST_HOOKED
@@ -272,11 +280,6 @@ func adjust_varargs(L *State, p *Proto, actual int) int {
 		L.top++
 	}
 	return base
-}
-
-// adjustVarargs keeps the old exported name used elsewhere.
-func adjustVarargs(L *State, p *Proto, actual int) int {
-	return adjust_varargs(L, p, actual)
 }
 
 // tryfuncTM is tryfuncTM (ldo.c): !ttisfunction(tm) → typeerror "call".
@@ -342,7 +345,9 @@ func luaD_poscall(L *State, ci *CallInfo, firstResult, nres int) int {
 		}
 		if prev := ci.prev; prev != nil && isLua(prev) {
 			/* C stores Instruction* (= next pc); Go's oldpc is pcRel-style
-			   (index of last traced insn). pcRel(savedpc) == savedpc-1. */
+			   (index of last traced insn). pcRel(savedpc) == savedpc-1.
+			   isLua guard: C assigns previous->u.l.savedpc via union even for
+			   C frames; typed CI has no safe equivalent. */
 			if prev.savedpc > 0 {
 				L.oldpc = prev.savedpc - 1
 			} else {
@@ -384,7 +389,7 @@ func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
 
 // precallC runs a Go/C function frame (ldo.c Cfunc path) with goroutine adaptations.
 func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
-	L.checkStack(LUA_MINSTACK) /* ensure minimum stack size */
+	luaD_checkstack(L, LUA_MINSTACK) /* ensure minimum stack size */
 	ci := prepCallInfo(L, funcIdx, nresults, 0, L.top+LUA_MINSTACK)
 	if L.hookmask&dbMaskCall != 0 {
 		luaD_hook(L, hookCall, -1)
@@ -420,7 +425,7 @@ retry:
 		p := clLvalue(fv).p
 		n := L.top - funcIdx - 1     /* number of real arguments */
 		fsize := int(p.maxstacksize) /* frame size */
-		L.checkStack(fsize)
+		luaD_checkstack(L, fsize)
 		var base int
 		nExtra := 0
 		if p.isVararg != 0 {
@@ -452,7 +457,7 @@ retry:
 		}
 		return 0
 	default: /* not a function */
-		L.checkStack(1) /* ensure space for metamethod */
+		luaD_checkstack(L, 1) /* ensure space for metamethod */
 		tryfuncTM(L, funcIdx)
 		goto retry /* now it must be a function */
 	}
@@ -468,6 +473,9 @@ func stackerror(L *State) {
 }
 
 // luaD_call is luaD_call (ldo.c 5.3.4).
+// C sets CIST_FRESH inside luaV_execute; Go sets it here (FLAG goroutine/
+// sync-yield: resume re-enters execute on the yielded frame without C's
+// unroll, so FRESH must not be applied on that path — see lvm.go).
 func luaD_call(L *State, funcIdx, nResults int) {
 	L.nCcalls++
 	if L.nCcalls >= LUAI_MAXCCALLS {
@@ -475,7 +483,7 @@ func luaD_call(L *State, funcIdx, nResults int) {
 	}
 	if luaD_precall(L, funcIdx, nResults) == 0 { /* is a Lua function? */
 		L.ci.callstatus |= CIST_FRESH /* fresh invocation of luaV_execute */
-		luaV_execute(L, L.ci)         /* call it */
+		luaV_execute(L, L.ci) /* call it */
 	}
 	L.nCcalls--
 }

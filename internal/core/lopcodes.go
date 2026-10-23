@@ -6,9 +6,34 @@
 // BITRK bit the way PUC-Lua encodes them (ISK / INDEXK / RKASK).
 //
 // Intentional OK vs C: Instruction is a struct, not a packed uint32, so
-// POS_*/MASK*/GET_*/SET_* bit-pack macros are omitted.
+// MASK*/GET_*/SET_* bit-pack macros that mutate a word are omitted (field
+// access instead). SIZE_*/POS_* layout constants match lopcodes.h; dump
+// /undump pack/unpack live in lundump.go (Apply debt: share POS_* there).
 // No 5.4 surface: no Instruction.K, no isIT/testITMode, no 5.4 OP_*.
 package core
+
+/*
+===========================================================================
+  We assume that instructions are unsigned numbers.
+  All instructions have an opcode in the first 6 bits.
+  Instructions can have the following fields:
+	'A' : 8 bits
+	'B' : 9 bits
+	'C' : 9 bits
+	'Ax' : 26 bits ('A', 'B', and 'C' together)
+	'Bx' : 18 bits ('B' and 'C' together)
+	'sBx' : signed Bx
+
+  A signed argument is represented in excess K; that is, the number
+  value is the unsigned value minus K. K is exactly the maximum value
+  for that argument (so that -max is represented by 0, and +max is
+  represented by 2*max), which is half the maximum for the corresponding
+  unsigned argument.
+
+  Go: Instruction is a struct (not a packed uint32). Fields hold the same
+  values GETARG_* would extract; sBx is stored biased in B (see OFFSET_sBx).
+===========================================================================
+*/
 
 // Instruction is the Go counterpart of Lua's Instruction word (5.3.4).
 type Instruction struct {
@@ -186,7 +211,10 @@ func opName(op int) string {
 	return "???"
 }
 
-// Field sizes from lopcodes.h (5.3: B and C are 9 bits).
+/*
+** size and position of opcode arguments (lopcodes.h).
+** 5.3 layout in a packed word: OP:6 A:8 C:9 B:9 (Bx=C+B, Ax=C+B+A).
+*/
 const (
 	SIZE_C  = 9
 	SIZE_B  = 9
@@ -194,6 +222,13 @@ const (
 	SIZE_A  = 8
 	SIZE_Ax = SIZE_C + SIZE_B + SIZE_A // 26
 	SIZE_OP = 6
+
+	POS_OP = 0
+	POS_A  = POS_OP + SIZE_OP // 6
+	POS_C  = POS_A + SIZE_A   // 14
+	POS_B  = POS_C + SIZE_C   // 23
+	POS_Bx = POS_C            // 14
+	POS_Ax = POS_A            // 6
 
 	MAXARG_Bx  = (1 << SIZE_Bx) - 1 // 262143
 	MAXARG_sBx = MAXARG_Bx >> 1     // 131071

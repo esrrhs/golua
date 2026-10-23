@@ -222,7 +222,7 @@ func ttisfunction(v *Value) bool { return ttype(v) == LUA_TFUNCTION }
 func ttisLclosure(v *Value) bool { return v.tt == ctb(LUA_VLCL) }
 func ttislcf(v *Value) bool      { return v.tt == LUA_VLCF }
 func ttisCclosure(v *Value) bool { return v.tt == ctb(LUA_VCCL) }
-func ttisclosure(v *Value) bool  { return ttisLclosure(v) || ttisCclosure(v) }
+func ttisclosure(v *Value) bool  { return (int(v.tt) & 0x1F) == LUA_TFUNCTION } /* C: (rttype & 0x1F) == LUA_TFUNCTION */
 
 // ttiscfunction reports whether 'v' is any kind of C function (a light C
 // function or a C closure), as 'lua_iscfunction' does.
@@ -470,7 +470,7 @@ func luaO_int2fb(x uint32) int {
 		x = (x + 1) >> 1 /* x = ceil(x / 2) */
 		e++
 	}
-	return int(((x) - 8) | uint32(e+1)<<3)
+	return ((e + 1) << 3) | (int(x) - 8) /* C: ((e+1)<<3) | (cast_int(x)-8) */
 }
 
 // luaO_fb2int converts a "floating point byte" back to an integer (lobject.c, 5.3).
@@ -528,9 +528,10 @@ func intarith(L *State, op int, v1, v2 int64) int64 {
 	case LUA_OPUNM:
 		return -v1
 	case LUA_OPBNOT:
-		return ^v1
+		return ^v1 /* C: intop(^, ~l_castS2U(0), v1) */
+	default:
+		panic("invalid integer operation") /* C: lua_assert(0); return 0 */
 	}
-	panic("invalid integer operation")
 }
 
 func numarith(L *State, op int, v1, v2 float64) float64 {
@@ -550,30 +551,34 @@ func numarith(L *State, op int, v1, v2 float64) float64 {
 	case LUA_OPUNM:
 		return -v1
 	case LUA_OPMOD:
-		return luaV_modf(L, v1, v2)
+		return luaV_modf(L, v1, v2) /* C: luai_nummod */
+	default:
+		panic("invalid float operation") /* C: lua_assert(0); return 0 */
 	}
-	panic("invalid float operation")
 }
 
-// luaO_rawarith is the raw part of luaO_arith (lobject.c 5.3.4).
-// Uses tointeger/tonumber (with string coercion), not the 5.4 *ns helpers.
+// luaO_rawarith is the raw part of luaO_arith (lobject.c 5.3.4) before TM.
+// C uses tointeger/tonumber macros (string coercion); not the 5.4 *ns helpers.
+// Go luaV_tonumber_ already includes the float fast path of C's tonumber().
 func luaO_rawarith(L *State, op int, p1, p2 *Value, res *Value) bool {
 	switch op {
 	case LUA_OPBAND, LUA_OPBOR, LUA_OPBXOR, LUA_OPSHL, LUA_OPSHR, LUA_OPBNOT:
+		/* operate only on integers */
 		var i1, i2 int64
 		if tointeger(L, p1, &i1) && tointeger(L, p2, &i2) {
 			setivalue(res, intarith(L, op, i1, i2))
 			return true
 		}
-		return false
+		return false /* go to TM */
 	case LUA_OPDIV, LUA_OPPOW:
+		/* operate only on floats */
 		var n1, n2 float64
 		if luaV_tonumber_(L, p1, &n1) && luaV_tonumber_(L, p2, &n2) {
 			setfltvalue(res, numarith(L, op, n1, n2))
 			return true
 		}
 		return false
-	default:
+	default: /* other operations */
 		var n1, n2 float64
 		if ttisinteger(p1) && ttisinteger(p2) {
 			setivalue(res, intarith(L, op, ivalue(p1), ivalue(p2)))
@@ -594,40 +599,60 @@ func luaO_arith(L *State, op int, p1, p2 *Value, res int) {
 	}
 }
 
-// luaO_utf8esc encodes x as UTF-8, returning the bytes.
+// luaO_utf8esc encodes x as UTF-8 into a UTF8BUFFSZ buffer (backwards),
+// returning the significant slice (lobject.c). C writes into buff[] and
+// returns n; Go returns the bytes so callers need no out-buffer.
 func luaO_utf8esc(x uint32) []byte {
-	if x < 0x80 {
-		return []byte{byte(x)}
-	}
-	var buf [8]byte
-	n := 1
-	mfb := uint32(0x3f)
-	for {
-		buf[8-n] = byte(0x80 | (x & 0x3f))
-		n++
-		x >>= 6
-		mfb >>= 1
-		if x <= mfb {
-			break
+	var buff [UTF8BUFFSZ]byte
+	n := 1 /* number of bytes put in buffer (backwards) */
+	/* lua_assert(x <= 0x10FFFF) */
+	if x < 0x80 { /* ascii? */
+		buff[UTF8BUFFSZ-1] = byte(x)
+	} else { /* need continuation bytes */
+		mfb := uint32(0x3f) /* maximum that fits in first byte */
+		for { /* add continuation bytes */
+			buff[UTF8BUFFSZ-n] = byte(0x80 | (x & 0x3f))
+			n++
+			x >>= 6 /* remove added bits */
+			mfb >>= 1 /* now there is one less bit available in first byte */
+			if !(x > mfb) { /* C: while (x > mfb) — done when x fits */
+				break
+			}
 		}
+		buff[UTF8BUFFSZ-n] = byte((^mfb << 1) | x) /* add first byte */
 	}
-	buf[8-n] = byte((^mfb << 1) | x)
-	return buf[8-n:]
+	return buff[UTF8BUFFSZ-n:]
 }
 
-// tostringbuff converts a number object to its string representation.
+// tostringbuff converts a number object to its string representation
+// (luaO_tostring body without the setsvalue).
 func tostringbuff(obj *Value) string {
 	if ttisinteger(obj) {
-		return strconv.FormatInt(ivalue(obj), 10)
+		return strconv.FormatInt(ivalue(obj), 10) /* lua_integer2str */
 	}
-	s := fmtFloat(fltvalue(obj))
-	if !strings.ContainsAny(s, ".eEnNaxi") { // looks like an integer?
-		/* PUC-Lua appends the locale's decimal point and a zero, not a
-		   hard-coded '.' -- under pt_BR this is "10,0". */
+	s := fmtFloat(fltvalue(obj)) /* lua_number2str ≈ "%.14g" */
+	/* !LUA_COMPAT_FLOATSTRING: if looks like an int, append locale point + '0'.
+	   C: buff[strspn(buff, "-0123456789")] == '\0' */
+	if strspnNumIntChars(s) == len(s) {
 		s += localeDecPoint + "0"
 		return s
 	}
 	return num2strLocale(s)
+}
+
+// strspnNumIntChars is strspn(s, "-0123456789") for luaO_tostring's
+// integral-float check (lobject.c).
+func strspnNumIntChars(s string) int {
+	i := 0
+	for i < len(s) {
+		c := s[i]
+		if c == '-' || (c >= '0' && c <= '9') {
+			i++
+			continue
+		}
+		break
+	}
+	return i
 }
 
 // fmtNaN is the word C's printf writes for a NaN.
@@ -988,9 +1013,13 @@ func luaO_str2num(s string, o *Value) bool {
 // ---------------------------------------------------------------------
 
 // pushfString is luaO_pushvfstring / luaO_pushfstring (lobject.c 5.3.4).
-// Formats: %s %c %d %I %f %p %U %%. SPEC: builds with strings.Builder
-// instead of pushstr pieces + luaV_concat. %c uses lisprint else "<\d>"
-// (H1 closed). %p is fixed "0x"+hex (C sprintf("%p") is platform).
+// Formats: %s %c %d %I %f %p %U %%.
+// FLAG: builds with strings.Builder instead of pushstr pieces + luaV_concat
+// (same final string; no intermediate stack values / concat TM).
+// %s cuts at NUL like C strlen. %d/%I/%f go through tostringbuff (= C
+// setivalue/setfltvalue + luaO_tostring / top2str), including locale '.'+'0'.
+// %c uses lisprint else "<\d>". %p is fixed "0x"+hex (C sprintf("%p") is
+// platform-dependent).
 func pushfString(L *State, format string, args ...any) *TString {
 	var b strings.Builder
 	i := 0
@@ -1015,14 +1044,15 @@ func pushfString(L *State, format string, args ...any) *TString {
 			break
 		}
 		switch format[i+1] {
-		case 's':
+		case 's': { /* zero-terminated string — C strlen */
 			a := next()
 			if a == nil {
 				b.WriteString("(null)")
 			} else {
-				b.WriteString(toStringAny(a))
+				b.WriteString(luaCStr(toStringAny(a)))
 			}
-		case 'c': /* an 'int' as a character (5.3.4: lisprint or '<\\d>') */
+		}
+		case 'c': { /* an 'int' as a character (5.3.4: lisprint or '<\\d>') */
 			a := next()
 			c := byte(toIntAny(a))
 			if lisprint(int(c)) {
@@ -1030,28 +1060,42 @@ func pushfString(L *State, format string, args ...any) *TString {
 			} else { /* non-printable character; print its code */
 				b.WriteString(fmt.Sprintf("<\\%d>", c))
 			}
-		case 'd':
+		}
+		case 'd': { /* an 'int' — C setivalue + top2str */
 			a := next()
-			b.WriteString(strconv.FormatInt(toIntAny(a), 10))
-		case 'I':
+			var tmp Value
+			setivalue(&tmp, toIntAny(a))
+			b.WriteString(tostringbuff(&tmp))
+		}
+		case 'I': { /* a 'lua_Integer' — C setivalue + top2str */
 			a := next()
-			b.WriteString(strconv.FormatInt(toIntAny(a), 10))
-		case 'f':
+			var tmp Value
+			setivalue(&tmp, toIntAny(a))
+			b.WriteString(tostringbuff(&tmp))
+		}
+		case 'f': { /* a 'lua_Number' — C setfltvalue + top2str */
 			a := next()
+			var f float64
 			switch v := a.(type) {
 			case float64:
-				b.WriteString(fmtFloat(v))
+				f = v
 			case float32:
-				b.WriteString(fmtFloat(float64(v)))
+				f = float64(v)
 			default:
-				b.WriteString(fmtFloat(float64(toIntAny(a))))
+				f = float64(toIntAny(a))
 			}
-		case 'p':
+			var tmp Value
+			setfltvalue(&tmp, f)
+			b.WriteString(tostringbuff(&tmp))
+		}
+		case 'p': { /* a pointer */
 			a := next()
 			b.WriteString("0x" + strconv.FormatUint(uint64(toPtrAny(a)), 16))
-		case 'U':
+		}
+		case 'U': { /* an 'int' as a UTF-8 sequence */
 			a := next()
 			b.Write(luaO_utf8esc(uint32(toIntAny(a))))
+		}
 		case '%':
 			b.WriteByte('%')
 		default:

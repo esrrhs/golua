@@ -127,8 +127,9 @@ func mathFmod(L *State) int {
 }
 
 /*
-** This function does not use 'modf', avoiding problems with 'float64'
-** (the equivalent of the C remark about 'double*').
+** next function does not use 'modf', avoiding problems with 'double*'
+** (which is not compatible with 'float*') when lua_Number is not
+** 'double'.
  */
 func mathModf(L *State) int {
 	if L.IsInteger(1) {
@@ -139,9 +140,9 @@ func mathModf(L *State) int {
 		/* integer part (rounds toward zero) */
 		var ip float64
 		if n < 0 {
-			ip = math.Ceil(n)
+			ip = mathCeil(n)
 		} else {
-			ip = math.Floor(n)
+			ip = mathFloor(n)
 		}
 		mathPushNumInt(L, ip)
 		/* fractional part (test needed for inf/-inf) */
@@ -175,6 +176,7 @@ func mathLog(L *State) int {
 		res = mathLogOf(x)
 	} else {
 		base := L.CheckNumber(2)
+		/* C: #if !defined(LUA_USE_C89) — default PUC is !C89, so log2 path is on */
 		if base == 2.0 {
 			res = mathLog2Of(x)
 		} else if base == 10.0 {
@@ -214,7 +216,7 @@ func mathMin(L *State) int {
 	imin := 1       /* index of current minimum value */
 	L.ArgCheck(n >= 1, 1, "value expected")
 	for i := 2; i <= n; i++ {
-		if L.LessThan(i, imin) {
+		if L.Compare(i, imin, LUA_OPLT) {
 			imin = i
 		}
 	}
@@ -227,12 +229,49 @@ func mathMax(L *State) int {
 	imax := 1       /* index of current maximum value */
 	L.ArgCheck(n >= 1, 1, "value expected")
 	for i := 2; i <= n; i++ {
-		if L.LessThan(imax, i) {
+		if L.Compare(imax, i, LUA_OPLT) {
 			imax = i
 		}
 	}
 	L.PushValue(imax)
 	return 1
+}
+
+/*
+** This function uses 'double' (instead of 'lua_Number') to ensure that
+** all bits from 'l_rand' can be represented, and that 'RANDMAX + 1.0'
+** will keep full precision (ensuring that 'r' is always less than 1.0.)
+ */
+func mathRandom(L *State) int {
+	var low, up int64
+	r := float64(lRand()) * (1.0 / (float64(lRandMax) + 1.0))
+	switch L.GetTop() { /* check number of arguments */
+	case 0: /* no arguments */
+		L.PushNumber(r) /* Number between 0 and 1 */
+		return 1
+	case 1: /* only upper limit */
+		low = 1
+		up = L.CheckInteger(1)
+	case 2: /* lower and upper limits */
+		low = L.CheckInteger(1)
+		up = L.CheckInteger(2)
+	default:
+		return L.Error2("wrong number of arguments")
+	}
+	/* random integer in the interval [low, up] */
+	L.ArgCheck(low <= up, 1, "interval is empty")
+	L.ArgCheck(low >= 0 || up <= LUA_MAXINTEGER+low, 1, "interval too large")
+	r *= float64(up-low) + 1.0
+	L.PushInteger(int64(r) + low)
+	return 1
+}
+
+func mathRandomSeed(L *State) int {
+	/* C: l_srand((unsigned int)(lua_Integer)luaL_checknumber(L, 1)); */
+	seed := L.CheckNumber(1)
+	lSrand(uint(int64(seed)))
+	_ = lRand() /* discard first value to avoid undesirable correlations */
+	return 0
 }
 
 func mathType(L *State) int {
@@ -249,48 +288,11 @@ func mathType(L *State) int {
 	return 1
 }
 
-// ---------------------------------------------------------------------
-// math.random / math.randomseed (5.3.4 l_rand/l_srand)
-// ---------------------------------------------------------------------
-//
-// 5.3.4 math.random / math.randomseed (lmathlib.c).
-// Uses l_rand/l_srand (POSIX random/srandom when cgo is on).
-// (No mathFigs / 5.4 xoshiro — removed as 5.4 leftover.)
-
-func mathRandom(L *State) int {
-	low, up := int64(0), int64(0)
-	r := float64(lRand()) * (1.0 / (float64(lRandMax) + 1.0))
-	switch L.GetTop() {
-	case 0:
-		L.PushNumber(r)
-		return 1
-	case 1:
-		low = 1
-		up = L.CheckInteger(1)
-	case 2:
-		low = L.CheckInteger(1)
-		up = L.CheckInteger(2)
-	default:
-		return L.Error2("wrong number of arguments")
-	}
-	L.ArgCheck(low <= up, 1, "interval is empty")
-	L.ArgCheck(low >= 0 || up <= LUA_MAXINTEGER+low, 1, "interval too large")
-	r *= float64(up-low) + 1.0
-	L.PushInteger(int64(r) + low)
-	return 1
-}
-
-func mathRandomSeed(L *State) int {
-	/* 5.3: one number argument; discard first value after srand. */
-	seed := L.CheckNumber(1)
-	lSrand(uint(int64(seed)))
-	_ = lRand()
-	return 0
-}
-
-// ---------------------------------------------------------------------
-// deprecated functions (for compatibility only)
-// ---------------------------------------------------------------------
+/*
+** {==================================================================
+** Deprecated functions (for compatibility only)
+** ===================================================================
+*/
 //
 // luaconf.h defines 'LUA_COMPAT_MATHLIB' and the reference build does
 // not turn it off, so 'math.sinh', 'math.cosh', 'math.tanh', 'math.pow',
@@ -301,12 +303,6 @@ func mathRandomSeed(L *State) int {
 // mathLogScaled / mathLog2Scaled / mathLog10Scaled and the !haveLibm
 // branches of mathExp / mathSinh / mathCosh. Not in C lmathlib.c.
 // When haveLibm (cgo), those paths are never taken.
-
-const (
-	// unused by production paths when haveLibm; kept for !haveLibm salvage docs
-	mathMaxLog  = 7.09782712893383973096e+02 // log(MaxFloat64)
-	mathMaxLog2 = 7.10475860073943863429e+02 // log(2*MaxFloat64)
-)
 
 // mathLn2Hi and mathLn2Lo are ln 2 split in two, so that 'n * ln 2'
 // keeps the low bits that a single float64 would drop.
@@ -520,6 +516,8 @@ func mathLog10(L *State) int {
 	return 1
 }
 
+/* }================================================================== */
+
 // ---------------------------------------------------------------------
 // library registration
 // ---------------------------------------------------------------------
@@ -542,7 +540,7 @@ var mathLib = []Reg{
 	{Name: "min", Func: mathMin},
 	{Name: "modf", Func: mathModf},
 	{Name: "rad", Func: mathRad},
-	{Name: "random", Func: mathRandom},         /* in C mathlib[]; not via SetFuncs */
+	{Name: "random", Func: mathRandom},
 	{Name: "randomseed", Func: mathRandomSeed},
 	{Name: "sin", Func: mathSin},
 	{Name: "sqrt", Func: mathSqrt},
@@ -557,6 +555,11 @@ var mathLib = []Reg{
 	{Name: "frexp", Func: mathFrexp},
 	{Name: "ldexp", Func: mathLdexp},
 	{Name: "log10", Func: mathLog10},
+	/* placeholders — overwritten in OpenMath (C mathlib[] NULL funcs) */
+	{Name: "pi", Func: nil},
+	{Name: "huge", Func: nil},
+	{Name: "maxinteger", Func: nil},
+	{Name: "mininteger", Func: nil},
 }
 
 // OpenMath opens the math library (luaopen_math).

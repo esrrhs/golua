@@ -4,6 +4,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 	"weak"
 )
 
@@ -191,10 +192,15 @@ type weakSlot struct {
 // marked (traverseephemeron + convergeephemerons). Leaving nd.val strong
 // across runtime.GC lets a value→key cycle keep the key alive, so the entry
 // never clears. During the detach window we therefore also weaken collectable
-// values for weak-key-only tables. Residual vs full convergeephemerons: a
-// strong value that is only reachable through an alive weak key may be
-// cleared here (Go has no ephemeron map); full parity needs a redesign
-// beyond this bridge — documented INTENTIONAL under Go GC in NOTES.
+// values for weak-key-only tables.
+//
+// Residuals (NOT 完全对齐 — do not rubber-stamp; see NOTES FLAG):
+//  - No convergeephemerons fixed point: a strong value reachable only via an
+//    alive weak key may be cleared in the detach window (Go has no ephemeron map).
+//  - No atomic-phase iscleared ordering: C clearvalues → separatetobefnz →
+//    markbeingfnz → clearkeys keeps objects about to run __gc as weak keys
+//    for that cycle; Go weak.Pointer nils as soon as the Go finalizer is
+//    queued, so a finalizable weak key can vanish in the same cycle as __gc.
 func (L *State) gcSweepWeak() {
 	if gcWeakCount.Load() == 0 {
 		return
@@ -310,23 +316,31 @@ func (L *State) gcSweepWeak() {
 			continue
 		}
 		if s.isKey {
-			/* clearkeys: nil value + removeentry (dead key) */
+			/* clearkeys: nil value + removeentry → setdeadvalue.
+			   FLAG Go-GC: C keeps gkey's gc pointer; after runtime.GC the
+			   object is reclaimed, so storing that address as unsafe.Pointer
+			   is illegal ("marked free object"). kp=nil; findindex dead-key
+			   arm stays inert (TestDeadKeyDoesNotBreakTraversal skipped). */
 			setnilvalue(&s.n.val)
-			setdeadkey(s.n)
+			setdeadkey(s.n, nil)
 			continue
 		}
 		/* clearvalues / ephemeron value death: nil the value.
-		   removeentry only deadens unmarked keys — a restored key stays. */
+		   removeentry only deadens unmarked (still-nil) keys — a restored
+		   or already-dead key stays as-is (C: valiswhite on gkey). */
 		setnilvalue(&s.n.val)
-		var k Value
-		getnodekey(&k, s.n)
-		if ttisnil(&k) {
-			setdeadkey(s.n)
+		if s.n.keytt == LUA_VNIL {
+			setdeadkey(s.n, nil)
 		}
 	}
 }
 
-// setdeadkey marks a node's key as dead: 'removeentry' leaves one behind
-// so that 'next' can step over the hole while the collision chain stays
-// intact.
-func setdeadkey(n *node) { n.keytt = LUA_TDEADKEY; n.kp = nil; n.ki = 0 }
+// setdeadkey is C's setdeadvalue on gkey after removeentry: mark the key
+// dead. C keeps the collectable pointer for findindex deadvalue==gcvalue;
+// callers may pass it when the object is still live. Weak-sweep death
+// must pass nil (Go GC FLAG — see gcSweepWeak).
+func setdeadkey(n *node, gc unsafe.Pointer) {
+	n.keytt = LUA_TDEADKEY
+	n.kp = gc
+	n.ki = 0
+}

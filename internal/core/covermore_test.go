@@ -202,13 +202,13 @@ func TestLuacStdinAndCannot(t *testing.T) {
 
 	var buf bytes.Buffer
 	c = &luac{progname: "luac", output: "out.luac", err: &buf}
-	c.cannot("write")
+	c.cannot("write", "I/O error")
 	if buf.String() != "luac: cannot write out.luac: I/O error\n" {
 		t.Fatalf("cannot: %q", buf.String())
 	}
 	buf.Reset()
 	c.output = ""
-	c.cannot("open")
+	c.cannot("open", "I/O error")
 	if buf.String() != "luac: cannot open (null): I/O error\n" {
 		t.Fatalf("cannot null: %q", buf.String())
 	}
@@ -358,7 +358,7 @@ func TestNamesUpvaluesAndWeakClosures(t *testing.T) {
 	L := NewState()
 	defer L.Close()
 	/* getLocalNameAt / luaF_unlinkupval were 5.4 helpers; use luaF_getlocalname. */
-	p := &Proto{locvars: []LocVar{{varname: luaS_new(L, "x"), startpc: 0, endpc: 10}}}
+	p := &Proto{locvars: []LocVar{{varname: luaS_new(L, "x"), startpc: 0, endpc: 10}}, sizelocvars: 1}
 	if luaF_getlocalname(p, 1, 1) != "x" {
 		t.Fatalf("local %q", luaF_getlocalname(p, 1, 1))
 	}

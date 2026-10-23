@@ -21,16 +21,12 @@ const (
 )
 
 // ---------------------------------------------------------------------
-// lTolstring (lauxlib.c luaL_tolstring)
+// lTolstring — placement helper (C: lauxlib.c luaL_tolstring)
 // ---------------------------------------------------------------------
 
-// lTolstring converts the value at 'idx' to a string using the
-// '__tostring' metamethod (or '__name'), pushes the resulting string on
-// the stack and returns it (lauxlib.c luaL_tolstring). The exported
-// name luaL_tolstring belongs to the C API (see cdlopen.go).
-//
-// The implementation lives in lstrlib.go (strToLString), which already
-// follows the C code step by step.
+// lTolstring is luaL_tolstring. Not part of lbaselib.c; kept here as the
+// shared Go name used by tests and extensions. baseToString calls
+// State.ToLString. Body: strToLString in lstrlib.go.
 func lTolstring(L *State, idx int) string {
 	return strToLString(L, idx)
 }
@@ -39,6 +35,20 @@ func lTolstring(L *State, idx int) string {
 // print
 // ---------------------------------------------------------------------
 
+// baseWriteString is lua_writestring (lauxlib.h): fwrite to stdout.
+// 'l' is the byte length (C size_t), so embedded NULs are written.
+func baseWriteString(s string, l int) {
+	if l > 0 {
+		os.Stdout.WriteString(s[:l]) /* fwrite(s, 1, l, stdout) */
+	}
+}
+
+// baseWriteLine is lua_writeline: newline + fflush(stdout).
+func baseWriteLine() {
+	baseWriteString("\n", 1)
+	os.Stdout.Sync() /* fflush(stdout) */
+}
+
 func basePrint(L *State) int {
 	n := L.GetTop() /* number of arguments */
 	L.GetGlobal("tostring")
@@ -46,18 +56,18 @@ func basePrint(L *State) int {
 		L.PushValue(-1) /* function to be called */
 		L.PushValue(i)  /* value to print */
 		L.Call(1, 1)
-		s, ok := L.ToString(-1) /* get result */
+		s, ok := L.ToString(-1) /* get result (lua_tolstring) */
 		if !ok {
 			return L.Error2("'tostring' must return a string to 'print'")
 		}
+		l := len(s)
 		if i > 1 {
-			os.Stdout.WriteString("\t")
+			baseWriteString("\t", 1)
 		}
-		os.Stdout.WriteString(s)
+		baseWriteString(s, l)
 		L.Pop(1) /* pop result */
 	}
-	os.Stdout.WriteString("\n")
-	os.Stdout.Sync() /* lua_writeline: fflush(stdout) */
+	baseWriteLine()
 	return 0
 }
 
@@ -119,7 +129,8 @@ func baseToNumber(L *State) int {
 			L.SetTop(1) /* yes; return it */
 			return 1
 		} else {
-			if s, ok := L.ToString(1); ok && strStringToNumber(L, s) {
+			s, ok := L.ToString(1) /* lua_tolstring */
+			if ok && L.StringToNumber(s) == len(s)+1 {
 				return 1 /* successful conversion to number */
 			}
 			/* else not a number */
@@ -247,11 +258,14 @@ func gcCount() float64 {
 
 // baseCollectGarbage is 'collectgarbage'.
 //
-// Intentional Go-GC simplification: only "collect" and "count" are
-// implemented.  Every other known PUC option name is accepted (so
-// CheckOption does not raise 'invalid option') but is a no-op that
+// Intentional Go-GC simplification (FLAG): only "collect" and "count"
+// do real work.  Every other known PUC 5.3.4 option name is accepted
+// (so CheckOption does not raise 'invalid option') but is a no-op that
 // pushes integer 0 — no gcCycle on "step", no gcStopped toggle on
-// stop/restart, no pause/stepmul mutation.  Unknown names still error.
+// stop/restart, no pause/stepmul mutation, and no OptInteger on arg 2
+// for those ignored names (C always luaL_optinteger's arg 2).  Unknown
+// names still error.  step/isrunning push integer 0 here, not boolean
+// as C's switch does after lua_gc.
 //
 // Note: the C API lua_gc (cdl_gc_cb) may still drive a real cycle and
 // mutate knobs; Lua collectgarbage and C lua_gc can therefore diverge.
@@ -259,12 +273,10 @@ func gcCount() float64 {
 // "collect" sweeps weak tables and runs '__gc' of unreachable objects,
 // then pushes 0.  "count" is Kbytes of the whole Go heap (not per-state).
 func baseCollectGarbage(L *State) int {
-	/* From inside a '__gc' PUC-Lua answers nil for every option, and not
-	   0: it has stopped the collector for the duration of the finalizer,
-	   and 'lua_gc' turns that into -1, which lbaselib.c's 'checkvalres'
-	   makes a fail.  So does this, for the same reason -- a finalizer is
-	   the one place where "the collector cannot be asked" is something a
-	   program can see. */
+	/* 5.3.4 lbaselib.c has no checkvalres / finalizer gate (that is 5.4).
+	   Go still answers nil inside '__gc' (gcInFinalizer): the finalizer
+	   bridge stops the collector for the duration, and a program can see
+	   "the collector cannot be asked" the same way 5.4 surfaces it. */
 	if L.g.gcInFinalizer {
 		L.PushNil()
 		return 1
@@ -295,16 +307,6 @@ func baseType(L *State) int {
 	return 1
 }
 
-func baseNext(L *State) int {
-	L.CheckType(1, LUA_TTABLE)
-	L.SetTop(2) /* create a 2nd argument if there isn't one */
-	if L.Next(1) {
-		return 2
-	}
-	L.PushNil()
-	return 1
-}
-
 /* basePairsMeta is pairsmeta (lbaselib.c): metamethod or default iterator. */
 func basePairsMeta(L *State, method string, iszero bool, iter func(*State) int) int {
 	L.CheckAny(1)
@@ -324,14 +326,23 @@ func basePairsMeta(L *State, method string, iszero bool, iter func(*State) int) 
 	return 3
 }
 
+func baseNext(L *State) int {
+	L.CheckType(1, LUA_TTABLE)
+	L.SetTop(2) /* create a 2nd argument if there isn't one */
+	if L.Next(1) {
+		return 2
+	}
+	L.PushNil()
+	return 1
+}
+
 func basePairs(L *State) int {
 	return basePairsMeta(L, "__pairs", false, baseNext)
 }
 
 // baseIPairsAux is the traversal function for 'ipairs' (ipairsaux).
 func baseIPairsAux(L *State) int {
-	i := L.CheckInteger(2)
-	i++ /* next index */
+	i := L.CheckInteger(2) + 1
 	L.PushInteger(i)
 	if L.GetI(1, i) == LUA_TNIL {
 		return 1
@@ -480,6 +491,13 @@ func baseLoad(L *State) int {
 	return baseLoadAux(L, status, env)
 }
 
+// baseDoFileCont is dofilecont (lbaselib.c): return all results but the
+// file name left at stack index 1.
+func baseDoFileCont(L *State, d1 int, d2 int) int {
+	_, _ = d1, d2 /* only to match 'lua_Kfunction' prototype */
+	return L.GetTop() - 1
+}
+
 func baseDoFile(L *State) int {
 	stdin := L.IsNoneOrNil(1) /* see baseLoadFile */
 	fname := luaCStr(L.OptString(1, ""))
@@ -502,13 +520,15 @@ func baseDoFile(L *State) int {
 	   A synchronous yield unwinds this frame and the resume finishes
 	   it with the same result count. */
 	if L.co != nil && L.co.sync {
-		L.ci.goCont = func(L *State, status int) int { return L.GetTop() - 1 }
+		L.ci.goCont = func(L *State, status int) int {
+			return baseDoFileCont(L, status, 0)
+		}
 	}
 	L.callK(0, LUA_MULTRET, true)
 	if L.ci != nil {
 		L.ci.goCont = nil
 	}
-	return L.GetTop() - 1 /* return all results */
+	return baseDoFileCont(L, 0, 0)
 }
 
 // ---------------------------------------------------------------------
@@ -530,8 +550,8 @@ func baseAssert(L *State) int {
 func baseSelect(L *State) int {
 	n := L.GetTop()
 	if L.Type(1) == LUA_TSTRING {
-		s, _ := L.ToString(1)
-		if len(s) > 0 && s[0] == '#' {
+		s, _ := L.ToString(1) /* lua_tostring */
+		if len(s) > 0 && s[0] == '#' { /* *lua_tostring(L, 1) == '#' */
 			L.PushInteger(int64(n - 1))
 			return 1
 		}
@@ -542,7 +562,7 @@ func baseSelect(L *State) int {
 	} else if i > int64(n) {
 		i = int64(n)
 	}
-	L.ArgCheck(i >= 1, 1, "index out of range")
+	L.ArgCheck(1 <= i, 1, "index out of range")
 	return n - int(i)
 }
 
@@ -615,7 +635,7 @@ func baseXPCall(L *State) int {
 
 func baseToString(L *State) int {
 	L.CheckAny(1)
-	lTolstring(L, 1)
+	L.ToLString(1) /* luaL_tolstring */
 	return 1
 }
 

@@ -10,7 +10,7 @@
 //     luaT_callTMres (2-arg + result slot, nresults=1).
 //   - migrateNested before TM calls (goroutine-coroutine port).
 //   - luaC_fix on tmnames omitted (Go GC).
-//   - notm: nil pointer + nil TValue (Go pointer model).
+//   - notm: nil pointer + nil TValue (Go pointer model; used at call sites).
 //   - luaT_tryconcatTM extracted (C inlines trybinTM TM_CONCAT in lvm.c).
 //   - cvt2str (from lvm.h) and luaO_nilobject hosted here for call-site convenience.
 package core
@@ -47,11 +47,11 @@ const (
 )
 
 // luaO_nilobject is the singleton nil TValue (lobject.c luaO_nilobject_).
-// Hosted here because gettmbyobj returns it; also used by older call sites.
+// Hosted here because gettmbyobj returns it; also used by table/API call sites.
 var luaO_nilobject = Value{tt: LUA_TNIL}
 
-// nilObject keeps older call sites compiling.
-var nilObject = luaO_nilobject
+// udatatypename matches C's static udatatypename[] shared by both userdata slots.
+const udatatypename = "userdata"
 
 // luaT_eventname is C's static luaT_eventname[] inside luaT_init (ORDER TM).
 var luaT_eventname = [TM_N]string{
@@ -66,20 +66,24 @@ var luaT_eventname = [TM_N]string{
 
 // luaT_typenames is C luaT_typenames_ (ltm.c): indices are ttnov+1;
 // last slot "proto" is for tests only.
-// C aliases both userdata slots to one static udatatypename[]; Go uses two
-// equal "userdata" literals (content-identical).
+// C aliases both userdata slots to one static udatatypename[]; Go uses the
+// same const string for both (content-identical).
 var luaT_typenames = [LUA_TOTALTAGS]string{
 	"no value",
-	"nil", "boolean", "userdata", "number",
-	"string", "table", "function", "userdata", "thread",
+	"nil", "boolean", udatatypename, "number",
+	"string", "table", "function", udatatypename, "thread",
 	"proto",
 }
+
+// ttypename is C ltm.h ttypename(x): luaT_typenames_[(x)+1].
+func ttypename(t int) string { return luaT_typenames[t+1] }
 
 // luaT_init initialises the tag-method names (ltm.c luaT_init).
 // C also luaC_fix's each name; omitted — Go GC (IGNORE).
 func luaT_init(L *State) {
 	for i := 0; i < int(TM_N); i++ {
 		L.g.tmNames[i] = luaS_new(L, luaT_eventname[i])
+		/* C: luaC_fix(L, obj2gco(G(L)->tmname[i])); — Go GC */
 	}
 }
 
@@ -89,7 +93,8 @@ func luaT_init(L *State) {
 func cvt2str(o *Value) bool { return ttisnumber(o) }
 
 // notm reports whether a metamethod is absent.
-// FLAG: Go pointer model — nil pointer OR nil TValue (C only ttisnil).
+// FLAG: Go pointer model — nil pointer OR nil TValue (C 5.3.4 only ttisnil
+// at gettm; gettm returns NULL which callers treat as absent).
 func notm(tm *Value) bool { return tm == nil || ttisnil(tm) }
 
 // fasttm is gfasttm/fasttm (ltm.h): optimized for absence of tag methods.
@@ -107,7 +112,7 @@ func fasttm(L *State, et *Table, e TMS) *Value {
 // C has lua_assert(event <= TM_EQ); omitted (debug-only).
 func luaT_gettm(events *Table, event TMS, ename *TString) *Value {
 	tm := luaH_getshortstr(events, ename)
-	if notm(tm) { /* no tag method? */
+	if ttisnil(tm) { /* no tag method? — C 5.3.4 uses ttisnil, not notm */
 		events.flags |= byte(1 << uint(event)) /* cache this fact */
 		return nil
 	}
@@ -134,6 +139,7 @@ func luaT_gettmbyobj(L *State, o *Value, event TMS) *Value {
 
 // luaT_objtypename returns the type name of an object, honouring __name
 // on table/fulluserdata metatables (ltm.c).
+// C: if ((ttistable && mt) || (ttisfulluserdata && mt)) { __name? }; else ttypename.
 func luaT_objtypename(L *State, o *Value) string {
 	var mt *Table
 	if ttistable(o) {
@@ -143,18 +149,12 @@ func luaT_objtypename(L *State, o *Value) string {
 	}
 	if mt != nil {
 		name := luaH_getshortstr(mt, luaS_new(L, "__name"))
-		if ttisstring(name) {
+		if ttisstring(name) { /* is '__name' a string? */
 			/* C returns getstr(...) as const char* for '%s' (stops at NUL). */
 			return luaCStr(tsvalue(name).val)
 		}
 	}
-	/* C: return ttypename(ttnov(o)). Light/full userdata both map to
-	   "userdata" via typenames; explicit cases keep that explicit. */
-	switch ttype(o) {
-	case LUA_TLIGHTUSERDATA, LUA_TUSERDATA:
-		return "userdata"
-	}
-	return luaT_typenames[ttype(o)+1]
+	return ttypename(ttype(o)) /* else use standard type name */
 }
 
 // luaT_callTM calls a metamethod with three arguments and no result
@@ -167,10 +167,10 @@ func luaT_callTM(L *State, f, p1, p2, p3 *Value) {
 	L.migrateNested() // FLAG: goroutine port
 	funcIdx := L.top
 	L.checkStack(4) // FLAG: vs C EXTRA_STACK assume
-	L.stack[funcIdx] = *f
-	L.stack[funcIdx+1] = *p1
-	L.stack[funcIdx+2] = *p2
-	L.stack[funcIdx+3] = *p3
+	L.stack[funcIdx] = *f     /* push function (assume EXTRA_STACK) */
+	L.stack[funcIdx+1] = *p1  /* 1st argument */
+	L.stack[funcIdx+2] = *p2  /* 2nd argument */
+	L.stack[funcIdx+3] = *p3  /* 3rd argument (hasres=0) */
 	L.top = funcIdx + 4
 	/* metamethod may yield only when called from Lua code */
 	if isLua(L.ci) {
@@ -186,31 +186,32 @@ func luaT_callTM(L *State, f, p1, p2, p3 *Value) {
 // FLAG: migrateNested — Go-only goroutine-coroutine port.
 // FLAG: checkStack(3) — grow instead of EXTRA_STACK assume.
 // FLAG: split half of C luaT_callTM(+hasres); res is an index (index stack).
+// Index stack makes savestack/restorestack unnecessary (indices stable).
 func luaT_callTMres(L *State, f, p1, p2 *Value, res int) {
 	L.migrateNested() // FLAG: goroutine port
 	funcIdx := L.top
 	L.checkStack(3) // FLAG: vs C EXTRA_STACK assume
-	L.stack[funcIdx] = *f
-	L.stack[funcIdx+1] = *p1
-	L.stack[funcIdx+2] = *p2
+	L.stack[funcIdx] = *f    /* push function (assume EXTRA_STACK) */
+	L.stack[funcIdx+1] = *p1 /* 1st argument */
+	L.stack[funcIdx+2] = *p2 /* 2nd argument */
 	L.top = funcIdx + 3
 	if isLua(L.ci) {
 		luaD_call(L, funcIdx, 1)
 	} else {
 		luaD_callnoyield(L, funcIdx, 1)
 	}
+	/* if has result, move it to its place */
 	L.stack[res] = L.stack[L.top-1]
 	L.top--
 }
 
-// callbinTM is luaT_callbinTM (ltm.c): try p1 then p2; call with result.
-// Unexported naming adaptation; semantics match C.
-func callbinTM(L *State, p1, p2 *Value, res int, event TMS) bool {
+// luaT_callbinTM tries p1 then p2; calls TM with one result (ltm.c).
+func luaT_callbinTM(L *State, p1, p2 *Value, res int, event TMS) bool {
 	tm := luaT_gettmbyobj(L, p1, event) /* try first operand */
-	if notm(tm) {
+	if ttisnil(tm) {
 		tm = luaT_gettmbyobj(L, p2, event) /* try second operand */
 	}
-	if notm(tm) {
+	if ttisnil(tm) {
 		return false
 	}
 	luaT_callTMres(L, tm, p1, p2, res)
@@ -221,12 +222,13 @@ func callbinTM(L *State, p1, p2 *Value, res int, event TMS) bool {
 // (ltm.c). C fallthrough after noreturn error helpers is dead — Go switch arms
 // each error and do not fall through (equivalent).
 func luaT_trybinTM(L *State, p1, p2 *Value, res int, event TMS) {
-	if !callbinTM(L, p1, p2, res, event) {
+	if !luaT_callbinTM(L, p1, p2, res, event) {
 		switch event {
 		case TM_CONCAT:
 			luaG_concaterror(L, p1, p2)
 		case TM_BAND, TM_BOR, TM_BXOR, TM_SHL, TM_SHR, TM_BNOT:
-			/* 5.3: tonumber (float+int+string coerce), not ttisnumber */
+			/* C: tonumber (lvm.h macro = float fast-path | luaV_tonumber_).
+			   Go luaV_tonumber_ already accepts float+int+string — ≡. */
 			var dummy float64
 			if luaV_tonumber_(L, p1, &dummy) && luaV_tonumber_(L, p2, &dummy) {
 				luaG_tointerror(L, p1, p2)
@@ -241,10 +243,10 @@ func luaT_trybinTM(L *State, p1, p2 *Value, res int, event TMS) {
 
 // luaT_tryconcatTM is the concat error path used by luaV_concat.
 // FLAG: packaging — C inlines luaT_trybinTM(..., TM_CONCAT) in lvm.c;
-// ≡ callbinTM(..., TM_CONCAT) else luaG_concaterror.
+// ≡ luaT_callbinTM(..., TM_CONCAT) else luaG_concaterror.
 func luaT_tryconcatTM(L *State) {
 	top := L.top
-	if !callbinTM(L, &L.stack[top-2], &L.stack[top-1], top-2, TM_CONCAT) {
+	if !luaT_callbinTM(L, &L.stack[top-2], &L.stack[top-1], top-2, TM_CONCAT) {
 		luaG_concaterror(L, &L.stack[top-2], &L.stack[top-1])
 	}
 }
@@ -253,10 +255,11 @@ func luaT_tryconcatTM(L *State) {
 // Returns -1 if no metamethod, else 0/1 for the boolean result
 // (!l_isfalse → 0/1). LT_LE fallback lives in luaV_lessequal (lvm), not here.
 func luaT_callorderTM(L *State, p1, p2 *Value, event TMS) int {
-	if !callbinTM(L, p1, p2, L.top, event) {
+	if !luaT_callbinTM(L, p1, p2, L.top, event) {
 		return -1 /* no metamethod */
 	}
-	if isFalse(&L.stack[L.top]) {
+	/* C: return !l_isfalse(L->top); result left at free slot */
+	if l_isfalse(&L.stack[L.top]) {
 		return 0
 	}
 	return 1

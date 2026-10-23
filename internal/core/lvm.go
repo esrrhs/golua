@@ -10,7 +10,7 @@
 // Intentional omissions / adaptations (see NOTES.md):
 //   - GC barriers / checkGC / gcAfterAlloc / migrateNested (Go GC)
 //   - luaV_finishOp absent (yield does not longjmp out of the interpreter)
-//   - vmFastGeti: FLAG Go/5.4-shaped helper for lapi; unused by VM loop
+//   - vmFastGeti purged (was 5.4-shaped; lapi uses luaH_getint directly)
 package core
 
 import (
@@ -29,56 +29,38 @@ func upvalValue(uv *UpVal) *Value {
 	return &uv.v
 }
 
-/*
-luaV_modcore and luaV_idivcore are the arithmetic of Lua's '%' and '//'
-
-	for a divisor that is neither 0 nor -1. They are separate from
-	luaV_mod and luaV_idiv for one reason: those two can raise, and the
-	cost of the call that raises is what keeps them over the compiler's
-	inline budget -- and '%' and '//' are the slowest arithmetic
-	operations, so it is exactly them that the interpreter loop wants
-	inlined. The loop therefore tests the divisor itself and only falls
-	back to luaV_mod / luaV_idiv for the two divisors that need care.
-*/
-func luaV_modcore(m, n int64) int64 {
-	r := m % n
-	if r != 0 && (r^n) < 0 { /* 'm/n' would be non-integer negative? */
-		r += n
-	}
-	return r
-}
-
-func luaV_idivcore(m, n int64) int64 {
-	q := m / n
-	if (m^n) < 0 && m%n != 0 { /* 'm/n' would be negative non-integer? */
-		q--
-	}
-	return q
-}
-
-func luaV_idiv(L *State, m, n int64) int64 {
+// luaV_div is integer floor division 'm // n' (lvm.c 5.3.4).
+// C division truncates toward zero; floor(q)==trunc(q) when q>=0 or
+// integral, otherwise floor(q)==trunc(q)-1.
+func luaV_div(L *State, m, n int64) int64 {
 	if uint64(n)+1 <= 1 { /* special cases: -1 or 0 */
 		if n == 0 {
 			luaG_runerror(L, "attempt to divide by zero")
 			return 0
 		}
-		return -m /* n == -1; avoid overflow with mininteger // -1 */
+		return -m /* n == -1; avoid overflow with 0x8000... // -1 */
 	}
-	return luaV_idivcore(m, n)
+	q := m / n /* perform C division */
+	if (m^n) < 0 && m%n != 0 { /* 'm/n' would be negative non-integer? */
+		q-- /* correct result for different rounding */
+	}
+	return q
 }
 
-// luaV_div is the 5.3.4 name for integer division (lvm.c).
-func luaV_div(L *State, m, n int64) int64 { return luaV_idiv(L, m, n) }
-
+// luaV_mod is integer modulus 'm % n' (lvm.c 5.3.4).
 func luaV_mod(L *State, m, n int64) int64 {
 	if uint64(n)+1 <= 1 { /* special cases: -1 or 0 */
 		if n == 0 {
 			luaG_runerror(L, "attempt to perform 'n%%0'")
 			return 0
 		}
-		return 0 /* m % -1 == 0; avoid overflow */
+		return 0 /* m % -1 == 0; avoid overflow with 0x8000... % -1 */
 	}
-	return luaV_modcore(m, n)
+	r := m % n
+	if r != 0 && (m^n) < 0 { /* 'm/n' would be non-integer negative? */
+		r += n /* correct result for different rounding */
+	}
+	return r
 }
 
 // luaV_modf is the float modulus (lvm.c). Unlike the integer version it
@@ -152,7 +134,7 @@ func luaV_concat(L *State, total int) {
 // isEmptyStr is C isemptystr: short empty string only (lvm.c).
 // Long empty strings do not short-circuit concat the same way in PUC.
 func isEmptyStr(v *Value) bool {
-	return ttypetag(v) == LUA_VSHRSTR && len(tsvalue(v).val) == 0
+	return ttisshrstring(v) && len(tsvalue(v).val) == 0
 }
 
 // tostringInPlace converts a number to a string, in place.
@@ -233,40 +215,15 @@ func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 	luaG_runerror(L, "'__newindex' chain too long; possible loop")
 }
 
-// vmFastGet does a raw table access, returning the slot (nil when 't' is
-// not a table).
+// vmFastGet is luaV_fastget(L,t,k,slot,luaH_get): raw table access.
+// Returns nil when 't' is not a table (C slot=NULL); otherwise luaH_get's
+// slot (may be luaO_nilobject). No specialized key dispatch here — that
+// lives inside luaH_get, matching C's macro + f=luaH_get.
 func vmFastGet(L *State, t, key *Value) *Value {
 	if !ttistable(t) {
 		return nil
 	}
-	h := hvalue(t)
-	switch ttypetag(key) {
-	case LUA_VSHRSTR:
-		return luaH_getshortstr(h, tsvalue(key))
-	case LUA_VNUMINT:
-		return luaH_getint(h, ivalue(key))
-	case LUA_VNUMFLT:
-		if k, ok := floatToIntEq(fltvalue(key)); ok {
-			return luaH_getint(h, k)
-		}
-	}
-	return luaH_get(L, h, key)
-}
-
-// vmFastGeti is an integer-key raw get used by lapi (GetI / SetI).
-//
-// FLAG: not in PUC 5.3.4 lvm.h (5.4 has luaV_fastgeti + alimit). The VM
-// opcode loop never calls this; keep for API fast path only. Equivalent
-// to luaH_getint when the key is in the array part (sizearray ≡ alimit).
-func vmFastGeti(t *Value, key int64) *Value {
-	if !ttistable(t) {
-		return nil
-	}
-	h := hvalue(t)
-	if uint64(key)-1 < uint64(h.sizearray) { /* array part (5.3 sizearray) */
-		return &h.array[key-1]
-	}
-	return luaH_getint(h, key)
+	return luaH_get(L, hvalue(t), key)
 }
 
 // getcached returns p.cache if it has the same upvalues the new closure would.
@@ -318,13 +275,6 @@ func savestate(L *State, ci *CallInfo, pc int) {
 }
 
 // luaV_execute is the main interpreter loop (lvm.c).
-func rk(base int, k []Value, x int) *Value {
-	if ISK(x) {
-		return &k[INDEXK(x)]
-	}
-	return nil // signal register — caller uses base+x
-}
-
 func rkVal(L *State, base int, k []Value, x int) *Value {
 	if ISK(x) {
 		return &k[INDEXK(x)]
@@ -392,6 +342,11 @@ func forlimit(L *State, obj *Value, p *int64, step int64, stopnow *bool) bool {
 }
 
 func luaV_execute(L *State, ci *CallInfo) {
+	/* C sets CIST_FRESH here; Go sets it in luaD_call instead.
+	   FLAG goroutine/sync-yield: resume re-enters execute on the yielded
+	   frame without C's unroll. FRESH on that frame would make OP_RETURN
+	   exit the VM and skip parent Lua frames (breaks coroutine.wrap
+	   generators). luaD_call still marks true fresh invocations. */
 	prevVM := L.inVM
 	L.inVM = true
 	L.vmNest++
@@ -521,15 +476,23 @@ func luaV_execute(L *State, ci *CallInfo) {
 					continue
 				}
 			case OP_SELF:
+				/* C: luaV_fastget(..., luaH_getstr); key must be a string. */
 				rb := &L.stack[base+i.B]
 				L.stack[ra+1] = *rb
 				rc := rkVal(L, base, k, i.C)
-				slot := vmFastGet(L, rb, rc)
-				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
+				var slot *Value
+				if ttistable(rb) {
+					slot = luaH_getstr(L, hvalue(rb), tsvalue(rc))
+					if !ttisnil(slot) {
+						L.stack[ra] = *slot
+					} else {
+						savestate(L, ci, pc)
+						luaV_finishget(L, rb, rc, ra, slot)
+						base = ci.base
+					}
 				} else {
 					savestate(L, ci, pc)
-					luaV_finishget(L, rb, rc, ra, slot)
+					luaV_finishget(L, rb, rc, ra, nil)
 					base = ci.base
 				}
 			case OP_ADD, OP_SUB, OP_MUL, OP_MOD, OP_POW, OP_DIV, OP_IDIV,
@@ -930,7 +893,7 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 		}
 	case OP_IDIV:
 		if ttisinteger(rb) && ttisinteger(rc) {
-			setivalue(ra, luaV_idiv(L, ivalue(rb), ivalue(rc)))
+			setivalue(ra, luaV_div(L, ivalue(rb), ivalue(rc)))
 			return true
 		}
 		var nb, nc float64
@@ -1084,20 +1047,8 @@ const (
 // (lvm.h). It is F2Ieq unless overridden.
 const LUA_FLOORN2I = F2Ieq
 
-// tonumberns converts to float without string coercion (lvm.h).
-func tonumberns(o *Value, n *float64) bool {
-	switch {
-	case ttisfloat(o):
-		*n = fltvalue(o)
-		return true
-	case ttisinteger(o):
-		*n = float64(ivalue(o))
-		return true
-	}
-	return false
-}
-
-// tointegerns converts to integer without string coercion (lvm.h).
+// tointegerns converts to integer without string coercion.
+// (5.4 name; 5.3 uses the tointeger macro after the value is known numeric.)
 func tointegerns(o *Value, i *int64) bool {
 	if ttisinteger(o) {
 		*i = ivalue(o)
@@ -1353,18 +1304,6 @@ func getFuncline(f *Proto, pc int) int {
 		return -1 /* no debug information */
 	}
 	return int(f.lineinfo[pc])
-}
-
-// changedLine reports whether two instructions are on different lines
-// (ldebug.c).
-func changedLine(p *Proto, oldpc, newpc int) bool {
-	if p.lineinfo == nil { /* no debug information? */
-		return false
-	}
-	if oldpc < 0 {
-		oldpc = 0
-	}
-	return getFuncline(p, oldpc) != getFuncline(p, newpc)
 }
 
 // luaG_traceexec checks (and runs) the line and count hooks before an

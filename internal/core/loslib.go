@@ -1,7 +1,7 @@
 // Translation of loslib.c (PUC-Lua 5.3.4): the standard Operating System
-// library.  align-wip deliverable — fully aligned to PUC 5.3.4 loslib.c.
+// library.  align-wip-534-review deliverable — line-faithful to loslib.c.
 //
-// Platform pieces live outside this file (see NOTES.md):
+// Platform pieces live outside this file (FLAG; see NOTES.md):
 //   - os_cpu_unix.go / os_cpu_other.go — os.clock CPU time
 //   - locale.go + cdlopen_locale.go — os.setlocale / libc strftime (LC_TIME)
 //
@@ -10,7 +10,9 @@
 // os.setlocale is visible the way it is in PUC-Lua.  Without cgo, or when
 // the calendar year would make libc's tm_year+1900 overflow an int, each
 // specifier is formatted on its own through the Go time package so literal
-// text is never mistaken for a layout element.
+// text is never mistaken for a layout element.  The format walk uses a
+// luaL_Buffer (NewBuffer / PrepBuffSize / AddChar / AddSize / PushResult)
+// like C's os_date, with SIZETIMEFMT == 250.
 package core
 
 import (
@@ -38,6 +40,9 @@ var osModifierOptions = map[byte]string{
 	'E': "cCxXyY",
 	'O': "deHImMSuUVwWy",
 }
+
+/* maximum size for an individual 'strftime' item (SIZETIMEFMT) */
+const sizeTimeFmt = 250
 
 // osStrftimeC is libc strftime when the build has cgo on unix; nil
 // otherwise.  Spec is a full conversion including '%', e.g. "%c" or "%Ec".
@@ -144,22 +149,24 @@ func osGetBoolField(L *State, key string) int {
 func osGetField(L *State, key string, d, delta int) int {
 	tp := L.GetField(-1, key) /* get field and its type */
 	v, isnum := L.ToInteger(-1)
-	L.Pop(1)
+	var res int64
 	if !isnum { /* field is not an integer? */
 		if tp != LUA_TNIL { /* some other value? */
 			return L.Error2("field '%s' is not an integer", key)
-		}
-		if d < 0 { /* absent field; no default? */
+		} else if d < 0 { /* absent field; no default? */
 			return L.Error2("field '%s' missing in date table", key)
 		}
-		return d
+		res = int64(d)
+	} else {
+		/* 5.3.4: L_MAXDATEFIELD = INT_MAX/2 */
+		const maxDateField = int64(math.MaxInt32 / 2)
+		if !(-maxDateField <= v && v <= maxDateField) {
+			return L.Error2("field '%s' is out-of-bound", key)
+		}
+		res = v - int64(delta)
 	}
-	/* 5.3.4: L_MAXDATEFIELD = INT_MAX/2 */
-	const maxDateField = int64(math.MaxInt32 / 2)
-	if !(-maxDateField <= v && v <= maxDateField) {
-		return L.Error2("field '%s' is out-of-bound", key)
-	}
-	return int(v) - delta
+	L.Pop(1)
+	return int(res)
 }
 
 // osCheckOption validates one conversion specifier; it returns the
@@ -328,31 +335,31 @@ func osFormatSpec(t time.Time, spec string) string {
 	return ""
 }
 
-// osStrftime formats a time according to a strftime-style format string.
-// utc matches the leading '!' of os.date so libc gmtime/localtime agree
-// with the time.Time already chosen by the caller.
-func osStrftime(L *State, t time.Time, s string, utc bool) string {
-	useC := osStrftimeC != nil && osStrftimeYearSafe(t)
-	var out strings.Builder
-	for len(s) > 0 {
-		i := strings.IndexByte(s, '%')
-		if i < 0 { /* no more conversion specifiers */
-			out.WriteString(s)
-			break
+// osAddStrftimeItem writes one validated conversion into b the way C's
+// os_date does: luaL_prepbuffsize(SIZETIMEFMT), strftime into that room,
+// luaL_addsize.  libc path when available and year-safe; else hand-roll.
+func osAddStrftimeItem(b *Buffer, t time.Time, utc bool, spec string) {
+	buf := b.PrepBuffSize(sizeTimeFmt)
+	piece := ""
+	usedC := false
+	if osStrftimeC != nil && osStrftimeYearSafe(t) {
+		if got, ok := osStrftimeC(t.Unix(), utc, "%"+spec); ok {
+			piece = got
+			usedC = true
 		}
-		out.WriteString(s[:i])
-		s = s[i+1:] /* skip '%' */
-		spec, n := osCheckOption(L, s)
-		s = s[n:]
-		if useC {
-			if got, ok := osStrftimeC(t.Unix(), utc, "%"+spec); ok {
-				out.WriteString(got)
-				continue
-			}
-		}
-		out.WriteString(osFormatSpec(t, spec))
 	}
-	return out.String()
+	if !usedC {
+		piece = osFormatSpec(t, spec)
+	}
+	/* C strftime(buf, SIZETIMEFMT, ...): size includes NUL; on overflow
+	   returns 0 and luaL_addsize adds nothing. */
+	if len(piece) >= sizeTimeFmt {
+		return
+	}
+	if len(piece) > 0 {
+		copy(buf, piece)
+	}
+	b.AddSize(len(piece))
 }
 
 // ---------------------------------------------------------------------
@@ -517,73 +524,88 @@ func osDate(L *State) int {
 		L.CreateTable(0, 9) /* 9 = number of fields */
 		osSetAllFields(L, tm)
 	} else {
-		L.PushString(osStrftime(L, tm, s, utc))
+		/* C: luaL_Buffer b; cc[0]='%'; buffinit; while (s < se) … */
+		b := L.NewBuffer()
+		for len(s) > 0 {
+			if s[0] != '%' { /* not a conversion specifier? */
+				b.AddChar(s[0])
+				s = s[1:]
+			} else {
+				s = s[1:] /* skip '%' */
+				spec, n := osCheckOption(L, s)
+				s = s[n:]
+				osAddStrftimeItem(b, tm, utc, spec)
+			}
+		}
+		b.PushResult()
 	}
 	return 1
 }
 
 func osTime(L *State) int {
+	var tUnix int64
 	if L.IsNoneOrNil(1) { /* called without args? */
-		L.PushInteger(time.Now().Unix()) /* get current time */
-		return 1
-	}
-	L.CheckType(1, LUA_TTABLE)
-	L.SetTop(1) /* make sure table is at the top */
-	/* getfield subtracts 'delta' (as in C, where the fields of 'struct
-	   tm' are relative); add it back for time.Date */
-	/* loslib.c 5.3.4 order: sec, min, hour, day, month, year */
-	sec := osGetField(L, "sec", 0, 0)
-	min := osGetField(L, "min", 0, 0)
-	hour := osGetField(L, "hour", 12, 0)
-	day := osGetField(L, "day", -1, 0)
-	month := osGetField(L, "month", -1, 1) + 1
-	year := osGetField(L, "year", -1, 1900) + 1900
-	isdst := osGetBoolField(L, "isdst") /* -1: work it out, 0: no, 1: yes */
-	t := time.Date(year, time.Month(month), day, hour, min, sec, 0, time.Local)
-	/* mktime reads 'tm_isdst' as an instruction rather than as a
-	   question: 1 means "read the wall clock as daylight-saving time",
-	   0 means "read it as standard time", and -1 (the field absent)
-	   means "work it out".  When the instruction disagrees with the
-	   zone, the absolute time moves by the daylight-saving step while
-	   the wall clock stays where it was -- that is why a winter
-	   'isdst = true' in New York answers with 11 o'clock and not 12,
-	   and why the fields written back into the table say 11 too.  Every
-	   zone in general use steps by an hour, and that is the step taken
-	   here.  A zone with no daylight-saving rule at all has nothing to
-	   disagree about and the field is ignored -- which is why 'isdst =
-	   true' changes nothing in UTC but shifts by an hour in Shanghai,
-	   whose rules still hold the daylight-saving time China kept in the
-	   late 1980s.
-	   That is what macOS's 'mktime' does.  glibc's goes about it the
-	   other way: it looks through the timezone database for a nearby
-	   instant whose 'tm_isdst' is the one it was told and borrows its
-	   offset, and only when it finds none anywhere near does it assume
-	   an hour.  For 1970 in Dublin it borrows an offset from 1972,
-	   which is the offset Dublin kept the whole year round in 1970, so
-	   the instant does not move at all; in UTC, where nothing has a
-	   summer time, it assumes the hour and the instant moves.  The two
-	   libraries answer -7200 and -3600 to one question and 0 and -3600
-	   to the other, and a port can follow only one of them: it follows
-	   the macOS one, and the two questions are asked only where the
-	   two agree (§6.16). */
-	if isdst >= 0 && tHasDSTRules(t) {
-		switch {
-		case isdst > 0 && !tIsDST(t):
-			t = t.Add(-time.Hour)
-		case isdst == 0 && tIsDST(t):
-			t = t.Add(time.Hour)
+		tUnix = time.Now().Unix() /* get current time */
+	} else {
+		L.CheckType(1, LUA_TTABLE)
+		L.SetTop(1) /* make sure table is at the top */
+		/* getfield subtracts 'delta' (as in C, where the fields of 'struct
+		   tm' are relative); add it back for time.Date */
+		/* loslib.c 5.3.4 order: sec, min, hour, day, month, year */
+		sec := osGetField(L, "sec", 0, 0)
+		min := osGetField(L, "min", 0, 0)
+		hour := osGetField(L, "hour", 12, 0)
+		day := osGetField(L, "day", -1, 0)
+		month := osGetField(L, "month", -1, 1) + 1
+		year := osGetField(L, "year", -1, 1900) + 1900
+		isdst := osGetBoolField(L, "isdst") /* -1: work it out, 0: no, 1: yes */
+		t := time.Date(year, time.Month(month), day, hour, min, sec, 0, time.Local)
+		/* mktime reads 'tm_isdst' as an instruction rather than as a
+		   question: 1 means "read the wall clock as daylight-saving time",
+		   0 means "read it as standard time", and -1 (the field absent)
+		   means "work it out".  When the instruction disagrees with the
+		   zone, the absolute time moves by the daylight-saving step while
+		   the wall clock stays where it was -- that is why a winter
+		   'isdst = true' in New York answers with 11 o'clock and not 12,
+		   and why the fields written back into the table say 11 too.  Every
+		   zone in general use steps by an hour, and that is the step taken
+		   here.  A zone with no daylight-saving rule at all has nothing to
+		   disagree about and the field is ignored -- which is why 'isdst =
+		   true' changes nothing in UTC but shifts by an hour in Shanghai,
+		   whose rules still hold the daylight-saving time China kept in the
+		   late 1980s.
+		   That is what macOS's 'mktime' does.  glibc's goes about it the
+		   other way: it looks through the timezone database for a nearby
+		   instant whose 'tm_isdst' is the one it was told and borrows its
+		   offset, and only when it finds none anywhere near does it assume
+		   an hour.  For 1970 in Dublin it borrows an offset from 1972,
+		   which is the offset Dublin kept the whole year round in 1970, so
+		   the instant does not move at all; in UTC, where nothing has a
+		   summer time, it assumes the hour and the instant moves.  The two
+		   libraries answer -7200 and -3600 to one question and 0 and -3600
+		   to the other, and a port can follow only one of them: it follows
+		   the macOS one, and the two questions are asked only where the
+		   two agree (§6.16). */
+		if isdst >= 0 && tHasDSTRules(t) {
+			switch {
+			case isdst > 0 && !tIsDST(t):
+				t = t.Add(-time.Hour)
+			case isdst == 0 && tIsDST(t):
+				t = t.Add(time.Hour)
+			}
 		}
+		osSetAllFields(L, t) /* update fields with normalized values */
+		tUnix = t.Unix()
 	}
-	osSetAllFields(L, t) /* update fields with normalized values */
-	/* C refuses a result of exactly -1, the value 'mktime' answers when
-	   it cannot represent the time (loslib.c):
+	/* C (loslib.c): after either branch —
 	      if (t != (time_t)(l_timet)t || t == (time_t)(-1))
-	        return luaL_error(L,
-	          "time result cannot be represented in this installation"); */
-	if t.Unix() == -1 {
+	        return luaL_error(...);
+	   On Linux LP64 the cast check is vacuous (FLAG); -1 still applies
+	   to both time(NULL) and mktime results. */
+	if tUnix == -1 {
 		return L.Error2("time result cannot be represented in this installation")
 	}
-	L.PushInteger(t.Unix())
+	L.PushInteger(tUnix)
 	return 1
 }
 
@@ -606,12 +628,19 @@ func osDiffTime(L *State) int {
 // library's setlocale, including the per-category query. Without cgo
 // there is no C library to ask; see locale.go.
 func osSetLocale(L *State) int {
+	/* C: l = luaL_optstring(L, 1, NULL); op = luaL_checkoption(L, 2, "all", …);
+	   lua_pushstring(L, setlocale(cat[op], l)); — NULL l queries; NULL
+	   setlocale result pushes nil. */
+	query := L.IsNoneOrNil(1)
+	var name string
+	if !query {
+		name = luaCStr(L.CheckString(1)) /* C string to setlocale */
+	}
 	cat := L.CheckOption(2, "all", localeCategories)
-	if L.IsNoneOrNil(1) { /* no locale: query the current one */
-		L.PushString(localeCurrent(cat))
+	if query {
+		L.PushString(localeCurrent(cat)) /* setlocale(cat, NULL) */
 		return 1
 	}
-	name, _ := L.ToString(1)
 	if got, ok := setLocale(cat, name); ok {
 		L.PushString(got)
 		return 1
@@ -665,9 +694,9 @@ var osLib = []Reg{
 }
 
 // OpenOS opens the operating system library (luaopen_os).
+// C leaves the module on the stack only; the global is set by
+// luaL_requiref(..., 1) / OpenLibs — not here.
 func OpenOS(L *State) int {
 	L.NewLib(osLib)
-	L.PushValue(-1)
-	L.SetGlobal("os")
 	return 1
 }

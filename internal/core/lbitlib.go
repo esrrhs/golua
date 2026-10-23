@@ -132,7 +132,7 @@ func b_arshift(L *State) int {
 
 func b_rot(L *State, d int64) int {
 	r := checkUnsigned(L, 1)
-	i := int(d) & (luaNBits - 1) // i = d % NBITS
+	i := int(d & int64(luaNBits-1)) // i = d % NBITS  (C: int i = d & (LUA_NBITS - 1))
 	r = trim(r)
 	if i != 0 { // avoid undefined shift of LUA_NBITS when i == 0
 		r = (r << uint(i)) | (r >> uint(luaNBits-i))
@@ -152,7 +152,7 @@ func b_rrot(L *State) int {
 /*
 ** get field and width arguments for field-manipulation functions,
 ** checking whether they are valid.
-** ('luaL_error' / Error2 called without relying on return to avoid
+** ('luaL_error' / Error2 called without return to avoid later warnings about
 ** 'width' being used uninitialized.)
  */
 func fieldArgs(L *State, farg int, width *int) int {

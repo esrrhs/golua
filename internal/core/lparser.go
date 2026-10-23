@@ -1,6 +1,5 @@
 // Translation of lparser.h / lparser.c (PUC-Lua 5.3.4).
-// Aligned WIP: purge 5.4 bleed; restore C hard limits; see NOTES.md.
-// createlabel already absent (5.4 helper; live breaklabel/labelstat are 5.3.4).
+// Re-review WIP: see NOTES.md. createlabel absent; C hard limits restored.
 package core
 
 import "fmt"
@@ -224,6 +223,8 @@ func new_localvar(ls *LexState, name *TString) {
 	dyd := ls.dyd
 	reg := registerlocalvar(ls, name)
 	checklimit(fs, dyd.actvar.n+1-fs.firstlocal, MAXVARS, "local variables")
+	/* C: luaM_growvector(..., MAX_INT, "local variables") on dyd->actvar */
+	checklimit(fs, dyd.actvar.n+1, maxInt, "local variables")
 	if len(dyd.actvar.arr) <= dyd.actvar.n {
 		dyd.actvar.arr = append(dyd.actvar.arr, Vardesc{})
 	}
@@ -371,8 +372,8 @@ func enterblock(fs *FuncState, bl *BlockCnt, isloop bool) {
 }
 
 func breaklabel(ls *LexState) {
-	/* lparser.c: newlabelentry(..., ls->fs->pc); findgotos — no createlabel. */
-	n := luaX_newstring(ls, "break")
+	/* C: luaS_new(ls->L, "break"); newlabelentry; findgotos — no createlabel. */
+	n := luaS_new(ls.L, "break")
 	l := newlabelentry(ls, &ls.dyd.label, n, 0, ls.fs.pc)
 	findgotos(ls, &ls.dyd.label.arr[l])
 }
@@ -530,14 +531,22 @@ func open_func(ls *LexState, fs *FuncState, bl *BlockCnt) {
 func close_func(ls *LexState) {
 	fs := ls.fs
 	f := fs.f
-	luaK_ret(fs, 0, 0)
+	luaK_ret(fs, 0, 0) /* final return */
 	leaveblock(fs)
+	/* C: luaM_reallocvector shrink to final counts; Go truncates slices.
+	   No luaC_checkGC — Go GC. */
+	f.code = f.code[:fs.pc]
+	f.lineinfo = f.lineinfo[:fs.pc]
+	f.k = f.k[:fs.nk]
+	f.p = f.p[:fs.np]
+	f.locvars = f.locvars[:fs.nlocvars]
+	f.upvalues = f.upvalues[:fs.nups]
 	f.sizecode = fs.pc
 	f.sizelineinfo = fs.pc
 	f.sizek = fs.nk
 	f.sizep = fs.np
-	f.sizeupvalues = fs.nups
 	f.sizelocvars = fs.nlocvars
+	f.sizeupvalues = fs.nups
 	ls.fs = fs.prev
 }
 
@@ -651,31 +660,31 @@ func constructor(ls *LexState, t *expdesc) {
 
 
 func parlist(ls *LexState) {
+	/* parlist -> [ param { ',' param } ] */
 	fs := ls.fs
 	f := fs.f
 	nparams := 0
-	isvararg := 0
-	if ls.t.token != ')' {
+	f.isVararg = 0
+	if ls.t.token != ')' { /* is 'parlist' not empty? */
 		for {
 			switch ls.t.token {
-			case TK_NAME:
+			case TK_NAME: /* param -> NAME */
 				new_localvar(ls, str_checkname(ls))
 				nparams++
-			case TK_DOTS:
+			case TK_DOTS: /* param -> '...' */
 				luaX_next(ls)
-				isvararg = 1
+				f.isVararg = 1 /* declared vararg */
 			default:
 				luaX_syntaxerror(ls, "<name> or '...' expected")
 			}
-			if isvararg != 0 || !testnext(ls, ',') {
+			if f.isVararg != 0 || !testnext(ls, ',') {
 				break
 			}
 		}
 	}
 	adjustlocalvars(ls, nparams)
 	f.numparams = byte(fs.nactvar)
-	f.isVararg = byte(isvararg)
-	luaK_reserveregs(fs, fs.nactvar)
+	luaK_reserveregs(fs, fs.nactvar) /* reserve register for parameters */
 }
 
 /* addprototype adds a new prototype into the parent's list (lparser.c). */
@@ -1038,8 +1047,8 @@ func gotostat(ls *LexState, pc int) {
 	if testnext(ls, TK_GOTO) {
 		name = str_checkname(ls)
 	} else {
-		luaX_next(ls)
-		name = luaX_newstring(ls, "break")
+		luaX_next(ls) /* skip break */
+		name = luaS_new(ls.L, "break")
 	}
 	g := newlabelentry(ls, &ls.dyd.gt, name, line, pc)
 	findlabel(ls, g)

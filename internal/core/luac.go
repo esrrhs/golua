@@ -76,7 +76,7 @@ func (c *luac) usage(message string) {
 		"usage: %s [options] [filenames]\n"+
 			"Available options are:\n"+
 			"  -l       list (use -l -l for full listing)\n"+
-			"  -o name  output to file 'name' (default is %q)\n"+
+			"  -o name  output to file 'name' (default is \"%s\")\n"+
 			"  -p       parse only\n"+
 			"  -s       strip debug information\n"+
 			"  -v       show version information\n"+
@@ -91,12 +91,13 @@ func (c *luac) fatal(message string) {
 }
 
 // cannot is luac.c's 'cannot': "cannot <what> <output>: <strerror>".
-func (c *luac) cannot(what string) {
+// 'why' is the strerror(errno) stand-in (err.Error() from the failing call).
+func (c *luac) cannot(what, why string) {
 	name := c.output
 	if name == "" {
 		name = "(null)" /* C prints NULL with '%s' */
 	}
-	fmt.Fprintf(c.err, "%s: cannot %s %s: %s\n", c.progname, what, name, "I/O error")
+	fmt.Fprintf(c.err, "%s: cannot %s %s: %s\n", c.progname, what, name, why)
 }
 
 // doargs is luac.c's 'doargs'. It returns the index of the first
@@ -235,6 +236,9 @@ func (c *luac) combine(L *State, n int) *Proto {
 }
 
 // dump writes the precompiled chunk (luac.c's 'pmain' when dumping).
+// Order matches C: luaU_dump → ferror("write") → fclose("close").
+// When output=="" (C: output==NULL → stdout), Go writes to c.out and does
+// not close it (C fclose(stdout) — FLAG safer).
 func (c *luac) dump(L *State, f *Proto) bool {
 	w := c.out
 	var file *os.File
@@ -242,31 +246,38 @@ func (c *luac) dump(L *State, f *Proto) bool {
 		var err error
 		file, err = os.Create(c.output) /* C: fopen(output,"wb") */
 		if err != nil {
-			c.cannot("open")
+			c.cannot("open", err.Error())
 			return false
 		}
 		w = file
 	}
-	werr := false
+	var werr error
 	luaU_dump(L, f, func(L *State, b []byte) int {
-		if werr {
+		/* C writer: (fwrite(...)!=1) && (size!=0) */
+		if len(b) == 0 {
+			return 0
+		}
+		if werr != nil {
 			return 1
 		}
 		if _, err := w.Write(b); err != nil {
-			werr = true
+			werr = err
 			return 1
 		}
 		return 0
 	}, c.stripping != 0)
+	if werr != nil { /* C: if (ferror(D)) cannot("write"); */
+		c.cannot("write", werr.Error())
+		if file != nil {
+			_ = file.Close()
+		}
+		return false
+	}
 	if file != nil {
-		if err := file.Close(); err != nil { /* C checks ferror and fclose */
-			c.cannot("close")
+		if err := file.Close(); err != nil { /* C: if (fclose(D)) cannot("close"); */
+			c.cannot("close", err.Error())
 			return false
 		}
-	}
-	if werr {
-		c.cannot("write")
-		return false
 	}
 	return true
 }

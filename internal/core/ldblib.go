@@ -7,8 +7,9 @@
 //
 // 5.3.4 surface: 16 dblib entries (no setcstacklimit); getinfo default
 // "flnStu"; no option 'r' / transfer info. Hooks, name/namewhat, and
-// debug.debug are implemented. See align-wip/ldblib/NOTES.md for
-// intentional diffs.
+// debug.debug are implemented. collectvalidlines / get|setupvalue use
+// Proto sizelineinfo / sizeupvalues (not len(slice)). See
+// align-wip-534-review/ldblib/NOTES.md for intentional diffs.
 package core
 
 import (
@@ -192,7 +193,7 @@ func dbFuncInfo(ar *dbAr, fv *Value) {
 			ar.what = "Lua"
 		}
 	}
-	/* C: luaO_chunkid(ar->short_src, ar->source, LUA_IDSIZE); Go takes the whole string. */
+	/* C: luaO_chunkid(ar->short_src, ar->source, LUA_IDSIZE). */
 	ar.shortSrc = luaO_chunkid(ar.source)
 }
 
@@ -207,8 +208,10 @@ func dbCollectValidLines(L *State, fv *Value) {
 	}
 	p := clLvalue(fv).p
 	L.NewTable()
-	/* C: for all lines with code, table[lineinfo[i]] = true (no line>0 filter). */
-	for i := 0; i < len(p.lineinfo); i++ {
+	/* C: for (i = 0; i < f->l.p->sizelineinfo; i++) table[lineinfo[i]] = true.
+	   Use sizelineinfo (not len(lineinfo)): luac may zero sizelineinfo while
+	   leaving the slice (strip debug). */
+	for i := 0; i < p.sizelineinfo; i++ {
 		L.PushBoolean(true)
 		L.SetI(-2, int64(p.lineinfo[i]))
 	}
@@ -303,7 +306,7 @@ func dbGetUpvalue(L *State, idx, n int) (string, bool) {
 	case ttisLclosure(fv):
 		f := clLvalue(fv)
 		p := f.p
-		if n < 1 || n > len(p.upvalues) {
+		if n < 1 || n > p.sizeupvalues { /* C: p->sizeupvalues */
 			return "", false
 		}
 		name := "(*no name)"
@@ -333,7 +336,7 @@ func dbSetUpvalue(L *State, idx, n int) (string, bool) {
 	case ttisLclosure(fv):
 		f := clLvalue(fv)
 		p := f.p
-		if n < 1 || n > len(p.upvalues) {
+		if n < 1 || n > p.sizeupvalues { /* C: p->sizeupvalues */
 			return "", false
 		}
 		name := "(*no name)"
@@ -360,7 +363,7 @@ func dbUpvalueID(L *State, idx, n int) unsafe.Pointer {
 		return unsafe.Pointer(&f.upvalue[n-1])
 	case ttisLclosure(fv):
 		f := clLvalue(fv)
-		if n < 1 || n > f.nupvalues {
+		if n < 1 || n > f.p.sizeupvalues { /* C getupvalref: p->sizeupvalues */
 			return nil
 		}
 		return unsafe.Pointer(f.upvals[n-1])
@@ -473,8 +476,7 @@ func dbGetInfoFunc(L *State) int {
 	}
 	L.NewTable() /* table to collect results */
 	if strings.ContainsRune(options, 'S') {
-		L.PushString(ar.source)
-		L.SetField(-2, "source")
+		dbSetTabSS(L, "source", ar.source) /* C settabss; source never NULL after funcinfo */
 		dbSetTabSS(L, "short_src", ar.shortSrc)
 		dbSetTabSI(L, "linedefined", ar.linedefined)
 		dbSetTabSI(L, "lastlinedefined", ar.lastlinedefined)

@@ -20,6 +20,9 @@ import (
 
 func ispseudo(i int) bool { return i <= LUA_REGISTRYINDEX }
 
+// isupvalue reports a pseudo-index below the registry (lapi.c).
+func isupvalue(i int) bool { return i < LUA_REGISTRYINDEX }
+
 // index2value translates an API index into a stack slot.
 // Invalid indices return &L.g.nilValue (C: NONVALIDVALUE / luaO_nilobject).
 // Callers that write through the result must check isvalid first.
@@ -161,6 +164,9 @@ func (L *State) Copy(fromIdx, toIdx int) {
 		panic("invalid index")
 	}
 	*t = *f
+	if isupvalue(toIdx) {
+		/* C: luaC_barrier(L, clCvalue(L->ci->func), fr); omitted (Go GC) */
+	}
 }
 
 // reverse reverses stack segment [from, to] inclusive (lapi.c static reverse).
@@ -232,6 +238,9 @@ func (L *State) XMove(from *State, n int) {
 	if L.g != from.g {
 		panic("moving among independent states")
 	}
+	if n < 0 || n > from.GetTop() {
+		panic("not enough elements in the stack") /* api_checknelems(from, n) */
+	}
 	L.checkStack(n) /* C: api_check(to->ci->top - to->top >= n) without grow */
 	from.top -= n
 	for i := 0; i < n; i++ {
@@ -247,10 +256,10 @@ func (L *State) XMove(from *State, n int) {
 // Type returns the type of the value at idx (lua_type).
 func (L *State) Type(idx int) int {
 	v := index2value(L, idx)
-	if v == &L.g.nilValue || v == &luaO_nilobject {
+	if !isvalid(L, v) { /* NONVALIDVALUE → LUA_TNONE */
 		return LUA_TNONE
 	}
-	return ttype(v)
+	return ttype(v) /* ttnov */
 }
 
 // TypeName (package) is lua_typename(L, t): name of a type tag.
@@ -403,7 +412,13 @@ func (L *State) ToPointer(idx int) uintptr {
 	case LUA_TTHREAD:
 		return ptrID(unsafe.Pointer(thvalue(v)))
 	case LUA_TUSERDATA:
-		return ptrID(gcvalue(v))
+		/* C: getudatamem(u) = (char*)u + sizeof(Udata). Go: cblock is that
+		   blob when allocated for CGO; else Udata identity (Go payload SPEC). */
+		u := uvalue(v)
+		if u.cblock != nil {
+			return ptrID(u.cblock)
+		}
+		return ptrID(unsafe.Pointer(u))
 	case LUA_TLIGHTUSERDATA:
 		return ptrID(pvalue(v))
 	default:
@@ -506,6 +521,13 @@ func (L *State) PushGoClosure(f GoFunc, n int) {
 		L.top++
 		return
 	}
+	/* C: api_checknelems(L, n); api_check(n <= MAXUPVAL) */
+	if n < 0 || n > L.GetTop() {
+		panic("not enough elements in the stack")
+	}
+	if n > MAXUPVAL {
+		panic("upvalue index too large")
+	}
 	cl := luaF_newCclosure(L, n)
 	cl.f = f
 	L.checkStack(1)
@@ -607,13 +629,8 @@ func (L *State) RawGet(idx int) int {
 	if !ttistable(t) {
 		panic("table expected")
 	}
-	key := &L.stack[L.top-1]
-	slot := luaH_get(L, hvalue(t), key)
-	if isempty(slot) {
-		setnilvalue(&L.stack[L.top-1])
-	} else {
-		L.stack[L.top-1] = *slot
-	}
+	/* C: setobj2s(L, L->top - 1, luaH_get(...)); absent → luaO_nilobject (nil) */
+	L.stack[L.top-1] = *luaH_get(L, hvalue(t), &L.stack[L.top-1])
 	return ttype(&L.stack[L.top-1])
 }
 
@@ -624,12 +641,7 @@ func (L *State) RawGetI(idx int, n int64) int {
 		panic("table expected")
 	}
 	L.checkStack(1)
-	slot := luaH_getint(hvalue(t), n)
-	if isempty(slot) {
-		setnilvalue(&L.stack[L.top])
-	} else {
-		L.stack[L.top] = *slot
-	}
+	L.stack[L.top] = *luaH_getint(hvalue(t), n) /* absent → nilobject */
 	L.top++
 	return ttype(&L.stack[L.top-1])
 }
@@ -643,12 +655,7 @@ func (L *State) RawGetP(idx int, p unsafe.Pointer) int {
 	L.checkStack(1)
 	var k Value
 	setpvalue(&k, p)
-	slot := luaH_get(L, hvalue(t), &k)
-	if isempty(slot) {
-		setnilvalue(&L.stack[L.top])
-	} else {
-		L.stack[L.top] = *slot
-	}
+	L.stack[L.top] = *luaH_get(L, hvalue(t), &k) /* absent → nilobject */
 	L.top++
 	return ttype(&L.stack[L.top-1])
 }
@@ -815,8 +822,8 @@ func (L *State) RawSetI(idx int, n int64) {
 		panic("table expected")
 	}
 	val := L.stack[L.top-1]
-	luaH_setint(L, hvalue(t), n, &val)
-	invalidateTMcache(hvalue(t))
+	luaH_setint(L, hvalue(t), n, &val) /* C: no invalidateTMcache on rawseti */
+	/* luaC_barrierback omitted (Go GC) */
 	L.top--
 }
 
@@ -829,8 +836,8 @@ func (L *State) RawSetP(idx int, p unsafe.Pointer) {
 	val := L.stack[L.top-1]
 	var k Value
 	setpvalue(&k, p)
-	*luaH_set(L, hvalue(t), &k) = val
-	invalidateTMcache(hvalue(t))
+	*luaH_set(L, hvalue(t), &k) = val /* C: no invalidateTMcache on rawsetp */
+	/* luaC_barrierback omitted (Go GC) */
 	L.top--
 }
 
@@ -951,8 +958,15 @@ func (L *State) CallK(nargs, nresults int) {
 // 'pairscont') and 'dofile' ('dofilecont') ask for a *yieldable* call,
 // so that a 'coroutine.yield' can cross them.
 func (L *State) callK(nargs, nresults int, k bool) {
+	/* C: api_check(L->status == LUA_OK); api_checknelems(nargs+1); checkresults */
+	if L.status != LUA_OK {
+		panic("cannot do calls on non-normal thread")
+	}
+	if nargs+1 > L.GetTop() {
+		panic("not enough elements in the stack")
+	}
 	funcIdx := L.top - (nargs + 1)
-	if k && yieldable(L) {
+	if k && yieldable(L) { /* C: k != NULL && L->nny == 0 */
 		luaD_call(L, funcIdx, nresults)
 	} else {
 		luaD_callnoyield(L, funcIdx, nresults)
@@ -983,6 +997,13 @@ func (L *State) PCall(nargs, nresults, msgh int) int {
 // resume-time findpcall. Remaining gap: true findpcall-on-resume (errors
 // do not abandon pcallK the way C longjmp does).
 func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
+	/* C: api_check(L->status == LUA_OK); api_checknelems(nargs+1) */
+	if L.status != LUA_OK {
+		panic("cannot do calls on non-normal thread")
+	}
+	if nargs+1 > L.GetTop() {
+		panic("not enough elements in the stack")
+	}
 	funcIdx := L.top - (nargs + 1)
 	var ef int
 	if msgh != 0 {
@@ -1037,9 +1058,7 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 			luaD_callnoyield(L, funcIdx, nresults)
 		}, funcIdx, ef)
 	}
-	if status == LUA_OK {
-		adjustresults(L, nresults)
-	}
+	adjustresults(L, nresults) /* C always adjusts, including after error */
 	return status
 }
 
@@ -1234,7 +1253,7 @@ func (L *State) Compare(idx1, idx2, op int) bool {
 	case LUA_OPLE:
 		return luaV_lessequal(L, o1, o2)
 	default:
-		return false
+		panic("invalid option") /* C api_check */
 	}
 }
 
@@ -1273,7 +1292,8 @@ func getupvalref(L *State, fidx, n int) **UpVal {
 		panic("Lua function expected")
 	}
 	f := clLvalue(fi)
-	if n < 1 || n > f.nupvalues {
+	/* C: 1 <= n && n <= f->p->sizeupvalues */
+	if f.p == nil || n < 1 || n > f.p.sizeupvalues {
 		panic("invalid upvalue index")
 	}
 	return &f.upvals[n-1]
@@ -1364,6 +1384,9 @@ func (L *State) Status() int { return int(L.status) }
 // Dump writes the Lua function on top of the stack as a binary chunk
 // (lua_dump). writer returns 0 on success; non-zero aborts. strip drops debug.
 func (L *State) Dump(writer func(L *State, b []byte) int, strip bool) int {
+	if L.GetTop() < 1 {
+		panic("not enough elements in the stack") /* api_checknelems(L, 1) */
+	}
 	return luaDump(L, dumpWriter(writer), strip)
 }
 

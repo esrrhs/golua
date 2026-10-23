@@ -1,5 +1,5 @@
 // Translation of lcode.h / lcode.c (PUC-Lua 5.3.4).
-// Aligned WIP: purge 5.4/specializations; see NOTES.md.
+// Re-review align WIP: see NOTES.md.
 package core
 
 import (
@@ -205,6 +205,11 @@ func dischargejpc(fs *FuncState) {
 	fs.jpc = NO_JUMP
 }
 
+func luaK_patchtohere(fs *FuncState, list int) {
+	luaK_getlabel(fs)
+	luaK_concat(fs, &fs.jpc, list)
+}
+
 func luaK_patchlist(fs *FuncState, list, target int) {
 	if target == fs.pc {
 		luaK_patchtohere(fs, list)
@@ -222,11 +227,6 @@ func luaK_patchclose(fs *FuncState, list, level int) {
 		inst.A = level
 		list = next
 	}
-}
-
-func luaK_patchtohere(fs *FuncState, list int) {
-	luaK_getlabel(fs)
-	luaK_concat(fs, &fs.jpc, list)
 }
 
 func luaK_jumpto(fs *FuncState, t int) {
@@ -324,9 +324,8 @@ func freeexps(fs *FuncState, e1, e2 *expdesc) {
 func addk(fs *FuncState, key, v *Value) int {
 	L := fs.ls.L
 	f := fs.f
-	/* C: idx = luaH_set(...); then setivalue(idx, k). */
-	idx := luaH_get(L, fs.ls.h, key) /* index scanner table */
-	if ttisinteger(idx) {            /* is there an index there? */
+	idx := luaH_set(L, fs.ls.h, key) /* index scanner table */
+	if ttisinteger(idx) { /* is there an index there? */
 		k := int(ivalue(idx))
 		/* correct value? (warning: must distinguish floats from integers!) */
 		if k < fs.nk && ttype(&f.k[k]) == ttype(v) && luaV_rawequalobj(&f.k[k], v) {
@@ -335,9 +334,9 @@ func addk(fs *FuncState, key, v *Value) int {
 	}
 	/* constant not found; create a new entry */
 	k := fs.nk
-	var ik Value
-	setivalue(&ik, int64(k))
-	*luaH_set(L, fs.ls.h, key) = ik
+	/* numerical value does not need GC barrier;
+	   table has no metatable, so it does not need to invalidate cache */
+	setivalue(idx, int64(k))
 	if len(f.k) <= k {
 		f.k = append(f.k, Value{})
 	}
@@ -430,21 +429,6 @@ func luaK_dischargevars(fs *FuncState, e *expdesc) {
 	}
 }
 
-func code_loadbool(fs *FuncState, A, b, jump int) int {
-	luaK_getlabel(fs)
-	return luaK_codeABC(fs, OP_LOADBOOL, A, b, jump)
-}
-
-func need_value(fs *FuncState, list int) bool {
-	for ; list != NO_JUMP; list = getjump(fs, list) {
-		i := getjumpcontrol(fs, list)
-		if i.Op != OP_TESTSET {
-			return true
-		}
-	}
-	return false
-}
-
 func discharge2reg(fs *FuncState, e *expdesc, reg int) {
 	luaK_dischargevars(fs, e)
 	switch e.k {
@@ -483,6 +467,21 @@ func discharge2anyreg(fs *FuncState, e *expdesc) {
 		luaK_reserveregs(fs, 1)
 		discharge2reg(fs, e, fs.freereg-1)
 	}
+}
+
+func code_loadbool(fs *FuncState, A, b, jump int) int {
+	luaK_getlabel(fs)
+	return luaK_codeABC(fs, OP_LOADBOOL, A, b, jump)
+}
+
+func need_value(fs *FuncState, list int) bool {
+	for ; list != NO_JUMP; list = getjump(fs, list) {
+		i := getjumpcontrol(fs, list)
+		if i.Op != OP_TESTSET {
+			return true
+		}
+	}
+	return false
 }
 
 func exp2reg(fs *FuncState, e *expdesc, reg int) {
@@ -700,6 +699,19 @@ func luaK_indexed(fs *FuncState, t, k *expdesc) {
 	t.k = VINDEXED
 }
 
+func validop(op int, v1, v2 *Value) bool {
+	switch op {
+	case LUA_OPBAND, LUA_OPBOR, LUA_OPBXOR, LUA_OPSHL, LUA_OPSHR, LUA_OPBNOT: /* conversion errors */
+		var i int64
+		/* C tointeger; for tonumeral inputs ≡ tointegerns / F2Ieq (LUA_FLOORN2I) */
+		return tointegerns(v1, &i) && tointegerns(v2, &i)
+	case LUA_OPDIV, LUA_OPIDIV, LUA_OPMOD: /* division by 0 */
+		return nvalue(v2) != 0
+	default:
+		return true /* everything else is valid */
+	}
+}
+
 func constfolding(fs *FuncState, op int, e1, e2 *expdesc) bool {
 	var v1, v2, r Value
 	if !tonumeral(e1, &v1) || !tonumeral(e2, &v2) || !validop(op, &v1, &v2) {
@@ -722,19 +734,6 @@ func constfolding(fs *FuncState, op int, e1, e2 *expdesc) bool {
 		e1.nval = n
 	}
 	return true
-}
-
-func validop(op int, v1, v2 *Value) bool {
-	switch op {
-	case LUA_OPBAND, LUA_OPBOR, LUA_OPBXOR, LUA_OPSHL, LUA_OPSHR, LUA_OPBNOT: /* conversion errors */
-		var i int64
-		/* C tointeger; for tonumeral inputs ≡ tointegerns / F2Ieq (LUA_FLOORN2I) */
-		return tointegerns(v1, &i) && tointegerns(v2, &i)
-	case LUA_OPDIV, LUA_OPIDIV, LUA_OPMOD: /* division by 0 */
-		return nvalue(v2) != 0
-	default:
-		return true /* everything else is valid */
-	}
 }
 
 func codeunexpval(fs *FuncState, op int, e *expdesc, line int) {
@@ -830,8 +829,8 @@ func luaK_posfix(fs *FuncState, op BinOpr, e1, e2 *expdesc, line int) {
 	case OPR_CONCAT:
 		luaK_exp2val(fs, e2)
 		if e2.k == VRELOCABLE && getinstruction(fs, e2).Op == OP_CONCAT {
-			getinstruction(fs, e2).B = e1.info
 			freeexp(fs, e1)
+			getinstruction(fs, e2).B = e1.info
 			e1.k = VRELOCABLE
 			e1.info = e2.info
 		} else {

@@ -714,7 +714,13 @@ func (L *State) callFinalizer(obj Value) {
 	   does not turn the collector back on for the outer one. */
 	oldIn := L.g.gcInFinalizer
 	L.g.gcInFinalizer = true
-	status := L.PCall(1, 0, 0)
+	/* C GCTM: luaD_pcall(L, dothecall, …) — not lua_pcallk. The API
+	   entry checks L->status==LUA_OK; Close/os.exit may run finalizers
+	   on a non-OK thread (e.g. after a prior error). */
+	funcIdx := L.top - 2
+	status := luaD_pcall(L, func() {
+		luaD_callnoyield(L, funcIdx, 0)
+	}, funcIdx, 0)
 	L.g.gcInFinalizer = oldIn
 	L.allowhook = oldah
 	L.ci.callstatus &= ^uint16(CIST_FIN)
@@ -732,13 +738,23 @@ func (L *State) callFinalizer(obj Value) {
 }
 
 // gcUnwatch clears the "watched" mark of an object, so that a later
-// 'setmetatable' can start watching it again.
+// 'setmetatable' can start watching it again.  Decrements gcWatched when
+// the mark was set — otherwise a single enroll would leave gcStep paying
+// forever after every finalizer had already run (C's finobj empties).
 func gcUnwatch(v *Value) {
 	switch ttypetag(v) {
 	case LUA_VTABLE:
-		hvalue(v).finalized = false
+		t := hvalue(v)
+		if t.finalized {
+			t.finalized = false
+			gcWatched.Add(-1)
+		}
 	case LUA_VUSERDATA:
-		uvalue(v).finalized = false
+		u := uvalue(v)
+		if u.finalized {
+			u.finalized = false
+			gcWatched.Add(-1)
+		}
 	}
 }
 

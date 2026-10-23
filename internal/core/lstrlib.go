@@ -3,6 +3,9 @@
 // Surface: basic string ops, pattern engine, string.format, pack/unpack.
 // Offsets replace C 'const char *'; goto-init match loop → for/continue.
 //
+// Buffer: every luaL_Buffer caller is stack-local (var b Buffer; strBuffInit),
+// matching C's luaL_Buffer b on the C stack — not L.NewBuffer() heap.
+//
 // 5.3.4 (not 5.4): createmetatable is __index only; gmatch SetTop(2) no init;
 // %q → addliteral (no modifier reject; float via %a / num2straux, not quotefloat);
 // %a/%A honor flags/width/prec like non-LUA_USE_C89 luaconf sprintf path.
@@ -12,13 +15,28 @@
 package core
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 )
+
+// ---------------------------------------------------------------------
+// Buffer helpers — stack-local luaL_Buffer like C (lauxlib buffinit)
+// ---------------------------------------------------------------------
+
+// strBuffInit is luaL_buffinit for a caller-owned Buffer (C stack-local).
+// Prefer this over State.NewBuffer(), which heap-allocates the Buffer.
+func strBuffInit(L *State, b *Buffer) {
+	*b = Buffer{L: L}
+}
+
+// strBuffInitSize is luaL_buffinitsize: buffinit then prepbuffsize.
+func strBuffInitSize(L *State, b *Buffer, sz int) []byte {
+	strBuffInit(L, b)
+	return b.PrepBuffSize(sz)
+}
 
 // ---------------------------------------------------------------------
 // basic string functions
@@ -64,13 +82,15 @@ func strSub(L *State) int {
 func strReverse(L *State) int {
 	s := L.CheckString(1)
 	n := len(s)
-	b := make([]byte, n)
+	var b Buffer
+	p := strBuffInitSize(L, &b, n)
 	for i := 0; i < n; i++ {
-		b[i] = s[n-i-1]
+		p[i] = s[n-i-1]
 	}
-	L.PushString(string(b))
+	b.PushResultSize(n)
 	return 1
 }
+
 
 // strASCIILower/strASCIIUpper mimic the C library 'tolower'/'toupper'
 // in the "C" locale: only ASCII letters are converted.
@@ -90,23 +110,29 @@ func strASCIIUpper(c byte) byte {
 
 func strLower(L *State) int {
 	s := L.CheckString(1)
-	b := []byte(s)
-	for i := range b {
-		b[i] = localeToLower(b[i])
+	n := len(s)
+	var b Buffer
+	p := strBuffInitSize(L, &b, n)
+	for i := 0; i < n; i++ {
+		p[i] = localeToLower(s[i])
 	}
-	L.PushString(string(b))
+	b.PushResultSize(n)
 	return 1
 }
 
+
 func strUpper(L *State) int {
 	s := L.CheckString(1)
-	b := []byte(s)
-	for i := range b {
-		b[i] = localeToUpper(b[i])
+	n := len(s)
+	var b Buffer
+	p := strBuffInitSize(L, &b, n)
+	for i := 0; i < n; i++ {
+		p[i] = localeToUpper(s[i])
 	}
-	L.PushString(string(b))
+	b.PushResultSize(n)
 	return 1
 }
+
 
 func strRep(L *State) int {
 	s := L.CheckString(1)
@@ -119,19 +145,25 @@ func strRep(L *State) int {
 	} else if l+lsep < l || l+lsep > math.MaxInt32/int(n) { /* may overflow? */
 		return L.Error2("resulting string too large")
 	} else {
-		var sb strings.Builder
+		totallen := int(n)*l + int(n-1)*lsep
+		var b Buffer
+		p := strBuffInitSize(L, &b, totallen)
+		off := 0
 		for n > 1 { /* first n-1 copies (followed by separator) */
-			sb.WriteString(s)
-			if lsep > 0 { /* empty copy is not that cheap */
-				sb.WriteString(sep)
+			copy(p[off:], s)
+			off += l
+			if lsep > 0 { /* empty 'memcpy' is not that cheap */
+				copy(p[off:], sep)
+				off += lsep
 			}
 			n--
 		}
-		sb.WriteString(s) /* last copy (not followed by separator) */
-		L.PushString(sb.String())
+		copy(p[off:], s) /* last copy (not followed by separator) */
+		b.PushResultSize(totallen)
 	}
 	return 1
 }
+
 
 func strByte(L *State) int {
 	s := L.CheckString(1)
@@ -160,15 +192,17 @@ func strByte(L *State) int {
 
 func strChar(L *State) int {
 	n := L.GetTop() /* number of arguments */
-	b := make([]byte, 0, n)
+	var b Buffer
+	p := strBuffInitSize(L, &b, n)
 	for i := 1; i <= n; i++ {
-		c := uint64(L.CheckInteger(i))
-		L.ArgCheck(c <= 255, i, "value out of range")
-		b = append(b, byte(c))
+		c := L.CheckInteger(i)
+		L.ArgCheck(c == int64(byte(c)), i, "value out of range") /* uchar(c) == c */
+		p[i-1] = byte(c)
 	}
-	L.PushString(string(b))
+	b.PushResultSize(n)
 	return 1
 }
+
 
 // strDump dumps a function as a precompiled chunk (string.dump,
 // lstrlib.c). The 'writer' of the C code is a closure appending to a Go
@@ -177,18 +211,20 @@ func strChar(L *State) int {
 func strDump(L *State) int {
 	strip := L.ToBoolean(2)
 	L.CheckType(1, LUA_TFUNCTION)
-	L.SetTop(1) /* ensure function is on the top of the stack */
-	var sb strings.Builder
-	status := luaDump(L, func(_ *State, b []byte) int {
-		sb.Write(b)
+	L.SetTop(1)
+	var b Buffer
+	strBuffInit(L, &b)
+	status := luaDump(L, func(_ *State, p []byte) int {
+		b.AddBytes(p) /* writer → luaL_addlstring */
 		return 0
 	}, strip)
 	if status != 0 {
 		return L.Error2("unable to dump given function")
 	}
-	L.PushString(sb.String())
+	b.PushResult()
 	return 1
 }
+
 
 // ---------------------------------------------------------------------
 // FLAG: strStringToNumber — not in 5.3.4 lstrlib.c
@@ -798,35 +834,32 @@ func strGmatch(L *State) int {
 // buffer (add_s).
 func strAddS(ms *strMatchState, b *Buffer, s, e int) {
 	L := ms.L
-	news := L.CheckString(3)
-	for {
-		i := strings.IndexByte(news, strEsc)
-		if i < 0 {
-			break
-		}
-		b.AddString(news[:i])
-		p := i + 1 /* skip ESC */
-		if p >= len(news) {
-			L.Error2("invalid use of '%c' in replacement string", strEsc)
-		}
-		if news[p] == strEsc { /* '%%' */
-			b.AddChar(news[p])
-		} else if news[p] == '0' { /* '%0' */
-			b.AddString(ms.src[s:e])
-		} else if news[p] >= '0' && news[p] <= '9' { /* '%n' */
-			cap, resl := strGetOneCapture(ms, int(news[p]-'1'), s, e)
-			if resl == strCapPosition {
-				b.AddValue() /* add position to accumulated result */
-			} else {
-				b.AddString(ms.src[cap : cap+resl])
-			}
+	news, _ := L.ToString(3) /* lua_tolstring(L, 3, &l) */
+	for i := 0; i < len(news); i++ {
+		if news[i] != strEsc {
+			b.AddChar(news[i])
 		} else {
-			L.Error2("invalid use of '%c' in replacement string", strEsc)
+			i++ /* skip ESC */
+			if i >= len(news) {
+				L.Error2("invalid use of '%c' in replacement string", strEsc)
+			}
+			if !localeIsDigit(news[i]) {
+				if news[i] != strEsc {
+					L.Error2("invalid use of '%c' in replacement string", strEsc)
+				}
+				b.AddChar(news[i])
+			} else if news[i] == '0' {
+				b.AddString(ms.src[s:e])
+			} else {
+				strPushOneCapture(ms, int(news[i]-'1'), s, e)
+				strToLString(L, -1) /* if number, convert it to string */
+				L.Remove(-2)         /* remove original value */
+				b.AddValue()         /* add capture to accumulated result */
+			}
 		}
-		news = news[p+1:]
 	}
-	b.AddString(news)
 }
+
 
 // strAddValue adds the replacement value to the buffer (add_value).
 // 5.3.4: void; no "changed" identity flag (that is 5.4).
@@ -834,25 +867,25 @@ func strAddValue(ms *strMatchState, b *Buffer, s, e int, tr int) {
 	L := ms.L
 	switch tr {
 	case LUA_TFUNCTION: /* call the function */
-		L.PushValue(3) /* push the function */
+		L.PushValue(3)
 		n := strPushCaptures(ms, s, e)
-		L.Call(n, 1) /* call it */
+		L.Call(n, 1)
 	case LUA_TTABLE: /* index the table */
-		strPushOneCapture(ms, 0, s, e) /* first capture is the index */
+		strPushOneCapture(ms, 0, s, e)
 		L.GetTable(3)
 	default: /* LUA_TNUMBER or LUA_TSTRING */
-		strAddS(ms, b, s, e) /* add value to the buffer */
+		strAddS(ms, b, s, e)
 		return
 	}
 	if !L.ToBoolean(-1) { /* nil or false? */
-		L.Pop(1)                 /* remove value */
-		b.AddString(ms.src[s:e]) /* keep original text */
+		L.Pop(1)
+		L.PushString(ms.src[s:e]) /* keep original text */
 	} else if !L.IsString(-1) {
 		L.Error2("invalid replacement value (a %s)", TypeName(L.Type(-1)))
-	} else {
-		b.AddValue() /* add result to accumulator */
 	}
+	b.AddValue() /* add result to accumulator */
 }
+
 
 func strGsub(L *State) int {
 	src := L.CheckString(1) /* subject */
@@ -870,16 +903,17 @@ func strGsub(L *State) int {
 	}
 	var ms strMatchState
 	strPrepState(&ms, L, src, len(src), pat, len(pat))
-	b := L.NewBuffer()
-	lastmatch := -1 /* end of last match */
+	var b Buffer
+	strBuffInit(L, &b)
+	lastmatch := -1 /* end of last match; C NULL → -1 */
 	pos := 0        /* current position in the subject */
-	var n int64 /* replacement count */
+	var n int64     /* replacement count */
 	for n < maxS {
 		strReprepState(&ms) /* (re)prepare state for new match */
 		e, ok := strMatch(&ms, pos, 0)
 		if ok && e != lastmatch { /* match? */
 			n++
-			strAddValue(&ms, b, pos, e, tr) /* add replacement to buffer */
+			strAddValue(&ms, &b, pos, e, tr) /* add replacement to buffer */
 			pos = e
 			lastmatch = e
 		} else if pos < ms.srcEnd { /* otherwise, skip one character */
@@ -898,13 +932,14 @@ func strGsub(L *State) int {
 	return 2
 }
 
+
 // ---------------------------------------------------------------------
 // STRING FORMAT
 // ---------------------------------------------------------------------
 
 const (
 	strMaxFormat  = 32
-	strMaxItem    = 120
+	strMaxItem    = 120 + 308 /* 120 + DBL_MAX_10_EXP; MAX_ITEM in lstrlib.c */
 	strFmtFlagsF  = "-+#0 " /* valid flags for a, A, e, E, f, F, g, G */
 	strFmtFlagsX  = "-#0"   /* valid flags for o, x, X */
 	strFmtFlagsI  = "-+0 "  /* valid flags for d, i */
@@ -1434,6 +1469,7 @@ func strAddLiteral(L *State, b *Buffer, arg int) {
 		strAddQuoted(b, s)
 	case LUA_TNUMBER:
 		if !L.IsInteger(arg) { /* float? */
+			/* write as hexa ('%a'); checkdp → force '.' (Go writes '.') */
 			b.AddString(strQuoteFloat(L, L.CheckNumber(arg)))
 		} else { /* integers */
 			n := L.CheckInteger(arg)
@@ -1444,17 +1480,13 @@ func strAddLiteral(L *State, b *Buffer, arg int) {
 			}
 		}
 	case LUA_TNIL, LUA_TBOOLEAN:
-		if L.Type(arg) == LUA_TNIL {
-			b.AddString("nil")
-		} else if L.ToBoolean(arg) {
-			b.AddString("true")
-		} else {
-			b.AddString("false")
-		}
+		strToLString(L, arg) /* ≅ luaL_tolstring (honors __tostring) */
+		b.AddValue()
 	default:
 		L.ArgError(arg, "value has no literal form")
 	}
 }
+
 
 // strToLString converts the value at 'idx' into a string, pushing the
 // result on the stack (luaL_tolstring).  The pushed string is left on
@@ -1568,7 +1600,8 @@ func strFormat(L *State) int {
 	top := L.GetTop()
 	arg := 1
 	strfrmt := L.CheckString(arg)
-	b := L.NewBuffer()
+	var b Buffer
+	strBuffInit(L, &b)
 	i := 0
 	for i < len(strfrmt) {
 		if strfrmt[i] != strEsc {
@@ -1598,29 +1631,21 @@ func strFormat(L *State) int {
 			strCheckFormat(L, form, strFmtFlagsC, false)
 			b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", string([]byte{byte(L.CheckInteger(arg))})))
 		case 'd', 'i':
-			/* C fetches the argument first -- 'intcase' is
-			   'luaL_checkinteger(L, arg); checkformat(...)' -- so a
-			   value that is not an integer is complained about even
-			   when the specification is itself invalid: '%#d' with
-			   1.5 answers "number has no integer representation",
-			   not "invalid conversion specification". */
+			/* C fetches the argument first */
 			n := L.CheckInteger(arg)
 			strCheckFormat(L, form, strFmtFlagsI, true)
 			if f := strParseFormat(form); n == 0 && f.prec == 0 {
-				/* C's printf still writes the sign when there are no
-				   digits to write; Go's fmt returns before it gets
-				   there.  See strFormatZeroInt. */
 				b.AddString(strFormatZeroInt(f))
 			} else {
 				b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", n))
 			}
 		case 'u':
-			n := L.CheckInteger(arg) /* as in 'intcase': value first */
+			n := L.CheckInteger(arg)
 			strCheckFormat(L, form, strFmtFlagsU, true)
 			uform := strStripSignedFlags(form)
 			b.AddString(fmt.Sprintf(uform[:len(uform)-1]+"d", uint64(n)))
 		case 'o', 'x', 'X':
-			n := L.CheckInteger(arg) /* as in 'intcase': value first */
+			n := L.CheckInteger(arg)
 			strCheckFormat(L, form, strFmtFlagsX, true)
 			b.AddString(strFormatUnsigned(strParseFormat(form),
 				uint64(n), spec))
@@ -1628,7 +1653,6 @@ func strFormat(L *State) int {
 			strCheckFormat(L, form, strFmtFlagsF, true)
 			b.AddString(strNumber2StrX(L, form, L.CheckNumber(arg)))
 		case 'e', 'E', 'f', 'g', 'G':
-			/* C reads the number first here too. */
 			n := L.CheckNumber(arg)
 			strCheckFormat(L, form, strFmtFlagsF, true)
 			b.AddString(strFormatFloat(form, n))
@@ -1636,9 +1660,8 @@ func strFormat(L *State) int {
 			/* 5.3.4: 'p' (and 'nLlh') is an invalid format option. */
 			return L.Error2("invalid option '%%%c' to 'format'", form[len(form)-1])
 		case 'q':
-			/* 5.3.4: addliteral(L, &b, arg) — form width/flags ignored,
-			   not 5.4's "specifier '%q' cannot have modifiers". */
-			strAddLiteral(L, b, arg)
+			/* 5.3.4: addliteral — form width/flags ignored */
+			strAddLiteral(L, &b, arg)
 		case 's':
 			s := strToLString(L, arg)
 			if len(form) == 2 { /* no modifiers? */
@@ -1649,7 +1672,6 @@ func strFormat(L *State) int {
 				}
 				strCheckFormat(L, form, strFmtFlagsC, true)
 				if !strings.Contains(form, ".") && len(s) >= 100 {
-					/* no precision and string is too long to be formatted */
 					b.AddValue() /* keep entire string */
 				} else { /* format the string */
 					b.AddString(strFormatS(form, s))
@@ -1663,6 +1685,7 @@ func strFormat(L *State) int {
 	b.PushResult()
 	return 1
 }
+
 
 // ---------------------------------------------------------------------
 // PACK/UNPACK
@@ -1860,37 +1883,33 @@ func strGetDetails(h *strHeader, totalsize int, fmt string, i *int, psize, ntoal
 
 // strPackInt packs the integer 'n' with 'size' bytes and the given
 // endianness (packint).
-func strPackInt(buf *bytes.Buffer, n uint64, islittle bool, size int, neg bool) {
-	var b [8]byte
+func strPackInt(b *Buffer, n uint64, islittle bool, size int, neg bool) {
+	buff := b.PrepBuffSize(size)
 	if islittle {
-		binary.LittleEndian.PutUint64(b[:], n)
+		buff[0] = byte(n & strMC)
 	} else {
-		binary.BigEndian.PutUint64(b[:], n)
+		buff[size-1] = byte(n & strMC)
 	}
-	if size <= 8 {
+	for i := 1; i < size; i++ {
+		n >>= strNB
 		if islittle {
-			buf.Write(b[:size])
+			buff[i] = byte(n & strMC)
 		} else {
-			buf.Write(b[8-size:])
+			buff[size-1-i] = byte(n & strMC)
 		}
-		return
 	}
-	pad := byte(0)
-	if neg {
-		pad = strMC /* negative number needs sign extension */
-	}
-	if islittle {
-		buf.Write(b[:])
-		for i := 8; i < size; i++ {
-			buf.WriteByte(pad)
+	if neg && size > strSzInt { /* negative number need sign extension? */
+		for i := strSzInt; i < size; i++ {
+			if islittle {
+				buff[i] = strMC
+			} else {
+				buff[size-1-i] = strMC
+			}
 		}
-	} else {
-		for i := 0; i < size-8; i++ {
-			buf.WriteByte(pad)
-		}
-		buf.Write(b[:])
 	}
+	b.AddSize(size)
 }
+
 
 // strUnpackInt unpacks an integer with 'size' bytes (unpackint).
 func strUnpackInt(L *State, data string, pos int, islittle bool, size, issigned int) int64 {
@@ -1934,16 +1953,20 @@ func strUnpackInt(L *State, data string, pos int, islittle bool, size, issigned 
 
 // strPackBits writes the low 'n' bytes of 'bits' with the given
 // endianness (copywithendian).
-func strPackBits(buf *bytes.Buffer, bits uint64, n int, islittle bool) {
-	var b [8]byte
+func strPackBits(b *Buffer, bits uint64, n int, islittle bool) {
+	/* copywithendian into a freshly prepped buffer slot */
+	buff := b.PrepBuffSize(n)
+	var tmp [8]byte
 	if islittle {
-		binary.LittleEndian.PutUint64(b[:], bits)
-		buf.Write(b[:n])
+		binary.LittleEndian.PutUint64(tmp[:], bits)
+		copy(buff, tmp[:n])
 	} else {
-		binary.BigEndian.PutUint64(b[:], bits)
-		buf.Write(b[8-n:])
+		binary.BigEndian.PutUint64(tmp[:], bits)
+		copy(buff, tmp[8-n:])
 	}
+	b.AddSize(n)
 }
+
 
 // strPadBytes appends 'n' padding bytes -- the tail of a 'cN' field.
 //
@@ -1957,17 +1980,20 @@ func strPackBits(buf *bytes.Buffer, bits uint64, n int, islittle bool) {
 // is written in chunks, and 'n' bytes are never materialised as one slice,
 // because a straight transliteration that grows the string on every step
 // would be quadratic and would never finish.
-func strPadBytes(buf *bytes.Buffer, n int) {
+func strPadBytes(b *Buffer, n int) {
+	/* C: while (len++ < size) luaL_addchar(&b, LUAL_PACKPADBYTE);
+	   Chunked AddBytes: same bytes; avoids quadratic growth on huge 'cN'. */
 	const chunk = 64 * 1024
-	pad := make([]byte, chunk)
+	pad := make([]byte, chunk) /* zero-filled == LUAL_PACKPADBYTE */
 	for n >= chunk {
-		buf.Write(pad)
+		b.AddBytes(pad)
 		n -= chunk
 	}
 	if n > 0 {
-		buf.Write(pad[:n])
+		b.AddBytes(pad[:n])
 	}
 }
+
 
 func strUnpackBits(data string, pos, n int, islittle bool) uint64 {
 	var b [8]byte
@@ -1989,14 +2015,15 @@ func strPack(L *State) int {
 	   absent argument sits where that nil is, so 'string.pack("B")'
 	   reports "number expected, got nil" instead of "got no value". */
 	L.PushNil()
-	var buf bytes.Buffer
+	var b Buffer
+	strBuffInit(L, &b)
 	totalsize := 0 /* accumulate total size of result */
 	for i := 0; i < len(fmtstr); {
 		var size, ntoalign int
 		opt := strGetDetails(&h, totalsize, fmtstr, &i, &size, &ntoalign)
 		totalsize += ntoalign + size
 		for j := 0; j < ntoalign; j++ {
-			buf.WriteByte(strPackPadByte) /* fill alignment */
+			b.AddChar(strPackPadByte) /* fill alignment */
 		}
 		arg++
 		switch opt {
@@ -2006,47 +2033,48 @@ func strPack(L *State) int {
 				lim := int64(1) << uint(size*strNB-1)
 				L.ArgCheck(-lim <= n && n < lim, arg, "integer overflow")
 			}
-			strPackInt(&buf, uint64(n), h.islittle, size, n < 0)
+			strPackInt(&b, uint64(n), h.islittle, size, n < 0)
 		case strKuint: /* unsigned integers */
 			n := L.CheckInteger(arg)
 			if size < strSzInt { /* need overflow check? */
 				L.ArgCheck(uint64(n) < uint64(1)<<uint(size*strNB), arg, "unsigned overflow")
 			}
-			strPackInt(&buf, uint64(n), h.islittle, size, false)
+			strPackInt(&b, uint64(n), h.islittle, size, false)
 		case strKfloat: /* C float */
 			f := float32(L.CheckNumber(arg))
-			strPackBits(&buf, uint64(math.Float32bits(f)), 4, h.islittle)
+			strPackBits(&b, uint64(math.Float32bits(f)), 4, h.islittle)
 		case strKnumber, strKdouble: /* Lua float / C double */
 			f := L.CheckNumber(arg)
-			strPackBits(&buf, math.Float64bits(f), 8, h.islittle)
+			strPackBits(&b, math.Float64bits(f), 8, h.islittle)
 		case strKchar: /* fixed-size string */
 			s := L.CheckString(arg)
 			L.ArgCheck(len(s) <= size, arg, "string longer than given size")
-			buf.WriteString(s)             /* add string */
-			strPadBytes(&buf, size-len(s)) /* pad extra space */
+			b.AddString(s)             /* add string */
+			strPadBytes(&b, size-len(s)) /* pad extra space */
 		case strKstring: /* strings with length count */
 			s := L.CheckString(arg)
 			L.ArgCheck(size >= strPackAlignSize || len(s) < 1<<uint(size*strNB),
 				arg, "string length does not fit in given size")
-			strPackInt(&buf, uint64(len(s)), h.islittle, size, false) /* pack length */
-			buf.WriteString(s)
+			strPackInt(&b, uint64(len(s)), h.islittle, size, false) /* pack length */
+			b.AddString(s)
 			totalsize += len(s)
 		case strKzstr: /* zero-terminated string */
 			s := L.CheckString(arg)
 			L.ArgCheck(strings.IndexByte(s, 0) < 0, arg, "string contains zeros")
-			buf.WriteString(s)
-			buf.WriteByte(0) /* add zero at the end */
+			b.AddString(s)
+			b.AddChar(0) /* add zero at the end */
 			totalsize += len(s) + 1
 		case strKpadding:
-			buf.WriteByte(strPackPadByte)
+			b.AddChar(strPackPadByte)
 			fallthrough
 		case strKpaddalign, strKnop:
 			arg-- /* undo increment */
 		}
 	}
-	L.PushString(buf.String())
+	b.PushResult()
 	return 1
 }
+
 
 func strPackSize(L *State) int {
 	fmtstr := strFmtOpts(L.CheckString(1)) /* format string */

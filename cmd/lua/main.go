@@ -62,19 +62,25 @@ func main() {
 // reference interpreter's observable behaviour.
 func pmainDriver(argv []string) int {
 	pmainArgv = argv
-	if len(argv) > 0 && argv[0] != "" {
-		progName = argv[0]
+	L = lua.NewState() /* create state */
+	if L == nil {
+		/* lua.c: l_message(argv[0], "cannot create state: not enough memory") */
+		pname := "lua"
+		if len(argv) > 0 && argv[0] != "" {
+			pname = argv[0]
+		}
+		fmt.Fprintf(os.Stderr, "%s: cannot create state: not enough memory\n", pname)
+		return 1
 	}
-	L = lua.NewState()
 	defer L.Close()
 	/* the libraries are opened inside 'pmain', after '-E' has had its
 	   say about the environment (see pmain) */
 
 	L.PushGoClosure(pmain, 0)
 	L.PushInteger(int64(len(argv))) /* 1st argument: argc */
-	L.PushInteger(0)                /* 2nd argument: argv (a pointer in C) */
-	status := L.PCall(2, 1, 0)
-	result := L.ToBoolean(-1) /* get result */
+	L.PushInteger(0)                /* 2nd argument: argv (lightuserdata in C) */
+	status := L.PCall(2, 1, 0)      /* do the call */
+	result := L.ToBoolean(-1)       /* get result */
 	/* 'report' is what removes the error object, as in C: it reads the
 	   message off the top of the stack and pops it.  Popping it here
 	   first -- which is what this used to do, before deciding whether
@@ -88,7 +94,8 @@ func pmainDriver(argv []string) int {
 	}
 	L.Pop(1)
 	/* 'pmain' returns false when a chunk it ran failed: the message has
-	   already been reported, only the exit status is left to decide. */
+	   already been reported, only the exit status is left to decide.
+	   C: return (result && status == LUA_OK) ? EXIT_SUCCESS : EXIT_FAILURE */
 	if !result {
 		return 1
 	}
@@ -99,9 +106,14 @@ func pmainDriver(argv []string) int {
 // protected call so that an uncaught error becomes the single result of
 // that call.
 func pmain(L *lua.State) int {
-	argv := pmainArgv
+	argcN, _ := L.ToInteger(1)
+	argc := int(argcN) /* lua_tointeger(L, 1) */
+	argv := pmainArgv           /* C: (char **)lua_touserdata(L, 2) */
 	args, script := collectArgs(argv)
 	L.CheckVersion() /* luaL_checkversion: interpreter has correct version */
+	if len(argv) > 0 && argv[0] != "" { /* argv[0] && argv[0][0] */
+		progName = argv[0]
+	}
 	if args == hasError { /* bad arg? */
 		printUsage(argv[script]) /* 'script' has the index of the bad arg */
 		L.PushBoolean(false)
@@ -111,40 +123,35 @@ func pmain(L *lua.State) int {
 		printVersion()
 	}
 	if args&hasEnv != 0 { /* option '-E'? */
-		L.PushBoolean(true)
+		L.PushBoolean(true) /* signal for libraries to ignore env. vars. */
 		L.SetField(lua.LUA_REGISTRYINDEX, "LUA_NOENV")
 	}
 	/* lua.c opens the libraries here, not before 'pmain': the packages
 	   read LUA_PATH from the environment, and '-E' must already have
 	   signalled that they should not. */
-	L.OpenLibs()
-	optlim := len(argv) /* first argv that is not an option */
-	if script > 0 {
-		optlim = script
-	}
-	createArgTable(L, argv, script) /* create table 'arg' */
-	if args&hasEnv == 0 {           /* no option '-E'? */
+	L.OpenLibs() /* open standard libraries */
+	createArgTable(L, argv, argc, script) /* create table 'arg' */
+	if args&hasEnv == 0 { /* no option '-E'? */
 		if !handleLuaInit() { /* run LUA_INIT */
 			L.PushBoolean(false)
-			return 1
+			return 1 /* error running LUA_INIT */
 		}
 	}
-	if !runArgs(argv, optlim) { /* execute arguments -e and -l */
+	if !runArgs(argv, script) { /* execute arguments -e and -l */
+		L.PushBoolean(false)
+		return 1 /* something failed */
+	}
+	if script < argc && /* execute main script (if there is one) */
+		!handleScript(argv[script], script > 0 && argv[script-1] == "--") {
 		L.PushBoolean(false)
 		return 1
 	}
-	if script > 0 { /* execute main script (if there is one) */
-		if !handleScript(argv[script], script > 1 && argv[script-1] == "--") {
-			L.PushBoolean(false)
-			return 1 /* interrupt in case of error */
-		}
-	}
 	if args&hasI != 0 { /* -i option? */
-		doREPL()
-	} else if script < 1 && args&(hasE|hasV) == 0 { /* no active option? */
+		doREPL() /* do read-eval-print loop */
+	} else if script == argc && args&(hasE|hasV) == 0 { /* no arguments? */
 		if stdinIsTTY() { /* running in interactive mode? */
 			printVersion()
-			doREPL()
+			doREPL() /* do read-eval-print loop */
 		} else {
 			/* lua.c dofile(NULL): report errors but still signal success. */
 			if err := runStdin(); err != nil {
@@ -160,13 +167,13 @@ func pmain(L *lua.State) int {
 // option handling
 // ---------------------------------------------------------------------
 
-// The option flags of lua.c.
+// The option flags of lua.c (has_error / has_i / has_v / has_e / has_E).
 const (
-	hasError = 1  /* bad option */
-	hasI     = 2  /* -i */
-	hasV     = 4  /* -v */
-	hasE     = 8  /* -e */
-	hasEnv   = 16 /* -E */
+	hasError = 1  /* has_error — bad option */
+	hasI     = 2  /* has_i — -i */
+	hasV     = 4  /* has_v — -v */
+	hasE     = 8  /* has_e — -e */
+	hasEnv   = 16 /* has_E — -E */
 )
 
 func usage() string {
@@ -205,20 +212,18 @@ func optChar(a string) byte {
 	return a[1]
 }
 
-// collectArgs is 'collectargs' of lua.c.  It walks the options, saving
-// the program name in 'progName', and returns the option flags plus the
-// index of the script in argv (0 when there is no script).  When an
-// option is invalid it returns hasError and 'script' is the index of the
-// offending argument.
+// collectArgs is 'collectargs' of lua.c. It walks the options and returns
+// the option mask plus 'first' (script index). Like C, 'script' is the
+// index of the script name, or len(argv) (== argc) when there is none —
+// not 0. createArgTable remaps script==argc to 0, matching C.
+// When an option is invalid it returns hasError and 'script' is the
+// index of the offending argument.
 func collectArgs(argv []string) (args, script int) {
-	if len(argv) > 0 && argv[0] != "" { /* is there a program name? */
-		progName = argv[0] /* save it */
-	}
-	for i := 1; i < len(argv); i++ { /* handle arguments */
+	for i := 1; i < len(argv); i++ {
 		a := argv[i]
-		script = i
-		if len(a) == 0 || a[0] != '-' {
-			return args, script /* not an option: this is the script */
+		script = i /* *first = i */
+		if len(a) == 0 || a[0] != '-' { /* not an option? */
+			return args, script /* stop handling options */
 		}
 		/* C reads argv[i][1], which is the NUL of a bare "-"; Go would
 		   panic on that index, so the option character is fetched with
@@ -228,29 +233,21 @@ func collectArgs(argv []string) (args, script int) {
 			if len(a) > 2 { /* extra characters after '--'? */
 				return hasError, i /* invalid option */
 			}
-			/* if there is a script name, it comes after '--' */
-			if i+1 < len(argv) {
-				script = i + 1
-			} else {
-				script = 0
-			}
+			script = i + 1 /* *first = i + 1; may equal argc */
 			return args, script
 		case 0: /* '-' */
 			return args, script /* script "name" is '-' */
-		case 'E': /* ignore environment */
-			if len(a) > 2 {
-				return hasError, i
+		case 'E':
+			if len(a) > 2 { /* extra characters after 1st? */
+				return hasError, i /* invalid option */
 			}
 			args |= hasEnv
 		case 'i':
 			args |= hasI /* (-i implies -v) */
-			if len(a) > 2 {
-				return hasError, i
-			}
-			args |= hasV
+			fallthrough
 		case 'v':
-			if len(a) > 2 {
-				return hasError, i
+			if len(a) > 2 { /* extra characters after 1st? */
+				return hasError, i /* invalid option */
 			}
 			args |= hasV
 		case 'e':
@@ -258,28 +255,28 @@ func collectArgs(argv []string) (args, script int) {
 			fallthrough
 		case 'l': /* both options need an argument */
 			if len(a) == 2 { /* no concatenated argument? */
-				i++ /* try next argv */
+				i++ /* try next 'argv' */
 				if i >= len(argv) || (len(argv[i]) > 0 && argv[i][0] == '-') {
-					return hasError, script /* no arg, or another option */
+					return hasError, script /* no next argument or it is another option */
 				}
 			}
 		default: /* invalid option */
 			return hasError, i
 		}
 	}
-	script = 0 /* no script name */
+	script = len(argv) /* *first = i; no script name */
 	return args, script
 }
 
 // runArgs is 'runargs' of lua.c: it executes the -e statements and -l
 // libraries, in the order they appear, up to (but not including) the
-// script.  It stops at the first failure, whose message has already been
-// reported.
-func runArgs(argv []string, optlim int) bool {
-	for i := 1; i < optlim; i++ {
+// script (index n). It stops at the first failure, whose message has
+// already been reported. Returns false if some code raises an error.
+func runArgs(argv []string, n int) bool {
+	for i := 1; i < n; i++ {
 		option := optChar(argv[i])
-		switch option {
-		case 'e', 'l':
+		/* C: lua_assert(argv[i][0] == '-'); already checked by collectargs */
+		if option == 'e' || option == 'l' {
 			extra := argv[i][2:] /* both options need an argument */
 			if extra == "" {
 				i++
@@ -303,17 +300,16 @@ func runArgs(argv []string, optlim int) bool {
 // createArgTable builds the global 'arg' table the way lua.c's
 // 'createargtable' does: arg[i - script] = argv[i] for every argument, so
 // arg[0] is the script name, arg[1..] the script arguments and the
-// negative indices hold the interpreter and the options.  'script' is the
-// index of the script in argv, or 0 when there is none.
-func createArgTable(L *lua.State, argv []string, script int) {
-	/* C: if (script == argc) script = 0; Go already uses script=0 for none */
-	narg := len(argv) - (script + 1) /* number of positive indices */
-	if narg < 0 {
-		narg = 0
+// negative indices hold the interpreter and the options. 'script' is the
+// index of the script in argv, or argc when there is none (remapped to 0).
+func createArgTable(L *lua.State, argv []string, argc, script int) {
+	if script == argc { /* no script name? */
+		script = 0
 	}
+	narg := argc - (script + 1) /* number of positive indices */
 	L.CreateTable(narg, script+1) /* lua_createtable(narg, script+1) */
-	for i, a := range argv {
-		L.PushString(a)
+	for i := 0; i < argc; i++ {
+		L.PushString(argv[i])
 		L.RawSetI(-2, int64(i-script))
 	}
 	L.SetGlobal("arg")
@@ -580,8 +576,8 @@ func doREPL() {
 			break
 		}
 		chunk := in.Text()
-		/* lua.c's 'pushline': a line starting with '=' means "print the
-		   value of what follows", kept from 5.0. */
+		/* pushline (lua.c): '=' prefix → "return …" (5.2 compat); line is
+		   then handed to loadline = addreturn + multiline. */
 		if strings.HasPrefix(chunk, "=") {
 			chunk = "return " + chunk[1:]
 		}
@@ -598,7 +594,6 @@ func doREPL() {
 	fmt.Println() /* lua_writeline, which ends doREPL */
 }
 
-// replPrompt is lua.c's 'get_prompt'.
 // replPrompt is get_prompt (lua.c): lua_tostring on _PROMPT/_PROMPT2.
 func replPrompt(first bool) string {
 	name, def := "_PROMPT2", luaPrompt2
@@ -623,8 +618,10 @@ func incomplete(err error) bool {
 	return strings.HasSuffix(le.Message, "<eof>")
 }
 
-// loadLine is addreturn + multiline of lua.c: try "return <line>;" first, then
-// the line as a statement with continuation lines while incomplete.
+// loadLine is loadline of lua.c (addreturn + multiline), after pushline has
+// produced the first line in 'chunk' (and applied the '=' → 'return' rewrite).
+// Try "return <line>;" first; on failure, compile as a statement with
+// continuation lines while incomplete.
 func loadLine(chunk *string, in *bufio.Scanner) error {
 	/* addreturn: load "return %s;" — trailing semicolon matches C pushfstring */
 	if err := L.LoadBytes([]byte("return "+*chunk+";"), "=stdin"); err == nil {

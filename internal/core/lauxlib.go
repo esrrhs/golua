@@ -358,54 +358,56 @@ func (L *State) NewLib(l []Reg) {
 }
 
 // ---------------------------------------------------------------------
-// string buffer (lauxlib.c luaL_Buffer)
+// string buffer (lauxlib.c luaL_Buffer / lauxlib.h)
 // ---------------------------------------------------------------------
 
-// Buffer is the Go counterpart of luaL_Buffer.
+// LUAL_BUFFERSIZE is the initial buffer size (luaconf.h).
+// Non-longdouble formula: (int)(0x80 * sizeof(void*) * sizeof(lua_Integer)).
+// On this port (64-bit pointers, int64 Integer) that is 8192, matching
+// include/lauxlib.h and the longdouble branch's literal 8192.
+const LUAL_BUFFERSIZE = 8192
+
+// bufInitSize is an alias kept for older call sites / cgo comments.
+const bufInitSize = LUAL_BUFFERSIZE
+
+// Buffer is luaL_Buffer (lauxlib.h):
 //
-// The content lives in one block, the way it does in PUC-Lua: 'b' is its
-// address, 'n' how much of it is used, 'size' how much it holds, and
-// luaL_addchar is a macro in <lauxlib.h> that writes into 'b[n++]'
-// without calling anything at all. So do luaL_addsize,
-// and so are luaL_bufflen and luaL_buffaddr macros over 'n' and 'b'.
-// An extension compiled against PUC-Lua's own header uses those macros
-// as they are, and they have to describe the content however it was
-// built -- which rules out keeping what luaL_addstring added somewhere
-// of its own: luaL_bufflen would then answer only what was written
-// through the address, and luaL_buffaddr an address with none of it in.
+//	typedef struct luaL_Buffer {
+//	  char *b;  size_t size;  size_t n;  lua_State *L;
+//	  char initb[LUAL_BUFFERSIZE];
+//	} luaL_Buffer;
 //
-// The block has to be memory C may hold, because luaL_prepbuffsize hands
-// out its address and the extension writes into it long after the call
-// returned; that is what 'reallocBlock' is for, and in a build without
-// cgo -- where nothing can ask for the address -- a Go slice stands in.
+// buffinit points b at initb; a userdata "box" appears only when
+// prepbuffsize outgrows initb (buffonstack). Pure-Go hot paths should
+// prefer a stack-local Buffer + BuffInit, like C's luaL_Buffer b on the
+// C stack — NewBuffer heap-allocates for convenience of existing callers.
 type Buffer struct {
-	L      *State
-	boxIdx int     // index of the "box" (a userdata marking the buffer)
-	boxPtr uintptr // address of the box, not a reference the GC follows
+	b     []byte // B->b (aliases initb or grown box storage)
+	size  int    // B->size
+	n     int    // B->n
+	L     *State
+	initb [LUAL_BUFFERSIZE]byte // B->initb
 
-	scratch unsafe.Pointer // the block, when there is one
-	slen    int            // how much it holds
-	n       int            // how much of it is used
-	buf     []byte         // the stand-in, when there is no block
+	// When buffonstack (b no longer aliases initb): UBox on the Lua stack
+	// plus grown storage. boxBuf is the pure-Go block; scratch/slen are the
+	// C-addressable block when cblock is set (cgo luaL_buffinit).
+	boxPtr  uintptr
+	boxBuf  []byte
+	scratch unsafe.Pointer
+	slen    int
 
-	// cblock is whether this buffer's content has to live in the block.
-	// Only luaL_buffinit says so: it is the one that hands the address
-	// out to C. A buffer the port itself makes -- table.concat's,
-	// utf8.char's -- never does, and it would pay for a C allocation
-	// and a finalizer on every call if it did.
+	// cblock: cgo path needs memory C may hold across calls (FLAG:
+	// platform/cgo companion). Pure-Go buffers never set this — they use
+	// initb then a Go []byte box, matching C's initb→UBox choreography
+	// without a C allocator. Not a "fast path" that skips initb.
 	cblock bool
 }
 
-// bufInitSize is the size of the first block: LUAL_BUFFERSIZE.
-const bufInitSize = 8192
-
-// reallocBlock replaces a buffer's block with one of 'sz' bytes, copying
-// the content across; 'old' is nil on the first call. It is set by the
-// cgo layer, which is the only place that can make memory C may hold.
+// reallocBlock replaces a buffer's C block with one of 'sz' bytes, copying
+// the content across; 'old' is nil on the first call. Set by the cgo layer.
 var reallocBlock func(old unsafe.Pointer, sz int) unsafe.Pointer
 
-// bufFree frees a buffer's block once the buffer is unreachable. Like
-// reallocBlock, only the cgo layer can do it.
+// bufFree frees a buffer's C block once the buffer is unreachable.
 var bufFree func(b *Buffer)
 
 func bufFinalize(b *Buffer) {
@@ -414,175 +416,236 @@ func bufFinalize(b *Buffer) {
 	}
 }
 
-// NewBuffer creates a new string buffer (luaL_buffinit).
-// C starts on the Buffer's initb[] with nothing on the Lua stack; a
-// userdata "box" appears only when prepbuffsize outgrows initb (or when
-// the cgo path sets cblock and ensureBox). Pure-Go callers therefore see
-// the same stack discipline as PUC-Lua.
+// buffonstack is C's '#define buffonstack(B) ((B)->b != (B)->initb)'.
+func (B *Buffer) buffonstack() bool {
+	if len(B.b) == 0 {
+		return false
+	}
+	return unsafe.Pointer(&B.b[0]) != unsafe.Pointer(&B.initb[0])
+}
+
+// BuffInit is luaL_buffinit: B starts on embedded initb, nothing on the
+// Lua stack. Prefer this with a stack-local Buffer for hot callers.
+func (L *State) BuffInit(B *Buffer) {
+	B.L = L
+	B.b = B.initb[:]
+	B.n = 0
+	B.size = LUAL_BUFFERSIZE
+	B.boxPtr = 0
+	B.boxBuf = nil
+	/* scratch/cblock left for the cgo export to configure after BuffInit */
+}
+
+// NewBuffer heap-allocates a Buffer and runs BuffInit (luaL_buffinit).
+// Equivalent to C's 'luaL_Buffer b; luaL_buffinit(L, &b);' when the
+// Buffer must outlive the current frame; hot stdlib sites may switch to
+// stack-local Buffer + BuffInit (Apply debt).
 func (L *State) NewBuffer() *Buffer {
-	return &Buffer{L: L}
+	B := &Buffer{}
+	L.BuffInit(B)
+	return B
 }
 
 // ensureBox pushes the UBox userdata C creates in newbox(), and records
 // its address so PushResult / AddValue can find it under the top.
-func (b *Buffer) ensureBox() {
-	if b.boxPtr != 0 {
+func (B *Buffer) ensureBox() {
+	if B.boxPtr != 0 {
 		return
 	}
-	L := b.L
+	L := B.L
 	L.checkStack(1)
 	u := luaS_newudata(L, nil)
 	setuvalue(&L.stack[L.top], u)
 	L.top++
-	b.boxIdx = L.AbsIndex(-1)
-	b.boxPtr = uintptr(unsafe.Pointer(u))
+	B.boxPtr = uintptr(unsafe.Pointer(u))
 }
 
-// room answers the 'sz' bytes just past the content, making the block
-// bigger if it has to. It does not advance 'n': that is AddString's and
-// AddSize's business, because an extension that asked for room says how
-// much of it it used.
-func (b *Buffer) room(sz int) []byte {
-	need := b.n + sz
-	/* C: if (newsize < B->n || newsize - B->n < sz) luaL_error("buffer too large") */
-	if need < b.n || need-b.n < sz {
-		b.L.Error2("buffer too large")
-	}
-	if !b.cblock || reallocBlock == nil {
-		/* no C memory in this build, and nothing to hand an address to */
-		if len(b.buf) < need {
-			newsize := len(b.buf) * 2 /* lauxlib.c: size*2 */
-			if newsize < need {
-				newsize = need
-			}
-			if newsize < bufInitSize {
-				newsize = bufInitSize
-			}
-			grown := make([]byte, newsize)
-			copy(grown, b.buf[:b.n])
-			b.buf = grown
+// newBox is C newbox + memcpy of current content (leaving initb).
+func (B *Buffer) newBox(newsize int) {
+	B.ensureBox()
+	if B.cblock && reallocBlock != nil {
+		p := reallocBlock(nil, newsize)
+		if p == nil && newsize > 0 {
+			B.L.Error2("not enough memory for buffer allocation")
 		}
-		return b.buf[b.n:need]
+		if p != nil {
+			runtime.SetFinalizer(B, bufFinalize) /* Go GC stand-in for UBox.__gc */
+			if B.n > 0 {
+				copy(unsafe.Slice((*byte)(p), newsize)[:B.n], B.b[:B.n])
+			}
+		}
+		B.scratch = p
+		B.slen = newsize
+		if p != nil {
+			B.b = unsafe.Slice((*byte)(p), newsize)
+		} else {
+			B.b = nil
+		}
+		return
 	}
-	if b.scratch != nil && need <= b.slen {
-		return unsafe.Slice((*byte)(b.scratch), b.slen)[b.n:need]
+	grown := make([]byte, newsize)
+	copy(grown, B.b[:B.n])
+	B.boxBuf = grown
+	B.b = grown
+}
+
+// resizeBox is C resizebox(L, -1, newsize) for an existing on-stack box.
+func (B *Buffer) resizeBox(newsize int) {
+	if B.cblock && reallocBlock != nil {
+		p := reallocBlock(B.scratch, newsize)
+		if p == nil && newsize > 0 {
+			reallocBlock(B.scratch, 0) /* free buffer, like C */
+			B.scratch = nil
+			B.slen = 0
+			B.b = nil
+			B.L.Error2("not enough memory for buffer allocation")
+		}
+		B.scratch = p
+		B.slen = newsize
+		if p != nil {
+			B.b = unsafe.Slice((*byte)(p), newsize)
+		} else {
+			B.b = nil
+		}
+		return
 	}
-	newsz := b.slen * 2 /* lauxlib.c: size * 2 */
-	if newsz < need {
-		newsz = need
+	grown := make([]byte, newsize)
+	copy(grown, B.b[:B.n])
+	B.boxBuf = grown
+	B.b = grown
+}
+
+// growTo expands the live block to newsize (newbox or resizebox).
+func (B *Buffer) growTo(newsize int) {
+	if B.buffonstack() {
+		B.resizeBox(newsize)
+	} else {
+		B.newBox(newsize)
 	}
-	if newsz < bufInitSize {
-		newsz = bufInitSize
+	B.size = newsize
+}
+
+// freeBox is resizebox(L, idx, 0): drop grown storage after pushresult.
+func (B *Buffer) freeBox() {
+	if B.cblock && reallocBlock != nil && B.scratch != nil {
+		reallocBlock(B.scratch, 0)
+		B.scratch = nil
+		B.slen = 0
 	}
-	/* first on-stack box, like C newbox() when leaving initb */
-	b.ensureBox()
-	p := reallocBlock(b.scratch, newsz)
-	if p == nil && newsz > 0 {
-		/* C: resizebox frees then luaL_error(this message) */
-		b.L.Error2("not enough memory for buffer allocation")
+	B.boxBuf = nil
+	B.b = nil
+	B.size = 0
+}
+
+// room is luaL_prepbuffsize: returns a slice of at least sz free bytes
+// at &B.b[B.n], growing via size*2 / n+sz like C.
+func (B *Buffer) room(sz int) []byte {
+	/* cgo: Go initb is not stable for C to hold; leave initb on first prep
+	   so buffonstack becomes true and scratch is C memory (cdlopen room(0)). */
+	if B.cblock && !B.buffonstack() && reallocBlock != nil {
+		B.growTo(B.size)
 	}
-	if b.scratch == nil && p != nil {
-		runtime.SetFinalizer(b, bufFinalize) /* Go GC stand-in for UBox.__gc */
+	if B.size-B.n < sz { /* not enough space? */
+		newsize := B.size * 2 /* double buffer size */
+		if newsize-B.n < sz { /* not big enough? */
+			newsize = B.n + sz
+		}
+		if newsize < B.n || newsize-B.n < sz {
+			B.L.Error2("buffer too large")
+		}
+		B.growTo(newsize)
 	}
-	b.scratch = p
-	b.slen = newsz
-	return unsafe.Slice((*byte)(p), newsz)[b.n:need]
+	return B.b[B.n : B.n+sz]
 }
 
 // AddString is luaL_addstring.
-func (b *Buffer) AddString(s string) {
-	b.AddBytes([]byte(s))
+func (B *Buffer) AddString(s string) {
+	B.AddBytes([]byte(s))
 }
 
 // AddBytes is luaL_addlstring (length-explicit; Go []byte stand-in).
-func (b *Buffer) AddBytes(p []byte) {
-	if len(p) > 0 { /* avoid copy when p can be empty/nil */
-		copy(b.room(len(p)), p)
-		b.AddSize(len(p))
+func (B *Buffer) AddBytes(p []byte) {
+	if len(p) > 0 { /* avoid copy when p can be empty/nil — C: if (l > 0) */
+		copy(B.room(len(p)), p)
+		B.AddSize(len(p))
 	}
 }
 
 // AddChar is luaL_addchar.
-func (b *Buffer) AddChar(c byte) {
-	b.room(1)[0] = c
-	b.n++
+func (B *Buffer) AddChar(c byte) {
+	B.room(1)[0] = c
+	B.n++
 }
 
 // AddValue adds the value on top of the stack, converted to a string
 // (luaL_addvalue). Matches C: lua_tolstring then addlstring; a
 // non-coercible value contributes zero bytes (no Go-only error).
-// When the buffer box is under the value (buffonstack), the value is
-// moved below the box before the copy, then removed — same as C.
-func (b *Buffer) AddValue() {
-	L := b.L
+// buffonstack is checked before insert and again after addlstring
+// (growth may push a box mid-call) — same as C.
+func (B *Buffer) AddValue() {
+	L := B.L
 	s, _ := L.ToString(-1)
-	onBox := false
-	if b.boxPtr != 0 && L.GetTop() >= 2 {
-		v := &L.stack[L.top-2]
-		if ttisfulluserdata(v) && uintptr(unsafe.Pointer(uvalue(v))) == b.boxPtr {
-			onBox = true
-			L.Insert(-2) /* put value below buffer */
-		}
+	if B.buffonstack() {
+		L.Insert(-2) /* put value below buffer */
 	}
-	b.AddString(s)
-	if onBox {
+	B.AddString(s)
+	if B.buffonstack() {
 		L.Remove(-2) /* remove value */
 	} else {
-		L.Pop(1)
+		L.Pop(1) /* remove value */
 	}
 }
 
-func (b *Buffer) Len() int { return b.n }
+// Len is luaL_bufflen (macro over n).
+func (B *Buffer) Len() int { return B.n }
 
 // String answers what the buffer holds, without touching it.
-func (b *Buffer) String() string {
-	if b.n == 0 {
+func (B *Buffer) String() string {
+	if B.n == 0 {
 		return ""
 	}
-	if b.scratch != nil {
-		return string(unsafe.Slice((*byte)(b.scratch), b.n))
-	}
-	return string(b.buf[:b.n])
+	return string(B.b[:B.n])
 }
 
 // PushResult finishes the buffer and pushes the resulting string
-// (luaL_pushresult). When a box is on the stack it is removed, matching
-// C's buffonstack path (one value out where the box was).
-func (b *Buffer) PushResult() {
-	L := b.L
-	L.PushString(b.String())
-	b.n = 0
-	if b.boxPtr != 0 && L.GetTop() >= 2 {
-		v := &L.stack[L.top-2]
-		if ttisfulluserdata(v) && uintptr(unsafe.Pointer(uvalue(v))) == b.boxPtr {
-			L.Remove(-2) /* remove box header */
+// (luaL_pushresult). When buffonstack, free the box storage and remove
+// the UBox — one value out where the box was.
+func (B *Buffer) PushResult() {
+	L := B.L
+	L.PushString(B.String())
+	if B.buffonstack() {
+		B.freeBox() /* resizebox(L, -2, 0) */
+		if B.boxPtr != 0 && L.GetTop() >= 2 {
+			v := &L.stack[L.top-2]
+			if ttisfulluserdata(v) && uintptr(unsafe.Pointer(uvalue(v))) == B.boxPtr {
+				L.Remove(-2) /* remove its header from the stack */
+			}
 		}
 	}
-	b.boxPtr = 0
-	b.boxIdx = 0
+	B.n = 0
+	B.boxPtr = 0
 }
 
 // PushResultSize is luaL_pushresultsize: addsize then pushresult.
-func (b *Buffer) PushResultSize(sz int) {
-	b.AddSize(sz)
-	b.PushResult()
+func (B *Buffer) PushResultSize(sz int) {
+	B.AddSize(sz)
+	B.PushResult()
 }
 
 // PrepBuffSize is luaL_prepbuffsize: returns a slice of at least sz free bytes.
-func (b *Buffer) PrepBuffSize(sz int) []byte { return b.room(sz) }
+func (B *Buffer) PrepBuffSize(sz int) []byte { return B.room(sz) }
 
 // BuffInitSize is luaL_buffinitsize: buffinit then prepbuffsize.
+// Heap form for callers that need a *Buffer; stack-local sites can
+// BuffInit(&B) then B.PrepBuffSize(sz).
 func (L *State) BuffInitSize(sz int) (*Buffer, []byte) {
-	b := L.NewBuffer()
-	return b, b.PrepBuffSize(sz)
+	B := L.NewBuffer()
+	return B, B.PrepBuffSize(sz)
 }
 
-// AddSize says that 'n' more bytes were written into the room
-// PrepBuffSize handed out (luaL_addsize).
-func (b *Buffer) AddSize(n int) {
-	if n > 0 {
-		b.n += n
-	}
+// AddSize is luaL_addsize: n more bytes were written into the prep room.
+func (B *Buffer) AddSize(n int) {
+	B.n += n
 }
 
 // ---------------------------------------------------------------------
@@ -714,8 +777,8 @@ func (L *State) stackTraceback(L1 *State, msg string, hasMsg bool, level int) st
 		limit2show--
 		if skip {
 			n := last - level - tracebackLevels2 + 1 /* levels to skip */
-			sb.WriteString("\n\t...") /* 5.3.4: no level count */
-			level += n /* and skip to the last levels */
+			sb.WriteString("\n\t...")                /* 5.3.4: no level count */
+			level += n                               /* and skip to the last levels */
 			continue
 		}
 		fv := &L1.stack[ar.ci.funcIdx]
@@ -770,7 +833,7 @@ func (L *State) TestUserData(ud int, tname string) any {
 	if p != nil { /* value is a userdata? */
 		if L.GetMetaTable(ud) { /* does it have a metatable? */
 			L.GetField(LUA_REGISTRYINDEX, tname) /* get correct metatable */
-			if !L.RawEqual(-1, -2) { /* not the same? */
+			if !L.RawEqual(-1, -2) {             /* not the same? */
 				p = nil /* userdata with wrong metatable */
 			}
 			L.Pop(2) /* remove both metatables */
@@ -820,7 +883,7 @@ func (L *State) FindTable(idx int, fname string, szhint int) string {
 			L.PushValue(-2)
 			L.SetTable(-4) /* set new table into field */
 		} else if !L.IsTable(-1) { /* field has a non-table value? */
-			L.Pop(2) /* remove table and value */
+			L.Pop(2)     /* remove table and value */
 			return fname /* return problematic part of the name */
 		}
 		L.Remove(-2) /* remove previous table */
@@ -853,7 +916,7 @@ func (L *State) OpenLib(libname string, l []Reg, nup int) {
 	L.CheckVersion()
 	if libname != "" {
 		L.PushModule(libname, len(l)) /* get/create library table */
-		L.Insert(-(nup + 1))            /* move library table below upvalues */
+		L.Insert(-(nup + 1))          /* move library table below upvalues */
 	}
 	if l != nil {
 		L.SetFuncs(l, nup)

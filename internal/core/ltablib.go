@@ -134,23 +134,24 @@ func tableAddField(L *State, b *Buffer, i int64) {
 	L.GetI(1, i)
 	if !L.IsString(-1) {
 		L.Error2("invalid value (%s) at index %d in table for 'concat'",
-			TypeName(L.Type(-1)), i)
+			L.TypeName(-1), i)
 	}
 	b.AddValue()
 }
 
 func tableConcat(L *State) int {
+	var b Buffer /* stack-local like C luaL_Buffer b */
 	last := tableAuxGetn(L, 1, tabR)
-	sep := L.OptString(2, "")
+	sep := L.OptString(2, "") /* ≡ luaL_optlstring(L, 2, "", &lsep) */
 	i := L.OptInteger(3, 1)
 	last = L.OptInteger(4, last)
-	b := L.NewBuffer()
+	L.BuffInit(&b) /* luaL_buffinit(L, &b) — not NewBuffer heap */
 	for ; i < last; i++ {
-		tableAddField(L, b, i)
-		b.AddString(sep)
+		tableAddField(L, &b, i)
+		b.AddString(sep) /* ≡ luaL_addlstring(&b, sep, lsep) */
 	}
 	if i == last { /* add last value (if interval was not empty) */
-		tableAddField(L, b, i)
+		tableAddField(L, &b, i)
 	}
 	b.PushResult()
 	return 1
