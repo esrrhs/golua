@@ -43,24 +43,27 @@ func lTolstring(L *State, idx int) string {
 // ---------------------------------------------------------------------
 
 func basePrint(L *State) int {
-	n := L.GetTop()           /* number of arguments */
-	for i := 1; i <= n; i++ { /* for each argument */
-		s := lTolstring(L, i) /* convert it to string */
-		if i > 1 {            /* not the first element? */
-			os.Stdout.WriteString("\t") /* add a tab before it */
+	/* Lua 5.3.4: call global tostring (5.4 uses luaL_tolstring directly). */
+	n := L.GetTop() /* number of arguments */
+	L.GetGlobal("tostring")
+	for i := 1; i <= n; i++ {
+		L.PushValue(-1) /* function to be called */
+		L.PushValue(i)  /* value to print */
+		L.Call(1, 1)
+		s, ok := L.ToString(-1) /* get result */
+		if !ok {
+			return L.Error2("'tostring' must return a string to 'print'")
 		}
-		os.Stdout.WriteString(s) /* print it */
-		L.Pop(1)                 /* pop result */
+		if i > 1 {
+			os.Stdout.WriteString("\t")
+		}
+		os.Stdout.WriteString(s)
+		L.Pop(1) /* pop result */
 	}
 	os.Stdout.WriteString("\n")
 	return 0
 }
 
-/*
-** Creates a warning with all given arguments.
-** Check first for errors; otherwise an error may interrupt
-** the composition of a warning, leaving it unfinished.
- */
 func baseWarn(L *State) int {
 	n := L.GetTop()  /* number of arguments */
 	L.CheckString(1) /* at least one argument */
