@@ -1,0 +1,15 @@
+gap is an hour or nothing	true
+isdst true is never later	true
+isdst absent agrees with one of them	true
+hours written back	true
+field is consistent	true	true
+mid-month	true	true	true
+round trip	true
+a day is a day	true
+epoch is a number	true
+month 13	2024	1	1
+hour 25	2023	1	2	1
+false	field 'day' missing in date table
+false	field 'day' missing in date table
+false	field 'day' missing in date table
+done

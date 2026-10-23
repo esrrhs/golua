@@ -1,0 +1,26 @@
+true|nil|"(load):1: <eof> expected near 'return'"
+true|nil|"(load):1: unexpected symbol near '42'"
+function
+function
+true|nil|"(load):1: <eof> expected near 'return'"
+true|nil|"29_load.lua:37: reader"
+true|nil|"reader function must return a string"
+true|nil|"reader function must return a string"
+function	1	3
+true	nil	1
+true|nil|"[string \"return 1\"]:1: <eof> expected"
+true|function: 0xADDR
+false|"a:1: z"
+true|nil|"[string \"\"]:1: unexpected symbol"
+function
+true|nil|"attempt to load a binary chunk (mode is 't')"
+true|nil|"attempt to load a text chunk (mode is 'b')"
+true|nil|"attempt to load a text chunk (mode is 'x')"
+true|nil|"b: version mismatch in precompiled chunk"
+string
+false|"unable to dump given function"
+false|"bad argument #1 to 'string.dump' (function expected, got number)"
+table: 0xADDR
+42
+1
+done

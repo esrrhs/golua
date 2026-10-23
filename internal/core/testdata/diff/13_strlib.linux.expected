@@ -1,0 +1,52 @@
+1	5
+14	18
+5	7
+nil
+6	6
+1	5
+nil
+hello	world
+hello
+world
+hello
+lua
+3	4
+0
+hello|world|hello|lua|
+a=1|b=2|c=3|
+x	y
+hi world, hi lua	2
+W W, W W	4
+<hello> <world>, <hello> <lua>	4
+hi world, hello lua	1
+A!B!C!	3
+aonebtwoc3	3
+-a-b-c-	4
+x	1
+2	2
+2	2
+1	1
+1	5
+5	11
+a.b.c	2
+ABC	abc
+ababab		ab-ab
+ell	llo	hello	
+olleh	5
+65	66	67
+ABC
+ 3.14|42   |00007|ff|FF|10|A|str|"a\"b\
+"
+42 -42 42 1.500000 1.5 1.500000e+00 1.500000E+00 0xADDR.8p+0 0X1.8P+0
+a          b c         |
+false	bad argument #2 to 'string.format' (number expected, got string)
+false	invalid option '%y' to 'format'
+false	invalid format (width or precision too long)
+10	16	10.5	10
+2	255	35	3
+nil	nil	nil
+lua: 13_strlib.lua:62: bad argument #1 to 'tonumber' (string expected, got number)
+stack traceback:
+	[C]: in function 'tonumber'
+	13_strlib.lua:62: in main chunk
+	[C]: in ?

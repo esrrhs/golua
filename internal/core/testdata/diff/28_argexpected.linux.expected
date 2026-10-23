@@ -1,0 +1,46 @@
+false	bad argument #3 to 'string.gsub' (string/function/table expected)
+false	bad argument #3 to 'string.gsub' (string/function/table expected)
+false	bad argument #1 to 'rawlen' (table or string expected)
+false	bad argument #1 to 'rawlen' (table or string expected)
+false	bad argument #1 to 'rawlen' (table or string expected)
+false	bad argument #1 to 'rawlen' (table or string expected)
+false	bad argument #2 to 'setmetatable' (nil or table expected)
+false	bad argument #2 to 'debug.setmetatable' (nil or table expected)
+false	bad argument #2 to 'setmetatable' (nil or table expected)
+false	bad argument #2 to 'debug.setmetatable' (nil or table expected)
+false	bad argument #2 to 'setmetatable' (nil or table expected)
+false	bad argument #2 to 'debug.setmetatable' (nil or table expected)
+false	bad argument #2 to 'setmetatable' (nil or table expected)
+false	bad argument #2 to 'debug.setmetatable' (nil or table expected)
+true	table: 0xADDR
+true	table: 0xADDR
+false	bad argument #1 to 'coroutine.resume' (thread expected)
+false	bad argument #1 to 'coroutine.status' (thread expected)
+false	attempt to call a nil value
+true	false
+false	bad argument #1 to 'coroutine.resume' (thread expected)
+false	bad argument #1 to 'coroutine.status' (thread expected)
+false	attempt to call a nil value
+true	false
+false	bad argument #1 to 'coroutine.resume' (thread expected)
+false	bad argument #1 to 'coroutine.status' (thread expected)
+false	attempt to call a nil value
+true	false
+false	bad argument #1 to 'coroutine.resume' (thread expected)
+false	bad argument #1 to 'coroutine.status' (thread expected)
+false	attempt to call a nil value
+true	false
+false	bad argument #1 to 'coroutine.resume' (thread expected)
+false	bad argument #1 to 'coroutine.status' (thread expected)
+false	attempt to call a nil value
+true	false
+false	bad argument #1 to 'io.close' (FILE* expected, got My Type)
+false	bad argument #1 to '?' (FILE* expected, got number)
+false	bad argument #1 to '?' (FILE* expected, got string)
+false	bad argument #1 to '?' (FILE* expected, got boolean)
+false	bad argument #1 to '?' (FILE* expected, got function)
+false	bad argument #1 to '?' (FILE* expected, got table)
+false	bad argument #1 to 'io.close' (FILE* expected, got table)
+written through a real handle
+true	file (0xADDR)
+done

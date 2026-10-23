@@ -1,0 +1,137 @@
+== stdout/stderr ==
+file	file	file
+nil	nil	nil
+true
+== open modes ==
+true	file
+r	true	file
+rb	true	file
+r+	true	file
+rw	ERR:bad argument #2 to 'io.open' (invalid mode)
+a	true	file
+ab	true	file
+a+	true	file
+false|"bad argument #2 to 'io.open' (invalid mode)"
+false|"bad argument #2 to 'io.open' (invalid mode)"
+true|file (0xADDR)
+false|"bad argument #1 to 'io.open' (string expected, got no value)"
+true|nil|"42: No such file or directory"|2
+false|"bad argument #1 to 'io.open' (string expected, got nil)"
+true|nil|"no_such_file_xyz: No such file or directory"|2
+true	file
+== read formats ==
+a	"line1\
+line2\
+line3\
+10 20.5 0xADDR abc\
+"
+l	"line1"
+ll	"line1"|"line2"
+L	"line1\
+"
+LL	"line1\
+"|"line2\
+"
+n	
+nn	
+nnnn	
+4	"line"
+0	""
+100	"line1\
+line2\
+line3\
+10 20.5 0xADDR abc\
+"
+la	"line1"|"line2\
+line3\
+10 20.5 0xADDR abc\
+"
+al	"line1\
+line2\
+line3\
+10 20.5 0xADDR abc\
+"
+*l	"line1"
+*a	"line1\
+line2\
+line3\
+10 20.5 0xADDR abc\
+"
+*n	
+*L	"line1\
+"
+bad1	true|"line1\
+line2\
+line3\
+10 20.5 0xADDR abc\
+"
+bad2	false|"bad argument #2 to '?' (invalid format)"
+bad3	false|"bad argument #2 to '?' (string expected, got boolean)"
+bad4	false|"bad argument #2 to '?' (string expected, got table)"
+bad5	false|"not enough memory for buffer allocation"
+== lines ==
+4	line1/line2/line3/10 20.5 0xADDR abc
+4	"line1\
+"/"line2\
+"/"line3\
+"/"10 20.5 0xADDR abc\
+"
+0	
+4
+4
+false|"cannot open file '42' (No such file or directory)"
+true|function: 0xADDR
+false|"cannot open file 'no_such_file_xyz' (No such file or directory)"
+true|function: 0xADDR
+true|function: 0xADDR
+== write ==
+true|file (0xADDR)
+true|file (0xADDR)
+false|"bad argument #2 to '?' (string expected, got nil)"
+false|"bad argument #2 to '?' (string expected, got boolean)"
+false|"bad argument #2 to '?' (string expected, got table)"
+false|"bad argument #3 to '?' (string expected, got nil)"
+"a12.5b1"
+true
+== seek ==
+true|0
+0	line1
+6	line2
+12
+35	nil
+0	line1
+false|"bad argument #2 to '?' (invalid option 'nowhere')"
+true|nil|"Invalid argument"|22
+false|"bad argument #3 to '?' (number has no integer representation)"
+true|135	
+false|"attempt to use a closed file"
+false|"attempt to use a closed file"
+false|"attempt to use a closed file"
+false|"attempt to use a closed file"
+false|"attempt to use a closed file"
+== closing twice ==
+true
+false|"attempt to use a closed file"
+false|"attempt to use a closed file"
+closed file
+true|true
+false|"attempt to use a closed file"
+== output/input redirection ==
+file (0xADDR)
+nil
+true|file (0xADDR)
+true|file (0xADDR)
+false|"cannot open file '42' (No such file or directory)"
+true|file (0xADDR)
+== file methods ==
+table
+true
+FILE*
+false|"41_io.lua:201: attempt to call a nil value (field 'nope')"
+false|"41_io.lua:202: attempt to call a nil value (method 'nope')"
+false|"41_io.lua:203: attempt to index a FILE* value (upvalue 'h')"
+true|"line1"
+false|"41_io.lua:206: attempt to use a closed file"
+true
+true
+done

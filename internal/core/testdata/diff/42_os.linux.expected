@@ -1,0 +1,109 @@
+== date in UTC ==
+0	1970-01-01 00:00:00	Thu Thursday Jan January
+1	1970-01-01 00:00:01	Thu Thursday Jan January
+59	1970-01-01 00:00:59	Thu Thursday Jan January
+60	1970-01-01 00:01:00	Thu Thursday Jan January
+86399	1970-01-01 23:59:59	Thu Thursday Jan January
+86400	1970-01-02 00:00:00	Fri Friday Jan January
+951782400	2000-02-29 00:00:00	Tue Tuesday Feb February
+1000000000	2001-09-09 01:46:40	Sun Sunday Sep September
+1234567890	2009-02-13 23:31:30	Fri Friday Feb February
+2147483647	2038-01-19 03:14:07	Tue Tuesday Jan January
+4102444800	2100-01-01 00:00:00	Fri Friday Jan January
+"Thu Jan  1 00:00:00 1970"
+"01/01/70"|"00:00:00"
+"AM"|"PM"
+"12"|"12"
+"001"|"002"
+"4"|"5"
+"00"|"00"
+"UTC"
+"%"
+"\
+\9"
+false|"bad argument #1 to 'os.date' (invalid conversion specifier '%Q')"
+false|"bad argument #1 to 'os.date' (invalid conversion specifier '%')"
+true|"42"
+false|"bad argument #2 to 'os.date' (number expected, got string)"
+false|"bad argument #2 to 'os.date' (number has no integer representation)"
+true|"1969"
+== date tables in UTC ==
+0	day=1 hour=0 isdst=false min=0 month=1 sec=0 wday=5 yday=1 year=1970
+951782400	day=29 hour=0 isdst=false min=0 month=2 sec=0 wday=3 yday=60 year=2000
+1234567890	day=13 hour=23 isdst=false min=31 month=2 sec=30 wday=6 yday=44 year=2009
+false
+true
+true|table: 0xADDR
+true|"z*t"
+true|"q*t"
+== time round trips ==
+0	true
+951782400	true
+1000000000	true
+1234567890	true
+2147483647	true
+1234567890
+0
+false|"bad argument #1 to 'os.time' (table expected, got number)"
+false|"bad argument #1 to 'os.time' (table expected, got string)"
+false|"field 'day' missing in date table"
+false|"field 'day' missing in date table"
+false|"field 'day' missing in date table"
+true|946728000
+false|"field 'hour' is not an integer"
+true|978350400
+true|944049600
+true|949406400
+true|946774800
+true|946692000
+true|946688520
+false|"field 'hour' is not an integer"
+"number"
+0
+86400
+951825600
+983448000
+-86400
+== difftime ==
+50.0	-50.0
+0.0	1000000000.0
+false|"bad argument #1 to 'os.difftime' (number expected, got no value)"
+false|"bad argument #2 to 'os.difftime' (number expected, got no value)"
+false|"bad argument #2 to 'os.difftime' (number expected, got string)"
+false|"bad argument #1 to 'os.difftime' (number expected, got string)"
+== getenv ==
+nil
+false|"bad argument #1 to 'os.getenv' (string expected, got no value)"
+true|nil
+string
+== remove and rename ==
+false|"bad argument #1 to 'os.remove' (string expected, got no value)"
+false|"bad argument #1 to 'os.remove' (string expected, got boolean)"
+true|nil|"no_such_file_xyz: No such file or directory"|2
+false|"bad argument #1 to 'os.rename' (string expected, got no value)"
+false|"bad argument #2 to 'os.rename' (string expected, got no value)"
+true|nil|"No such file or directory"|2
+true|nil|"No such file or directory"|2
+true
+true
+nil	string
+== execute ==
+true|true
+true|true|"exit"|0
+true|nil|"exit"|3
+true|nil|"exit"|1
+sh: 1: 42: not found
+true|nil|"exit"|127
+sh: 1: no_such_command_xyz: not found
+true|nil|"exit"|127
+== clock and tmpname ==
+number
+true
+number
+string	true
+== setlocale ==
+string
+string
+true|nil
+string
+done
