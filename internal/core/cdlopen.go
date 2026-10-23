@@ -625,7 +625,7 @@ func lua_arith(p *C.lua_State, op C.int) { stateOf(p).Arith(int(op)) }
 //export lua_newuserdata
 func lua_newuserdata(p *C.lua_State, sz C.size_t) unsafe.Pointer {
 	/* Lua 5.3.4: one user value (like C lua_newuserdata). */
-	return cgoNewUserBlock(stateOf(p), int(sz), 1)
+	return cgoNewUserBlock(stateOf(p), int(sz))
 }
 
 // ---------------------------------------------------------------------

@@ -362,12 +362,14 @@ func twoto(x byte) int          { return 1 << x }
 // Udata (lobject.h)
 // ---------------------------------------------------------------------
 
-// Udata is a full userdata: a Go value plus a metatable and user values.
+// Udata is a full userdata (lobject.h 5.3.4).
+// C lays out a size_t byte blob after the header plus one uservalue
+// (user_/ttuv_). Go keeps val any as the intentional port of that blob
+// (and of cgo malloc blocks via cblock), and a single user Value.
 type Udata struct {
-	nuvalue   uint16
 	metatable *Table
-	uv        []Value        // user values
-	val       any            // the Go value carried by this userdata
+	user      Value          // single uservalue (C user_ + ttuv_)
+	val       any            // Go payload ≈ C getudatamem blob (SPEC)
 	finalized bool           // being watched: its '__gc' is to run
 	finSet    bool           // the Go finalizer has been set, which happens once
 	cblock    unsafe.Pointer // the C block behind it, if it has one

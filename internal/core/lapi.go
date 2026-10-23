@@ -625,12 +625,16 @@ func (L *State) CreateTable(narr, nrec int) {
 func (L *State) NewTable() { L.CreateTable(0, 0) }
 
 // NewUserData creates a full userdata wrapping a Go value
-// (lua_newuserdata). C 5.3.4 allocates a size_t byte blob with a single
-// uservalue; Go keeps a value wrapper plus optional uv[] (nuvalue). Prefer
-// nuvalue==1 for C-shaped userdata; multi-uv remains a Go/5.4-shaped SPEC
-// pending a later lobject/lstring reshape.
+// (lua_newuserdata). C 5.3.4 allocates a size_t byte blob with exactly
+// one uservalue. Go keeps val any as the intentional port of that blob;
+// nuvalue is accepted for API compatibility but must be 0 or 1 — a
+// userdata always has one uservalue slot (nil until set), never a 5.4
+// multi-uv array.
 func (L *State) NewUserData(val any, nuvalue int) any {
-	u := luaS_newudata(L, nuvalue, val)
+	if nuvalue < 0 || nuvalue > 1 {
+		panic("NewUserData: Lua 5.3.4 allows at most one uservalue")
+	}
+	u := luaS_newudata(L, val)
 	L.checkStack(1)
 	setuvalue(&L.stack[L.top], u)
 	L.top++
@@ -660,29 +664,17 @@ func (L *State) GetMetaTable(idx int) bool {
 }
 
 // GetUserValue is lua_getuservalue (lapi.c 5.3.4: single uservalue).
-// The 'n' argument is a Go extension for multi-uv userdata (pass 1 for
-// C-compatible behaviour). Out of range → push nil, return LUA_TNONE.
+// The 'n' argument is kept for API compatibility; only n==1 is valid
+// (C has no n). Out of range / not full userdata → push nil, LUA_TNONE.
 func (L *State) GetUserValue(idx, n int) int {
 	v := index2value(L, idx)
 	L.checkStack(1)
-	if !ttisfulluserdata(v) || n <= 0 {
+	if !ttisfulluserdata(v) || n != 1 {
 		setnilvalue(&L.stack[L.top])
 		L.top++
 		return LUA_TNONE
 	}
-	u := uvalue(v)
-	if u.nuvalue == 0 {
-		/* 5.3.4 userdata always has one uservalue slot (may be nil) */
-		setnilvalue(&L.stack[L.top])
-		L.top++
-		return LUA_TNIL
-	}
-	if n > int(u.nuvalue) {
-		setnilvalue(&L.stack[L.top])
-		L.top++
-		return LUA_TNONE
-	}
-	L.stack[L.top] = u.uv[n-1]
+	L.stack[L.top] = uvalue(v).user
 	L.top++
 	return ttype(&L.stack[L.top-1])
 }
@@ -802,20 +794,17 @@ func (L *State) SetMetaTable(idx int) {
 	L.top--
 }
 
-// SetUserValue sets the n-th user value of the userdata at idx.
+// SetUserValue is lua_setuservalue (lapi.c 5.3.4: single uservalue).
+// The 'n' argument is kept for API compatibility; only n==1 succeeds
+// (C has no n / returns void). Returns 1 on success, 0 otherwise.
 func (L *State) SetUserValue(idx, n int) int {
 	v := index2value(L, idx)
 	val := L.stack[L.top-1]
-	if !ttisfulluserdata(v) {
+	if !ttisfulluserdata(v) || n != 1 {
 		L.top--
 		return 0
 	}
-	u := uvalue(v)
-	if n <= 0 || n > int(u.nuvalue) {
-		L.top--
-		return 0
-	}
-	u.uv[n-1] = val
+	uvalue(v).user = val
 	L.top--
 	return 1
 }

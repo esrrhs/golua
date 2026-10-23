@@ -136,14 +136,12 @@ func luaS_init(L *State) {
 	}
 }
 
-// luaS_newudata creates a full userdata wrapping a Go value.
-func luaS_newudata(L *State, nuvalue int, val any) *Udata {
-	u := &Udata{nuvalue: uint16(nuvalue), val: val}
-	if nuvalue > 0 {
-		u.uv = make([]Value, nuvalue)
-		for i := 0; i < nuvalue; i++ {
-			setnilvalue(&u.uv[i])
-		}
-	}
+// luaS_newudata creates a full userdata (lstring.c 5.3.4).
+// C takes size_t and always installs one nil uservalue. Go takes the
+// payload value (≈ blob) and always installs one nil uservalue; there is
+// no multi-uservalue path (5.4 luaS_newudata(nuvalue) bleed removed).
+func luaS_newudata(L *State, val any) *Udata {
+	u := &Udata{val: val}
+	setnilvalue(&u.user) /* setuservalue(L, u, luaO_nilobject) */
 	return u
 }

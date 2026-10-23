@@ -109,7 +109,7 @@ func TestTolstringNotFreedWhileCRuns(t *testing.T) {
 func TestUserdataBlockSurvivesUntilCReturns(t *testing.T) {
 	L := NewState()
 	t.Cleanup(L.Close)
-	block := cgoNewUserBlock(L, 4, 0)
+	block := cgoNewUserBlock(L, 4)
 	*(*byte)(block) = 7
 	beforeUser := cdlUserFrees.Load()
 	beforeFree := cgoFreed.Load()
@@ -140,7 +140,7 @@ func TestUserdataBlockSurvivesUntilCReturns(t *testing.T) {
 func TestUserdataResurrectKeepsBlock(t *testing.T) {
 	L := NewState()
 	t.Cleanup(L.Close)
-	block := cgoNewUserBlock(L, 4, 0)
+	block := cgoNewUserBlock(L, 4)
 	*(*byte)(block) = 0xAB
 	L.NewTable()
 	L.PushGoFunc(func(L *State) int {
@@ -279,7 +279,7 @@ func TestCloseDoesNotFinalizeOtherState(t *testing.T) {
 	L2 := NewState()
 	t.Cleanup(L2.Close)
 
-	block := cgoNewUserBlock(L2, 4, 0)
+	block := cgoNewUserBlock(L2, 4)
 	*(*byte)(block) = 0x5A
 	L2.NewTable()
 	gcRan := false
@@ -311,7 +311,7 @@ func TestCloseDoesNotReleaseOtherStateHold(t *testing.T) {
 	L2 := NewState()
 	t.Cleanup(L2.Close)
 
-	block := cgoNewUserBlock(L2, 4, 0)
+	block := cgoNewUserBlock(L2, 4)
 	*(*byte)(block) = 0xC3
 	L2.NewTable()
 	L2.PushGoFunc(func(L *State) int { return 0 })

@@ -440,7 +440,7 @@ func bufFinalize(b *Buffer) {
 func (L *State) NewBuffer() *Buffer {
 	b := &Buffer{L: L}
 	L.checkStack(2)
-	u := luaS_newudata(L, 0, nil)
+	u := luaS_newudata(L, nil)
 	setuvalue(&L.stack[L.top], u)
 	L.top++
 	b.boxIdx = L.AbsIndex(-1)

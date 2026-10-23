@@ -589,7 +589,7 @@ func ioNewPreFile(L *State) *ioStream {
 	   was opened for is not ours to guess. */
 	s := &ioStream{canR: true, canW: true}
 	ioTrackStream(s)
-	L.NewUserData(s, 1) /* 5.3.4: one uservalue */
+	L.NewUserData(s, 1) /* 5.3.4: single uservalue slot */
 	/* weak: see the note on the field */
 	s.uw = weak.Make(uvalue(&L.stack[L.top-1])) /* the handle C is handed */
 	ioSetMetaTableByName(L, ioFileHandle)

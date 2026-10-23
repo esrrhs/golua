@@ -33,13 +33,14 @@ import (
 // userdata can also have a '__gc' -- lpeg's patterns do. One finalizer
 // serves both, and when a '__gc' is waiting the block is freed after the
 // metamethod has run, so that a C '__gc' still sees its own memory.
-func cgoNewUserBlock(L *State, sz, uv int) unsafe.Pointer {
+func cgoNewUserBlock(L *State, sz int) unsafe.Pointer {
 	block := C.malloc(C.size_t(sz))
 	if block == nil {
 		return nil
 	}
 	C.memset(block, 0, C.size_t(sz))
-	u := luaS_newudata(L, uv, unsafe.Pointer(block))
+	/* 5.3.4: one uservalue; val holds the C block pointer for ToUserData. */
+	u := luaS_newudata(L, unsafe.Pointer(block))
 	u.cblock = block
 	u.len = sz /* lua_rawlen: the extension reads its size back */
 	L.checkStack(1)
