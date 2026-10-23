@@ -3,9 +3,8 @@
 // Surface: basic string ops, pattern engine, string.format, pack/unpack.
 // Offsets replace C 'const char *'; goto-init match loop → for/continue.
 //
-// Buffer: callers use stack-local (var b Buffer; strBuffInit) or, for
-// string.format, a pooled *Buffer (strGetBuffer) — still BuffInit/initb/
-// pushresult like C, not L.NewBuffer() convenience heap without pooling.
+// Buffer: every luaL_Buffer caller is stack-local (var b Buffer; strBuffInit),
+// matching C's luaL_Buffer b on the C stack — not L.NewBuffer() heap.
 //
 // 5.3.4 (not 5.4): createmetatable is __index only; gmatch SetTop(2) no init;
 // %q → addliteral (no modifier reject; float via %a / num2straux, not quotefloat);
@@ -21,7 +20,6 @@ import (
 	"math"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // ---------------------------------------------------------------------
@@ -32,32 +30,6 @@ import (
 // Prefer this over State.NewBuffer(), which heap-allocates the Buffer.
 func strBuffInit(L *State, b *Buffer) {
 	L.BuffInit(b)
-}
-
-// strBufferPool reuses *Buffer headers for hot stdlib format (initb slabs
-// are pooled separately in lauxlib). Amortizes the small header that still
-// escapes through AddValue / PushResult.
-var strBufferPool = sync.Pool{New: func() any { return new(Buffer) }}
-
-func strGetBuffer() *Buffer {
-	return strBufferPool.Get().(*Buffer)
-}
-
-func strPutBuffer(b *Buffer) {
-	if b == nil {
-		return
-	}
-	if b.initb != nil { /* error path skipped PushResult */
-		putInitb(b.initb)
-		b.initb = nil
-	}
-	b.L = nil
-	b.boxBuf = nil
-	b.b = nil
-	b.n = 0
-	b.size = 0
-	b.boxPtr = 0
-	strBufferPool.Put(b)
 }
 
 // strBuffInitSize is luaL_buffinitsize: buffinit then prepbuffsize.
@@ -1628,9 +1600,8 @@ func strFormat(L *State) int {
 	top := L.GetTop()
 	arg := 1
 	strfrmt := L.CheckString(arg)
-	b := strGetBuffer()
-	defer strPutBuffer(b)
-	strBuffInit(L, b)
+	var b Buffer
+	strBuffInit(L, &b)
 	i := 0
 	for i < len(strfrmt) {
 		if strfrmt[i] != strEsc {
@@ -1665,11 +1636,6 @@ func strFormat(L *State) int {
 			strCheckFormat(L, form, strFmtFlagsI, true)
 			if f := strParseFormat(form); n == 0 && f.prec == 0 {
 				b.AddString(strFormatZeroInt(f))
-			} else if len(form) == 2 {
-				/* bare %d/%i: l_sprintf into prep room (no fmt.Sprintf / []byte copy) */
-				dst := b.PrepBuffSize(strMaxItem)
-				w := strconv.AppendInt(dst[:0], n, 10)
-				b.AddSize(len(w))
 			} else {
 				b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", n))
 			}
@@ -1695,7 +1661,7 @@ func strFormat(L *State) int {
 			return L.Error2("invalid option '%%%c' to 'format'", form[len(form)-1])
 		case 'q':
 			/* 5.3.4: addliteral — form width/flags ignored */
-			strAddLiteral(L, b, arg)
+			strAddLiteral(L, &b, arg)
 		case 's':
 			s := strToLString(L, arg)
 			if len(form) == 2 { /* no modifiers? */

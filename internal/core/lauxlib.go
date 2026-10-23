@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
-	"sync"
 	"unsafe"
 )
 
@@ -382,18 +381,12 @@ const bufInitSize = LUAL_BUFFERSIZE
 // prepbuffsize outgrows initb (buffonstack). Pure-Go hot paths should
 // prefer a stack-local Buffer + BuffInit, like C's luaL_Buffer b on the
 // C stack — NewBuffer heap-allocates for convenience of existing callers.
-//
-// Go note: initb is a *pooled* [LUAL_BUFFERSIZE]byte, not an embedded
-// array. Embedding the 8KiB array made every escaped Buffer pay ~8296 B
-// per call (string.format was ~9.5 KiB/op). A pointer keeps sizeof(Buffer)
-// small if escape analysis moves B to the heap; the slab is reused via
-// bufferInitbPool. buffonstack / prep / pushresult choreography is unchanged.
 type Buffer struct {
-	b     []byte // B->b (aliases *initb or grown box storage)
+	b     []byte // B->b (aliases initb or grown box storage)
 	size  int    // B->size
 	n     int    // B->n
 	L     *State
-	initb *[LUAL_BUFFERSIZE]byte // B->initb (pooled; see bufferInitbPool)
+	initb [LUAL_BUFFERSIZE]byte // B->initb
 
 	// When buffonstack (b no longer aliases initb): UBox on the Lua stack
 	// plus grown storage. boxBuf is the pure-Go block; scratch/slen are the
@@ -408,21 +401,6 @@ type Buffer struct {
 	// initb then a Go []byte box, matching C's initb→UBox choreography
 	// without a C allocator. Not a "fast path" that skips initb.
 	cblock bool
-}
-
-// bufferInitbPool recycles the LUAL_BUFFERSIZE initial slabs for Buffer.
-var bufferInitbPool = sync.Pool{
-	New: func() any { return new([LUAL_BUFFERSIZE]byte) },
-}
-
-func getInitb() *[LUAL_BUFFERSIZE]byte {
-	return bufferInitbPool.Get().(*[LUAL_BUFFERSIZE]byte)
-}
-
-func putInitb(p *[LUAL_BUFFERSIZE]byte) {
-	if p != nil {
-		bufferInitbPool.Put(p)
-	}
 }
 
 // reallocBlock replaces a buffer's C block with one of 'sz' bytes, copying
@@ -440,19 +418,16 @@ func bufFinalize(b *Buffer) {
 
 // buffonstack is C's '#define buffonstack(B) ((B)->b != (B)->initb)'.
 func (B *Buffer) buffonstack() bool {
-	if B.initb == nil || len(B.b) == 0 {
-		return len(B.b) > 0
+	if len(B.b) == 0 {
+		return false
 	}
 	return unsafe.Pointer(&B.b[0]) != unsafe.Pointer(&B.initb[0])
 }
 
-// BuffInit is luaL_buffinit: B starts on initb, nothing on the Lua stack.
-// Prefer this with a stack-local Buffer for hot callers.
+// BuffInit is luaL_buffinit: B starts on embedded initb, nothing on the
+// Lua stack. Prefer this with a stack-local Buffer for hot callers.
 func (L *State) BuffInit(B *Buffer) {
 	B.L = L
-	if B.initb == nil {
-		B.initb = getInitb()
-	}
 	B.b = B.initb[:]
 	B.n = 0
 	B.size = LUAL_BUFFERSIZE
@@ -506,20 +481,12 @@ func (B *Buffer) newBox(newsize int) {
 		} else {
 			B.b = nil
 		}
-		if B.initb != nil {
-			putInitb(B.initb)
-			B.initb = nil
-		}
 		return
 	}
 	grown := make([]byte, newsize)
 	copy(grown, B.b[:B.n])
 	B.boxBuf = grown
 	B.b = grown
-	if B.initb != nil {
-		putInitb(B.initb)
-		B.initb = nil
-	}
 }
 
 // resizeBox is C resizebox(L, -1, newsize) for an existing on-stack box.
@@ -654,11 +621,6 @@ func (B *Buffer) PushResult() {
 				L.Remove(-2) /* remove its header from the stack */
 			}
 		}
-	} else if B.initb != nil {
-		putInitb(B.initb)
-		B.initb = nil
-		B.b = nil
-		B.size = 0
 	}
 	B.n = 0
 	B.boxPtr = 0
