@@ -89,13 +89,12 @@ func TestFinalizerRuns(t *testing.T) {
 		do
 			local o = {}
 			setmetatable(o, {__gc = function (self)
-				ran = debug.getinfo(1).name
+				-- 5.3.4: CIST_FIN is on the caller; getinfo(1) is the
+				-- finalizer Lua frame (no name), getinfo(2) is "__gc".
+				ran = debug.getinfo(2).name
 			end})
 		end
-		for i = 1, 1000000 do   -- allocating is what drives a cycle
-			local a = {}
-			if ran then break end
-		end
+		collectgarbage("collect")
 		return ran
 	`)
 	if got != "__gc" {
