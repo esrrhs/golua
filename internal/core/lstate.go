@@ -73,6 +73,8 @@ type CallInfo struct {
 	callstatus uint16
 	nExtraArgs int // number of vararg extra arguments
 	oldErrFunc int
+	/* C CallInfo.extra saves func StkId across yield/hook; index stack
+	   keeps funcIdx stable across realloc, so no separate extra field. */
 
 	// trap is ci->u.l.trap: whether the VM must stop at the next
 	// instruction to check hooks (and to correct a moved stack).

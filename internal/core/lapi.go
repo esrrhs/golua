@@ -862,6 +862,13 @@ func (L *State) SetGlobalValue(name string, v Value) {
 // continuation, so the call is made non-yieldable: a 'coroutine.yield'
 // inside the called function raises "attempt to yield across a C-call
 // boundary".
+/* adjustresults (lapi.h): when MULTRET, raise ci.top to L.top. */
+func adjustresults(L *State, nres int) {
+	if nres == LUA_MULTRET && L.ci.top < L.top {
+		L.ci.top = L.top
+	}
+}
+
 func (L *State) Call(nargs, nresults int) {
 	L.callK(nargs, nresults, false)
 }
@@ -890,10 +897,7 @@ func (L *State) callK(nargs, nresults int, k bool) {
 	} else {
 		luaD_callnoyield(L, funcIdx, nresults)
 	}
-	if nresults != LUA_MULTRET && nresults > 0 {
-		// results have already been adjusted by luaD_poscall
-		_ = funcIdx
-	}
+	adjustresults(L, nresults)
 }
 
 // PCall calls a function in protected mode (lua_pcall). Like C's
@@ -917,19 +921,24 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 	if msgh != 0 {
 		ef = L.indexToAbs(msgh)
 	}
+	var status int
 	if k && yieldable(L) {
 		/* C's lua_pcallk takes the yieldable path: the call is made
 		   with CIST_YPCALL set so a 'coroutine.yield' can cross pcall.
 		   5.3.4 has no to-be-closed / __close. */
-		return luaD_pcall(L, func() {
+		status = luaD_pcall(L, func() {
 			luaD_call(L, funcIdx, nresults)
 		}, funcIdx, ef)
+	} else {
+		/* the conventional call: C's f_call goes through luaD_pcall */
+		status = luaD_pcall(L, func() {
+			luaD_callnoyield(L, funcIdx, nresults)
+		}, funcIdx, ef)
 	}
-	/* the conventional call: C's f_call goes through luaD_pcall, whose
-	   'closepaux' hands 'luaF_close' a 'yy' of 0 */
-	return luaD_pcall(L, func() {
-		luaD_callnoyield(L, funcIdx, nresults)
-	}, funcIdx, ef)
+	if status == LUA_OK {
+		adjustresults(L, nresults)
+	}
+	return status
 }
 
 // LoadBytes compiles a chunk, pushing the resulting function on the stack

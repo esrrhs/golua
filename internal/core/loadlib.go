@@ -368,7 +368,7 @@ func pkSearcherCRoot(L *State) int {
 			return pkCheckLoadStat(L, false, filename) /* real error */
 		}
 		/* else: open function not found */
-		L.PushString(fmt.Sprintf("no module '%s' in file '%s'", name, filename))
+		L.PushString(fmt.Sprintf("\n\tno module '%s' in file '%s'", name, filename))
 		return 1
 	}
 	L.PushString(filename) /* will be 2nd argument to module */

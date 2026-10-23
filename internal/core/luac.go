@@ -235,7 +235,8 @@ func (c *luac) combine(L *State, n int) *Proto {
 			f.p[i].upvalues[0].instack = 0
 		}
 	}
-	f.sizelineinfo = 0 /* luac.c: dump omits wrapper lineinfo; pointer kept for listing */
+	f.sizelineinfo = 0
+	f.lineinfo = nil /* luac.c: f->sizelineinfo = 0 (no listing of wrapper) */
 	return f
 }
 

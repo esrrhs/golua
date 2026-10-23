@@ -408,9 +408,20 @@ func osClock(L *State) int {
 	return 1
 }
 
+/* osCheckTime is l_checktime (loslib.c): (time_t)t == t.
+   Target is Linux LP64 (time_t == int64), so every lua_Integer fits. */
+func osCheckTime(L *State, arg int) int64 {
+	t := L.CheckInteger(arg)
+	L.ArgCheck(int64(t) == t, arg, "time out-of-bounds")
+	return t
+}
+
 func osDate(L *State) int {
 	s := L.OptString(1, "%c")
-	t := L.OptInteger(2, time.Now().Unix())
+	t := time.Now().Unix()
+	if !L.IsNoneOrNil(2) {
+		t = osCheckTime(L, 2) /* luaL_opt(L, l_checktime, 2, time(NULL)) */
+	}
 	utc := false
 	if len(s) > 0 && s[0] == '!' { /* UTC? */
 		utc = true
@@ -526,8 +537,8 @@ func osTime(L *State) int {
 // 'os.difftime(math.maxinteger, math.mininteger)' answered -1.0 instead
 // of 1.844674407371e+19.
 func osDiffTime(L *State) int {
-	t1 := L.CheckInteger(1)
-	t2 := L.CheckInteger(2)
+	t1 := osCheckTime(L, 1)
+	t2 := osCheckTime(L, 2)
 	L.PushNumber(float64(t1) - float64(t2))
 	return 1
 }

@@ -20,7 +20,9 @@ const maxInt = int(^uint(0) >> 1)
 
 // FIRST_RESERVED: single-char tokens are represented by their own numeric
 // code; other tokens start at the following value.
-const FIRST_RESERVED = 256
+const FIRST_RESERVED = 257 /* llex.h 5.3.4 */
+
+const maxSize = int(^uint(0) >> 1) /* llimits.h MAX_SIZE ≈ max int */
 
 // Token codes. WARNING: if you change the order of this enumeration,
 // grep "ORDER RESERVED".
@@ -172,7 +174,13 @@ func (ls *LexState) resetbuffer() { ls.buff = ls.buff[:0] }
 
 func (ls *LexState) buffer() string { return string(ls.buff) }
 
-func (ls *LexState) save(c int) { ls.buff = append(ls.buff, byte(c)) }
+func (ls *LexState) save(c int) {
+	/* llex.c: luaZ_sizebuffer >= MAX_SIZE/2 → "lexical element too long" */
+	if len(ls.buff) >= maxSize/2 {
+		lexerror(ls, "lexical element too long", 0)
+	}
+	ls.buff = append(ls.buff, byte(c))
+}
 
 // saveAndNext saves the current character and reads the next one.
 func (ls *LexState) saveAndNext() { ls.save(ls.current); ls.next() }

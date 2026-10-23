@@ -726,6 +726,7 @@ func ioOpenCheck(L *State, fname, mode string) {
 		L.Error2("cannot open file '%s' (%s)", fname, ioStrError(err))
 	}
 	s.f = f
+	ioSetDirection(s, ioFlags(mode)) /* match fopen mode (canR/canW) */
 }
 
 // ---------------------------------------------------------------------

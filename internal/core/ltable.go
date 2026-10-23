@@ -229,11 +229,21 @@ func setdummy(t *Table) {
 }
 
 // setnodevector creates a new hash part of the given size (ltable.c).
+func allocsizenode(t *Table) int {
+	if isdummy(t) {
+		return 0
+	}
+	return sizenode(t)
+}
+
 func setnodevector(L *State, t *Table, size uint32) {
 	if size == 0 { /* no elements to hash part? */
 		setdummy(t) /* use common 'dummyNode' */
 	} else {
 		lsize := luaO_ceillog2(size)
+		if lsize > MAXHBITS {
+			luaG_runerror(L, "table overflow")
+		}
 		size = uint32(twoto(byte(lsize)))
 		t.nodes = make([]node, size)
 		for i := range t.nodes {
@@ -357,7 +367,7 @@ func reinsert(L *State, ot, t *Table) {
 
 // luaH_resizearray resizes only the array part (ltable.c).
 func luaH_resizearray(L *State, t *Table, nasize uint32) {
-	luaH_resize(L, t, nasize, uint32(sizenode(t)))
+	luaH_resize(L, t, nasize, uint32(allocsizenode(t)))
 }
 
 // computesizes computes the best size for the array part (ltable.c).

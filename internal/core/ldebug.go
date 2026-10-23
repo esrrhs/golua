@@ -478,8 +478,9 @@ func luaG_callerror(L *State, o *Value) {
 }
 
 func luaG_forerror(L *State, o *Value, what string) {
-	luaG_runerror(L, "bad 'for' %s (number expected, got %s)",
-		what, luaT_objtypename(L, o))
+	/* 5.3.4 lvm.c inlines "'for' %s must be a number" (no type in message). */
+	_ = o
+	luaG_runerror(L, "'for' %s must be a number", what)
 }
 
 // luaG_findlocal returns the name of the local variable at a given

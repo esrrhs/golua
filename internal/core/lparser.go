@@ -313,12 +313,12 @@ func singlevaraux(fs *FuncState, n *TString, var_ *expdesc, base int) expkind {
 func singlevar(ls *LexState, var_ *expdesc) {
 	varname := str_checkname(ls)
 	fs := ls.fs
-	if singlevaraux(fs, varname, var_, 1) == VVOID {
+	singlevaraux(fs, varname, var_, 1)
+	if var_.k == VVOID { /* global name? */
 		var key expdesc
-		singlevaraux(fs, ls.envn, var_, 1)
-		luaK_exp2anyregup(fs, var_)
-		codestring(ls, &key, varname)
-		luaK_indexed(fs, var_, &key)
+		singlevaraux(fs, ls.envn, var_, 1) /* get environment variable */
+		codestring(ls, &key, varname)      /* key is variable name */
+		luaK_indexed(fs, var_, &key)       /* env[varname] */
 	}
 }
 
@@ -360,8 +360,10 @@ func enterblock(fs *FuncState, bl *BlockCnt, isloop bool) {
 }
 
 func breaklabel(ls *LexState) {
+	/* lparser.c: newlabelentry(..., ls->fs->pc); findgotos — no createlabel. */
 	n := luaX_newstring(ls, "break")
-	createlabel(ls, n, 0, true)
+	l := newlabelentry(ls, &ls.dyd.label, n, 0, ls.fs.pc)
+	findgotos(ls, &ls.dyd.label.arr[l])
 }
 
 func undefgoto(ls *LexState, gt *Labeldesc) {

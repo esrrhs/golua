@@ -455,7 +455,7 @@ func (b *Buffer) room(sz int) []byte {
 	if !b.cblock || reallocBlock == nil {
 		/* no C memory in this build, and nothing to hand an address to */
 		if len(b.buf) < need {
-			grown := make([]byte, (len(b.buf)/2)*3)
+			grown := make([]byte, len(b.buf)*2) /* lauxlib.c: size*2 */
 			if len(grown) < need {
 				grown = make([]byte, need)
 			}
@@ -467,7 +467,7 @@ func (b *Buffer) room(sz int) []byte {
 	if b.scratch != nil && need <= b.slen {
 		return unsafe.Slice((*byte)(b.scratch), b.slen)[b.n:need]
 	}
-	newsz := (b.slen / 2) * 3 /* as lauxlib.c grows it: one and a half */
+	newsz := b.slen * 2 /* lauxlib.c: size * 2 */
 	if newsz < need {
 		newsz = need
 	}
@@ -671,7 +671,7 @@ func (L *State) stackTraceback(L1 *State, msg string, hasMsg bool, level int) st
 		limit2show--
 		if skip {
 			n := last - level - tracebackLevels2 + 1 /* levels to skip */
-			fmt.Fprintf(&sb, "\n\t...\t(skipping %d levels)", n)
+			sb.WriteString("\n\t...") /* 5.3.4: no level count */
 			level += n /* and skip to the last levels */
 			continue
 		}

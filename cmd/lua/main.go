@@ -141,10 +141,11 @@ func pmain(L *lua.State) int {
 		if stdinIsTTY() { /* running in interactive mode? */
 			printVersion()
 			doREPL()
-		} else if err := runStdin(); err != nil { /* executes stdin as a file */
-			report(err)
-			L.PushBoolean(false)
-			return 1
+		} else {
+			/* lua.c dofile(NULL): report errors but still signal success. */
+			if err := runStdin(); err != nil {
+				report(err)
+			}
 		}
 	}
 	L.PushBoolean(true) /* signal no errors */
@@ -595,11 +596,8 @@ func doREPL() {
 	fmt.Println() /* lua_writeline, which ends doREPL */
 }
 
-// replPrompt is lua.c's 'get_prompt': the global _PROMPT, or _PROMPT2 on
-// a continuation line, passed through luaL_tolstring.  That is the only
-// reason a prompt that is not a string can work at all.  A _PROMPT that
-// is nil means the default; one that is the empty string is an empty
-// prompt and not the default.
+// replPrompt is lua.c's 'get_prompt'.
+// replPrompt is get_prompt (lua.c): lua_tostring on _PROMPT/_PROMPT2.
 func replPrompt(first bool) string {
 	name, def := "_PROMPT2", luaPrompt2
 	if first {
@@ -608,13 +606,10 @@ func replPrompt(first bool) string {
 	top := L.GetTop()
 	defer L.SetTop(top)
 	L.GetGlobal(name)
-	if L.Type(-1) == lua.LUA_TNIL {
-		return def
+	if s, ok := L.ToString(-1); ok {
+		return s /* even empty string is a valid prompt */
 	}
-	/* luaL_tolstring. A table with no metamethod is "table: 0x...",
-	   and a __tostring that does not return a string is an error;
-	   neither of those is the default prompt. */
-	return L.ToLString(-1)
+	return def
 }
 
 // loadLine compiles one REPL line, reading continuation lines from 'in'

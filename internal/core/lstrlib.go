@@ -888,14 +888,11 @@ func strGmatch(L *State) int {
 	s := L.CheckString(1)
 	p := L.CheckString(2)
 	ls := len(s)
-	init := strPosRelatI(L.OptInteger(3, 1), ls) - 1
-	L.SetTop(2)    /* keep strings on closure to avoid being collected */
-	if init > ls { /* start after string's end? */
-		init = ls + 1 /* avoid overflows in 's + init' */
-	}
+	/* 5.3.4 gmatch: only two arguments; ignore any 5.4-style init. */
+	L.SetTop(2) /* keep them on closure to avoid being collected */
 	gm := &strGMatchState{}
 	strPrepState(&gm.ms, L, s, ls, p, len(p))
-	gm.src = init
+	gm.src = 0
 	gm.p = 0
 	gm.lastmatch = -1
 	/* '%a+' is a scan for letter runs. The general matcher retries the
@@ -1790,13 +1787,8 @@ func strFormat(L *State) int {
 			strCheckFormat(L, form, strFmtFlagsF, true)
 			b.AddString(strFormatFloat(form, n))
 		case 'p':
-			strCheckFormat(L, form, strFmtFlagsC, false)
-			p := L.ToPointer(arg)
-			s := "(null)"
-			if p != 0 {
-				s = fmt.Sprintf("0x%x", uint64(p))
-			}
-			b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", s))
+			/* 5.3.4: 'p' (and 'nLlh') is an invalid format option. */
+			return L.Error2("invalid option '%%%c' to 'format'", form[len(form)-1])
 		case 'q':
 			if len(form) > 2 { /* modifiers? */
 				return L.Error2("specifier '%%q' cannot have modifiers")

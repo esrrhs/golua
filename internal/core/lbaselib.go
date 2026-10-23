@@ -320,14 +320,8 @@ func basePairsMeta(L *State, method string, iszero bool, iter func(*State) int) 
 		}
 	} else {
 		L.PushValue(1) /* argument 'self' to metamethod */
-		/* C passes a continuation so the call is yieldable. */
-		if L.co != nil && L.co.sync {
-			L.ci.goCont = func(L *State, status int) int { return 3 }
-		}
-		L.callK(1, 3, true) /* get 3 values from metamethod */
-		if L.ci != nil {
-			L.ci.goCont = nil
-		}
+		/* 5.3.4 pairsmeta uses lua_call (not yieldable). */
+		L.Call(1, 3) /* get 3 values from metamethod */
 	}
 	return 3
 }
