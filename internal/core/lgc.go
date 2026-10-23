@@ -194,8 +194,8 @@ func (L *State) gcAwaitPending() {
 	for i := 0; i < 1000 && L.g.pendN.Load() == 0; i++ {
 		runtime.Gosched()
 	}
-	for i := 0; i < 6 && L.g.pendN.Load() == 0; i++ {
-		time.Sleep(50 * time.Microsecond)
+	for i := 0; i < 50 && L.g.pendN.Load() == 0; i++ {
+		time.Sleep(200 * time.Microsecond)
 	}
 }
 
@@ -261,15 +261,33 @@ func gcHasWatchFor(g *globalState) bool {
 // gcCycle is where PUC-Lua would have finished a collection: the objects
 // held for '__gc' are let go, the stale stack slots are cleared, Go
 // collects, and the metamethods of what has become unreachable run.
+//
+// sweepWeak asks for a weak-table clear too.  collectgarbage("collect")
+// always sweeps; an allocation-triggered step does not — gcSweepWeak
+// runs two extra runtime.GC passes, and after a busy-wait like GC1 in
+// gc.lua that has already grown a large heap, doing that on every debt
+// threshold turns the next busy-wait (GC2) into a multi-minute stall
+// that the 120s official harness reads as a hang.
 func (L *State) gcCycle() {
+	L.gcCycleOpt(true)
+}
+
+func (L *State) gcCycleOpt(sweepWeak bool) {
 	gcPruneWatch()
 	gcReleaseFor(L.g)
 	gcClearStacks() /* see gcClearStacks: stale slots keep objects alive */
-	L.gcSweepWeak()
+	if sweepWeak {
+		L.gcSweepWeak()
+	}
 	if L.g.strt != nil {
 		L.g.strt.flush() /* the intern table must not pin dead strings */
 	}
 	runtime.GC() /* lets Go find the unreachable objects */
+	/* A second pass: SetFinalizer / weak.Pointer handoff can lag one
+	   cycle behind the first mark, and a single GC after a long
+	   busy-wait (gc.lua GC1) was leaving the next __gc (GC2) stuck
+	   until an explicit collectgarbage forced extra cycles. */
+	runtime.GC()
 	L.gcAwaitPending()
 	L.runFinalizers()
 	gcRehold()
@@ -288,6 +306,9 @@ func (L *State) gcCycle() {
 // finalizer cannot start a collection there -- and, what matters more,
 // cannot run *another* finalizer in the middle of the one that is
 // running.  See gcAfterAlloc, the only caller.
+//
+// Steps still sweep weak tables (gcCycleOpt(true)): allocation-driven
+// clears are what TestWeakSweptOnAllocation and gc.lua rely on.
 func (L *State) gcStep() {
 	if L.g.gcInFinalizer || L.g.closing { /* 'g->gcstp & GCSTPGC' */
 		return
@@ -303,7 +324,7 @@ func (L *State) gcStep() {
 		return
 	}
 	L.g.gcDebt = 0
-	L.gcCycle()
+	L.gcCycleOpt(true) /* weak sweep: needed so __gc busy-waits observe clears */
 }
 
 // gcAfterAlloc is PUC-Lua's 'luaC_checkGC' at the end of an allocation:

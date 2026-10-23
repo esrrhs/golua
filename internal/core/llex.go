@@ -495,8 +495,9 @@ func readutf8esc(ls *LexState) uint32 {
 			break
 		}
 		i++
-		esccheck(ls, r <= (0x7FFFFFFF>>4), "UTF-8 value too large")
 		r = (r << 4) + uint32(luaO_hexavalue(byte(ls.current)))
+		/* 5.3.4: MAXUNICODE is 0x10FFFF (5.4 raised the ceiling). */
+		esccheck(ls, r <= 0x10FFFF, "UTF-8 value too large")
 	}
 	esccheck(ls, ls.current == '}', "missing '}'")
 	ls.next()        /* skip '}' */

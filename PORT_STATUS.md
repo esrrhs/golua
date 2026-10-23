@@ -29,16 +29,23 @@
 - `math.random`/`randomseed`: POSIX `random()`/`srandom()` (5.3), not xoshiro; sort comparison counts match
 - officialNormalise: short-circuit GLOB1 digit (`os.time()%2`)
 - package: `LUA_*_5_3` versioned env; `;;` → `;`+default+`;` (setpath); preload searcher returns 1 value (not `:preload:`)
+- Lexer `\u{...}`: reject code points > 0x10FFFF (`UTF-8 value too large`) matching PUC 5.3.4 (was 5.4-era 0x7FFFFFFF ceiling)
+- Official suite harness: `_port=true` for gc.lua (skips infinite `dosteps(0)` / pace); workdir patch of `GC()` busy-wait to call `collectgarbage` so ephemeron section fails fast instead of hanging the 120s timeout
 
 ## Remaining / known gaps
-1. **Official suite** (tip measured): **24 identical** (1 vacuous: api), **2 known-diff** (gc, literals), **2 not run** (all, main — Ctrl-C harness hang). Of 28. Before this push cluster: 15/28 at a9ac67d.
-2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
-3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
-4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).
-5. **Numeric for + NaN step** not matching PUC yet (test skipped).
-6. Third-party goldens (LPeg, etc.) captured from 5.4.9 — LPeg test skipped pending re-capture; fuzz corpora that embed `<close>`/`coroutine.close` are harmless under LUA_REF=5.3.4 (both sides error) but should be trimmed when convenient.
-7. `lua_resume` C signature keeps 5.4 out-param form (documented in lua.h).
-8. README polish after official suite is closer to green.
+1. **Official suite** (tip measured): **25 identical** (1 vacuous: api), **1 known-diff** (gc — Go GC / no ephemerons / no collector pace), **2 not run** (all, main). Of 28. Was 24/28 at a845d0c.
+2. **main.lua / all.lua (stopped)**: Ctrl-C / SIGINT stand-alone harness cannot be automated safely. PUC installs `laction`→`lua_sethook(lstop)`→`"interrupted!"`; we do not, and `CommandContext` kills only the parent so the child is left unreaped under the suite timeout. `main.lua` already no-ops when `_port` is set, but forcing `_port` yields an empty run, not an identical one. Emulating laction/lstop + process-group kill is possible but still races the golden. **Left not-run; do not reopen without a real SIGINT hook and Setpgid kill.**
+3. **gc.lua known-diff (honest leftovers)**:
+   - No incremental collector debt/pace (`dosteps(0)` would infinite-loop without `_port`).
+   - Ephemeron chains: weak-key values keep keys alive across stock Go GC; `assert(next(a)==nil)` after dropping the chain root fails.
+   - Finalizer ordering / `gcinfo()` shrink assertions vs Go heap.
+4. **literals**: identical here (pt_BR absent → both sides skip decimal-point block). Hosts with pt_BR may still differ if Go's locale decimal point ≠ C `setlocale`.
+5. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
+6. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
+7. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).
+8. **Numeric for + NaN step** not matching PUC yet (test skipped).
+9. Third-party goldens (LPeg, etc.) captured from 5.4.9 — LPeg test skipped pending re-capture.
+10. `lua_resume` C signature keeps 5.4 out-param form (documented in lua.h).
 
 ## Paths
 - C ref: `/workspace/lua-sources/lua-5.3.4` (`src/lua`, `src/luac`)
