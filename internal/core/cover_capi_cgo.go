@@ -182,10 +182,7 @@ func exerciseCAPI(dir string) error {
 	if lua_tothread(p, -1) != th {
 		return fmt.Errorf("tothread")
 	}
-	if lua_closethread(th, p) < 0 {
-		return fmt.Errorf("closethread")
-	}
-	lua_pop(p, 1)
+	lua_pop(p, 1) /* 5.3.4: no lua_closethread */
 
 	lua_getglobal(p, cs("type"))
 	_ = lua_tocfunction(p, -1)
@@ -203,7 +200,7 @@ func exerciseCAPI(dir string) error {
 	}
 	lua_pop(p, 1)
 
-	lua_setwarnf(p, nil, nil)
+	/* 5.3.4: no lua_setwarnf */
 	if lua_gethook(p) != nil {
 		return fmt.Errorf("gethook")
 	}
