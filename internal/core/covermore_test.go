@@ -394,8 +394,8 @@ func TestNamesUpvaluesAndWeakClosures(t *testing.T) {
 	proto := &Proto{
 		k: []Value{kv},
 		code: []Instruction{
-			newABC(OP_LOADK, 1, 0, 0, 0),
-			newABC(OP_GETTABLE, 2, 0, 1, 0),
+			newABC(OP_LOADK, 1, 0, 0),
+			newABC(OP_GETTABLE, 2, 0, 1),
 		},
 	}
 	var name string

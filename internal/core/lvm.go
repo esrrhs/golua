@@ -1374,7 +1374,14 @@ func luaG_traceexec(L *State, ci *CallInfo, pc int) bool {
 		ci.callstatus &= ^uint16(CIST_HOOKYIELD) /* erase mark */
 		return true
 	}
-	if !isIT(p.code[pc-1]) { /* top not being used? */
+	/* 5.3.4 has no IT column; open ops use top when B==0 (lopcodes.h notes). */
+	prev := p.code[pc-1]
+	usesTop := false
+	switch prev.Op {
+	case OP_CALL, OP_TAILCALL, OP_RETURN, OP_SETLIST, OP_VARARG:
+		usesTop = prev.B == 0
+	}
+	if !usesTop { /* top not being used? */
 		L.top = ci.top /* correct top */
 	}
 	if counthook {

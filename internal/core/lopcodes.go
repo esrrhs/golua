@@ -4,7 +4,6 @@
 // a plain struct: the fields are the same (Op, A, B, C). B doubles as
 // Bx/sBx/Ax depending on the opcode. For RK operands, B/C carry the
 // BITRK bit the way PUC-Lua encodes them (ISK / INDEXK / RKASK).
-// The K field is unused in 5.3 (kept so Instruction stays one type).
 package core
 
 // Instruction is the Go counterpart of Lua's Instruction word.
@@ -13,10 +12,9 @@ type Instruction struct {
 	A  int
 	B  int // also Bx or sBx (biased) depending on the opcode
 	C  int
-	K  int // unused in 5.3; kept for struct compatibility
 }
 
-func newABC(op, a, b, c int, k ...int) Instruction {
+func newABC(op, a, b, c int) Instruction {
 	return Instruction{Op: op, A: a, B: b, C: c}
 }
 
@@ -211,24 +209,4 @@ func getBMode(m int) int      { return int((opModes[m] >> 4) & 3) }
 func getCMode(m int) int      { return int((opModes[m] >> 2) & 3) }
 func testTMode(op int) bool   { return opModes[op]&(1<<7) != 0 }
 
-// testITMode: 5.3 has no separate 'it' column; open ops use B/C==0.
-func testITMode(op int) bool {
-	switch op {
-	case OP_CALL, OP_TAILCALL, OP_RETURN, OP_SETLIST, OP_VARARG:
-		return true
-	}
-	return false
-}
-
-func isIT(i Instruction) bool {
-	switch i.Op {
-	case OP_CALL, OP_TAILCALL:
-		return i.B == 0
-	case OP_RETURN, OP_VARARG:
-		return i.B == 0
-	case OP_SETLIST:
-		return i.B == 0
-	}
-	return false
-}
 
