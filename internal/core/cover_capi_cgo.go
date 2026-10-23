@@ -233,12 +233,63 @@ func exerciseCAPI(dir string) error {
 	}
 	lua_close(fp)
 
+	/* more auxlib / buffer / typeerror / gsub paths */
+	lua_pushstring(p, cs("hello"))
+	var blen C.size_t
+	_ = luaL_tolstring(p, -1, &blen)
+	lua_pop(p, 2)
+	lua_newtable(p)
+	_ = luaL_tolstring(p, -1, nil)
+	lua_pop(p, 2)
+
+	var B C.luaL_Buffer
+	luaL_buffinit(p, &B)
+	luaL_addstring(&B, cs("ab"))
+	luaL_addlstring(&B, cs("cd"), 2)
+	luaL_addgsub(&B, cs("x_y_z"), cs("_"), cs("+"))
+	luaL_pushresult(&B)
+	if C.GoString(lua_tostring(p, -1)) != "abcdx+y+z" {
+		return fmt.Errorf("addgsub %q", C.GoString(lua_tostring(p, -1)))
+	}
+	lua_pop(p, 1)
+
+	luaL_buffinitsize(p, &B, 32)
+	dst := luaL_prepbuffsize(&B, 4)
+	if dst != nil {
+		*(*byte)(unsafe.Pointer(dst)) = 'Z'
+		B.n++ /* luaL_addsize macro */
+	}
+	luaL_addchar_(&B, '!')
+	luaL_pushresult(&B)
+	lua_pop(p, 1)
+
+	_ = luaL_optlstring(p, 1, cs("def"), &blen)
+	lua_pushstring(p, cs("arg"))
+	_ = luaL_optlstring(p, 1, cs("def"), &blen)
+	lua_settop(p, 0)
+
+	_ = luaL_fileresult(p, 1, nil)
+	lua_settop(p, 0)
+	_ = luaL_fileresult(p, 0, cs("/no/such"))
+	lua_settop(p, 0)
+
+	L3 := NewState()
+	p3 := L3.statePtr()
+	luaL_openlibs(p3)
+	lua_pushinteger(p3, 1)
+	if !capiPanics(func() { luaL_typeerror(p3, 1, cs("table")) }) {
+		L3.Close()
+		return fmt.Errorf("typeerror did not fail")
+	}
+	L3.Close()
+
 	if !capiPanics(func() { lua_yield(p, 0) }) {
 		return fmt.Errorf("yield outside a coroutine did not fail")
 	}
 	if !capiPanics(func() { cdl_runerror_cb(p, cs("nope")) }) {
 		return fmt.Errorf("runerror did not fail")
 	}
+
 	return nil
 }
 
