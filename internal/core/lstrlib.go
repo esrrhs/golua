@@ -29,7 +29,7 @@ import (
 // strBuffInit is luaL_buffinit for a caller-owned Buffer (C stack-local).
 // Prefer this over State.NewBuffer(), which heap-allocates the Buffer.
 func strBuffInit(L *State, b *Buffer) {
-	*b = Buffer{L: L}
+	L.BuffInit(b)
 }
 
 // strBuffInitSize is luaL_buffinitsize: buffinit then prepbuffsize.
