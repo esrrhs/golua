@@ -84,9 +84,12 @@ func novariant(t int) int      { return t & 0x0F }
 // 5.3.4 number variants: FLT is variant 0, INT is variant 1 (ldump/lundump).
 // Historical port names LUA_VNUM* are aliases with those same values.
 //
-// Still 5.4-shaped (not in 5.3.4 TValue tags): LUA_VEMPTY, LUA_VABSTKEY,
-// LUA_VFALSE/LUA_VTRUE (5.3.4 uses LUA_TBOOLEAN + b in the value union).
-// LUA_TUPVAL as a distinct tag is also 5.4-ish bookkeeping under Go GC.
+// Remaining tag debt vs 5.3.4 TValue:
+//   - LUA_VFALSE/LUA_VTRUE: 5.3.4 stores booleans as LUA_TBOOLEAN + b in the
+//     value union; this port still uses variant tags (behavior OK via ttype).
+//   - LUA_VEMPTY/LUA_VABSTKEY: unused for table slots after nilobject switch;
+//     kept as numeric constants only.
+//   - LUA_TUPVAL: Go-GC bookkeeping tag, not in 5.3.4 typenames.
 const (
 	/* 5.3.4 primary */
 	LUA_TNUMFLT = LUA_TNUMBER | (0 << 4) // 3  float
@@ -99,8 +102,8 @@ const (
 
 	/* aliases used across the port */
 	LUA_VNIL     = LUA_TNIL + 0<<4 // 0
-	LUA_VEMPTY   = LUA_TNIL + 1<<4 // 16 — 5.4 empty slot; debt for ltable
-	LUA_VABSTKEY = LUA_TNIL + 2<<4 // 32 — 5.4 absent key; debt for ltable
+	LUA_VEMPTY   = LUA_TNIL + 1<<4 // 16 — unused (empty slots are nil)
+	LUA_VABSTKEY = LUA_TNIL + 2<<4 // 32 — unused (absent is &luaO_nilobject)
 
 	LUA_VFALSE = LUA_TBOOLEAN + 0<<4 // 1 — 5.4-style; debt vs bvalue union
 	LUA_VTRUE  = LUA_TBOOLEAN + 1<<4 // 17
