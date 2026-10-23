@@ -48,6 +48,15 @@ const (
 )
 
 // incnny/decnny bump L.nny (lstate.h 5.3.4: separate unsigned short nny).
+// setoah / getoah are lstate.h macros: store/load allowhook in CIST_OAH.
+func setoah(st *uint16, v byte) {
+	*st = (*st &^ CIST_OAH) | uint16(v&1)
+}
+
+func getoah(st uint16) byte {
+	return byte(st & CIST_OAH)
+}
+
 func incnny(L *State) { L.nny++ }
 
 func decnny(L *State) { L.nny-- }

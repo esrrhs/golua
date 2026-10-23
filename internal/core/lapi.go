@@ -918,12 +918,17 @@ func (L *State) PCall(nargs, nresults, msgh int) int {
 // *yieldable* protected call (lbaselib.c passes 'finishpcall' as the
 // continuation).
 //
-// C (yieldable path): set CIST_YPCALL, save errfunc, bare luaD_call;
-// errors unwind to resume/findpcall → finishpcallk. This port runs
-// coroutines on goroutines with goCont resume, so a true bare-call +
-// findpcall redesign would risk breaking Yield/Resume. Safe alignment:
-// mark ci.ypcall (CIST_YPCALL), keep luaD_call (not noyield) inside
-// luaD_pcall so yield can cross pcall and errors stay recovered here.
+// C (lapi.c): when k!=NULL && nny==0, save errfunc/old allowhook on ci,
+// set CIST_YPCALL, then bare luaD_call (not luaD_pcall). Errors longjmp
+// to resume → findpcall → recover. Non-yieldable path uses luaD_pcall
+// + f_call (noyield).
+//
+// This port: non-yieldable path matches C. Yieldable path now also uses
+// bare luaD_call with CIST_YPCALL + saved errfunc/allowhook (same shape
+// as cdlopen_ext.lua_pcallk). Errors are still recovered at the call
+// site — goroutine/goCont keep the frame alive — rather than by a
+// resume-time findpcall. Remaining gap: true findpcall-on-resume (errors
+// do not abandon pcallK the way C longjmp does).
 func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 	funcIdx := L.top - (nargs + 1)
 	var ef int
@@ -933,11 +938,46 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 	var status int
 	if k && yieldable(L) {
 		ci := L.ci
+		ci.oldErrFunc = L.errfunc
+		L.errfunc = ef
+		setoah(&ci.callstatus, L.allowhook)
 		ci.ypcall = true /* CIST_YPCALL */
-		defer func() { ci.ypcall = false }()
-		status = luaD_pcall(L, func() {
-			luaD_call(L, funcIdx, nresults)
-		}, funcIdx, ef)
+		status = LUA_OK
+		oldNCcalls := L.nCcalls
+		func() {
+			L.errorJmp++ /* C: resume's errorJmp covers unprotected call */
+			defer func() {
+				L.errorJmp--
+				L.nCcalls = oldNCcalls
+				r := recover()
+				if r == nil {
+					return
+				}
+				e, ok := r.(*luaError)
+				if !ok {
+					panic(r) /* yieldAbort / migrateAbort / closeSignal */
+				}
+				status = e.status
+				/* re-push like rawRunProtected: a Go defer may have popped it */
+				if L.top >= len(L.stack) {
+					L.reallocStack(len(L.stack) + EXTRA_STACK)
+				}
+				L.stack[L.top] = e.value
+				L.top++
+			}()
+			luaD_call(L, funcIdx, nresults) /* bare call, not luaD_pcall */
+		}()
+		ci.ypcall = false
+		L.errfunc = ci.oldErrFunc
+		if status != LUA_OK {
+			/* ldo.c recover (finish interrupted protected call) */
+			L.ci = ci
+			L.allowhook = getoah(ci.callstatus)
+			L.nny = 0
+			luaF_close(L, funcIdx)
+			seterrorobj(L, status, funcIdx)
+			L.shrinkStack()
+		}
 	} else {
 		/* conventional: C's f_call via luaD_pcall (noyield) */
 		status = luaD_pcall(L, func() {
