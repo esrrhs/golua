@@ -333,36 +333,35 @@ func funcNameFromCode(L *State, p *Proto, pc int, name *string) string {
 	default:
 		return "" /* cannot find a reasonable name */
 	}
-	*name = strings.TrimPrefix(luaT_eventname[tm], "__")
+	/* 5.3.4: keep the "__" prefix (getstr(G(L)->tmname[tm])). */
+	*name = luaT_eventname[tm]
 	return "metamethod"
 }
 
-// funcNameFromCall is 'funcnamefromcall' (ldebug.c).
-func funcNameFromCall(L *State, ci *CallInfo, name *string) string {
-	switch {
-	case ci == nil:
+// getFuncName is getfuncname (ldebug.c, Lua 5.3.4).
+//
+// CIST_FIN is set on the *caller* of the finalizer (GCTM), so querying
+// that frame yields namewhat "metamethod" / name "__gc". CIST_HOOKED is
+// checked inside funcNameFromCode on the interrupted frame.
+func getFuncName(L *State, ci *CallInfo, name *string) string {
+	if ci == nil {
 		return ""
-	case ci.callstatus&CIST_HOOKED != 0: /* was it called inside a hook? */
-		*name = "?"
-		return "hook"
-	case ci.callstatus&CIST_FIN != 0: /* was it called as a finalizer? */
+	}
+	if ci.callstatus&CIST_FIN != 0 { /* GCTM marked this frame */
 		*name = "__gc"
-		return "metamethod" /* report it as such */
-	case isLua(ci):
-		return funcNameFromCode(L, clLvalue(&L.stack[ci.funcIdx]).p,
-			ci.savedpc-1, name) /* currentpc */
+		return "metamethod"
+	}
+	if ci.callstatus&CIST_TAIL == 0 && ci.prev != nil && isLua(ci.prev) {
+		prev := ci.prev
+		/* 5.3.4 funcnamefromcode: hooked frame reports as hook '?'. */
+		if prev.callstatus&CIST_HOOKED != 0 {
+			*name = "?"
+			return "hook"
+		}
+		return funcNameFromCode(L, clLvalue(&L.stack[prev.funcIdx]).p,
+			prev.savedpc-1, name)
 	}
 	return ""
-}
-
-// getFuncName is 'getfuncname' (ldebug.c): the name of the function of
-// the frame 'ci', as it appears in the calling code.
-func getFuncName(L *State, ci *CallInfo, name *string) string {
-	/* calling function is a known function? */
-	if ci != nil && ci.callstatus&CIST_TAIL == 0 {
-		return funcNameFromCall(L, ci.prev, name)
-	}
-	return "" /* no way to find a name */
 }
 
 // getUpvalName is 'getupvalname' (ldebug.c): checks whether 'o' is an
@@ -479,15 +478,11 @@ func luaG_ordererror(L *State, p1, p2 *Value) {
 // a variable whose '__close' disappeared produce a useful message. Only
 // when the call has no such explanation does it fall back to 'varinfo'.
 func luaG_callerror(L *State, o *Value) {
-	var name string
-	extra := ""
-	if kind := funcNameFromCall(L, L.ci, &name); kind != "" {
-		extra = formatvarinfo(kind, name)
-	} else {
-		extra = varinfo(L, o)
-	}
+	/* 5.3.4: same as luaG_typeerror(L, o, "call") — name the
+	   value being called via varinfo, not how the current frame
+	   was entered (that 5.4 path mis-labelled NoSuchName as main). */
 	t := luaT_objtypename(L, o)
-	luaG_runerror(L, "attempt to call a %s value%s", t, extra)
+	luaG_runerror(L, "attempt to call a %s value%s", t, varinfo(L, o))
 }
 
 func luaG_forerror(L *State, o *Value, what string) {

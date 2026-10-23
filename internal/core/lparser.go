@@ -110,7 +110,13 @@ func bool2byte(b bool) byte {
 	return 0
 }
 
-func enterlevel(ls *LexState) { luaE_incCstack(ls.L) }
+// enterlevel matches 5.3.4 lparser.c: bump nCcalls and report
+// "too many C levels" (a syntax-limit error), not the runtime
+// "C stack overflow" from luaE_incCstack.
+func enterlevel(ls *LexState) {
+	ls.L.nCcalls++
+	checklimit(ls.fs, int(ls.L.nCcalls&0xffff), LUAI_MAXCCALLS, "C levels")
+}
 func leavelevel(ls *LexState) { ls.L.nCcalls-- }
 
 func error_expected(ls *LexState, token int) {

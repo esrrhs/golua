@@ -478,15 +478,16 @@ func forprep53(L *State, ra int) {
 		setivalue(init, initv-ivalue(pstep))
 	} else {
 		var ninit, nlimit, nstep float64
-		if !tonumberns(plimit, &nlimit) {
+		/* 5.3: tonumber coerces strings (not tonumberns). */
+		if !luaV_tonumber_(L, plimit, &nlimit) {
 			luaG_runerror(L, "'for' limit must be a number")
 		}
 		setfltvalue(plimit, nlimit)
-		if !tonumberns(pstep, &nstep) {
+		if !luaV_tonumber_(L, pstep, &nstep) {
 			luaG_runerror(L, "'for' step must be a number")
 		}
 		setfltvalue(pstep, nstep)
-		if !tonumberns(init, &ninit) {
+		if !luaV_tonumber_(L, init, &ninit) {
 			luaG_runerror(L, "'for' initial value must be a number")
 		}
 		setfltvalue(init, ninit-nstep)
@@ -548,6 +549,13 @@ func luaV_execute(L *State, ci *CallInfo) {
 		}
 	loop:
 		for {
+			/* 5.3 has no trap bit: vmfetch checks hookmask every
+			   instruction. We keep the 5.4 local 'trap' but must
+			   honour ci.trap that setTraps (lua_sethook) sets, or a
+			   mid-chunk debug.sethook never fires (db.lua hooks). */
+			if ci.trap {
+				trap = true
+			}
 			if trap {
 				trap = luaG_traceexec(L, ci, pc)
 			}
@@ -792,6 +800,8 @@ func luaV_execute(L *State, ci *CallInfo) {
 					restart = true
 					break loop
 				}
+				/* C/Go call may have installed hooks (setTraps). */
+				trap = ci.trap || L.hookmask != 0
 				if L.fastYield {
 					return
 				}
@@ -1069,12 +1079,13 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 }
 
 func luaG_tracecall(L *State, ci *CallInfo) bool {
-	p := clLvalue(&L.stack[ci.funcIdx]).p
 	ci.trap = true       /* ensure hooks will be checked */
 	if ci.savedpc == 0 { /* first instruction (not resuming)? */
-		if p.isVararg != 0 {
-			return false /* hooks will start at VARARGPREP instruction */
-		} else if ci.callstatus&CIST_HOOKYIELD == 0 { /* not yielded? */
+		/* 5.3: no OP_VARARGPREP. Main chunks and declared-vararg
+		   functions start hooks on the first real instruction; the
+		   5.4 "return false until VARARGPREP" path would leave trap
+		   off for the whole body and silence line hooks (db.lua). */
+		if ci.callstatus&CIST_HOOKYIELD == 0 { /* not yielded? */
 			luaD_hookcall(L, ci) /* check 'call' hook */
 		}
 	}
@@ -1136,15 +1147,22 @@ func luaG_traceexec(L *State, ci *CallInfo, pc int) bool {
 		luaD_hook(L, hookCount, -1, 0, 0) /* call count hook */
 	}
 	if mask&dbMaskLine != 0 {
-		/* 'L.oldpc' may be invalid; use zero in this case */
-		oldpc := 0
-		if L.oldpc < len(p.code) && L.oldpc >= 0 {
-			oldpc = L.oldpc
-		}
+		/* 5.3.4 luaG_traceexec: oldpc is a code pointer in C; we keep an
+		   integer pc index. When entering a new function npc==0 always
+		   fires (L.oldpc may still refer to the caller). */
 		npci := pc - 1 /* pcRel: 'pc' relative to the first instruction */
-		if npci <= oldpc || changedLine(p, oldpc, npci) {
-			/* call the hook when jumping back (loop) or on a new line */
-			luaD_hook(L, hookLine, getFuncline(p, npci), 0, 0)
+		newline := getFuncline(p, npci)
+		oldpc := L.oldpc
+		fire := npci == 0 /* enter a new function */
+		if !fire {
+			if oldpc < 0 || oldpc >= len(p.code) {
+				fire = true /* oldpc not in this proto: treat as new line */
+			} else if npci <= oldpc || newline != getFuncline(p, oldpc) {
+				fire = true /* jump back (loop) or enter a new line */
+			}
+		}
+		if fire {
+			luaD_hook(L, hookLine, newline, 0, 0)
 		}
 		L.oldpc = npci /* 'pc' of last call to line hook */
 	}

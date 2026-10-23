@@ -20,9 +20,15 @@
 - Proto.cache / getcached for closure equality
 - `debug.upvalueid` always ArgChecks invalid index
 - pretailcall sets `ci.base` and runs `adjustVarargs` for 5.3 vararg protos (__call chains)
+- `forprep53` float path uses `luaV_tonumber_` (string coerce), not tonumberns
+- Parser `enterlevel` reports "too many C levels" (checklimit), not runtime "C stack overflow"
+- Line/call hooks: no VARARGPREP skip; honour `ci.trap` from setTraps mid-chunk; `npc==0` line fire
+- `debug.getlocal`/`setlocal` varargs: `(*vararg)` slots between func and base; `(*temporary)` / `(*no name)`
+- `getfuncname` 5.3: CIST_FIN on queried frame; metamethod names keep `__` prefix
+- `luaG_callerror` uses varinfo (5.3), not 5.4 frame-entry naming
 
 ## Remaining / known gaps
-1. **Official suite**: measuring after closure/events/vararg cluster. Known remaining candidates: attrib, big, db, errors, main, nextvar, sort. Known-diff: all, gc, literals.
+1. **Official suite**: **21/28 identical** target after db+errors+nextvar (was 15 at a9ac67d; 19 after forprep+hooks partial). Remaining fail candidates: **attrib**, **big**, **main**, **sort**. Known-diff: all, gc, literals. Hard walls: attrib C loadlib/CGO; main stand-alone/Ctrl-C harness; sort comparison counts (pivot); big yield-outside-coro.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).

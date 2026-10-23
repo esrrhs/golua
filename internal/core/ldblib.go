@@ -116,13 +116,19 @@ func dbPush(L *State, v *Value) {
 // deviation: the core's luaG_findlocal uses 'ci.savedpc' where C uses
 // 'currentpc(ci)' (savedpc - 1); the lookup here follows C.
 func dbFindLocal(L *State, ci *CallInfo, n int) (string, int) {
-	base := ci.funcIdx + 1
+	/* 5.3.4 findlocal/findvararg: varargs sit between func and base. */
 	if isLua(ci) && n < 0 { /* access to vararg values? */
 		cl := clLvalue(&L.stack[ci.funcIdx])
-		if cl.p.isVararg != 0 && n >= -ci.nExtraArgs {
-			return "(vararg)", ci.funcIdx - ci.nExtraArgs - (n + 1)
+		nparams := int(cl.p.numparams)
+		vn := -n /* 1-based vararg index */
+		if vn >= (ci.base-ci.funcIdx)-nparams {
+			return "", 0 /* no such vararg */
 		}
-		return "", 0 /* no such vararg */
+		return "(*vararg)", ci.funcIdx + nparams + vn
+	}
+	base := ci.funcIdx + 1
+	if isLua(ci) {
+		base = ci.base
 	}
 	var name string
 	if isLua(ci) {
@@ -135,11 +141,7 @@ func dbFindLocal(L *State, ci *CallInfo, n int) (string, int) {
 			limit = ci.next.funcIdx
 		}
 		if limit-base >= n && n > 0 { /* is 'n' inside 'ci' stack? */
-			/* generic name for any valid slot */
-			if isLua(ci) {
-				return "(temporary)", base + (n - 1)
-			}
-			return "(C temporary)", base + (n - 1)
+			return "(*temporary)", base + (n - 1)
 		}
 		return "", 0 /* no name */
 	}
@@ -211,11 +213,8 @@ func dbCollectValidLines(L *State, fv *Value) {
 	}
 	p := clLvalue(fv).p
 	L.NewTable()
-	i := 0
-	if p.isVararg != 0 {
-		i = 1 /* skip first instruction (OP_VARARGPREP) */
-	}
-	for ; i < len(p.lineinfo); i++ {
+	/* 5.3: no OP_VARARGPREP to skip; every instruction may be active. */
+	for i := 0; i < len(p.lineinfo); i++ {
 		line := luaG_getfuncline(p, i)
 		if line > 0 {
 			L.PushBoolean(true)
@@ -326,7 +325,7 @@ func dbGetUpvalue(L *State, idx, n int) (string, bool) {
 		if n < 1 || n > len(p.upvalues) {
 			return "", false
 		}
-		name := "(no name)"
+		name := "(*no name)"
 		if p.upvalues[n-1].name != nil {
 			name = p.upvalues[n-1].name.val
 		}
@@ -356,7 +355,7 @@ func dbSetUpvalue(L *State, idx, n int) (string, bool) {
 		if n < 1 || n > len(p.upvalues) {
 			return "", false
 		}
-		name := "(no name)"
+		name := "(*no name)"
 		if p.upvalues[n-1].name != nil {
 			name = p.upvalues[n-1].name.val
 		}
