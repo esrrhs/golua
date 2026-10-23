@@ -91,17 +91,11 @@ func coAuxResume(L *State, co *State, narg int) int {
 	/* error: C's lua_resume does luaD_seterrorobj(L, status, L->top),
 	   which leaves an extra copy on co; auxresume then lua_xmove(co, L, 1)
 	   so one copy remains for lua_closethread. Go Resume leaves a single
-	   copy — duplicate before xmove. Salvage from co.vals when panic-based
-	   throw left nothing on the stack (no luaD_seterrorobj). */
+	   copy — duplicate before xmove. When Resume left nothing on the stack
+	   and no error object in co.vals (async empty-vals error), report dead. */
 	if co.top <= 0 {
-		if len(co.co.vals) > 0 {
-			co.checkStack(1)
-			co.stack[co.top] = co.co.vals[0]
-			co.top++
-		} else {
-			L.PushString("cannot resume dead coroutine")
-			return -1 /* error flag */
-		}
+		L.PushString("cannot resume dead coroutine")
+		return -1 /* error flag */
 	}
 	co.checkStack(1)
 	co.stack[co.top] = co.stack[co.top-1]
@@ -137,10 +131,9 @@ func coAuxWrap(L *State) int {
 			   lua_closethread. Preserve returned status for ERRMEM. */
 			co.nCcalls = uint32(getCcalls(L))
 			stat = co.resetThreadStatus(stat)
-			/* C asserts stat != LUA_OK; keep error path if somehow OK. */
-			if stat == LUA_OK {
-				stat = LUA_ERRRUN
-			}
+			/* C asserts stat != LUA_OK after closethread on an erroring
+			   coroutine; resetThreadStatus preserves a non-OK status when
+			   __close does not replace it, so the OK→ERRRUN guard is omitted. */
 			if co.top > 0 {
 				L.XMove(co, 1) /* move error message to the caller */
 			}
@@ -287,11 +280,9 @@ func coCloseThread(co, from *State) (bool, Value) {
 		if st == LUA_OK {
 			return true, Value{}
 		}
+		/* unwindForClose always leaves the error in co.vals on failure. */
 		if len(co.co.vals) > 0 {
 			return false, co.co.vals[0]
-		}
-		if co.top > 1 && !ttisnil(&co.stack[1]) {
-			return false, co.stack[1]
 		}
 		return false, strValue(co, "error closing coroutine")
 	}

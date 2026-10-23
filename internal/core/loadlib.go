@@ -146,13 +146,21 @@ func pkSetPath(L *State, fieldname, envname, dft string) {
 	L.Pop(1)                  /* pop versioned variable name ('nver') */
 }
 
+// pkIsWindowsFn is the GOOS check for setprogdir's Windows rewrite.
+// Tests may override it temporarily; production always uses runtime.GOOS.
+var pkIsWindowsFn = func() bool { return runtime.GOOS == "windows" }
+
+// pkExecutableFn returns the process executable path (os.Executable).
+// Tests may override it to force error / empty-dir arms.
+var pkExecutableFn = os.Executable
+
 // pkSetProgDir is setprogdir: on Windows replace LUA_EXEC_DIR ("!") with
 // the executable's directory; elsewhere a no-op (C #define setprogdir(L) ((void)0)).
 func pkSetProgDir(L *State) {
-	if runtime.GOOS != "windows" {
+	if !pkIsWindowsFn() {
 		return
 	}
-	exe, err := os.Executable()
+	exe, err := pkExecutableFn()
 	if err != nil {
 		L.Error2("unable to get ModuleFileName")
 	}

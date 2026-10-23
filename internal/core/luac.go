@@ -175,13 +175,27 @@ done:
 }
 
 // pmain is luac.c's 'pmain': load every file, combine them, list, dump.
+// luacCheckStackFn is CheckStack for luac; tests may override.
+var luacCheckStackFn = func(L *State, n int) bool { return L.CheckStack(n) }
+
+// luacFileCloseFn closes the dump output file; tests may force an error.
+var luacFileCloseFn = func(f *os.File) error { return f.Close() }
+
+// luacReadAllFn reads stdin for '-'; tests may force an error.
+var luacReadAllFn = io.ReadAll
+
+// luacLoadBytesFn loads a combined skeleton; tests may force an error.
+var luacLoadBytesFn = func(L *State, data []byte, name string) error {
+	return L.LoadBytes(data, name)
+}
+
 func (c *luac) pmain(files []string) int {
 	/* luac.c uses luaL_newstate, which opens no libraries: the parser
 	   needs nothing from them. */
 	L := NewState()
 	defer L.Close()
 	c.tmname = L.g.tmNames /* C: tmname=G(L)->tmname */
-	if !L.CheckStack(len(files)) {
+	if !luacCheckStackFn(L, len(files)) {
 		c.fatal("too many input files")
 		return 1
 	}
@@ -215,7 +229,7 @@ func (c *luac) pmain(files []string) int {
 // loadStdin is luaL_loadfile(L, NULL): the chunk is standard input and
 // is named "=stdin".
 func (c *luac) loadStdin(L *State) error {
-	data, err := io.ReadAll(os.Stdin)
+	data, err := luacReadAllFn(os.Stdin)
 	if err != nil {
 		return err
 	}
@@ -229,7 +243,7 @@ func (c *luac) combine(L *State, n int) *Proto {
 		return clLvalue(&L.stack[L.top-1]).p
 	}
 	src := strings.Repeat(luacFunction, n)
-	if err := L.LoadBytes([]byte(src), "=("+luacProgName+")"); err != nil {
+	if err := luacLoadBytesFn(L, []byte(src), "=("+luacProgName+")"); err != nil {
 		c.fatal(err.Error())
 		return nil
 	}
@@ -266,13 +280,8 @@ func (c *luac) dump(L *State, f *Proto) bool {
 	}
 	werr := false
 	luaU_dump(L, f, func(L *State, b []byte) int {
-		/* C writer: (fwrite(...)!=1) && (size!=0) */
-		if werr {
-			return 1
-		}
-		if len(b) == 0 {
-			return 0
-		}
+		/* dumpBlock only calls the writer with len(b)>0 and status==0,
+		   so the C (size!=0) / sticky-werr arms are unreachable here. */
 		if _, err := w.Write(b); err != nil {
 			c.lastErr = err
 			werr = true
@@ -289,7 +298,7 @@ func (c *luac) dump(L *State, f *Proto) bool {
 		return false
 	}
 	if file != nil {
-		if err := file.Close(); err != nil {
+		if err := luacFileCloseFn(file); err != nil {
 			c.lastErr = err
 			c.cannot("close")
 			return false

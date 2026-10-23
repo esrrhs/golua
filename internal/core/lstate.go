@@ -488,9 +488,7 @@ func (L *State) shrinkStack() {
 	used := L.top + EXTRA_STACK
 	if size > BASIC_STACK_SIZE && used < size/4 {
 		newsize := size / 2
-		if newsize < used {
-			newsize = used
-		}
+		/* newsize (= size/2) cannot be < used while used < size/4. */
 		if newsize < BASIC_STACK_SIZE {
 			newsize = BASIC_STACK_SIZE
 		}
@@ -706,6 +704,10 @@ func close_state(L *State, caller *State) {
 	}
 }
 
+// fLuaOpenFn runs the open sequence for NewState. Tests may override it
+// to force the failure path (C returns NULL); production always uses f_luaopen.
+var fLuaOpenFn = f_luaopen
+
 // NewState creates a new Lua state (lua_newstate). May return nil if
 // f_luaopen fails (C returns NULL); Go alloc rarely fails.
 func NewState() *State {
@@ -729,7 +731,7 @@ func NewState() *State {
 	g.gcStopped = true        /* C: gcstp = GCSTPGC while building */
 	setivalue(&g.nilValue, 0) /* signal state not yet built */
 	g.strt = newStringTable()
-	if L.rawRunProtected(func() { f_luaopen(L) }) != LUA_OK {
+	if L.rawRunProtected(func() { fLuaOpenFn(L) }) != LUA_OK {
 		close_state(L, L)
 		return nil
 	}
@@ -955,64 +957,9 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 	status = LUA_OK
 	defer func() {
 		if r := recover(); r != nil {
-			switch x := r.(type) {
-			case *yieldAbort, *migrateAbort:
-				panic(x)
-			case *closeSignal:
-				/* C's lua_closethread -> luaE_resetthread: unwind the
-				   CallInfo list and close every to-be-closed variable
-				   still pending on the coroutine's stack.  A '__close'
-				   that raises must not stop the others: C keeps going
-				   and reports the *newest* error.
-
-				   When the whole state is closing, C does not run child
-				   __close at all — skip luaD_closeprotected so a
-				   suspended wrap whose __close is os.exit is not run. */
-				closed = true
-				if L.g.closing {
-					status = LUA_OK
-					L.top = 1
-					L.co.vals = L.co.vals[:0]
-					return
-				}
-				L.ci = &L.baseCI
-				L.baseCI.next = nil
-				L.baseCI.funcIdx = 0
-				L.baseCI.top = 1
-				L.baseCI.callstatus = CIST_C
-				setnilvalue(&L.stack[0])
-				L.errfunc = 0
-				st := int(L.status)
-				if st == LUA_YIELD {
-					st = LUA_OK
-				}
-				L.status = LUA_OK /* so that it can run the metamethods */
-				st = luaD_closeprotected(L, 1, st, false)
-				if st != LUA_OK {
-					status = st
-					luaD_seterrorobj(L, st, 1)
-					L.co.vals = append(L.co.vals[:0], L.stack[1])
-				} else {
-					status = LUA_OK
-					L.top = 1
-					/* no results at all: 'L.co.vals' is a scratch slice
-					   that the last yield filled, and a stale value
-					   handed to the resumer would be a real one. */
-					L.co.vals = L.co.vals[:0]
-				}
-				L.baseCI.top = L.top + LUA_MINSTACK /* luaE_resetthread */
-				return
-			case *luaError:
-				status = x.status
-				L.co.vals = append(L.co.vals[:0], x.value)
-				return
-			default:
-				status = LUA_ERRRUN
-				var v Value
-				setsvalue(&v, luaS_newlstr(L, fmt.Sprintf("%v", r)))
-				L.co.vals = append(L.co.vals[:0], v)
-				return
-			}
+			/* Shared with finishMigrated/reexec: yieldAbort/migrateAbort
+			   re-panic; closeSignal / luaError / plain panic are handled. */
+			status, closed = L.recoverCo(r)
 		}
 	}()
 	// stack[0] is the function; push the arguments after it
@@ -1271,10 +1218,7 @@ func (L *State) prepareFastYield(nresults int) {
 	} else {
 		L.co.vals = L.co.vals[:0]
 	}
-	L.top -= nresults
-	if L.top < 0 {
-		L.top = 0
-	}
+	L.top -= nresults /* callers pass GetTop()/stack depth; top stays >= 0 */
 	L.fastYield = true
 }
 

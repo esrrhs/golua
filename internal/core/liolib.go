@@ -33,9 +33,20 @@ import (
 // closed handle the way PUC-Lua shows it one.  It is nil without cgo.
 var ioStreamClosed func(s *ioStream)
 
+// ioIsWindowsFn is the GOOS check for Windows-specific I/O rules.
+// Tests may override it temporarily; production always uses runtime.GOOS.
+var ioIsWindowsFn = func() bool { return runtime.GOOS == "windows" }
+
 // ioIsWindows tells whether the host runs Windows (the shell used by
 // io.popen and os.execute depends on it).
-func ioIsWindows() bool { return runtime.GOOS == "windows" }
+func ioIsWindows() bool { return ioIsWindowsFn() }
+
+// Test hooks for fail paths (production defaults).
+var ioCreateTempFn = os.CreateTemp
+var ioFileSeekFn = func(f *os.File, offset int64, whence int) (int64, error) {
+	return f.Seek(offset, whence)
+}
+var ioCmdStartFn = func(cmd *exec.Cmd) error { return cmd.Start() }
 
 const (
 	ioPrefix     = "_IO_"
@@ -381,7 +392,7 @@ func ioStrError(err error) string {
 // two do about a rename onto a directory is not a difference in a
 // number, it is a difference in whether the file moved.
 func ioRename(oldpath, newpath string) error {
-	if runtime.GOOS == "windows" {
+	if ioIsWindows() {
 		/* no rename(2) there: MoveFileEx is what a move is, and this
 		   port keeps Go's, which does replace the target. */
 		return os.Rename(oldpath, newpath)
@@ -713,7 +724,7 @@ func ioOpenFile(fname, mode string) (*os.File, error) {
 	   library's business, and it is not the same for the two of them:
 	   see ioAppendAtEnd. */
 	if ioAppendAtEnd(mode) {
-		if _, err := f.Seek(0, io.SeekEnd); err != nil {
+		if _, err := ioFileSeekFn(f, 0, io.SeekEnd); err != nil {
 			f.Close()
 			return nil, err
 		}
@@ -790,6 +801,7 @@ func (rn *ioNumReader) next() bool {
 		return false
 	}
 	rn.buff = append(rn.buff, byte(rn.c))
+	rn.n++ /* C: rn->buff[rn->n++] = rn->c */
 	b, err := rn.r.ReadByte()
 	if err != nil {
 		rn.c = -1
@@ -1252,7 +1264,7 @@ func ioPOpen(L *State) int {
 		   stdio write buffer before the child inherits descriptors.
 		   Windows _popen has no fflush(NULL); harmless extra flush. */
 		ioFlushAll()
-		err = cmd.Start()
+		err = ioCmdStartFn(cmd)
 	}
 	/* C sets closef even when l_popen returns NULL; f_gc skips f==NULL. */
 	s.cmd = cmd
@@ -1273,7 +1285,7 @@ func ioShellCommand(command string) *exec.Cmd {
 
 func ioTmpFile(L *State) int {
 	s := ioNewFile(L)
-	f, err := os.CreateTemp("", "lua_")
+	f, err := ioCreateTempFn("", "lua_")
 	if err != nil {
 		return ioFileResult(L, false, nil, err)
 	}

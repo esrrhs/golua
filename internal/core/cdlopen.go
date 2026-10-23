@@ -122,6 +122,10 @@ import (
 // front of every lua_State, which 'lua_getextraspace' hands to C.
 const luaExtraSpace = unsafe.Sizeof(uintptr(0))
 
+// cMallocFn is C.malloc for lua_State / identity blocks. Tests may
+// override it to force the OOM arms; production always uses C.malloc.
+var cMallocFn = func(n C.size_t) unsafe.Pointer { return C.malloc(n) }
+
 func (L *State) statePtr() *C.lua_State {
 	if L.cstate == nil {
 		/* The block is LUA_EXTRASPACE bytes followed by the id:
@@ -129,7 +133,7 @@ func (L *State) statePtr() *C.lua_State {
 		   was given, and PUC-Lua really does keep them there, so they
 		   have to exist and be addressable. */
 		size := unsafe.Sizeof(uintptr(0))
-		base := C.malloc(C.size_t(luaExtraSpace) + C.size_t(size))
+		base := cMallocFn(C.size_t(luaExtraSpace) + C.size_t(size))
 		if base == nil {
 			panic("lua: out of memory for a lua_State handle")
 		}
@@ -447,7 +451,7 @@ func ptrOf(v uintptr) unsafe.Pointer {
 	defer ptrMu.Unlock()
 	p, ok := ptrAddr[v]
 	if !ok {
-		p = C.malloc(1)
+		p = cMallocFn(1)
 		if p == nil {
 			panic("lua: out of memory for a value's identity")
 		}
@@ -688,7 +692,9 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 		src := C.GoString((*C.char)(data))
 		return C.int(cdlStatus(L.LoadBytesMode([]byte(src), name, m)))
 	}
-	return C.int(cdlStatus(L.LoadStream(nil, func() []byte {
+	/* Peek the first piece (same as baseLoadReader): LoadStream with a
+	   nil 'first' starts at EOZ and never calls the reader. */
+	more := func() []byte {
 		var sz C.size_t
 		cgoEnter()
 		defer cgoLeave()
@@ -697,7 +703,9 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 			return nil
 		}
 		return []byte(C.GoStringN(cs, C.int(sz)))
-	}, name, m)))
+	}
+	first := more()
+	return C.int(cdlStatus(L.LoadStream(first, more, name, m)))
 }
 
 // ---------------------------------------------------------------------

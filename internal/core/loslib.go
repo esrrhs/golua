@@ -128,9 +128,13 @@ func osGetEnv(L *State) int {
 // to wall time since start — FLAG vs C clock().
 var osStartTime = time.Now()
 
+// osCPUTimeFn is the process-CPU-time probe for os.clock.
+// Tests may override it; production always uses osProcessCPUTime.
+var osCPUTimeFn = osProcessCPUTime
+
 func osClock(L *State) int {
 	/* C: ((lua_Number)clock())/(lua_Number)CLOCKS_PER_SEC */
-	if sec, ok := osProcessCPUTime(); ok {
+	if sec, ok := osCPUTimeFn(); ok {
 		L.PushNumber(sec)
 		return 1
 	}

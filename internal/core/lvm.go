@@ -130,6 +130,10 @@ func copy2buff(stack []Value, top, n int, buff *strings.Builder) {
 ** Main operation for concatenation: concat 'total' values in the stack,
 ** from 'L.top - total' up to 'L.top - 1'.
  */
+// luaV_concatMaxLen is MaxInt for the concat length-overflow check.
+// Tests may lower it; production always uses math.MaxInt.
+var luaV_concatMaxLen = math.MaxInt
+
 func luaV_concat(L *State, total int) {
 	if total == 1 {
 		return /* "all" values already concatenated */
@@ -150,7 +154,7 @@ func luaV_concat(L *State, total int) {
 			tl := len(tsvalue(&L.stack[top-1]).val)
 			for n = 1; n < total && tostringInPlace(L, &L.stack[top-n-1]); n++ {
 				l := len(tsvalue(&L.stack[top-n-1]).val)
-				if l >= math.MaxInt-tl { /* string length overflow? */
+				if l >= luaV_concatMaxLen-tl { /* string length overflow? */
 					L.top = top - total /* pop strings to avoid wasting stack */
 					luaG_runerror(L, "string length overflow")
 					return
@@ -1169,11 +1173,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 					pc -= i3.B
 				}
 			case OP_TFORLOOP:
-				ra5 := base + i.A
-				if !ttisnil(&L.stack[ra5+4]) {
-					L.stack[ra5+2] = L.stack[ra5+4]
-					pc -= i.B
-				}
+				/* Unreachable on valid bytecode: OP_TFORCALL / OP_TFORPREP
+				   already consume the following OP_TFORLOOP (C fallthrough).
+				   Kept as an empty case so an accidental lone OP_TFORLOOP is
+				   a no-op rather than an unknown-opcode panic. */
 			case OP_SETLIST:
 				n := i.B
 				last := uint32(i.C)

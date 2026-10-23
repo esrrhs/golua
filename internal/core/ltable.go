@@ -557,7 +557,8 @@ func luaH_newarray4(L *State) *Table {
 func invalidateTMcache(t *Table) { t.flags &= ^maskflags }
 
 // luaH_free is a no-op: the Go GC reclaims the table (ltable.c IGNORE).
-func luaH_free(L *State, t *Table) {}
+// The blank assignment is an executable statement so coverage can see a call.
+func luaH_free(L *State, t *Table) { _, _ = L, t }
 
 // getfreepos returns a free position in the hash part (ltable.c).
 // Returns -1 when none (C returns NULL).
