@@ -78,14 +78,19 @@ func luaD_rawrunprotected(L *State, f func()) int {
 // ---------------------------------------------------------------------
 //
 // Index-stack SPEC: C's relstack/correctstack convert pointers ↔ offsets
-// across realloc. Go indices stay valid; those helpers are no-ops.
-// Runtime grow/check methods also live on *State in lstate.go; the
-// luaD_* forms below are the C-faithful API for this unit (Apply debt:
-// merge callers onto these, or make State methods thin wrappers).
+// across realloc. Go indices stay valid — relstack is a no-op; correctstack
+// still sets trap bits. Runtime grow/check also live on *State in lstate.go;
+// luaD_* forms below match C 5.4.9 (realloc → correctstack/setTraps).
+// Apply debt: point State.growStackNoRaise / checkStack at these.
 
-// relstack / correctstack: no-ops with index-based stacks.
-func relstack(L *State)     { _ = L }
-func correctstack(L *State) { _ = L }
+// relstack: no-op with index-based stacks (C converts pointers → offsets).
+func relstack(L *State) { _ = L }
+
+// correctstack restores stack pointers after realloc (ldo.c).
+// Index-stack: pointer restore is a no-op; still set trap bits like C.
+func correctstack(L *State) {
+	setTraps(L) /* C: if (isLua(ci)) ci->u.l.trap = 1 */
+}
 
 // ERRORSTACKSIZE is defined in lstate.go (LUAI_MAXSTACK + 200).
 
@@ -124,18 +129,47 @@ func luaD_checkminstack(L *State) int {
 
 // luaD_reallocstack reallocates the stack to 'newsize' usable slots
 // (ldo.c 5.4.9). 'raiseerror' selects throw vs soft failure.
-// Index-stack: no relstack/correctstack; no emergency-GC stop (Go GC).
+// Index-stack: relstack is a no-op; correctstack still sets traps.
+// No emergency-GC stop (Go GC SPEC).
 func luaD_reallocstack(L *State, newsize int, raiseerror bool) bool {
 	/* C: assert newsize <= LUAI_MAXSTACK || newsize == ERRORSTACKSIZE */
+	relstack(L) /* change pointers to offsets (no-op on index stack) */
+	/* C: gcstopem = 1 around realloc — omitted (Go GC) */
 	L.reallocStack(newsize)
-	_ = raiseerror /* Go reallocStack does not fail; soft-fail N/A */
+	correctstack(L) /* restore pointers + set traps on Lua CIs */
+	_ = raiseerror  /* Go reallocStack does not fail; soft-fail N/A */
 	return true
 }
 
 // luaD_growstack grows the stack by at least 'n' elements (ldo.c 5.4.9).
 // When raiseerror is false, returns false on failure instead of throwing.
 func luaD_growstack(L *State, n int, raiseerror bool) bool {
-	return L.growStackNoRaise(n, raiseerror)
+	size := L.stackSize()
+	if size > LUAI_MAXSTACK {
+		/* already on ERRORSTACKSIZE / handling a stack error */
+		if raiseerror {
+			luaD_errerr(L) /* error inside message handler */
+		}
+		return false
+	} else if n < LUAI_MAXSTACK { /* avoids arithmetic overflows */
+		newsize := 2 * size          /* tentative new size */
+		needed := L.top + n          /* C: (top - stack) + n */
+		if newsize > LUAI_MAXSTACK { /* cannot cross the limit */
+			newsize = LUAI_MAXSTACK
+		}
+		if newsize < needed { /* but must respect what was asked for */
+			newsize = needed
+		}
+		if newsize <= LUAI_MAXSTACK {
+			return luaD_reallocstack(L, newsize, raiseerror)
+		}
+	}
+	/* else stack overflow — grow to ERRORSTACKSIZE for the message */
+	luaD_reallocstack(L, ERRORSTACKSIZE, raiseerror)
+	if raiseerror {
+		luaG_runerror(L, "stack overflow")
+	}
+	return false
 }
 
 // stackinuse computes how much of the stack is in use (ldo.c).
@@ -155,9 +189,8 @@ func stackinuse(L *State) int {
 
 // luaD_shrinkstack shrinks an oversized stack (ldo.c 5.4.9).
 //
-// Apply debt: master State.shrinkStack uses a different heuristic
-// (halve when used < size/4). This form matches C 5.4.9; on merge,
-// point luaD_pcall / cdlopen at this (or make shrinkStack call it).
+// State.shrinkStack uses a different heuristic (halve when used < size/4);
+// Apply debt: make that a thin wrapper of this.
 func luaD_shrinkstack(L *State) {
 	inuse := stackinuse(L)
 	max := inuse * 3
@@ -321,13 +354,11 @@ func decodeNresults(n int) int   { return -n - 3 }
 
 // moveresults moves nres results at the top of the stack to 'res' (ldo.c).
 //
-// FLAG vs C 5.4.9: C handles hastocloseCfunc *inside* moveresults
-// (sets CIST_CLSRET, may yield in luaF_close, then rethook). Go does
-// the close in luaD_poscall before calling moveresults, because CallInfo
-// has no u2.nres slot for finishCcall yet and the goroutine yield path
-// does not re-enter moveresults the C way. Semantics for non-yielding
-// closes match; yielding __close across a C return is Apply debt
-// (finishCcall / CIST_CLSRET — see NOTES colocated section).
+// Matches C 5.4.9: hastocloseCfunc is handled *inside* here (CIST_CLSRET,
+// luaF_close at res==func, rethook after closes, then decodeNresults).
+// u2.nres is stored in ci.ntransfer (C union with transferinfo).
+// Yielding __close across a C return still needs finishCcall re-entry
+// (colocated in lstate.go) — Apply debt if that path is incomplete.
 func moveresults(L *State, res, nres, wanted int) {
 	switch wanted { /* handle typical cases separately */
 	case 0: /* no values needed */
@@ -343,8 +374,24 @@ func moveresults(L *State, res, nres, wanted int) {
 		return
 	case LUA_MULTRET:
 		wanted = nres /* we want all results */
+	default: /* two/more results and/or to-be-closed variables */
+		if hastocloseCfunc(wanted) { /* to-be-closed variables? */
+			ci := L.ci
+			ci.callstatus |= CIST_CLSRET /* in case of yields */
+			ci.ntransfer = nres          /* C: ci->u2.nres */
+			luaF_close(L, res, closeKTOP, true)
+			ci.callstatus &^= CIST_CLSRET
+			if L.hookmask != 0 { /* call hook after '__close's */
+				rethook(L, ci, nres)
+				/* C: restore res after hook may move stack; index stack OK */
+			}
+			wanted = decodeNresults(wanted)
+			if wanted == LUA_MULTRET {
+				wanted = nres /* we want all results */
+			}
+		}
 	}
-	/* generic case (C also folds the post-close decode path here) */
+	/* generic case */
 	firstresult := L.top - nres /* index of first result */
 	if nres > wanted {          /* extra results? */
 		nres = wanted /* don't need them */
@@ -362,29 +409,16 @@ func moveresults(L *State, res, nres, wanted int) {
 // luaD_poscall finishes a function call (ldo.c 5.4.9).
 //
 // C: rethook only when hookmask && !hastocloseCfunc; close lives in
-// moveresults. Go: close-then-hook branch here (FLAG above).
+// moveresults. Does not mutate ci.nresults after decode (coded value kept).
 func luaD_poscall(L *State, ci *CallInfo, nres int) {
 	wanted := ci.nresults
-	if hastocloseCfunc(wanted) { /* to-be-closed variables pending? */
-		/* C does this inside 'moveresults', before the results are moved
-		   and with the return hook saved until after the '__close's —
-		   a hook cannot run with a close still pending. */
-		wanted = decodeNresults(wanted)
-		ci.nresults = wanted
-		luaF_close(L, ci.funcIdx+1, closeKTOP, true)
-		if L.hookmask != 0 {
-			rethook(L, ci, nres)
-		}
-		moveresults(L, ci.funcIdx, nres, wanted)
-		L.ci = ci.prev
-		return
-	}
-	if L.hookmask != 0 {
+	if L.hookmask != 0 && !hastocloseCfunc(wanted) {
 		rethook(L, ci, nres)
 	}
+	/* move results to proper place (may close tbc vars) */
 	moveresults(L, ci.funcIdx, nres, wanted)
 	/* C asserts !(HOOKED|YPCALL|FIN|TRAN|CLSRET) */
-	L.ci = ci.prev /* back to caller */
+	L.ci = ci.prev /* back to caller (after closing variables) */
 }
 
 // next_ci is next_ci (ldo.c): reuse free CI or extend.
@@ -608,7 +642,6 @@ func luaD_closeprotected(L *State, level, status int, yy bool) int {
 // luaD_pcall runs f in protected mode (ldo.c).
 //
 // FLAG: extra 'yy' for the close path — see luaD_closeprotected.
-// Uses L.shrinkStack (master) today; Apply debt: switch to luaD_shrinkstack.
 func luaD_pcall(L *State, f func(), oldTop, ef int, yy bool) int {
 	oldCI := L.ci
 	oldAllowHooks := L.allowhook
@@ -620,7 +653,7 @@ func luaD_pcall(L *State, f func(), oldTop, ef int, yy bool) int {
 		L.allowhook = oldAllowHooks
 		status = luaD_closeprotected(L, oldTop, status, yy)
 		luaD_seterrorobj(L, status, oldTop)
-		L.shrinkStack() /* restore stack size in case of overflow */
+		luaD_shrinkstack(L) /* restore stack size in case of overflow */
 	}
 	L.errfunc = oldErrFunc
 	return status

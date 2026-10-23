@@ -17,8 +17,8 @@
 //     word is unpacked with unpackInstruction (bit layout from lopcodes.h).
 //
 //  4. Proto.lineinfo holds *absolute* lines (see lobject.go). The file
-//     format stores signed byte deltas plus abslineinfo; loadLineInfo
-//     converts on load (mirrors luaG_getfuncline), dumpLineInfo (ldump.go)
+//     format stores signed byte deltas plus abslineinfo; loadDebug
+//     converts on load (mirrors luaG_getfuncline), encodeLineInfo (ldump.go)
 //     converts back.
 //
 //  5. LoadState uses []byte+pos instead of ZIO*; fixed LE widths for
@@ -133,14 +133,14 @@ func (S *LoadState) loadCount(unit int) int {
 	return n
 }
 
-/* loadInteger — loadVar of lua_Integer (8 bytes, LE) */
-func (S *LoadState) loadInteger() int64 {
-	return int64(binary.LittleEndian.Uint64(S.loadBlock(8)))
-}
-
 /* loadNumber — loadVar of lua_Number (8 bytes, LE) */
 func (S *LoadState) loadNumber() float64 {
 	return math.Float64frombits(binary.LittleEndian.Uint64(S.loadBlock(8)))
+}
+
+/* loadInteger — loadVar of lua_Integer (8 bytes, LE) */
+func (S *LoadState) loadInteger() int64 {
+	return int64(binary.LittleEndian.Uint64(S.loadBlock(8)))
 }
 
 /*
@@ -154,30 +154,38 @@ func (S *LoadState) loadStringN(p *Proto) *TString {
 	if size == 0 { /* no string? */
 		return nil
 	}
-	size-- /* remove trailing '\0' counted in size (dump writes len+1) */
+	size-- /* C: --size in the else-if condition; dump writes len+1 */
 	/* Go hardening: reject absurd size (C trusts size_t / ZIO). */
 	if size < 0 || size > math.MaxInt32 {
 		S.loadError("integer overflow")
 	}
-	b := S.loadBlock(int(size))
+	var ts *TString
 	if size <= LUAI_MAXSHORTLEN { /* short string? */
-		return luaS_newlstr(S.L, string(b))
+		b := S.loadBlock(int(size))       /* load string into buffer */
+		ts = luaS_newlstr(S.L, string(b)) /* create string */
+	} else { /* long string */
+		/* C: createlngstrobj, setsvalue2s+inctop anchor, loadVector, pop.
+		   FLAG: load then createlngstrobj (no stack anchor / Go GC). */
+		b := S.loadBlock(int(size))
+		ts = luaS_createlngstrobj(S.L, string(b))
 	}
-	return luaS_createlngstrobj(S.L, string(b)) /* long string */
+	_ = p /* C: luaC_objbarrier(L, p, ts) — Go GC */
+	return ts
 }
 
 /* loadString — non-nullable; NULL → "bad format for constant string" */
 func (S *LoadState) loadString(p *Proto) *TString {
-	ts := S.loadStringN(p)
-	if ts == nil {
+	st := S.loadStringN(p)
+	if st == nil {
 		S.loadError("bad format for constant string")
 	}
-	return ts
+	return st
 }
 
 /*
 ** loadCode — loadInt n; allocate code[n]; loadVector of Instructions.
 ** FLAG: each 32-bit word is unpacked into Instruction struct fields.
+** Uses loadCount(4) hardening (C: loadInt + luaM_newvectorchecked).
  */
 func (S *LoadState) loadCode(f *Proto) {
 	n := S.loadCount(4)
@@ -200,6 +208,9 @@ func (S *LoadState) loadConstants(f *Proto) {
 	f.k = make([]Value, n)
 	f.sizek = n
 	for i := 0; i < n; i++ {
+		setnilvalue(&f.k[i]) /* make array valid for GC (C) */
+	}
+	for i := 0; i < n; i++ {
 		o := &f.k[i]
 		switch S.loadByte() {
 		case LUA_VNIL:
@@ -213,9 +224,9 @@ func (S *LoadState) loadConstants(f *Proto) {
 		case LUA_VNUMINT:
 			setivalue(o, S.loadInteger())
 		case LUA_VSHRSTR, LUA_VLNGSTR:
-			setsvalue(o, S.loadString(f))
+			setsvalue(o, S.loadString(f)) /* C: setsvalue2n */
 		default:
-			S.loadError("bad constant type")
+			S.loadError("bad constant type") /* C: lua_assert(0) */
 		}
 	}
 }
@@ -229,7 +240,11 @@ func (S *LoadState) loadProtos(f *Proto) {
 	f.p = make([]*Proto, n)
 	f.sizep = n
 	for i := 0; i < n; i++ {
+		f.p[i] = nil /* make array valid for GC (C) */
+	}
+	for i := 0; i < n; i++ {
 		f.p[i] = luaF_newproto(S.L)
+		/* luaC_objbarrier(S->L, f, f->p[i]); — Go GC */
 		S.loadFunction(f.p[i], f.source)
 	}
 }
@@ -243,7 +258,10 @@ func (S *LoadState) loadUpvalues(f *Proto) {
 	n := S.loadCount(3)
 	f.upvalues = make([]Upvaldesc, n)
 	f.sizeupvalues = n
-	for i := 0; i < n; i++ {
+	for i := 0; i < n; i++ { /* make array valid for GC */
+		f.upvalues[i].name = nil
+	}
+	for i := 0; i < n; i++ { /* following calls can raise errors */
 		f.upvalues[i].instack = S.loadByte()
 		f.upvalues[i].idx = S.loadByte()
 		f.upvalues[i].kind = S.loadByte()
@@ -251,50 +269,49 @@ func (S *LoadState) loadUpvalues(f *Proto) {
 }
 
 /*
-** loadLineInfo — C loadDebug's lineinfo + abslineinfo portion, then
-** convert on-disk (delta bytes + abslineinfo) into Proto.lineinfo
-** absolute lines (FLAG #4). Also keeps abslineinfo on the Proto for
-** any consumer that wants the raw abs table; dumpLineInfo rebuilds
-** deltas from absolute lines.
+** loadDebug — lineinfo/abslineinfo, locvars, upvalue names (lundump.c).
+** FLAG #4: on-disk signed-byte deltas + abslineinfo are converted into
+** Proto.lineinfo absolute lines (mirrors luaG_getfuncline); abslineinfo
+** retained for dump round-trip. C stores ls_byte deltas natively.
  */
-func (S *LoadState) loadLineInfo(f *Proto) {
+func (S *LoadState) loadDebug(f *Proto) {
 	n := S.loadCount(1)
-	raw := S.loadBlock(n)
+	raw := S.loadBlock(n) /* C: loadVector into f->lineinfo (ls_byte) */
 	nabs := S.loadCount(2)
 	abs := make([]AbsLineInfo, nabs)
 	for i := 0; i < nabs; i++ {
 		abs[i].pc = S.loadInt()
 		abs[i].line = S.loadInt()
 	}
-	/* convert to absolute lines, the way luaG_getfuncline does it */
+	/* convert deltas → absolute lines (FLAG #4); C keeps ls_byte deltas.
+	   ABSLINEINFO markers + abslineinfo[] mirror luaG_getfuncline. */
 	lines := make([]int32, n)
 	baseline := f.linedefined
 	ai := 0
 	for pc := 0; pc < n; pc++ {
-		if ai < nabs && abs[ai].pc <= pc {
-			/* delta at this pc is ABSLINEINFO; line is absolute */
-			baseline = abs[ai].line
-			ai++
+		linedif := int8(raw[pc])
+		if linedif == int8(absLineInfo) { /* ABSLINEINFO */
+			if ai < nabs && abs[ai].pc == pc {
+				baseline = abs[ai].line
+				ai++
+			}
 			lines[pc] = int32(baseline)
 			continue
 		}
-		baseline += int(int8(raw[pc]))
+		baseline += int(linedif)
 		lines[pc] = int32(baseline)
 	}
 	f.lineinfo = lines
 	f.sizelineinfo = n
 	f.abslineinfo = abs
-}
+	f.sizeabslineinfo = nabs /* C: f->sizeabslineinfo = n */
 
-/*
-** loadDebug — lineinfo/abslineinfo, locvars, upvalue names.
-** Upvalue-name count: if n!=0 then n = f->sizeupvalues (C).
- */
-func (S *LoadState) loadDebug(f *Proto) {
-	S.loadLineInfo(f)
-	n := S.loadCount(1)
+	n = S.loadCount(1)
 	f.locvars = make([]LocVar, n)
 	f.sizelocvars = n
+	for i := 0; i < n; i++ {
+		f.locvars[i].varname = nil
+	}
 	for i := 0; i < n; i++ {
 		f.locvars[i].varname = S.loadStringN(f)
 		f.locvars[i].startpc = S.loadInt()
@@ -318,7 +335,7 @@ func (S *LoadState) loadFunction(f *Proto, psource *TString) {
 	f.linedefined = S.loadInt()
 	f.lastlinedefined = S.loadInt()
 	f.numparams = S.loadByte()
-	f.isVararg = S.loadByte()
+	f.isVararg = S.loadByte() /* C: is_vararg */
 	f.maxstacksize = S.loadByte()
 	S.loadCode(f)
 	S.loadConstants(f)
@@ -348,7 +365,7 @@ func (S *LoadState) checkSize(size int, tname string) {
 ** FLAG: sizes hardcoded 4/8/8 (LE fixed width).
  */
 func (S *LoadState) checkHeader() {
-	/* skip 1st char (already checked by the caller) */
+	/* skip 1st char (already read and checked) */
 	S.checkLiteral(dmpSignature[1:], "not a binary chunk")
 	if S.loadByte() != dmpVersion {
 		S.loadError("version mismatch")
@@ -357,7 +374,7 @@ func (S *LoadState) checkHeader() {
 		S.loadError("format mismatch")
 	}
 	S.checkLiteral(dmpData, "corrupted chunk")
-	S.checkSize(4, "Instruction")
+	S.checkSize(4, "Instruction") /* checksize(S, Instruction) */
 	S.checkSize(8, "lua_Integer")
 	S.checkSize(8, "lua_Number")
 	if S.loadInteger() != dmpInt {
@@ -370,9 +387,9 @@ func (S *LoadState) checkHeader() {
 
 /*
 ** luaU_undump — Load precompiled chunk (lundump.c).
-** FLAG: does not push the closure on the stack / no luaC_objbarrier /
-** no lua_assert(nupvalues==sizeupvalues) / luai_verifycode is empty in
-** C by default. Push + initupvals + _ENV live in luaU_loadBinary.
+** Pushes the closure on the stack (setclLvalue2s + luaD_inctop), matching C.
+** FLAG: no luaC_objbarrier; luai_verifycode empty by default in C.
+** _ENV setup lives in luaU_loadBinary (C: lua_load).
  */
 func luaU_undump(L *State, data []byte, name string) *LClosure {
 	var S LoadState
@@ -393,18 +410,22 @@ func luaU_undump(L *State, data []byte, name string) *LClosure {
 	S.pos = 1
 	S.checkHeader()
 	cl := luaF_newLclosure(L, int(S.loadByte()))
+	setclLvalue(&L.stack[L.top], cl) /* setclLvalue2s */
+	luaD_inctop(L)
 	cl.p = luaF_newproto(L)
+	/* luaC_objbarrier(L, cl, cl->p); — Go GC */
 	S.loadFunction(cl.p, nil)
+	/* lua_assert(cl->nupvalues == cl->p->sizeupvalues); */
 	/* luai_verifycode(L, cl.p) — empty by default in C */
 	return cl
 }
 
 /*
 ** checkLoadMode — checkmode from ldo.c (colocated; FLAG #6).
-** mode must contain the kind rune ('b' or 't').
+** C: if (mode && strchr(mode, x[0]) == NULL). Empty mode ≈ NULL (skip).
  */
 func checkLoadMode(L *State, mode, x string) {
-	if !strings.ContainsRune(mode, rune(x[0])) {
+	if mode != "" && !strings.ContainsRune(mode, rune(x[0])) {
 		ts := pushfString(L, "attempt to load a %s chunk (mode is '%s')", x, mode)
 		L.checkStack(1)
 		setsvalue(&L.stack[L.top], ts)
@@ -415,13 +436,13 @@ func checkLoadMode(L *State, mode, x string) {
 
 /*
 ** luaU_loadBinary — precompiled path of lua_load / f_parser (colocated).
-** undump → luaF_initupvals → set _ENV upvalue → push closure.
+** checkmode → undump (pushes cl) → luaF_initupvals → set _ENV upvalue.
  */
 func luaU_loadBinary(L *State, data []byte, chunkname, mode string) error {
 	oldtop := L.top
 	status := L.rawRunProtected(func() {
 		checkLoadMode(L, mode, "binary")
-		cl := luaU_undump(L, data, chunkname)
+		cl := luaU_undump(L, data, chunkname) /* closure already on stack */
 		luaF_initupvals(L, cl)
 		if cl.nupvalues >= 1 {
 			/* set the globals table as the first upvalue (the _ENV) */
@@ -429,9 +450,6 @@ func luaU_loadBinary(L *State, data []byte, chunkname, mode string) error {
 			sethvalue(&gt, L.rawGetRegistryGlobals())
 			setobj(&cl.upvals[0].v, &gt)
 		}
-		L.checkStack(1)
-		setclLvalue(&L.stack[L.top], cl)
-		L.top++
 	})
 	if status != LUA_OK {
 		msg := ""
@@ -446,129 +464,10 @@ func luaU_loadBinary(L *State, data []byte, chunkname, mode string) error {
 
 /* ---------------------------------------------------------------------
 ** instruction (un)packing (lopcodes.h) — shared with ldump.go
+** Uses POS_/SIZE_ constants and getOpMode from lopcodes.go (luaP_opmodes).
 ** --------------------------------------------------------------------- */
 
-/* Instruction modes (lopcodes.c luaP_opmodes, mode field only). */
-const (
-	dmpIABC = iota
-	dmpIABx
-	dmpIAsBx
-	dmpIAx
-	dmpIsJ
-)
-
-/* dmpOpModes — mode column of luaP_opmodes, opcode order. */
-var dmpOpModes = [NUM_OPCODES]int{
-	dmpIABC,  /* OP_MOVE */
-	dmpIAsBx, /* OP_LOADI */
-	dmpIAsBx, /* OP_LOADF */
-	dmpIABx,  /* OP_LOADK */
-	dmpIABx,  /* OP_LOADKX */
-	dmpIABC,  /* OP_LOADFALSE */
-	dmpIABC,  /* OP_LFALSESKIP */
-	dmpIABC,  /* OP_LOADTRUE */
-	dmpIABC,  /* OP_LOADNIL */
-	dmpIABC,  /* OP_GETUPVAL */
-	dmpIABC,  /* OP_SETUPVAL */
-	dmpIABC,  /* OP_GETTABUP */
-	dmpIABC,  /* OP_GETTABLE */
-	dmpIABC,  /* OP_GETI */
-	dmpIABC,  /* OP_GETFIELD */
-	dmpIABC,  /* OP_SETTABUP */
-	dmpIABC,  /* OP_SETTABLE */
-	dmpIABC,  /* OP_SETI */
-	dmpIABC,  /* OP_SETFIELD */
-	dmpIABC,  /* OP_NEWTABLE */
-	dmpIABC,  /* OP_SELF */
-	dmpIABC,  /* OP_ADDI */
-	dmpIABC,  /* OP_ADDK */
-	dmpIABC,  /* OP_SUBK */
-	dmpIABC,  /* OP_MULK */
-	dmpIABC,  /* OP_MODK */
-	dmpIABC,  /* OP_POWK */
-	dmpIABC,  /* OP_DIVK */
-	dmpIABC,  /* OP_IDIVK */
-	dmpIABC,  /* OP_BANDK */
-	dmpIABC,  /* OP_BORK */
-	dmpIABC,  /* OP_BXORK */
-	dmpIABC,  /* OP_SHRI */
-	dmpIABC,  /* OP_SHLI */
-	dmpIABC,  /* OP_ADD */
-	dmpIABC,  /* OP_SUB */
-	dmpIABC,  /* OP_MUL */
-	dmpIABC,  /* OP_MOD */
-	dmpIABC,  /* OP_POW */
-	dmpIABC,  /* OP_DIV */
-	dmpIABC,  /* OP_IDIV */
-	dmpIABC,  /* OP_BAND */
-	dmpIABC,  /* OP_BOR */
-	dmpIABC,  /* OP_BXOR */
-	dmpIABC,  /* OP_SHL */
-	dmpIABC,  /* OP_SHR */
-	dmpIABC,  /* OP_MMBIN */
-	dmpIABC,  /* OP_MMBINI */
-	dmpIABC,  /* OP_MMBINK */
-	dmpIABC,  /* OP_UNM */
-	dmpIABC,  /* OP_BNOT */
-	dmpIABC,  /* OP_NOT */
-	dmpIABC,  /* OP_LEN */
-	dmpIABC,  /* OP_CONCAT */
-	dmpIABC,  /* OP_CLOSE */
-	dmpIABC,  /* OP_TBC */
-	dmpIsJ,   /* OP_JMP */
-	dmpIABC,  /* OP_EQ */
-	dmpIABC,  /* OP_LT */
-	dmpIABC,  /* OP_LE */
-	dmpIABC,  /* OP_EQK */
-	dmpIABC,  /* OP_EQI */
-	dmpIABC,  /* OP_LTI */
-	dmpIABC,  /* OP_LEI */
-	dmpIABC,  /* OP_GTI */
-	dmpIABC,  /* OP_GEI */
-	dmpIABC,  /* OP_TEST */
-	dmpIABC,  /* OP_TESTSET */
-	dmpIABC,  /* OP_CALL */
-	dmpIABC,  /* OP_TAILCALL */
-	dmpIABC,  /* OP_RETURN */
-	dmpIABC,  /* OP_RETURN0 */
-	dmpIABC,  /* OP_RETURN1 */
-	dmpIABx,  /* OP_FORLOOP */
-	dmpIABx,  /* OP_FORPREP */
-	dmpIABx,  /* OP_TFORPREP */
-	dmpIABC,  /* OP_TFORCALL */
-	dmpIABx,  /* OP_TFORLOOP */
-	dmpIABC,  /* OP_SETLIST */
-	dmpIABx,  /* OP_CLOSURE */
-	dmpIABC,  /* OP_VARARG */
-	dmpIABC,  /* OP_VARARGPREP */
-	dmpIAx,   /* OP_EXTRAARG */
-}
-
-/*
-** Bit positions and sizes of the packed instruction (lopcodes.h):
-**   Op: bits 0-6    A: bits 7-14    k: bit 15    B: bits 16-23    C: bits 24-31
-**   Bx: bits 15-31 (17 bits)        Ax: bits 7-31 (25 bits)        sJ: bits 7-31
- */
-const (
-	instrPosOp  = 0
-	instrPosA   = 7
-	instrPosK   = 15
-	instrPosB   = 16
-	instrPosC   = 24
-	instrPosBx  = instrPosK /* 15 */
-	instrPosAx  = instrPosA /* 7 */
-	instrPosSJ  = instrPosA /* 7 */
-	instrSizeOp = 7
-	instrSizeA  = 8
-	instrSizeB  = 8
-	instrSizeC  = 8
-	instrSizeK  = 1
-	instrSizeBx = 17
-	instrSizeAx = 25
-	instrSizeSJ = 25
-)
-
-/* instrMask — MASK1(size) in lopcodes.h */
+/* instrMask — MASK1(size) in lopcodes.h (bit macros otherwise omitted). */
 func instrMask(size int) uint32 { return uint32(1)<<uint(size) - 1 }
 
 /*
@@ -579,59 +478,63 @@ func instrMask(size int) uint32 { return uint32(1)<<uint(size) - 1 }
  */
 func packInstruction(i Instruction) uint32 {
 	if i.Op < 0 || i.Op >= NUM_OPCODES {
-		return uint32(i.Op) << instrPosOp
+		return uint32(i.Op) << POS_OP
 	}
 	var w uint32
-	switch dmpOpModes[i.Op] {
-	case dmpIABC:
-		w = uint32(i.Op)<<instrPosOp |
-			uint32(i.A)<<instrPosA |
-			uint32(i.B)<<instrPosB |
-			uint32(i.C)<<instrPosC |
-			uint32(i.K)<<instrPosK
-	case dmpIABx, dmpIAsBx:
-		w = uint32(i.Op)<<instrPosOp |
-			uint32(i.A)<<instrPosA |
-			uint32(i.B)<<instrPosBx
-	case dmpIAx:
-		w = uint32(i.Op)<<instrPosOp |
-			uint32(i.A)<<instrPosAx
-	case dmpIsJ:
-		w = uint32(i.Op)<<instrPosOp |
-			uint32(i.B)<<instrPosSJ |
-			uint32(i.K)<<instrPosK
+	switch getOpMode(i.Op) {
+	case iABC:
+		w = uint32(i.Op)<<POS_OP |
+			uint32(i.A)<<POS_A |
+			uint32(i.B)<<POS_B |
+			uint32(i.C)<<POS_C |
+			uint32(i.K)<<POS_k
+	case iABx, iAsBx:
+		w = uint32(i.Op)<<POS_OP |
+			uint32(i.A)<<POS_A |
+			uint32(i.B)<<POS_Bx
+	case iAx:
+		w = uint32(i.Op)<<POS_OP |
+			uint32(i.A)<<POS_Ax
+	case isJ:
+		w = uint32(i.Op)<<POS_OP |
+			uint32(i.B)<<POS_sJ |
+			uint32(i.K)<<POS_k
 	}
 	return w
 }
 
-/* unpackInstruction — GET_OPCODE / GETARG_A / … */
+/* unpackInstruction — GET_OPCODE / GETARG_A / …; unknown op → iABC fields. */
 func unpackInstruction(w uint32) Instruction {
-	op := int(w>>instrPosOp) & int(instrMask(instrSizeOp))
-	switch dmpOpModes[op] {
-	case dmpIABC:
+	op := int(w>>POS_OP) & int(instrMask(SIZE_OP))
+	mode := iABC /* C stores raw Instruction words; tolerate out-of-range op */
+	if op >= 0 && op < NUM_OPCODES {
+		mode = getOpMode(op)
+	}
+	switch mode {
+	case iABC:
 		return Instruction{
 			Op: op,
-			A:  int(w>>instrPosA) & int(instrMask(instrSizeA)),
-			B:  int(w>>instrPosB) & int(instrMask(instrSizeB)),
-			C:  int(w>>instrPosC) & int(instrMask(instrSizeC)),
-			K:  int(w>>instrPosK) & int(instrMask(instrSizeK)),
+			A:  int(w>>POS_A) & int(instrMask(SIZE_A)),
+			B:  int(w>>POS_B) & int(instrMask(SIZE_B)),
+			C:  int(w>>POS_C) & int(instrMask(SIZE_C)),
+			K:  int(w>>POS_k) & int(instrMask(1)),
 		}
-	case dmpIABx, dmpIAsBx:
+	case iABx, iAsBx:
 		return Instruction{
 			Op: op,
-			A:  int(w>>instrPosA) & int(instrMask(instrSizeA)),
-			B:  int(w>>instrPosBx) & int(instrMask(instrSizeBx)),
+			A:  int(w>>POS_A) & int(instrMask(SIZE_A)),
+			B:  int(w>>POS_Bx) & int(instrMask(SIZE_Bx)),
 		}
-	case dmpIAx:
+	case iAx:
 		return Instruction{
 			Op: op,
-			A:  int(w>>instrPosAx) & int(instrMask(instrSizeAx)),
+			A:  int(w>>POS_Ax) & int(instrMask(SIZE_Ax)),
 		}
 	}
 	/* isJ */
 	return Instruction{
 		Op: op,
-		B:  int(w>>instrPosSJ) & int(instrMask(instrSizeSJ)),
-		K:  int(w>>instrPosK) & int(instrMask(instrSizeK)),
+		B:  int(w>>POS_sJ) & int(instrMask(SIZE_sJ)),
+		K:  int(w>>POS_k) & int(instrMask(1)),
 	}
 }

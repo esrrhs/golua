@@ -128,7 +128,7 @@ func strRep(L *State) int {
 	lsep := len(sep)
 	if n <= 0 {
 		L.PushString("")
-	} else if l+lsep < l || l+lsep > math.MaxInt32/int(n) { /* may overflow? */
+	} else if l+lsep < l || l+lsep > strMaxSize/int(n) { /* may overflow? */
 		return L.Error2("resulting string too large")
 	} else {
 		var sb strings.Builder
@@ -154,7 +154,7 @@ func strByte(L *State) int {
 	if posi > pose { /* empty interval; return no values */
 		return 0
 	}
-	if pose-posi >= math.MaxInt32 { /* arithmetic overflow? */
+	if pose-posi >= strMaxSize { /* arithmetic overflow? */
 		return L.Error2("string slice too long")
 	}
 	n := pose - posi + 1
@@ -240,7 +240,7 @@ func strTryMt(L *State, mtname string) {
 	L.SetTop(2) /* back to the original arguments */
 	if L.Type(2) == LUA_TSTRING || L.GetMetaField(2, mtname) == LUA_TNIL {
 		L.Error2("attempt to %s a '%s' with a '%s'", mtname[2:],
-			TypeName(L.Type(-2)), TypeName(L.Type(-1)))
+			L.TypeName(-2), L.TypeName(-1))
 	}
 	L.Insert(-3) /* put metamethod before arguments */
 	L.Call(2, 1) /* call metamethod */
@@ -753,7 +753,7 @@ func strFindAux(L *State, find bool) int {
 	lp := len(p)
 	init := strPosRelatI(L.OptInteger(3, 1), ls) - 1
 	if init > ls { /* start after string's end? */
-		L.PushNil() /* cannot find anything */
+		L.PushFail() /* luaL_pushfail — cannot find anything */
 		return 1
 	}
 	/* explicit request or no special characters? */
@@ -790,7 +790,7 @@ func strFindAux(L *State, find bool) int {
 			s1++
 		}
 	}
-	L.PushNil() /* not found */
+	L.PushFail() /* luaL_pushfail — not found */
 	return 1
 }
 
@@ -903,7 +903,7 @@ func strAddValue(ms *strMatchState, b *Buffer, s, e int, tr int) bool {
 		b.AddString(ms.src[s:e]) /* keep original text */
 		return false             /* no changes */
 	} else if !L.IsString(-1) {
-		L.Error2("invalid replacement value (a %s)", TypeName(L.Type(-1)))
+		L.Error2("invalid replacement value (a %s)", L.TypeName(-1))
 		return false
 	}
 	b.AddValue() /* add result to accumulator */
@@ -1486,13 +1486,8 @@ func strAddLiteral(L *State, b *Buffer, arg int) {
 			}
 		}
 	case LUA_TNIL, LUA_TBOOLEAN:
-		if L.Type(arg) == LUA_TNIL {
-			b.AddString("nil")
-		} else if L.ToBoolean(arg) {
-			b.AddString("true")
-		} else {
-			b.AddString("false")
-		}
+		strToLString(L, arg) /* luaL_tolstring: honors __tostring */
+		b.AddValue()
 	default:
 		L.ArgError(arg, "value has no literal form")
 	}
@@ -1537,7 +1532,7 @@ func strToLString(L *State, idx int) string {
 				L.PushString(fmt.Sprintf("%s: 0x%x", kind, uint64(L.ToPointer(idx))))
 				L.Remove(-2)
 			} else {
-				L.PushString(fmt.Sprintf("%s: 0x%x", TypeName(L.Type(idx)), uint64(L.ToPointer(idx))))
+				L.PushString(fmt.Sprintf("%s: 0x%x", L.TypeName(idx), uint64(L.ToPointer(idx))))
 			}
 		}
 	}
@@ -1716,13 +1711,15 @@ func strFormat(L *State) int {
 // ---------------------------------------------------------------------
 
 const (
-	strMaxIntSize    = 16
-	strNB            = 8 /* number of bits in a character */
-	strMC            = 0xff
-	strSzInt         = 8 /* size of a lua_Integer */
-	strPackPadByte   = 0x00
-	strPackMaxAlign  = 8
-	strPackMaxSize   = math.MaxInt32
+	strMaxIntSize   = 16
+	strNB           = 8 /* number of bits in a character */
+	strMC           = 0xff
+	strSzInt        = 8 /* size of a lua_Integer */
+	strPackPadByte  = 0x00
+	strPackMaxAlign = 8
+	/* MAXSIZE: sizes better limited to fit in 'int' (and in size_t). */
+	strMaxSize       = math.MaxInt32
+	strPackMaxSize   = strMaxSize
 	strPackAlignSize = 8
 )
 

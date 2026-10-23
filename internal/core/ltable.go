@@ -51,27 +51,29 @@ func hashpointer(t *Table, p unsafe.Pointer) int {
  */
 func hashint(t *Table, i int64) int {
 	ui := uint64(i)
-	size := uint64((sizenode(t) - 1) | 1)
 	if ui <= uint64(math.MaxInt32) {
-		return int(uint32(ui) % uint32(size))
+		return hashmod(t, uint32(ui)) /* C: hashmod(t, cast_int(ui)) */
 	}
-	return int(ui % size)
+	/* C: hashmod(t, ui) with full lua_Unsigned width */
+	return int(ui % uint64((sizenode(t)-1)|1))
 }
 
 /*
-** Hash for floating-point numbers (ltable.c l_hashfloat).
-** Early NaN/Inf matches C's lua_numbertointeger failure → 0.
+** Hash for floating-point numbers.
+** The main computation should be just
+**     n = frexp(n, &i); return (n * INT_MAX) + i
+** but there are numerical subtleties (ltable.c l_hashfloat).
  */
 func l_hashfloat(n float64) int {
-	if math.IsNaN(n) || math.IsInf(n, 0) {
-		return 0
-	}
 	frac, exp := math.Frexp(n)
-	v := frac * 2147483648.0 // -INT_MIN
-	if v != math.Trunc(v) {  /* is 'n' inf/-inf/NaN? */
+	/* frexp * -INT_MIN (C: -cast_num(INT_MIN)); INT_MIN exact as float. */
+	v := frac * -float64(math.MinInt32)
+	var ni int64
+	/* C uses lua_numbertointeger (truncates); NOT luaV_flttointeger/F2Ieq. */
+	if !lua_numbertointeger(v, &ni) { /* is 'n' inf/-inf/NaN? */
 		return 0
 	}
-	u := uint32(int64(exp)) + uint32(int64(v))
+	u := uint32(int32(exp)) + uint32(ni)
 	if u <= uint32(math.MaxInt32) {
 		return int(u)
 	}
@@ -160,7 +162,8 @@ func equalkey(k1 *Value, n *node, deadok bool) bool {
  */
 func limitequalsasize(t *Table) bool { return isrealasize(t) || ispow2u(t.alimit) }
 
-func ispow2u(x uint32) bool { return x != 0 && (x&(x-1)) == 0 }
+// ispow2u is C llimits.h ispow2: ((x)&((x)-1))==0. True for 0 (unsigned).
+func ispow2u(x uint32) bool { return (x & (x - 1)) == 0 }
 
 /*
 ** Returns the real size of the 'array' array (ltable.c luaH_realasize).
@@ -398,7 +401,7 @@ func luaH_resize(L *State, t *Table, newasize uint32, nhsize uint32) {
 	exchangehashpart(t, newt) /* 't' has the new hash ('newt' has the old) */
 	t.array = newarray        /* set new array part */
 	t.alimit = newasize
-	setrealasize(t)
+	/* setrealasize already done by setlimittosize at entry (C same) */
 	for i := oldasize; i < newasize; i++ { /* clear new slice of the array */
 		setempty(&t.array[i])
 	}
@@ -481,8 +484,8 @@ func numusehash(t *Table, nums *[MAXABITS + 1]uint32, pna *uint32) int {
 		i--
 		n := &t.nodes[i]
 		if !isempty(&n.val) {
-			if n.keytt == LUA_VNUMINT {
-				ause += countint(n.ki, nums)
+			if keyisinteger(n) {
+				ause += countint(keyival(n), nums)
 			}
 			totaluse++
 		}
@@ -562,7 +565,7 @@ func getfreepos(t *Table) int {
 	if !isdummy(t) {
 		for t.lastfree > 0 {
 			t.lastfree--
-			if t.nodes[t.lastfree].keytt == LUA_VNIL {
+			if keyisnil(&t.nodes[t.lastfree]) {
 				return t.lastfree
 			}
 		}
@@ -653,7 +656,7 @@ func luaH_getint(t *Table, key int64) *Value {
 	/* key is not in the array part; check the hash */
 	n := hashint(t, key)
 	for { /* check whether 'key' is somewhere in the chain */
-		if t.nodes[n].keytt == LUA_VNUMINT && t.nodes[n].ki == key {
+		if keyisinteger(&t.nodes[n]) && keyival(&t.nodes[n]) == key {
 			return &t.nodes[n].val /* that's it */
 		}
 		nx := t.nodes[n].next
@@ -671,8 +674,8 @@ func luaH_getint(t *Table, key int64) *Value {
 func luaH_getshortstr(t *Table, key *TString) *Value {
 	n := hashstr(t, key)
 	for { /* check whether 'key' is somewhere in the chain */
-		if t.nodes[n].keytt == ctb(LUA_VSHRSTR) &&
-			luaS_eqshrstr((*TString)(t.nodes[n].kp), key) {
+		if keyisshrstr(&t.nodes[n]) &&
+			luaS_eqshrstr(keystrval(&t.nodes[n]), key) { /* C: eqshrstr; Go content FLAG */
 			return &t.nodes[n].val /* that's it */
 		}
 		nx := t.nodes[n].next

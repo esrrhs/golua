@@ -16,6 +16,13 @@ import (
 	"unsafe"
 )
 
+// LUA_AUTHORS is lua.h LUA_AUTHORS (used by lua_ident).
+const LUA_AUTHORS = "R. Ierusalimschy, L. H. de Figueiredo, W. Celes"
+
+// luaIdent is lua_ident (lapi.c) — version banner embedded for tools.
+const luaIdent = "$LuaVersion: " + LUA_COPYRIGHT + " $" +
+	"$LuaAuthors: " + LUA_AUTHORS + " $"
+
 // ---------------------------------------------------------------------
 // index translation (lapi.c)
 // ---------------------------------------------------------------------
@@ -37,6 +44,9 @@ func index2value(L *State, idx int) *Value {
 		}
 		return &L.g.nilValue
 	} else if !ispseudo(idx) { /* negative index */
+		if idx == 0 {
+			panic("invalid index") /* C api_check: idx != 0 */
+		}
 		return &L.stack[L.top+idx]
 	} else if idx == LUA_REGISTRYINDEX {
 		return &L.g.registry
@@ -57,9 +67,10 @@ func index2value(L *State, idx int) *Value {
 }
 
 // isvalid reports whether o is a real addressable slot, not the shared
-// invalid-index sentinel (lapi.c: isvalid / NONVALIDVALUE).
+// invalid-index sentinel (lapi.c: isvalid).
+// C: (!ttisnil(o) || o != &G(L)->nilvalue) — fast path for non-nil.
 func isvalid(L *State, o *Value) bool {
-	return o != &L.g.nilValue
+	return !ttisnil(o) || o != &L.g.nilValue
 }
 
 // stackIndexOf answers the 0-based stack slot an acceptable index names,
@@ -73,6 +84,9 @@ func stackIndexOf(L *State, idx int) int {
 	}
 	if ispseudo(idx) {
 		return -1
+	}
+	if idx == 0 {
+		panic("invalid index")
 	}
 	return L.top + idx
 }
@@ -160,6 +174,9 @@ func (L *State) indexToStack(idx int) int {
 	if ispseudo(idx) {
 		return -1
 	}
+	if idx == 0 {
+		panic("invalid index") /* C api_check: idx != 0 */
+	}
 	return L.top + idx /* negative index */
 }
 
@@ -229,22 +246,18 @@ func (L *State) Rotate(idx, n int) {
 }
 
 // CheckStack is lua_checkstack (lapi.c): ensure room for n more slots.
-// Never raises (C grows via luaD_rawrunprotected; Go: growStackNoRaise).
+// Never raises (C: luaD_growstack(L, n, 0)).
 func (L *State) CheckStack(n int) bool {
 	ci := L.ci
 	var res bool
+	/* api_check n >= 0 omitted / soft */
 	if L.stackLast-L.top > n { /* stack large enough? */
-		res = true
-	} else {
-		inuse := L.top + EXTRA_STACK
-		if inuse > LUAI_MAXSTACK-n { /* can grow without overflow? */
-			res = false
-		} else {
-			res = L.growStackNoRaise(n, false)
-		}
+		res = true /* yes; check is OK */
+	} else { /* need to grow stack */
+		res = luaD_growstack(L, n, false)
 	}
 	if res && ci != nil && ci.top < L.top+n {
-		ci.top = L.top + n /* adjust frame top — C does this even if already large */
+		ci.top = L.top + n /* adjust frame top */
 	}
 	return res
 }
@@ -273,22 +286,20 @@ func (L *State) XMove(from *State, n int) {
 
 // Type returns the type of the value at idx (lua_type).
 func (L *State) Type(idx int) int {
-	v := index2value(L, idx)
-	if v == &L.g.nilValue || v == &absentKey {
+	o := index2value(L, idx)
+	if !isvalid(L, o) {
 		return LUA_TNONE
 	}
-	return ttype(v)
+	return ttype(o)
 }
 
 // TypeName (package) is lua_typename(L, t): name of a type tag.
 func TypeName(tp int) string {
-	if tp < LUA_TNONE || tp >= LUA_NUMTAGS {
-		return "no value" /* C api_check would abort; soft for Go */
+	/* C: api_check(L, LUA_TNONE <= t && t < LUA_NUMTYPES); return ttypename(t) */
+	if tp < LUA_TNONE || tp >= LUA_NUMTYPES {
+		return "no value" /* soft: C api_check would abort */
 	}
-	if tp < 0 || tp >= len(luaT_typenames)-2 {
-		return "no value"
-	}
-	return luaT_typenames[tp+1]
+	return ttypename(tp)
 }
 
 // TypeName (method) is luaL_typename — NOT lua_typename. Kept for
@@ -301,7 +312,7 @@ func (L *State) IsNoneOrNil(idx int) bool { t := L.Type(idx); return t == LUA_TN
 func (L *State) IsBoolean(idx int) bool   { return L.Type(idx) == LUA_TBOOLEAN }
 func (L *State) IsNumber(idx int) bool {
 	var n float64
-	return luaV_tonumber_(L, index2value(L, idx), &n) /* tonumber: coerce strings */
+	return tonumber(index2value(L, idx), &n) /* C: tonumber(o, &n) */
 }
 func (L *State) IsInteger(idx int) bool { return ttisinteger(index2value(L, idx)) }
 func (L *State) IsString(idx int) bool {
@@ -312,30 +323,23 @@ func (L *State) IsTable(idx int) bool      { return L.Type(idx) == LUA_TTABLE }
 func (L *State) IsFunction(idx int) bool   { return L.Type(idx) == LUA_TFUNCTION }
 func (L *State) IsGoFunction(idx int) bool { return ttiscfunction(index2value(L, idx)) }
 func (L *State) IsUserData(idx int) bool {
-	t := L.Type(idx)
-	return t == LUA_TUSERDATA || t == LUA_TLIGHTUSERDATA
+	o := index2value(L, idx)
+	return ttisfulluserdata(o) || ttislightuserdata(o)
 }
 func (L *State) IsThread(idx int) bool        { return L.Type(idx) == LUA_TTHREAD }
 func (L *State) IsLightUserData(idx int) bool { return ttislightuserdata(index2value(L, idx)) }
 
 // ToNumber converts the value at idx to a float (lua_tonumberx).
 func (L *State) ToNumber(idx int) (float64, bool) {
-	v := index2value(L, idx)
 	var n float64
-	if ttisinteger(v) {
-		return float64(ivalue(v)), true
-	}
-	if luaV_tonumber_(L, v, &n) {
-		return n, true
-	}
-	return 0, false
+	ok := tonumber(index2value(L, idx), &n) /* C lua_tonumberx: tonumber(o, &n) */
+	return n, ok
 }
 
 // ToInteger converts the value at idx to an integer (lua_tointegerx).
 func (L *State) ToInteger(idx int) (int64, bool) {
-	v := index2value(L, idx)
 	var i int64
-	if luaV_tointeger(L, v, &i, F2Ieq) {
+	if tointeger(L, index2value(L, idx), &i) { /* C lua_tointegerx: tointeger(o, &res) */
 		return i, true
 	}
 	return 0, false
@@ -348,14 +352,15 @@ func (L *State) ToBoolean(idx int) bool { return !isFalse(index2value(L, idx)) }
 // lua_tostring). Numbers are converted in place, exactly as in C Lua.
 func (L *State) ToString(idx int) (string, bool) {
 	v := index2value(L, idx)
-	if ttisstring(v) {
-		return tsvalue(v).val, true
-	}
-	if cvt2str(v) {
+	if !ttisstring(v) {
+		if !cvt2str(v) { /* not convertible? */
+			return "", false
+		}
 		luaO_tostring(L, v)
-		return tsvalue(v).val, true
+		/* C: luaC_checkGC then re-index — GC omitted; still re-fetch */
+		v = index2value(L, idx)
 	}
-	return "", false
+	return tsvalue(v).val, true
 }
 
 // ToStringX is ToString without in-place conversion.
@@ -372,32 +377,30 @@ func (L *State) ToStringX(idx int) string {
 
 // RawLen returns the raw length of the value at idx (lua_rawlen).
 func (L *State) RawLen(idx int) uint64 {
-	v := index2value(L, idx)
-	switch ttypetag(v) {
-	case LUA_VTABLE:
-		return luaH_getn(hvalue(v))
+	o := index2value(L, idx)
+	switch ttypetag(o) {
 	case LUA_VSHRSTR, LUA_VLNGSTR:
-		return uint64(len(tsvalue(v).val))
+		return uint64(len(tsvalue(o).val))
 	case LUA_VUSERDATA:
-		/* the size in bytes of the block, which is what 'lua_rawlen'
-		   answers for a userdata -- not the number of user values. An
-		   extension reads it back to know how much it was given: lpeg
-		   derives the size of a pattern from it. */
-		return uint64(uvalue(v).len)
+		/* C: uvalue(o)->len — byte size of the block, not nuvalue.
+		   Go wraps 'val any'; len is the port of that size (lpeg etc.). */
+		return uint64(uvalue(o).len)
+	case LUA_VTABLE:
+		return luaH_getn(hvalue(o))
+	default:
+		return 0
 	}
-	return 0
 }
 
 // ToGoFunction returns the Go function at idx (lua_tocfunction).
 func (L *State) ToGoFunction(idx int) GoFunc {
-	v := index2value(L, idx)
-	if ttisCclosure(v) {
-		return clCvalue(v).f
+	o := index2value(L, idx)
+	if ttislcf(o) {
+		return fvalue(o)
+	} else if ttisCclosure(o) {
+		return clCvalue(o).f
 	}
-	if ttislcf(v) {
-		return fvalue(v)
-	}
-	return nil
+	return nil /* not a C/Go function */
 }
 
 // ToUserData returns the Go value carried by the userdata at idx.
@@ -681,7 +684,7 @@ func (L *State) NewTable() { L.CreateTable(0, 0) }
 // Go wraps 'val any' as the intentional port of that blob and keeps the
 // multi-uservalue array (5.4).
 func (L *State) NewUserData(val any, nuvalue int) any {
-	if nuvalue < 0 {
+	if nuvalue < 0 || nuvalue >= SHRT_MAX {
 		panic("invalid value") /* C: api_check 0 <= nuvalue < SHRT_MAX */
 	}
 	u := luaS_newudata(L, nuvalue, val)
@@ -757,7 +760,7 @@ func auxsetstr(L *State, t *Value, k string) {
 	slot := vmFastGet(L, t, &key)
 	if slot != nil && !isempty(slot) {
 		*slot = L.stack[L.top-1] /* luaV_finishfastset; barrier omitted */
-		L.top-- /* pop value */
+		L.top--                  /* pop value */
 		return
 	}
 	L.checkStack(1)
@@ -793,42 +796,34 @@ func (L *State) SetI(idx int, n int64) {
 	L.top-- /* pop value */
 }
 
-// RawSet does t[k] = v without metamethods (lua_rawset).
-func (L *State) RawSet(idx int) {
-	t := index2value(L, idx)
-	if !ttistable(t) {
-		panic("table expected")
-	}
-	key := L.stack[L.top-2]
-	val := L.stack[L.top-1]
-	luaH_set(L, hvalue(t), &key, &val)
-	invalidateTMcache(hvalue(t))
-	L.top -= 2
+// aux_rawset is lapi.c aux_rawset: t[key] = top-1, pop n, invalidate TM cache.
+// Barrier omitted (Go GC SPEC).
+func aux_rawset(L *State, idx int, key *Value, n int) {
+	t := gettable(L, idx)
+	luaH_set(L, t, key, &L.stack[L.top-1])
+	invalidateTMcache(t)
+	/* luaC_barrierback omitted (Go GC) */
+	L.top -= n
 }
 
-// RawSetI does t[n] = v without metamethods (lua_rawseti).
-func (L *State) RawSetI(idx int, n int64) {
-	t := index2value(L, idx)
-	if !ttistable(t) {
-		panic("table expected")
-	}
-	val := L.stack[L.top-1]
-	luaH_setint(L, hvalue(t), n, &val)
-	invalidateTMcache(hvalue(t))
-	L.top--
+// RawSet does t[k] = v without metamethods (lua_rawset).
+func (L *State) RawSet(idx int) {
+	aux_rawset(L, idx, &L.stack[L.top-2], 2)
 }
 
 // RawSetP does t[p] = v for a light userdata key (lua_rawsetp).
 func (L *State) RawSetP(idx int, p unsafe.Pointer) {
-	t := index2value(L, idx)
-	if !ttistable(t) {
-		panic("table expected")
-	}
-	val := L.stack[L.top-1]
 	var k Value
 	setpvalue(&k, p)
-	luaH_set(L, hvalue(t), &k, &val)
-	invalidateTMcache(hvalue(t))
+	aux_rawset(L, idx, &k, 1)
+}
+
+// RawSetI does t[n] = v without metamethods (lua_rawseti).
+// C does NOT call invalidateTMcache here (only aux_rawset does).
+func (L *State) RawSetI(idx int, n int64) {
+	t := gettable(L, idx)
+	luaH_setint(L, t, n, &L.stack[L.top-1])
+	/* luaC_barrierback omitted (Go GC) */
 	L.top--
 }
 
@@ -885,23 +880,28 @@ func (L *State) SetUserValue(idx, n int) int {
 	return 1
 }
 
+/*
+** Get the global table in the registry. Since all predefined
+** indices in the registry were inserted right when the registry
+** was created and never removed, they must always be in the array
+** part of the registry. (lapi.c getGtable)
+ */
+func getGtable(L *State) *Value {
+	return &hvalue(&L.g.registry).array[LUA_RIDX_GLOBALS-1]
+}
+
 // GetGlobal pushes the value of a global (lua_getglobal → auxgetstr on _G).
 func (L *State) GetGlobal(name string) int {
-	reg := hvalue(&L.g.registry)
-	gt := luaH_getint(reg, LUA_RIDX_GLOBALS)
-	return auxgetstr(L, gt, name)
+	return auxgetstr(L, getGtable(L), name)
 }
 
 // SetGlobal pops a value and assigns it to a global (lua_setglobal → auxsetstr).
 func (L *State) SetGlobal(name string) {
-	reg := hvalue(&L.g.registry)
-	gt := luaH_getint(reg, LUA_RIDX_GLOBALS)
-	auxsetstr(L, gt, name)
+	auxsetstr(L, getGtable(L), name)
 }
 
 func (L *State) rawGetRegistryGlobals() *Table {
-	reg := hvalue(&L.g.registry)
-	slot := luaH_getint(reg, LUA_RIDX_GLOBALS)
+	slot := getGtable(L)
 	if !ttistable(slot) {
 		panic("globals table missing")
 	}
@@ -917,40 +917,37 @@ func (L *State) SetGlobalValue(name string, v Value) {
 	luaH_set(L, gt, &key, &v)
 }
 
-
 // ---------------------------------------------------------------------
 // to-be-closed (lua_toclose / lua_closeslot) — 5.4
 // ---------------------------------------------------------------------
 
 // ToClose marks the value at idx as to-be-closed (lua_toclose).
-// Alias CloseSlotAt kept for tip/cdlopen call sites.
-func (L *State) ToClose(idx int) { L.CloseSlotAt(idx) }
-
-// CloseSlotAt marks the value at idx as to-be-closed so its __close
-// metamethod runs when the C/Go function returns (lua_toclose).
-func (L *State) CloseSlotAt(idx int) {
-	level := stackIndexOf(L, idx)
+func (L *State) ToClose(idx int) {
+	level := L.indexToStack(idx) /* C: index2stack */
 	if level < 0 {
-		return
+		panic("index not in the stack")
 	}
 	/* api_check: L->tbclist.p < o */
 	luaF_newtbcupval(L, level)
-	if !hastocloseCfunc(L.ci.nresults) { /* function not marked yet? */
-		L.ci.nresults = codeNresults(L.ci.nresults) /* mark it */
+	nresults := L.ci.nresults
+	if !hastocloseCfunc(nresults) { /* function not marked yet? */
+		L.ci.nresults = codeNresults(nresults) /* mark it */
 	}
 }
+
+// CloseSlotAt is an alias of ToClose kept for tip/cdlopen call sites.
+func (L *State) CloseSlotAt(idx int) { L.ToClose(idx) }
 
 // CloseSlot closes the to-be-closed variable at idx now and leaves nil
 // in its slot (lua_closeslot).
 func (L *State) CloseSlot(idx int) {
-	level := stackIndexOf(L, idx)
+	level := L.indexToStack(idx) /* C: index2stack */
 	if level < 0 {
-		return
+		panic("index not in the stack")
 	}
+	/* api_check: hastocloseCfunc && tbclist.p == level — soft */
 	luaF_close(L, level, closeKTOP, false)
-	if level >= 0 && level < len(L.stack) {
-		setnilvalue(&L.stack[level])
-	}
+	setnilvalue(&L.stack[level])
 }
 
 // ---------------------------------------------------------------------
@@ -1067,9 +1064,7 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 			luaD_callnoyield(L, funcIdx, nresults)
 		}, funcIdx, ef, false)
 	}
-	if status == LUA_OK {
-		adjustresults(L, nresults)
-	}
+	adjustresults(L, nresults) /* C always adjusts, even after error */
 	return status
 }
 
@@ -1245,12 +1240,16 @@ func (L *State) Error() int {
 
 // Arith performs arithmetic op on the stack (lua_arith).
 func (L *State) Arith(op int) {
-	if op == LUA_OPUNM || op == LUA_OPBNOT {
-		L.CheckStack(1)
-		L.PushValue(-1) /* unary: fake 2nd operand */
+	if op != LUA_OPUNM && op != LUA_OPBNOT {
+		/* api_checknelems(L, 2) soft — all other ops expect two operands */
+	} else { /* for unary operations, add fake 2nd operand */
+		/* api_checknelems(L, 1) soft */
+		L.checkStack(1)
+		L.stack[L.top] = L.stack[L.top-1]
+		L.top++
 	}
-	res := L.top - 2
-	luaO_arith(L, op, &L.stack[L.top-2], &L.stack[L.top-1], res)
+	/* first operand at top-2, second at top-1; result goes to top-2 */
+	luaO_arith(L, op, &L.stack[L.top-2], &L.stack[L.top-1], L.top-2)
 	L.top-- /* remove second operand */
 }
 
@@ -1285,30 +1284,100 @@ func (L *State) StringToNumber(s string) int {
 	return len(s) + 1
 }
 
+// aux_upvalue is lapi.c aux_upvalue: resolve upvalue n of closure fi.
+// On success returns the name ("" for C closures) and sets *val (and *owner
+// when non-nil). On failure returns "", false.
+func aux_upvalue(fi *Value, n int, val **Value, owner *any) (string, bool) {
+	switch ttypetag(fi) {
+	case LUA_VCCL: /* C closure */
+		f := clCvalue(fi)
+		if n < 1 || n > f.nupvalues {
+			return "", false
+		}
+		*val = &f.upvalue[n-1]
+		if owner != nil {
+			*owner = f /* barrier owner; Go GC unused */
+		}
+		return "", true /* C returns "" */
+	case LUA_VLCL: /* Lua closure */
+		f := clLvalue(fi)
+		p := f.p
+		if n < 1 || n > p.sizeupvalues {
+			return "", false
+		}
+		*val = upvalValue(f.upvals[n-1])
+		if owner != nil {
+			*owner = f.upvals[n-1]
+		}
+		name := p.upvalues[n-1].name
+		if name == nil {
+			return "(no name)", true
+		}
+		return name.val, true
+	default:
+		return "", false /* not a closure */
+	}
+}
+
 // GetUpvalue pushes upvalue n of the function at funcindex (lua_getupvalue).
-// Returns the upvalue name, or "" when there is none / out of range.
+// Returns the upvalue name, or ("", false) when there is none / out of range.
 func (L *State) GetUpvalue(funcindex, n int) (name string, ok bool) {
-	return dbGetUpvalue(L, funcindex, n)
+	var val *Value
+	name, ok = aux_upvalue(index2value(L, funcindex), n, &val, nil)
+	if ok {
+		L.checkStack(1)
+		L.stack[L.top] = *val
+		L.top++
+	}
+	return name, ok
 }
 
 // SetUpvalue pops a value into upvalue n (lua_setupvalue).
+// Barrier omitted (Go GC SPEC).
 func (L *State) SetUpvalue(funcindex, n int) (name string, ok bool) {
-	return dbSetUpvalue(L, funcindex, n)
+	var val *Value
+	var owner any
+	fi := index2value(L, funcindex)
+	name, ok = aux_upvalue(fi, n, &val, &owner)
+	if ok {
+		L.top--
+		*val = L.stack[L.top]
+		/* luaC_barrier(L, owner, val) omitted (Go GC) */
+	}
+	return name, ok
 }
 
 // UpvalueId returns an identity for an upvalue (lua_upvalueid).
-func (L *State) UpvalueId(funcindex, n int) unsafe.Pointer {
-	return dbUpvalueID(L, funcindex, n)
+func (L *State) UpvalueId(fidx, n int) unsafe.Pointer {
+	fi := index2value(L, fidx)
+	switch ttypetag(fi) {
+	case LUA_VLCL: /* lua closure */
+		return unsafe.Pointer(*getupvalref(L, fidx, n, nil))
+	case LUA_VCCL: /* C closure */
+		f := clCvalue(fi)
+		if 1 <= n && n <= f.nupvalues {
+			return unsafe.Pointer(&f.upvalue[n-1])
+		}
+		return nil
+	case LUA_VLCF:
+		return nil /* light C functions have no upvalues */
+	default:
+		panic("function expected")
+	}
 }
 
 // getupvalref is lapi.c getupvalref (Lua closure upvalue pointer).
 // Out-of-range returns a pointer to a nil *UpVal (C: static nullup).
-func getupvalref(L *State, fidx, n int) **UpVal {
+// When pf != nil, *pf receives the LClosure (for barriers in upvaluejoin).
+func getupvalref(L *State, fidx, n int, pf **LClosure) **UpVal {
 	fi := index2value(L, fidx)
 	if !ttisLclosure(fi) {
 		panic("Lua function expected")
 	}
 	f := clLvalue(fi)
+	if pf != nil {
+		*pf = f
+	}
 	if 1 <= n && n <= f.p.sizeupvalues {
 		return &f.upvals[n-1]
 	}
@@ -1321,26 +1390,23 @@ var nullUpValRef *UpVal
 // UpvalueJoin makes upvalue n1 of f1 refer to upvalue n2 of f2 (lua_upvaluejoin).
 // Barriers / refcount omitted (Go GC SPEC).
 func (L *State) UpvalueJoin(fidx1, n1, fidx2, n2 int) {
-	up1 := getupvalref(L, fidx1, n1)
-	up2 := getupvalref(L, fidx2, n2)
+	var f1 *LClosure
+	up1 := getupvalref(L, fidx1, n1, &f1)
+	up2 := getupvalref(L, fidx2, n2, nil)
 	if *up1 == nil || *up2 == nil {
 		panic("invalid upvalue index")
 	}
 	*up1 = *up2
+	_ = f1 /* luaC_objbarrier(L, f1, *up1) omitted (Go GC) */
 }
 
 // ---------------------------------------------------------------------
 // comparison and misc
 // ---------------------------------------------------------------------
 
-// Equal compares two values (lua_compare with LUA_OPEQ).
+// Equal compares two values (historical lua_equal → lua_compare LUA_OPEQ).
 func (L *State) Equal(idx1, idx2 int) bool {
-	o1 := index2value(L, idx1)
-	o2 := index2value(L, idx2)
-	if !isvalid(L, o1) || !isvalid(L, o2) {
-		return false
-	}
-	return luaV_equalobj(L, o1, o2)
+	return L.Compare(idx1, idx2, LUA_OPEQ)
 }
 
 // RawEqual compares two values without metamethods (lua_rawequal).
@@ -1353,26 +1419,22 @@ func (L *State) RawEqual(idx1, idx2 int) bool {
 	return luaV_rawequalobj(o1, o2)
 }
 
-// LessThan compares two values with '<' (lua_compare with LUA_OPLT).
+// LessThan compares two values with '<' (historical lua_lessthan → LUA_OPLT).
 func (L *State) LessThan(idx1, idx2 int) bool {
-	o1 := index2value(L, idx1)
-	o2 := index2value(L, idx2)
-	if !isvalid(L, o1) || !isvalid(L, o2) {
-		return false
-	}
-	return luaV_lessthan(L, o1, o2)
+	return L.Compare(idx1, idx2, LUA_OPLT)
 }
 
 // Concat concatenates the n values on top of the stack (lua_concat).
 func (L *State) Concat(n int) {
-	if n >= 2 {
-		luaV_concat(L, n)
-	} else if n == 0 {
+	/* api_checknelems(L, n) soft */
+	if n > 0 {
+		luaV_concat(L, n) /* n==1 returns immediately inside luaV_concat */
+	} else { /* nothing to concatenate */
 		L.checkStack(1)
 		setsvalue(&L.stack[L.top], luaS_newlstr(L, ""))
 		L.top++
 	}
-	/* else n == 1: nothing to do */
+	/* luaC_checkGC omitted (Go GC) */
 }
 
 // Len returns the length of the value at idx, honouring __len
@@ -1387,12 +1449,11 @@ func (L *State) Len(idx int) {
 // Next pops a key and pushes the next key/value pair of the table at idx
 // (lua_next).
 func (L *State) Next(idx int) bool {
-	t := index2value(L, idx)
-	if !ttistable(t) {
-		panic("table expected")
-	}
+	/* api_checknelems(L, 1) soft */
+	t := gettable(L, idx)
 	keyIdx := L.top - 1
-	if luaH_next(L, hvalue(t), keyIdx) {
+	if luaH_next(L, t, keyIdx) {
+		L.checkStack(1)
 		L.top++
 		return true
 	}
@@ -1406,7 +1467,12 @@ func (L *State) Status() int { return int(L.status) }
 // Dump writes the Lua function on top of the stack as a binary chunk
 // (lua_dump). writer returns 0 on success; non-zero aborts. strip drops debug.
 func (L *State) Dump(writer func(L *State, b []byte) int, strip bool) int {
-	return luaDump(L, dumpWriter(writer), strip)
+	/* api_checknelems(L, 1) soft */
+	o := &L.stack[L.top-1]
+	if isLfunction(o) {
+		return luaU_dump(L, getproto(o), dumpWriter(writer), strip)
+	}
+	return 1
 }
 
 // Version returns LUA_VERSION_NUM (lua_version).

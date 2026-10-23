@@ -8,6 +8,7 @@
 //   - tbclist is []int of stack indices (C: delta chain on stack slots with
 //     MAXDELTA dummy nodes). Semantics equivalent.
 //   - Goroutine coroutines: luaF_close may migrateNested before tbc work.
+//   - luaF_close has no StkId return (absolute indices; C savestack/restorestack).
 package core
 
 // ---------------------------------------------------------------------
@@ -61,8 +62,10 @@ const MAXMISS = 10
 // ---------------------------------------------------------------------
 
 // luaF_newCclosure creates a closure for a Go function (lfunc.c).
-// Go nil-fills upvalue slots (C leaves them uninitialized until caller fills).
+// Omits luaC_newobj / sizeCclosure (Go GC + slice). Go nil-fills upvalue
+// slots (C leaves them uninitialized until caller fills).
 func luaF_newCclosure(L *State, nupvals int) *CClosure {
+	_ = L
 	cl := &CClosure{nupvalues: nupvals}
 	if nupvals > 0 {
 		cl.upvalue = make([]Value, nupvals)
@@ -74,8 +77,11 @@ func luaF_newCclosure(L *State, nupvals int) *CClosure {
 }
 
 // luaF_newLclosure creates a Lua closure (lfunc.c).
+// Omits luaC_newobj / sizeLclosure (Go GC + slice).
 func luaF_newLclosure(L *State, nupvals int) *LClosure {
+	_ = L
 	cl := &LClosure{nupvalues: nupvals}
+	cl.p = nil
 	cl.upvals = make([]*UpVal, nupvals) /* C: while (nupvals--) c->upvals[nupvals] = NULL */
 	return cl
 }
@@ -83,8 +89,9 @@ func luaF_newLclosure(L *State, nupvals int) *LClosure {
 /*
 ** fill a closure with new closed upvalues
  */
-// luaF_initupvals (lfunc.c). Omits luaC_newobj / objbarrier (Go GC).
+// luaF_initupvals (lfunc.c). Omits luaC_newobj / luaC_objbarrier (Go GC).
 func luaF_initupvals(L *State, cl *LClosure) {
+	_ = L
 	for i := 0; i < cl.nupvalues; i++ {
 		uv := &UpVal{open: false} /* make it closed: value lives in uv.v */
 		setnilvalue(&uv.v)
@@ -93,13 +100,14 @@ func luaF_initupvals(L *State, cl *LClosure) {
 }
 
 /*
-** Create a new upvalue at the given level, and link it into the open list.
+** Create a new upvalue at the given level, and link it to the list of
+** open upvalues of 'L' after entry 'prev'.
 ** C: static newupval — inserts after 'prev' in a doubly-linked list and
-** may link the thread into G(L)->twups. Go: insert into ascending slice;
-** twups omitted (Go GC).
+** may link the thread into G(L)->twups. Go: insert into ascending slice
+** at position i; twups omitted (Go GC).
  */
 func newupval(L *State, level int, i int) *UpVal {
-	uv := &UpVal{open: true, idx: level, L: L}
+	uv := &UpVal{open: true, idx: level, L: L} /* current value lives in the stack */
 	L.openupval = append(L.openupval, nil)
 	copy(L.openupval[i+1:], L.openupval[i:])
 	L.openupval[i] = uv
@@ -132,10 +140,10 @@ func callclosemethod(L *State, obj *Value, err *Value, yy bool) {
 	top := L.top
 	tm := luaT_gettmbyobj(L, obj, TM_CLOSE)
 	L.checkStack(3)
-	L.stack[top] = *tm     /* will call metamethod... */
-	L.stack[top+1] = *obj  /* with 'self' as the 1st argument */
-	L.stack[top+2] = *err  /* and error msg. as 2nd argument */
-	L.top = top + 3        /* add function and arguments */
+	L.stack[top] = *tm    /* will call metamethod... */
+	L.stack[top+1] = *obj /* with 'self' as the 1st argument */
+	L.stack[top+2] = *err /* and error msg. as 2nd argument */
+	L.top = top + 3       /* add function and arguments */
 	if yy {
 		luaD_call(L, top, 0)
 	} else {
@@ -172,13 +180,18 @@ func prepcallclosemth(L *State, level int, status int, yy bool) {
 	if status == closeKTOP {
 		errObj = &L.g.nilValue /* error object is nil */
 	} else { /* 'luaD_seterrorobj' will set top to level + 2 */
-		luaD_seterrorobj(L, status, level+1) /* set error object */
 		errObj = &L.stack[level+1]           /* error object goes after 'uv' */
+		luaD_seterrorobj(L, status, level+1) /* set error object */
 	}
 	callclosemethod(L, uv, errObj, yy)
 }
 
-// MAXDELTA (C): dependent on sizeof(tbclist.delta) — N/A; Go tbclist is []int.
+/*
+** Maximum value for deltas in 'tbclist', dependent on the type
+** of delta. (C macro assumes an 'L' is in scope.)
+** N/A in Go: tbclist is []int of absolute stack indices (no delta chain).
+ */
+// MAXDELTA — omitted (index-stack Spec).
 
 /*
 ** Insert a variable in the list of to-be-closed variables.
@@ -223,18 +236,24 @@ func luaF_unlinkupval(L *State, uv *UpVal) {
 func luaF_closeupval(L *State, level int) {
 	for len(L.openupval) > 0 {
 		uv := L.openupval[len(L.openupval)-1]
-		if uv.idx < level {
+		upl := uv.idx /* stack index pointed by 'uv' */
+		if upl < level {
 			break
 		}
-		uv.v = L.stack[uv.idx] /* move value to upvalue slot */
-		uv.open = false        /* now current value lives here */
+		luaF_unlinkupval(L, uv) /* remove upvalue from 'openupval' list */
+		uv.v = L.stack[upl]     /* move value to upvalue slot */
+		uv.open = false         /* now current value lives here */
 		uv.L = nil
-		L.openupval = L.openupval[:len(L.openupval)-1]
 	}
 }
 
-// poptbclist (C static): remove first tbc + dummy nodes — inlined into
-// luaF_close via slice pop (no MAXDELTA dummies on Go tbclist).
+/*
+** Remove first element from the tbclist plus its dummy nodes.
+** Go: no MAXDELTA dummies — pop the high end of the ascending []int.
+ */
+func poptbclist(L *State) {
+	L.tbclist = L.tbclist[:len(L.tbclist)-1]
+}
 
 /*
 ** Close all upvalues and to-be-closed variables up to the given stack
@@ -251,19 +270,24 @@ func luaF_close(L *State, level int, status int, yy bool) {
 		L.migrateNested()
 	}
 	luaF_closeupval(L, level) /* first, close the upvalues */
-	for len(L.tbclist) > 0 { /* traverse tbc's down to that level */
+	for len(L.tbclist) > 0 {  /* traverse tbc's down to that level */
 		idx := L.tbclist[len(L.tbclist)-1] /* get variable index */
 		if idx < level {
 			break
 		}
-		L.tbclist = L.tbclist[:len(L.tbclist)-1] /* poptbclist */
-		prepcallclosemth(L, idx, status, yy)    /* close variable */
+		poptbclist(L)                        /* remove it from list */
+		prepcallclosemth(L, idx, status, yy) /* close variable */
 	}
 }
 
 // luaF_newproto creates a new prototype (lfunc.c).
-// &Proto{} zero-value matches C's explicit NULL/0 field init.
-func luaF_newproto(L *State) *Proto { return &Proto{} }
+// Omits luaC_newobj (Go GC). &Proto{} zero-value matches C's explicit
+// NULL/0 field init (k/p/code/lineinfo/abslineinfo/upvalues/locvars/
+// source and all size*/numparams/is_vararg/maxstacksize/linedefined).
+func luaF_newproto(L *State) *Proto {
+	_ = L
+	return &Proto{}
+}
 
 // luaF_freeproto omitted — Go GC owns Proto / array lifetime (intentional).
 
@@ -276,7 +300,7 @@ func luaF_getlocalname(f *Proto, localNumber, pc int) string {
 		if pc < f.locvars[i].endpc { /* is variable active? */
 			localNumber--
 			if localNumber == 0 {
-				return f.locvars[i].varname.val
+				return getstr(f.locvars[i].varname)
 			}
 		}
 	}

@@ -1,9 +1,10 @@
 // Translation of lbaselib.c (PUC-Lua 5.4.9): the basic library.
 //
 // Every luaB_* function is named base*; control flow follows the C source.
-// Intentional port exceptions (see NOTES.md): Go GC collectgarbage subset,
-// panic/recover instead of setjmp, index-stack (not TValue*), goroutine
-// coroutines (goCont only on sync co). Every C function is a GoFunc.
+// Intentional port exceptions: Go-GC collectgarbage subset (collect+count
+// only; other known opts no-op→0), panic/recover instead of setjmp,
+// index-stack (not TValue*), goroutine coroutines (goCont only on sync
+// co). Every C function is a GoFunc.
 package core
 
 import (
@@ -38,18 +39,31 @@ func lTolstring(L *State, idx int) string {
 // print / warn  (luaB_print / luaB_warn)
 // ---------------------------------------------------------------------
 
+// baseWriteString is lua_writestring (luaconf.h): fwrite(s,1,l,stdout).
+// l is the byte length so embedded NULs are written.
+func baseWriteString(s string, l int) {
+	if l > 0 {
+		os.Stdout.WriteString(s[:l]) /* fwrite((s), sizeof(char), (l), stdout) */
+	}
+}
+
+// baseWriteLine is lua_writeline: newline + fflush(stdout).
+func baseWriteLine() {
+	baseWriteString("\n", 1)
+	os.Stdout.Sync() /* fflush(stdout) */
+}
+
 func basePrint(L *State) int {
 	n := L.GetTop()           /* number of arguments */
 	for i := 1; i <= n; i++ { /* for each argument */
 		s := lTolstring(L, i) /* convert it to string (luaL_tolstring) */
 		if i > 1 {            /* not the first element? */
-			os.Stdout.WriteString("\t") /* lua_writestring("\t", 1) */
+			baseWriteString("\t", 1) /* add a tab before it */
 		}
-		os.Stdout.WriteString(s) /* lua_writestring(s, l) */
-		L.Pop(1)                 /* pop result */
+		baseWriteString(s, len(s)) /* print it */
+		L.Pop(1)                   /* pop result */
 	}
-	os.Stdout.WriteString("\n")
-	os.Stdout.Sync() /* lua_writeline: fwrite("\n") + fflush(stdout) */
+	baseWriteLine()
 	return 0
 }
 
@@ -66,10 +80,10 @@ func baseWarn(L *State) int {
 	}
 	for i := 1; i < n; i++ { /* compose warning */
 		s, _ := L.ToString(i)
-		luaE_warning(L, s, true) /* lua_warning(..., 1) */
+		L.Warning(s, true) /* lua_warning(..., 1) */
 	}
 	s, _ := L.ToString(n)
-	luaE_warning(L, s, false) /* close warning */
+	L.Warning(s, false) /* close warning */
 	return 0
 }
 
@@ -130,8 +144,9 @@ func baseToNumber(L *State) int {
 			L.SetTop(1) /* yes; return it */
 			return 1
 		} else {
-			/* lua_tolstring + lua_stringtonumber == l+1 → whole-string parse */
-			if s, ok := L.ToString(1); ok && strStringToNumber(L, s) {
+			/* C: s = lua_tolstring; if (s && lua_stringtonumber(L,s) == l+1) */
+			s, ok := L.ToString(1)             /* lua_tolstring (also converts number→string) */
+			if ok && strStringToNumber(L, s) { /* whole-string parse ≡ l+1 */
 				return 1 /* successful conversion to number */
 			}
 			/* else not a number */
@@ -140,8 +155,9 @@ func baseToNumber(L *State) int {
 	} else {
 		base := L.CheckInteger(2)
 		L.CheckType(1, LUA_TSTRING) /* no numbers as strings */
-		s, _ := L.ToString(1)
+		s, _ := L.ToString(1)       /* lua_tolstring → s, l */
 		L.ArgCheck(2 <= base && base <= 36, 2, "base out of range")
+		/* C: if (b_str2int(s, base, &n) == s + l) */
 		if n, end, ok := baseStr2Int(s, int(base)); ok && end == len(s) {
 			L.PushInteger(n)
 			return 1
@@ -232,24 +248,24 @@ func baseRawSet(L *State) int {
 // collectgarbage  (pushmode / luaB_collectgarbage) — intentional Go-GC
 // ---------------------------------------------------------------------
 
-// The PUC option names (including 5.4 mode names), in C's order.  Kept
-// so scripts that pass known names do not get 'invalid option'; only
-// "collect" and "count" do real work (see baseCollectGarbage).
+// The PUC option names (including 5.4 mode names), in C's opts[] order.
+// Kept so scripts that pass known names do not get 'invalid option';
+// only "collect" and "count" do real work (see baseCollectGarbage).
 var baseGCOpts = []string{"stop", "restart", "collect", "count", "step",
 	"setpause", "setstepmul", "isrunning", "generational", "incremental"}
 
-// indices into baseGCOpts (optsnum order)
+// indices into baseGCOpts — same order as C's optsnum[] → LUA_GC*
 const (
-	baseGCStop = iota
-	baseGCRestart
-	baseGCCollect
-	baseGCCount
-	baseGCStep
-	baseGCSetPause
-	baseGCSetStepMul
-	baseGCIsRunning
-	baseGCGenerational
-	baseGCIncremental
+	baseGCStop         = iota // LUA_GCSTOP
+	baseGCRestart             // LUA_GCRESTART
+	baseGCCollect             // LUA_GCCOLLECT
+	baseGCCount               // LUA_GCCOUNT
+	baseGCStep                // LUA_GCSTEP
+	baseGCSetPause            // LUA_GCSETPAUSE
+	baseGCSetStepMul          // LUA_GCSETSTEPMUL
+	baseGCIsRunning           // LUA_GCISRUNNING
+	baseGCGenerational        // LUA_GCGEN
+	baseGCIncremental         // LUA_GCINC
 )
 
 // gcModeInc / gcModeGen are the two collector modes the C API's lua_gc
@@ -260,46 +276,84 @@ const (
 	gcModeGen = "generational"
 )
 
-// gcCount is 'lua_gc(L, LUA_GCCOUNT)' expressed the way lbaselib.c does
-// it: Kbytes with a fractional part, i.e. bytes/1024 as a float.
+// LUA_GCINC / LUA_GCGEN numeric values (lua.h) — used by basePushMode.
+const (
+	baseGCModeInc = 11 // LUA_GCINC
+	baseGCModeGen = 10 // LUA_GCGEN
+)
+
+// gcCount is 'lua_gc(L, LUA_GCCOUNT)' + LUA_GCCOUNTB expressed the way
+// lbaselib.c does it: Kbytes with a fractional part (bytes/1024 as float).
 func gcCount() float64 {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	return float64(ms.HeapAlloc>>10) + float64(ms.HeapAlloc&1023)/1024
 }
 
-// baseCollectGarbage is 'collectgarbage'.
+// basePushMode is pushmode: push the previous collector mode name, or
+// fail if oldmode == -1 (invalid lua_gc inside a finalizer).
+func basePushMode(L *State, oldmode int) int {
+	if oldmode == -1 {
+		L.PushNil() /* luaL_pushfail — invalid call to 'lua_gc' */
+	} else {
+		if oldmode == baseGCModeInc {
+			L.PushString("incremental")
+		} else {
+			L.PushString("generational")
+		}
+	}
+	return 1
+}
+
+// baseCollectGarbage is luaB_collectgarbage.
 //
-// Intentional Go-GC simplification: only "collect" and "count" are
-// implemented.  Every other known PUC option name (including mode
-// names) is accepted but is a no-op that pushes integer 0 — no gcCycle
-// on "step", no gcStopped toggle, no pause/stepmul/mode mutation.
-// Unknown names still error via CheckOption.
+// Intentional Go-GC simplification (not a mark-sweep port of lgc.c):
+// only "collect" and "count" are implemented.  Every other known PUC
+// option name (including mode names) is accepted but is a no-op that
+// pushes integer 0 — no OptInteger validation of extra args (so
+// collectgarbage("step","x") stays valid), no gcCycle on "step", no
+// gcStopped toggle, no pause/stepmul/mode mutation, and mode cases do
+// not call basePushMode.  Unknown names still error via CheckOption.
 //
 // Note: the C API lua_gc (cdl_gc_cb) may still drive a real cycle and
 // mutate knobs; Lua collectgarbage and C lua_gc can therefore diverge.
 //
 // "collect" sweeps weak tables and runs '__gc' of unreachable objects,
 // then pushes 0.  "count" is Kbytes of the whole Go heap (not per-state).
-// Inside a finalizer (gcInFinalizer), push fail/nil for every option
-// (C: lua_gc → -1 → checkvalres → luaL_pushfail).
+// Inside a finalizer (gcInFinalizer), after CheckOption, push fail/nil
+// for every option (C: lua_gc → -1 → checkvalres → luaL_pushfail).
 func baseCollectGarbage(L *State) int {
+	/* o = optsnum[luaL_checkoption(...)] — index stands in for LUA_GC*
+	   C runs checkoption *before* lua_gc; inside a finalizer lua_gc
+	   returns -1 and checkvalres breaks to luaL_pushfail. */
+	o := L.CheckOption(1, "collect", baseGCOpts)
 	if L.g.gcInFinalizer {
 		L.PushNil() /* luaL_pushfail — invalid call (inside a finalizer) */
 		return 1
 	}
-	switch L.CheckOption(1, "collect", baseGCOpts) {
-	case baseGCCollect:
-		L.fullCollect()
-		L.PushInteger(0)
-		return 1
-	case baseGCCount:
+	switch o {
+	case baseGCCount: /* LUA_GCCOUNT (+ COUNTB fractional) */
 		L.PushNumber(gcCount())
 		return 1
-	default:
-		/* stop, restart, step, setpause, setstepmul, isrunning,
-		   generational, incremental: ignore (push 0 like a successful
-		   no-op lua_gc integer result). */
+	case baseGCStep: /* LUA_GCSTEP — Go-GC no-op (C: pushboolean) */
+		L.PushInteger(0)
+		return 1
+	case baseGCSetPause, baseGCSetStepMul: /* setpause / setstepmul */
+		L.PushInteger(0)
+		return 1
+	case baseGCIsRunning: /* LUA_GCISRUNNING — Go-GC no-op (C: pushboolean) */
+		L.PushInteger(0)
+		return 1
+	case baseGCGenerational: /* LUA_GCGEN — Go-GC no-op (C: pushmode) */
+		L.PushInteger(0)
+		return 1
+	case baseGCIncremental: /* LUA_GCINC — Go-GC no-op (C: pushmode) */
+		L.PushInteger(0)
+		return 1
+	default: /* stop, restart, collect */
+		if o == baseGCCollect {
+			L.fullCollect()
+		}
 		L.PushInteger(0)
 		return 1
 	}
@@ -344,10 +398,9 @@ func baseNext(L *State) int {
 	}
 }
 
-// basePairsCont is pairscont (unused args; returns 3).
+// basePairsCont is pairscont (lua_Kfunction); unused args; returns 3.
 func basePairsCont(L *State, status int) int {
-	_ = L
-	_ = status
+	_, _ = L, status /* (void)L; (void)status; (void)k */
 	return 3
 }
 
@@ -378,8 +431,9 @@ func baseIPairsAux(L *State) int {
 	L.PushInteger(i)
 	if L.GetI(1, i) == LUA_TNIL {
 		return 1
+	} else {
+		return 2
 	}
-	return 2
 }
 
 /*
@@ -416,10 +470,11 @@ func baseLoadAux(L *State, err error, env int) int {
 			}
 		}
 		return 1
-	} else { /* error (message reconstructed; C has it on stack already) */
-		L.PushNil() /* luaL_pushfail */
-		L.PushString(err.Error())
-		return 2 /* return fail plus error message */
+	} else { /* error (C: message already on stack; Go rebuilds it) */
+		L.PushString(err.Error()) /* error message */
+		L.PushNil()               /* luaL_pushfail */
+		L.Insert(-2)              /* put fail before error message */
+		return 2                  /* return fail plus error message */
 	}
 }
 
@@ -457,7 +512,7 @@ func baseLoadFile(L *State) int {
 ** {======================================================
 ** Generic Read function
 ** =======================================================
-*/
+ */
 
 // RESERVEDSLOT (lbaselib.c): above all arguments, holds a copy of the
 // reader string so the parser can keep a stable pointer (C GC). Go still
@@ -469,7 +524,7 @@ const baseReservedSlot = 5 /* RESERVEDSLOT */
 // Called from inside protected LoadStream / rawRunProtected (as C's
 // reader runs inside protected lua_load), so L.Call errors become the
 // load status. Empty string → size 0 for that fill (EOZ that fill);
-// nil → end. Re-call after empty is an llex/ZIO concern (NOTES).
+// nil → end. Re-call after empty is an llex/ZIO concern (port debt).
 func baseLoadReader(L *State) func() []byte {
 	return func() []byte {
 		L.CheckStack2(2, "too many nested functions")
@@ -506,7 +561,7 @@ func baseLoad(L *State) int {
 		more := baseLoadReader(L)
 		/* C: lua_load(generic_reader) — first byte inside protected f_parser.
 		   Go LoadStream is text-oriented; peek first piece (protected) to
-		   dispatch binary undump vs text stream (NOTES / Apply debt). */
+		   dispatch binary undump vs text stream (port debt). */
 		var first []byte
 		top := L.top
 		if st := L.rawRunProtected(func() { first = more() }); st != LUA_OK {
@@ -590,19 +645,22 @@ func baseSelect(L *State) int {
 	n := L.GetTop()
 	if L.Type(1) == LUA_TSTRING {
 		s, _ := L.ToString(1)
-		if len(s) > 0 && s[0] == '#' { /* *lua_tostring == '#' */
+		if len(s) > 0 && s[0] == '#' { /* *lua_tostring(L, 1) == '#' */
 			L.PushInteger(int64(n - 1))
 			return 1
 		}
 	}
-	i := L.CheckInteger(1)
-	if i < 0 {
-		i = int64(n) + i
-	} else if i > int64(n) {
-		i = int64(n)
+	/* else */
+	{
+		i := L.CheckInteger(1)
+		if i < 0 {
+			i = int64(n) + i
+		} else if i > int64(n) {
+			i = int64(n)
+		}
+		L.ArgCheck(1 <= i, 1, "index out of range")
+		return n - int(i)
 	}
-	L.ArgCheck(1 <= i, 1, "index out of range")
-	return n - int(i)
 }
 
 // ---------------------------------------------------------------------

@@ -184,6 +184,7 @@ func ttisboolean(v *Value) bool { return ttype(v) == LUA_TBOOLEAN }
 func ttisfalse(v *Value) bool   { return v.tt == LUA_VFALSE }
 func ttistrue(v *Value) bool    { return v.tt == LUA_VTRUE }
 func isFalse(v *Value) bool     { return ttisfalse(v) || ttisnil(v) }
+func l_isfalse(v *Value) bool   { return isFalse(v) } // lobject.h name
 func bvalue(v *Value) bool      { return v.tt == LUA_VTRUE }
 
 func ttisnumber(v *Value) bool  { return ttype(v) == LUA_TNUMBER }
@@ -201,6 +202,7 @@ func ttisLclosure(v *Value) bool { return v.tt == ctb(LUA_VLCL) }
 func ttislcf(v *Value) bool      { return v.tt == LUA_VLCF }
 func ttisCclosure(v *Value) bool { return v.tt == ctb(LUA_VCCL) }
 func ttisclosure(v *Value) bool  { return ttisLclosure(v) || ttisCclosure(v) }
+func isLfunction(v *Value) bool  { return ttisLclosure(v) } // lobject.h
 
 // ttiscfunction reports whether 'v' is any kind of C function (a light C
 // function or a C closure), as 'lua_iscfunction' does.
@@ -226,6 +228,7 @@ func tsvalue(v *Value) *TString       { return (*TString)(v.p) }
 func hvalue(v *Value) *Table          { return (*Table)(v.p) }
 func clLvalue(v *Value) *LClosure     { return (*LClosure)(v.p) }
 func clCvalue(v *Value) *CClosure     { return (*CClosure)(v.p) }
+func getproto(o *Value) *Proto        { return clLvalue(o).p } // lobject.h
 func fvalue(v *Value) GoFunc          { return *(*GoFunc)(unsafe.Pointer(&v.p)) }
 func uvalue(v *Value) *Udata          { return (*Udata)(v.p) }
 func pvalue(v *Value) unsafe.Pointer  { return v.p }
@@ -243,7 +246,7 @@ func setnilvalue(v *Value) { *v = Value{tt: LUA_VNIL} }
 func setempty(v *Value)    { *v = Value{tt: LUA_VEMPTY} }
 func setabstkey(v *Value)  { *v = Value{tt: LUA_VABSTKEY} }
 func setbfvalue(v *Value)  { *v = Value{tt: LUA_VFALSE} }
-func setbtvalue(v *Value)  { *v = Value{tt: LUA_VTRUE, i: 1} }
+func setbtvalue(v *Value)  { *v = Value{tt: LUA_VTRUE} }
 func setbvalue(v *Value, b bool) {
 	if b {
 		setbtvalue(v)
@@ -325,8 +328,26 @@ func getnodekey(dst *Value, n *node) {
 	dst.tt = n.keytt
 }
 
-// setnilkey empties a node's key, as 'setnilvalue(L, gkey(n))' does.
-func setnilkey(n *node) { n.keytt = LUA_VNIL; n.kp = nil; n.ki = 0 }
+// setnilkey empties a node's key (lobject.h: keytt(node) = LUA_TNIL).
+// Clears kp/ki so no stale reference keeps an object alive (Go GC).
+func setnilkey(n *node) { n.keytt = LUA_TNIL; n.kp = nil; n.ki = 0 }
+
+// Node key macros (lobject.h). setdeadkey/keyisdead live in lgc_weak.go /
+// ltable.go (call sites); not redeclared here.
+func keytt(n *node) uint8           { return n.keytt }
+func keyisnil(n *node) bool         { return n.keytt == LUA_TNIL }
+func keyisinteger(n *node) bool     { return n.keytt == LUA_VNUMINT }
+func keyival(n *node) int64         { return n.ki }
+func keyisshrstr(n *node) bool      { return n.keytt == ctb(LUA_VSHRSTR) }
+func keystrval(n *node) *TString    { return (*TString)(n.kp) }
+func keyiscollectable(n *node) bool { return n.keytt&BIT_ISCOLLECTABLE != 0 }
+func gckey(n *node) unsafe.Pointer  { return n.kp }
+func gckeyN(n *node) unsafe.Pointer {
+	if keyiscollectable(n) {
+		return n.kp
+	}
+	return nil
+}
 
 // Table is a Lua table: an array part plus an open-addressing hash part.
 //
@@ -589,19 +610,36 @@ func luaO_utf8esc(x uint32) []byte {
 	return buf[UTF8BUFFSZ-n:]
 }
 
-// tostringbuff converts a number object to its string representation.
+// tostringbuff converts a number object to its string representation
+// (lobject.c). C writes into char buff[MAXNUMBER2STR] and returns len;
+// Go returns the string of those bytes.
 func tostringbuff(obj *Value) string {
 	if ttisinteger(obj) {
 		return strconv.FormatInt(ivalue(obj), 10)
 	}
 	s := fmtFloat(fltvalue(obj))
-	if !strings.ContainsAny(s, ".eEnNaxi") { // looks like an integer?
+	// C: if (buff[strspn(buff, "-0123456789")] == '\0') — looks like an int?
+	if strspnDigitsMinus(s) == len(s) {
 		/* PUC-Lua appends the locale's decimal point and a zero, not a
 		   hard-coded '.' -- under pt_BR this is "10,0". */
 		s += localeDecPoint + "0"
 		return s
 	}
 	return num2strLocale(s)
+}
+
+// strspnDigitsMinus is C strspn(s, "-0123456789").
+func strspnDigitsMinus(s string) int {
+	n := 0
+	for n < len(s) {
+		c := s[n]
+		if c == '-' || (c >= '0' && c <= '9') {
+			n++
+			continue
+		}
+		break
+	}
+	return n
 }
 
 // fmtNaN is the word C's printf writes for a NaN.
@@ -961,8 +999,11 @@ func luaO_str2num(s string, o *Value) bool {
 // luaO_pushvfstring / luaO_pushfstring (lobject.c)
 // ---------------------------------------------------------------------
 
-// pushfString builds a string on the stack, handling Lua's '%d', '%I',
-// '%f', '%s', '%c', '%p', '%U' and '%%' formats.
+// pushfString is the Go spelling of luaO_pushvfstring / luaO_pushfstring
+// (lobject.c). It handles '%d', '%I', '%f', '%s', '%c', '%p', '%U', '%%'.
+// Unlike C (BuffFS + stack pieces + luaV_concat), it builds with
+// strings.Builder and returns the TString without leaving it on the
+// stack — callers that need the C "pushed" contract push it themselves.
 func pushfString(L *State, format string, args ...any) *TString {
 	var b strings.Builder
 	i := 0
@@ -987,31 +1028,43 @@ func pushfString(L *State, format string, args ...any) *TString {
 			break
 		}
 		switch format[i+1] {
-		case 's':
+		case 's': // zero-terminated string (C: strlen)
 			a := next()
 			if a == nil {
 				b.WriteString("(null)")
 			} else {
-				b.WriteString(toStringAny(a))
+				b.WriteString(luaCStr(toStringAny(a)))
 			}
-		case 'c':
+		case 'c': // an 'int' as a character (C: cast_uchar)
 			a := next()
-			b.WriteByte(byte(toIntAny(a)))
+			b.WriteByte(byte(toIntAny(a) & 0xff))
 		case 'd':
-			a := next()
-			b.WriteString(strconv.FormatInt(toIntAny(a), 10))
+			{ // an 'int' — C: setivalue + addnum2buff/tostringbuff
+				var num Value
+				setivalue(&num, toIntAny(next()))
+				b.WriteString(tostringbuff(&num))
+			}
 		case 'I':
-			a := next()
-			b.WriteString(strconv.FormatInt(toIntAny(a), 10))
+			{ // a 'lua_Integer' — C: setivalue + addnum2buff/tostringbuff
+				var num Value
+				setivalue(&num, toIntAny(next()))
+				b.WriteString(tostringbuff(&num))
+			}
 		case 'f':
-			a := next()
-			switch v := a.(type) {
-			case float64:
-				b.WriteString(fmtFloat(v))
-			case float32:
-				b.WriteString(fmtFloat(float64(v)))
-			default:
-				b.WriteString(fmtFloat(float64(toIntAny(a))))
+			{ // a 'lua_Number' — C: setfltvalue + addnum2buff/tostringbuff
+				// tostringbuff appends locale decimal+"0" when the float looks like an int
+				// (e.g. 504 → "504.0"), matching C luaO_pushvfstring.
+				var num Value
+				a := next()
+				switch v := a.(type) {
+				case float64:
+					setfltvalue(&num, v)
+				case float32:
+					setfltvalue(&num, float64(v))
+				default:
+					setfltvalue(&num, float64(toIntAny(a)))
+				}
+				b.WriteString(tostringbuff(&num))
 			}
 		case 'p':
 			a := next()
@@ -1027,6 +1080,17 @@ func pushfString(L *State, format string, args ...any) *TString {
 		i += 2
 	}
 	return luaS_newlstr(L, b.String())
+}
+
+// luaO_pushvfstring / luaO_pushfstring are the C names for pushfString.
+// Go has no va_list, so both are variadic wrappers (same body as C's
+// luaO_pushfstring → luaO_pushvfstring call chain).
+func luaO_pushvfstring(L *State, format string, args ...any) *TString {
+	return pushfString(L, format, args...)
+}
+
+func luaO_pushfstring(L *State, format string, args ...any) *TString {
+	return luaO_pushvfstring(L, format, args...)
 }
 
 func toStringAny(a any) string {

@@ -3,7 +3,7 @@
 //
 // The C code works with pointers into the (NUL-terminated) string; here
 // we work with indexes into the Go string and treat "past the end" as
-// the terminating NUL.
+// the terminating NUL (utf8IsContAt returns false at/after len).
 package core
 
 const (
@@ -48,31 +48,30 @@ func utf8libDecode(s string, i int, strict bool) (val uint32, next int, ok bool)
 	limits := [6]uint32{^uint32(0), 0x80, 0x800, 0x10000, 0x200000, 0x4000000}
 	c := uint32(s[i])
 	var res uint32 /* final result */
-	next = i + 1
-	if c < 0x80 { /* ascii? */
+	pos := i       /* C: s cursor; advanced by count for non-ASCII */
+	if c < 0x80 {  /* ascii? */
 		res = c
 	} else if c >= 0xfe { /* c >= 1111 1110b ? */
 		return 0, 0, false /* would need six or more continuation bytes */
 	} else {
-		count := 0        /* to count number of continuation bytes */
-		for c&0x40 != 0 { /* while it needs continuation bytes... */
+		count := 0                   /* to count number of continuation bytes */
+		for ; c&0x40 != 0; c <<= 1 { /* while it needs continuation bytes... */
 			count++
 			if i+count >= len(s) {
 				/* C reads s[++count] into trailing NUL → !iscont → NULL */
 				return 0, 0, false /* invalid byte sequence */
 			}
-			cc := uint32(s[i+count]) /* read next byte */
+			cc := uint32(s[i+count])   /* read next byte */
 			if !utf8IsCont(byte(cc)) { /* not a continuation byte? */
 				return 0, 0, false /* invalid byte sequence */
 			}
 			res = (res << 6) | (cc & 0x3F) /* add lower 6 bits from cont. byte */
-			c <<= 1
 		}
 		res |= (c & 0x7F) << (count * 5) /* add first byte */
 		if res > utf8MaxUTF || res < limits[count] {
 			return 0, 0, false /* invalid byte sequence */
 		}
-		next = i + count + 1 /* skip continuation bytes read (+ first) */
+		pos = i + count /* s += count — skip continuation bytes read */
 	}
 	if strict {
 		/* check for invalid code points; too large or surrogates */
@@ -80,7 +79,7 @@ func utf8libDecode(s string, i int, strict bool) (val uint32, next int, ok bool)
 			return 0, 0, false
 		}
 	}
-	return res, next, true
+	return res, pos + 1, true /* +1 to include first byte */
 }
 
 /*
@@ -105,7 +104,7 @@ func utf8Len(L *State) int {
 	for posi <= posj {
 		_, s1, ok := utf8libDecode(s, int(posi), !lax)
 		if !ok { /* conversion error? */
-			L.PushNil()             /* luaL_pushfail — return fail ... */
+			L.PushFail()            /* luaL_pushfail — return fail ... */
 			L.PushInteger(posi + 1) /* ... and current position */
 			return 2
 		}
@@ -131,15 +130,15 @@ func utf8Codepoint(L *State) int {
 	if posi > pose {
 		return 0 /* empty interval; return no values */
 	}
-	/* (lua_Integer -> int) overflow? C uses INT_MAX (keep 32-bit ceiling). */
-	intMax := int64(int(^uint32(0) >> 1))
+	/* (lua_Integer -> int) overflow? C: pose - posi >= INT_MAX */
+	const intMax = int64(^uint32(0) >> 1) /* INT_MAX on typical Lua hosts */
 	if pose-posi >= intMax {
 		return L.Error2("string slice too long")
 	}
 	n := int(pose-posi) + 1 /* upper bound for number of returns */
 	L.CheckStack2(n, "string slice too long")
 	n = 0           /* count the number of returns */
-	se := int(pose) /* string end (exclusive index) */
+	se := int(pose) /* string end (exclusive index; C: se = s + pose) */
 	for i := int(posi) - 1; i < se; {
 		code, next, ok := utf8libDecode(s, i, !lax)
 		if !ok {
@@ -156,8 +155,8 @@ func utf8Codepoint(L *State) int {
 func utf8PushChar(L *State, arg int) {
 	code := uint64(L.CheckInteger(arg)) /* lua_Unsigned */
 	L.ArgCheck(code <= utf8MaxUTF, arg, "value out of range")
-	/* C: lua_pushfstring(L, "%U", (long)code) — same encoder via luaO_utf8esc */
-	L.PushString(string(luaO_utf8esc(uint32(code))))
+	/* C: lua_pushfstring(L, "%U", (long)code) */
+	L.PushFString("%U", int64(code))
 }
 
 /*
@@ -232,7 +231,7 @@ func utf8ByteOffset(L *State) int {
 	if n == 0 { /* did it find given character? */
 		L.PushInteger(posi + 1)
 	} else { /* no such character */
-		L.PushNil() /* luaL_pushfail */
+		L.PushFail() /* luaL_pushfail */
 	}
 	return 1
 }
@@ -250,14 +249,15 @@ func utf8IterAux(L *State, strict bool) int {
 	}
 	if un >= uint64(length) { /* (also handles original 'n' being negative) */
 		return 0 /* no more codepoints */
+	} else {
+		code, next, ok := utf8libDecode(s, int(un), strict)
+		if !ok || utf8IsContAt(s, next) {
+			return L.Error2(utf8MsgInvalid)
+		}
+		L.PushInteger(int64(un) + 1)
+		L.PushInteger(int64(code))
+		return 2
 	}
-	code, next, ok := utf8libDecode(s, int(un), strict)
-	if !ok || utf8IsContAt(s, next) {
-		return L.Error2(utf8MsgInvalid)
-	}
-	L.PushInteger(int64(un) + 1)
-	L.PushInteger(int64(code))
-	return 2
 }
 
 func utf8IterAuxStrict(L *State) int { return utf8IterAux(L, true) }  // iter_auxstrict
@@ -285,13 +285,15 @@ var utf8Funcs = []Reg{
 	{Name: "char", Func: utf8Char},
 	{Name: "len", Func: utf8Len},
 	{Name: "codes", Func: utf8IterCodes},
-	/* placeholders: {"charpattern", NULL} — set below in OpenUTF8 */
+	/* placeholders */
+	{Name: "charpattern", Func: nil},
 }
 
 // OpenUTF8 opens the UTF-8 library (luaopen_utf8).
 func OpenUTF8(L *State) int {
 	L.NewLib(utf8Funcs) /* luaL_newlib */
-	L.PushString(utf8CharPattern)
+	/* C: lua_pushlstring(L, UTF8PATT, sizeof(UTF8PATT)/sizeof(char) - 1) */
+	L.PushLString(utf8CharPattern)
 	L.SetField(-2, "charpattern")
 	return 1
 }

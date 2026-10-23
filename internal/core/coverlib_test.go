@@ -490,7 +490,7 @@ func TestMathApproximationsAndSmallAPI(t *testing.T) {
 	if !short.isShort() {
 		t.Fatal("isShort")
 	}
-	if sBx(0) != -OFFSET_sBx || !numIsNaN(math.NaN()) || numIsNaN(0) {
+	if sBx(0) != -OFFSET_sBx || !math2IsNaN(math.NaN()) || math2IsNaN(0) {
 		t.Fatal("sBx / nan")
 	}
 	if n, err := ioWriteString(nil, "a"); n != 0 || err == nil {
