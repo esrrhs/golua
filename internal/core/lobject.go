@@ -157,6 +157,13 @@ const (
 	LUA_OPBNOT = 13
 )
 
+// Comparison op codes for lua_compare (lua.h).
+const (
+	LUA_OPEQ = 0
+	LUA_OPLT = 1
+	LUA_OPLE = 2
+)
+
 // Value is the translation of TValue: a tag plus the value itself.
 //
 // C's TValue is a tagged union, and so is this, with two deliberate

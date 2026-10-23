@@ -268,7 +268,10 @@ func (L *State) IsNil(idx int) bool        { return L.Type(idx) == LUA_TNIL }
 func (L *State) IsNone(idx int) bool       { return L.Type(idx) == LUA_TNONE }
 func (L *State) IsNoneOrNil(idx int) bool  { t := L.Type(idx); return t == LUA_TNONE || t == LUA_TNIL }
 func (L *State) IsBoolean(idx int) bool    { return L.Type(idx) == LUA_TBOOLEAN }
-func (L *State) IsNumber(idx int) bool     { return tonumberns(index2value(L, idx), nil2()) }
+func (L *State) IsNumber(idx int) bool {
+	var n float64
+	return luaV_tonumber_(L, index2value(L, idx), &n) /* tonumber: coerce strings */
+}
 func (L *State) IsInteger(idx int) bool    { return ttisinteger(index2value(L, idx)) }
 func (L *State) IsString(idx int) bool     { t := L.Type(idx); return t == LUA_TSTRING || t == LUA_TNUMBER }
 func (L *State) IsTable(idx int) bool      { return L.Type(idx) == LUA_TTABLE }
@@ -638,25 +641,29 @@ func (L *State) GetMetaTable(idx int) bool {
 	return true
 }
 
-// GetUserValue pushes the n-th user value of the full userdata at 'idx'
-// and returns its type, or LUA_TNONE when 'n' is out of range.
-// 5.3.4 C lua_getuservalue has no 'n' (always the first); Go keeps 'n'
-// so callers can pass 1. Out-of-range pushes nil and returns LUA_TNONE,
-// which is what tells 'debug.getuservalue' to return a single nil.
+// GetUserValue is lua_getuservalue (lapi.c 5.3.4: single uservalue).
+// The 'n' argument is a Go extension for multi-uv userdata (pass 1 for
+// C-compatible behaviour). Out of range → push nil, return LUA_TNONE.
 func (L *State) GetUserValue(idx, n int) int {
 	v := index2value(L, idx)
+	L.checkStack(1)
 	if !ttisfulluserdata(v) || n <= 0 {
 		setnilvalue(&L.stack[L.top])
 		L.top++
 		return LUA_TNONE
 	}
 	u := uvalue(v)
+	if u.nuvalue == 0 {
+		/* 5.3.4 userdata always has one uservalue slot (may be nil) */
+		setnilvalue(&L.stack[L.top])
+		L.top++
+		return LUA_TNIL
+	}
 	if n > int(u.nuvalue) {
 		setnilvalue(&L.stack[L.top])
 		L.top++
 		return LUA_TNONE
 	}
-	L.checkStack(1)
 	L.stack[L.top] = u.uv[n-1]
 	L.top++
 	return ttype(&L.stack[L.top-1])
@@ -1084,6 +1091,83 @@ func (e *LuaError) Error() string { return e.Message }
 func (L *State) Error() int {
 	luaG_errormsg(L)
 	return 0
+}
+
+// ---------------------------------------------------------------------
+// arith / compare / stringtonumber (lapi.c)
+// ---------------------------------------------------------------------
+
+// Arith performs arithmetic op on the stack (lua_arith).
+func (L *State) Arith(op int) {
+	if op == LUA_OPUNM || op == LUA_OPBNOT {
+		L.CheckStack(1)
+		L.PushValue(-1) /* unary: fake 2nd operand */
+	}
+	res := L.top - 2
+	luaO_arith(L, op, &L.stack[L.top-2], &L.stack[L.top-1], res)
+	L.top-- /* remove second operand */
+}
+
+// Compare compares values at idx1/idx2 with op LUA_OPEQ/OPLT/OPLE (lua_compare).
+func (L *State) Compare(idx1, idx2, op int) bool {
+	o1 := index2value(L, idx1)
+	o2 := index2value(L, idx2)
+	if !isvalid(L, o1) || !isvalid(L, o2) {
+		return false
+	}
+	switch op {
+	case LUA_OPEQ:
+		return luaV_equalobj(L, o1, o2)
+	case LUA_OPLT:
+		return luaV_lessthan(L, o1, o2)
+	case LUA_OPLE:
+		return luaV_lessequal(L, o1, o2)
+	default:
+		return false
+	}
+}
+
+// StringToNumber converts s and pushes the number (lua_stringtonumber).
+// Returns the size of the string plus one on success, or 0 on failure —
+// matching C's return of (e - s) + 1 from luaO_str2num.
+func (L *State) StringToNumber(s string) int {
+	L.checkStack(1)
+	if !luaO_str2num(s, &L.stack[L.top]) {
+		return 0
+	}
+	L.top++
+	return len(s) + 1
+}
+
+// GetUpvalue pushes upvalue n of the function at funcindex (lua_getupvalue).
+// Returns the upvalue name, or "" when there is none / out of range.
+func (L *State) GetUpvalue(funcindex, n int) (name string, ok bool) {
+	return dbGetUpvalue(L, funcindex, n)
+}
+
+// SetUpvalue pops a value into upvalue n (lua_setupvalue).
+func (L *State) SetUpvalue(funcindex, n int) (name string, ok bool) {
+	return dbSetUpvalue(L, funcindex, n)
+}
+
+// UpvalueId returns an identity for an upvalue (lua_upvalueid).
+func (L *State) UpvalueId(funcindex, n int) unsafe.Pointer {
+	return dbUpvalueID(L, funcindex, n)
+}
+
+// UpvalueJoin makes upvalue n1 of f1 refer to upvalue n2 of f2 (lua_upvaluejoin).
+func (L *State) UpvalueJoin(fidx1, n1, fidx2, n2 int) {
+	fv1 := index2value(L, fidx1)
+	fv2 := index2value(L, fidx2)
+	if !ttisLclosure(fv1) || !ttisLclosure(fv2) {
+		return
+	}
+	f1 := clLvalue(fv1)
+	f2 := clLvalue(fv2)
+	if n1 < 1 || n1 > f1.nupvalues || n2 < 1 || n2 > f2.nupvalues {
+		return
+	}
+	f1.upvals[n1-1] = f2.upvals[n2-1]
 }
 
 // ---------------------------------------------------------------------

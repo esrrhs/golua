@@ -109,25 +109,6 @@ func init() {
 }
 
 // ---------------------------------------------------------------------
-// lua_arith
-// ---------------------------------------------------------------------
-
-// Arith performs the arithmetic operation 'op' (lua_arith, lapi.c:699).
-// Unary operations act on the top value alone; everything else consumes
-// two. luaO_arith already falls back to the metamethod, which is what
-// lua_arith does too.
-func (L *State) Arith(op int) {
-	if op == LUA_OPUNM || op == LUA_OPBNOT {
-		L.CheckStack(1)
-		L.PushValue(-1) /* unary operations: fake second operand */
-	}
-	L.checkStack(0)
-	res := L.top - 2
-	luaO_arith(L, op, &L.stack[L.top-2], &L.stack[L.top-1], res)
-	L.top--
-}
-
-// ---------------------------------------------------------------------
 // luaL_typeerror
 // ---------------------------------------------------------------------
 
