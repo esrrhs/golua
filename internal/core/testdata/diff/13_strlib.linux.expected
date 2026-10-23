@@ -37,7 +37,7 @@ olleh	5
 ABC
  3.14|42   |00007|ff|FF|10|A|str|"a\"b\
 "
-42 -42 42 1.500000 1.5 1.500000e+00 1.500000E+00 0xADDR.8p+0 0X1.8P+0
+42 -42 42 1.500000 1.5 1.500000e+00 1.500000E+00 0x1.8p+0 0X1.8P+0
 a          b c         |
 false	bad argument #2 to 'string.format' (number expected, got string)
 false	invalid option '%y' to 'format'
@@ -45,8 +45,8 @@ false	invalid format (width or precision too long)
 10	16	10.5	10
 2	255	35	3
 nil	nil	nil
-lua: 13_strlib.lua:62: bad argument #1 to 'tonumber' (string expected, got number)
+/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/13_strlib.lua:62: bad argument #1 to 'tonumber' (string expected, got number)
 stack traceback:
 	[C]: in function 'tonumber'
-	13_strlib.lua:62: in main chunk
+	internal/core/testdata/diff/13_strlib.lua:62: in main chunk
 	[C]: in ?

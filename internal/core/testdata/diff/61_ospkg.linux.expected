@@ -46,9 +46,9 @@ true|"19 70 1970 70 4 01"
 false|"bad argument #1 to 'os.date' (invalid conversion specifier '%k %l %s')"
 true|"GMT"
 true|"1970"
-true|table: 0x556b808219e0
-true|table: 0x556b80821d80
-true|table: 0x556b808220f0
+true|table: 0x55da248879e0
+true|table: 0x55da24887d80
+true|table: 0x55da248880f0
 false|"time result cannot be represented in this installation"
 false|"time result cannot be represented in this installation"
 true|""
@@ -120,7 +120,7 @@ false|"module 'no_such_module_xyz' not found:\
 \9no file '/usr/local/lib/lua/5.3/no_such_module_xyz.so'\
 \9no file '/usr/local/lib/lua/5.3/loadall.so'\
 \9no file './no_such_module_xyz.so'"
-true|table: 0x556b80810b40	true|table: 0x556b80810ef0
+true|table: 0x55da24876b40	true|table: 0x55da24876ef0
 nil
 false|"module 'm1' not found:\
 \9no field package.preload['m1']\

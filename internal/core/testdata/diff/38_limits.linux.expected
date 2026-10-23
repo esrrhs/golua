@@ -9,14 +9,14 @@ regs	100	true|5050
 regs	200	true|20100
 regs	250	true|31375
 regs	300	true|45150
-ctor	100	true|table: 0xADDR
-ctor	250	true|table: 0xADDR
-ctor	300	true|table: 0xADDR
+ctor	100	true|table: 0x563aa6cacb70
+ctor	250	true|table: 0x563aa6cca840
+ctor	300	true|table: 0x563aa6cadbc0
 paren	10	true|1
 paren	199	nil|"g:1: too many C levels (limit is 200) in main function near '('"
 paren	200	nil|"g:1: too many C levels (limit is 200) in main function near '('"
 paren	201	nil|"g:1: too many C levels (limit is 200) in main function near '('"
-table	10	true|table: 0xADDR
+table	10	true|table: 0x563aa6c9acc0
 table	199	nil|"g:1: too many C levels (limit is 200) in main function near '{'"
 table	200	nil|"g:1: too many C levels (limit is 200) in main function near '{'"
 table	201	nil|"g:1: too many C levels (limit is 200) in main function near '{'"
@@ -32,13 +32,13 @@ args	100	true|100
 args	1000	nil|"g:1: function or expression needs too many registers near '254'"
 0                     	true|0
 1                     	true|1
-0xADDR                  	true|16
+0x10                  	true|16
 0X10                  	true|16
-0xADDRp4                 	true|16.0
-0xADDRp-2                	true|0.25
+0x1p4                 	true|16.0
+0x1p-2                	true|0.25
 0x.8p1                	true|1.0
 0x                    	nil|"g:1: malformed number near '0x'"
-0xADDRp                  	nil|"g:1: malformed number near '0xADDRp'"
+0x1p                  	nil|"g:1: malformed number near '0x1p'"
 .5                    	true|0.5
 5.                    	true|5.0
 1e2                   	true|100.0
@@ -48,9 +48,9 @@ args	1000	nil|"g:1: function or expression needs too many registers near '254'"
 1e                    	nil|"g:1: malformed number near '1e'"
 .5e2                  	true|50.0
 5.e2                  	true|500.0
-0xADDR    	true|9223372036854775807
-0xADDR    	true|-9223372036854775808
-0xADDR    	true|-1
+0x7fffffffffffffff    	true|9223372036854775807
+0x8000000000000000    	true|-9223372036854775808
+0xffffffffffffffff    	true|-1
 9223372036854775807   	true|9223372036854775807
 9223372036854775808   	true|9.2233720368548e+18
 1e400                 	true|inf

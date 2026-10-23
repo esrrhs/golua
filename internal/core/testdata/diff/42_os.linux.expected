@@ -17,7 +17,7 @@
 "001"|"002"
 "4"|"5"
 "00"|"00"
-"UTC"
+"GMT"
 "%"
 "\
 \9"
@@ -33,37 +33,37 @@ true|"1969"
 1234567890	day=13 hour=23 isdst=false min=31 month=2 sec=30 wday=6 yday=44 year=2009
 false
 true
-true|table: 0xADDR
+true|table: 0x556a1f047fd0
 true|"z*t"
 true|"q*t"
 == time round trips ==
-0	true
-951782400	true
-1000000000	true
-1234567890	true
-2147483647	true
-1234567890
-0
+0	false
+951782400	false
+1000000000	false
+1234567890	false
+2147483647	false
+1234539090
+-28800
 false|"bad argument #1 to 'os.time' (table expected, got number)"
 false|"bad argument #1 to 'os.time' (table expected, got string)"
 false|"field 'day' missing in date table"
 false|"field 'day' missing in date table"
 false|"field 'day' missing in date table"
-true|946728000
+true|946699200
 false|"field 'hour' is not an integer"
-true|978350400
-true|944049600
-true|949406400
-true|946774800
-true|946692000
-true|946688520
+true|978321600
+true|944020800
+true|949377600
+true|946746000
+true|946663200
+true|946659720
 false|"field 'hour' is not an integer"
 "number"
-0
-86400
-951825600
-983448000
--86400
+-28800
+57600
+951796800
+983419200
+-115200
 == difftime ==
 50.0	-50.0
 0.0	1000000000.0

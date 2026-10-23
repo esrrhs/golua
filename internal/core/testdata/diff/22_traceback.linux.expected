@@ -1,9 +1,9 @@
-\nstack traceback:\n	22_tr
-stack traceback:\n	22_tra
-stack traceback:\n	22_tra
-hi\nstack traceback:\n	22_
-42\nstack traceback:\n	22_
+\nstack traceback:\n	inter
+stack traceback:\n	intern
+stack traceback:\n	intern
+hi\nstack traceback:\n	int
+42\nstack traceback:\n	int
 boolean
 true
-\nstack traceback:\n	22_tr
-false	22_traceback.lua:25: boom\nstack traceback:\n	22_traceback.lua:27: in function <22_traceback.lua:26>\n	[C]: in function 'error'\n	22_traceback.lua:25: in function <22_traceback.lua:24>\n	[C]: in function 'xpcall'\n	22_traceback.lua:24: in main chunk\n	[C]: in ?
+\nstack traceback:\n	inter
+false	internal/core/testdata/diff/22_traceback.lua:25: boom\nstack traceback:\n	internal/core/testdata/diff/22_traceback.lua:27: in function <internal/core/testdata/diff/22_traceback.lua:26>\n	[C]: in function 'error'\n	internal/core/testdata/diff/22_traceback.lua:25: in function <internal/core/testdata/diff/22_traceback.lua:24>\n	[C]: in function 'xpcall'\n	internal/core/testdata/diff/22_traceback.lua:24: in main chunk\n	[C]: in ?

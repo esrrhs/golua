@@ -13,13 +13,13 @@ m1,m2,f3,inner
 3,3,3,3,3
 == vararg in constructors ==
 3|2
-1|table: 0xADDR
+1|table: 0x55b0ae8726f0
 100
 60|60
 false|"attempt to call a nil value"
 1|2|3
-table: 0xADDR
-table: 0xADDR
+table: 0x55b0ae887ac0
+table: 0x55b0ae886fc0
 3
 2|3
 3
@@ -74,7 +74,7 @@ false|"bad argument #1 to 'math.tointeger' (value expected)"
 "integer"|"float"|nil|nil
 false|"bad argument #1 to 'math.type' (value expected)"
 2.0|true
-true|nan
+true|-nan
 false|"bad argument #1 to 'math.sqrt' (number expected, got string)"
 true|false|false
 false|"bad argument #2 to 'math.ult' (number expected, got no value)"

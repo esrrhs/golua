@@ -64,7 +64,7 @@ true
 true
 false|"internal/core/testdata/diff/71_nextsort.lua:201: invalid order function for sorting"
 false|"internal/core/testdata/diff/71_nextsort.lua:205: boom"
-false|table: 0x55dec1bdd8d0
+false|table: 0x55b62bf5b8d0
 true
 false|"attempt to yield from outside a coroutine"
 nargs	true	ok	2:2<3 2:1<2

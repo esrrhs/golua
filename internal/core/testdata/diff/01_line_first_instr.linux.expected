@@ -1,1 +1,1 @@
-lua: 01_line_first_instr.lua:19: unexpected symbol near '<'
+/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/01_line_first_instr.lua:19: unexpected symbol near '<'

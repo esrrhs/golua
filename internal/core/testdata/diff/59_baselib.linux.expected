@@ -9,7 +9,7 @@ false|nil
 false|nil
 false|42
 false|42
-false|table: 0x55f89778bd40
+false|table: 0x559254631d40
 false|!
 false|true
 false|"x"
@@ -22,7 +22,7 @@ true|false|42
 false|"bad argument #1 to 'pcall' (value expected)"
 true|false|"attempt to call a number value"
 true|false|"internal/core/testdata/diff/59_baselib.lua:55: a"
-true|false|table: 0x55f897789c90
+true|false|table: 0x55925462fc90
 true|false|"y"
 true|false|"H:internal/core/testdata/diff/59_baselib.lua:58: a"
 true|false|"internal/core/testdata/diff/59_baselib.lua:59: a"
@@ -93,7 +93,7 @@ false|"bad argument #1 to 'tostring' (value expected)"
 false|"bad argument #1 to 'rawlen' (table or string expected)"	false|"bad argument #1 to 'rawlen' (table or string expected)"	false|"bad argument #1 to 'rawlen' (table or string expected)"
 1	nil
 false|"bad argument #1 to 'rawget' (table expected, got number)"	true|nil
-table: 0x55f8977897e0	"v"	false|"bad argument #1 to 'rawset' (table expected, got number)"
+table: 0x559254631de0	"v"	false|"bad argument #1 to 'rawset' (table expected, got number)"
 false|"table index is nil"	false|"table index is NaN"
 true|true|true|false|true
 false|"bad argument #2 to 'rawequal' (value expected)"	false|"bad argument #1 to 'rawequal' (value expected)"
@@ -101,14 +101,14 @@ false|"bad argument #2 to 'rawequal' (value expected)"	false|"bad argument #1 to
 "a"|1	nil	false|"invalid key to 'next'"
 false|"bad argument #1 to 'next' (table expected, got number)"	false|"bad argument #1 to 'next' (table expected, got no value)"	true|nil
 1|10	2|20	nil	nil
-true|function: 0x55f8583c01e0|5|0	false|"bad argument #1 to 'ipairs' (value expected)"	true|function: 0x55f8583c01e0|nil|0
-true|function: 0x55f8583c01e0|table: 0x55f897793010|0
+true|function: 0x55922b6941e0|5|0	false|"bad argument #1 to 'ipairs' (value expected)"	true|function: 0x55922b6941e0|nil|0
+true|function: 0x55922b6941e0|table: 0x559254637630|0
 == metatables ==
 "locked"	false|"cannot change a protected metatable"
 false|"bad argument #1 to 'setmetatable' (table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected)"	false|"bad argument #2 to 'setmetatable' (nil or table expected)"
-nil	table: 0x55f89777de50	nil
+nil	table: 0x559254623e50	nil
 false|"bad argument #1 to 'getmetatable' (value expected)"
-table: 0x55f89779b170
+table: 0x55925462f360
 == require through package.preload ==
 "_xy"|true
 true

@@ -12,8 +12,8 @@ false	bad argument #2 to 'setmetatable' (nil or table expected)
 false	bad argument #2 to 'debug.setmetatable' (nil or table expected)
 false	bad argument #2 to 'setmetatable' (nil or table expected)
 false	bad argument #2 to 'debug.setmetatable' (nil or table expected)
-true	table: 0xADDR
-true	table: 0xADDR
+true	table: 0x558f5d069b60
+true	table: 0x558f5d060e00
 false	bad argument #1 to 'coroutine.resume' (thread expected)
 false	bad argument #1 to 'coroutine.status' (thread expected)
 false	attempt to call a nil value
@@ -42,5 +42,5 @@ false	bad argument #1 to '?' (FILE* expected, got function)
 false	bad argument #1 to '?' (FILE* expected, got table)
 false	bad argument #1 to 'io.close' (FILE* expected, got table)
 written through a real handle
-true	file (0xADDR)
+true	file (0x7f1db6b035c0)
 done

@@ -21,6 +21,7 @@
 package core
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Heap addresses differ between the two implementations and cannot be
@@ -42,7 +44,7 @@ var diffAddrRe = regexp.MustCompile(`0x[0-9a-f]+`)
 // per-GOOS golden names cannot sort out: the reference and this port run
 // on the same machine and still disagree.
 func diffNormalise(s string) string {
-	s = diffAddrRe.ReplaceAllString(s, "0xADDR")
+	s = diffAddrRe.ReplaceAllString(s, "<ADDR>")
 	/* The sign of a NaN.  C asks printf, which on glibc writes "-nan"
 	   when the sign bit is set and "nan" when it is not, while Go's
 	   strconv writes neither and fmtNaN (lobject.go) has to guess the
@@ -151,13 +153,16 @@ func diffEnv() []string { return append(os.Environ(), "TZ=UTC") }
 func diffRunCase(t *testing.T, path string) string {
 	t.Helper()
 	bin := diffBuild(t)
-	cmd := &exec.Cmd{
-		Path: bin,
-		Args: []string{"lua", filepath.Base(path)}, /* argv[0] decides the message prefix */
-		Dir:  filepath.Dir(path),
-		Env:  diffEnv(),
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, filepath.Base(path))
+	cmd.Args[0] = "lua" /* argv[0] decides the message prefix */
+	cmd.Dir = filepath.Dir(path)
+	cmd.Env = diffEnv()
 	out, _ := cmd.CombinedOutput() /* the exit status is not part of the golden output */
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Errorf("%s: timed out after 15s (possible infinite loop)", filepath.Base(path))
+	}
 	return string(out)
 }
 

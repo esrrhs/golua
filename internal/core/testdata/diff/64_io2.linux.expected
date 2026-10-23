@@ -11,26 +11,26 @@ x	nil	true	exit	0
 nil	signal	15
 == io.popen, writing ==
 userdata	file
-file (0x5610ccb79e30)	file (0x5610ccb79e30)
+file (0x55f3c368be30)	file (0x55f3c368be30)
 xyz123true	exit	0
 6
 true	exit	0
 true	exit	0
 stored
 == io.popen, refused ==
-true|file (0x5610ccb79e30)
+true|file (0x55f3c368be30)
 false|"bad argument #1 to 'io.popen' (string expected, got no value)"
-true|file (0x5610ccb80770)
+true|file (0x55f3c3692770)
 true|nil|"echo hi: Invalid argument"|22
 true|nil|"echo hi: Invalid argument"|22
-true|file (0x5610ccb80660)
+true|file (0x55f3c3692660)
 == io.tmpfile ==
 userdata	file
-file (0x5610ccb7d480)	0	abc
+file (0x55f3c368f480)	0	abc
 3	3
 true	true
 true|true
-true|file (0x5610ccb7d480)
+true|file (0x55f3c368f480)
 == io.lines with a file name ==
 a,b,c
 a
@@ -42,17 +42,17 @@ true|0
 true|""
 true|0
 false|"cannot open file '/no/such/file/xyz' (No such file or directory)"
-true|function: 0x5610ccb89540
-true|function: 0x5610ccb896c0
+true|function: 0x55f3c369b540
+true|function: 0x55f3c369b6c0
 false|"cannot open file '5' (No such file or directory)"
-true|function: 0x5610ccb89c30
+true|function: 0x55f3c369bc30
 true
 == file methods on a real file ==
 file	0	0
 true	true	true	true
 false|"bad argument #2 to '?' (invalid option 'x')"
 false|"bad argument #2 to '?' (string expected, got no value)"
-file (0x5610ccb89e00)
+file (0x55f3c369be00)
 true
 6	0	nil	Bad file descriptor	9
 false|"bad argument #2 to '?' (invalid format)"

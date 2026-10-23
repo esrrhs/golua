@@ -18,28 +18,28 @@ a=1,b=2
 nil	false|"bad argument #1 to 'next' (table expected, got number)"	false|"invalid key to 'next'"
 1a,2b
 1a
-true|function: 0xADDR|42|0	true|function: 0xADDR|nil|0	true|function: 0xADDR|"x"|0
+true|function: 0x556bfad961e0|42|0	true|function: 0x556bfad961e0|nil|0	true|function: 0x556bfad961e0|"x"|0
 110,220,330,440
-true|function: 0xADDR|42|nil	true|function: 0xADDR|nil|nil
+true|function: 0x556bfad960c0|42|nil	true|function: 0x556bfad960c0|nil|nil
 false|"attempt to call a number value"
 true|1	true|1|2|3
 false|"assertion failed!"	false|"message"
 false|"bad argument #1 to 'assert' (value expected)"	false|nil
 false|"plain"	false|"l0"
-false|"l1"	false|"35_libs.lua:81: l2"
+false|"l1"	false|"internal/core/testdata/diff/35_libs.lua:81: l2"
 false|nil	false|nil
-false|"bad argument #2 to 'error' (number has no integer representation)"	false|"35_libs.lua:83: x"
+false|"bad argument #2 to 'error' (number has no integer representation)"	false|"internal/core/testdata/diff/35_libs.lua:83: x"
 false|"bad argument #1 to 'pcall' (value expected)"	true|false|"in pcall"
 true|false|"attempt to yield from outside a coroutine"
-true|false|"H:35_libs.lua:88: bad"
-true|false|"H:35_libs.lua:89: bad"
+true|false|"H:internal/core/testdata/diff/35_libs.lua:88: bad"
+true|false|"H:internal/core/testdata/diff/35_libs.lua:89: bad"
 true|false|"table"
 false|"bad argument #2 to 'xpcall' (function expected, got number)"	false|"bad argument #2 to 'xpcall' (function expected, got no value)"	false|"bad argument #2 to 'xpcall' (function expected, got no value)"
 0.32996420748531818 0.69063570396974683 0.42248668195679784 0.20626513846218586 0.25012845080345869 0.63655852386727929 0.86362238042056561 0.3016556310467422 0.024923935066908598 0.36499270889908075 0.76538098184391856 0.31786026293411851 0.1357283927500248 0.10674525797367096 0.76067157182842493 0.081672282889485359 0.55095620825886726 0.56465188879519701 0.74327050661668181 0.98176014935597777
 33 70 43 21 26 64 87 31 3 37 77 32 14 11 77 9 56 57 75 99
 0.7635568524710834 0.32907565031200647 0.89714393811300397 0.03317307960242033 0.53457824047654867 0.48373664915561676 0.4380541667342186 0.36743612261489034 0.21651765983551741 0.41348410537466407
-lua: 35_libs.lua:108: bad argument #1 to 'random' (interval is empty)
+/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/35_libs.lua:108: bad argument #1 to 'random' (interval is empty)
 stack traceback:
 	[C]: in function 'math.random'
-	35_libs.lua:108: in main chunk
+	internal/core/testdata/diff/35_libs.lua:108: in main chunk
 	[C]: in ?

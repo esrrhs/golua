@@ -13,13 +13,13 @@ C fn	=[C]	[C]	C	-1	-1	nil		nil
 C fn u	0	true
 main	main	0	0
 names	f1	nil
-level0	true|table: 0x55cdbdf3da90
+level0	true|table: 0x55b82ce99a90
 level99	true|nil
 level-1	true|nil
-level1.0	true|table: 0x55cdbdf3a510
+level1.0	true|table: 0x55b82ce96510
 level1.5	false|"bad argument #1 to 'debug.getinfo' (number has no integer representation)"
-level'1'	true|table: 0x55cdbdf3a830
-no what	true|table: 0x55cdbdf3a9e0
+level'1'	true|table: 0x55b82ce96830
+no what	true|table: 0x55b82ce969e0
 no args	false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
 bad arg	false|"bad argument #1 to 'debug.getinfo' (number expected, got table)"
 bad what	false|"bad argument #2 to 'debug.getinfo' (invalid option)"
@@ -28,7 +28,7 @@ plain	mychunk	[string "mychunk"]	main
 noname	return 1	[string "return 1"]	main
 long	=long	long
 == getlocal / setlocal ==
-locals	a=9,x=1,y=2,out=table: 0x55cdbdf3ff70,i=5	an upvalue
+locals	a=9,x=1,y=2,out=table: 0x55b82ce9bf70,i=5	an upvalue
 setlocal	99
 setlocal oob	true|nil
 setlocal neg	true|nil
@@ -71,7 +71,7 @@ level0	m / stack traceback: / 	[C]: in function 'debug.traceback' / 	internal/co
 level99	m / stack traceback:	1
 level1.5	false|"bad argument #2 to 'debug.traceback' (number has no integer representation)"
 msg num	42 / stack traceback: / 	internal/core/testdata/diff/75_dbgdeep.lua:194: in main chunk / 	[C]: in ?	3
-msg table	true|table: 0x55cdbdf431d0
+msg table	true|table: 0x55b82ce9f1d0
 thread	stack traceback:	0
 thread msg	m / stack traceback:	1
 bad thread	false|"bad argument #2 to 'debug.traceback' (number expected, got string)"
@@ -79,7 +79,7 @@ in coro	true	inner / stack traceback: / 	internal/core/testdata/diff/75_dbgdeep.
 == the rest ==
 registry	table
 reg main	true
-getmetatable	nil	table: 0x55cdbdf2be50	nil
+getmetatable	nil	table: 0x55b82ce87e50	nil
 setmetatable	true	true
 clear	nil
 setmt bad	true|1

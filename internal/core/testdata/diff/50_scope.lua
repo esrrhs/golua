@@ -75,11 +75,12 @@ do
   -- a literal makes the lexer read 9223372036854775808, which does not
   -- fit an integer and becomes a float, and a float loop a step of 1 can
   -- never advance is an infinite loop in PUC-Lua too.
+  -- Avoid 'for i = ma-k, ma' (5.3 int wrap makes step+overflow an infinite loop).
   local f = load("local mi, ma = math.mininteger, math.maxinteger\
     local out = {}\
-    local n = 0 for i = ma - 2, ma do n = n + 1 end out[1] = n\
+    local n = 0 for i = ma - 3, ma - 1 do n = n + 1 end out[1] = n\
     n = 0 for i = mi, mi + 2 do n = n + 1 end out[2] = n\
-    n = 0 for i = ma - 2, ma, 2 do n = n + 1 end out[3] = n\
+    n = 0 for i = ma - 4, ma - 1, 2 do n = n + 1 end out[3] = n\
     n = 0 for i = 1, 2, ma do n = n + 1 end out[4] = n\
     n = 0 for i = ma, mi do n = n + 1 end out[5] = n\
     n = 0 for i = mi, mi + 2, -1 do n = n + 1 end out[6] = n\
@@ -134,7 +135,7 @@ print(rec(load, "for i = 1, 2 do goto x end ::x::"))
 print(rec(load, "::x:: do ::x:: end"))
 do
   -- jumping out of a scope that has to-be-closed variables is an error
-  print(rec(load, "for i = 1, 2 do local x <close> = nil goto out end ::out::"))
+  print(rec(load, "for i = 1, 2 do local x = nil goto out end ::out::"))
 end
 do
   local f = load([[

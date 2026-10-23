@@ -1,4 +1,4 @@
-// Translation of lcorolib.c (PUC-Lua 5.4): the coroutine library.
+// Translation of lcorolib.c (PUC-Lua 5.3.4): the coroutine library.
 //
 // Two things differ from the C source, both forced by the way this port
 // implements coroutines (see lstate.go: each coroutine runs on its own
@@ -22,9 +22,8 @@ package core
 // getco gets the coroutine in the first argument (lcorolib.c getco).
 func coGetCo(L *State) *State {
 	co := L.ToThread(1)
-	if co == nil {
-		L.CheckType(1, LUA_TTHREAD) /* raises "thread expected, got ..." */
-	}
+	/* 5.3.4: luaL_argcheck(L, co, 1, "thread expected") — no ", got TYPE". */
+	L.ArgCheck(co != nil, 1, "thread expected")
 	return co
 }
 
@@ -229,18 +228,10 @@ func coStatus(L *State) int {
 	return 1
 }
 
-// coYieldable is luaB_yieldable (lcorolib.c): with no argument it asks
-// about the running thread, otherwise about the given thread.  The
-// answer is C's 'yieldable', i.e. whether the upper 16 bits of
-// 'nCcalls' are clear: the main thread and any call made through
-// luaD_callnoyield (a metamethod, a 'for' iterator, 'table.sort', a
-// __close handler, ...) are not yieldable.
+// coYieldable is luaB_yieldable (lcorolib.c 5.3.4): no argument; asks
+// whether the running thread is yieldable (upper 16 bits of nCcalls clear).
 func coYieldable(L *State) int {
-	co := L
-	if !L.IsNone(1) {
-		co = coGetCo(L)
-	}
-	L.PushBoolean(yieldable(co))
+	L.PushBoolean(yieldable(L))
 	return 1
 }
 

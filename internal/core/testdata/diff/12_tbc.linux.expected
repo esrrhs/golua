@@ -1,1 +1,1 @@
-lua: 12_tbc.lua:17: unexpected symbol near '<'
+/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/12_tbc.lua:17: unexpected symbol near '<'
