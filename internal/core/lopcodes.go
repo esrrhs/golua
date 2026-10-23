@@ -16,7 +16,7 @@ type Instruction struct {
 	K  int // unused in 5.3; kept for struct compatibility
 }
 
-func newABC(op, a, b, c int) Instruction {
+func newABC(op, a, b, c int, k ...int) Instruction {
 	return Instruction{Op: op, A: a, B: b, C: c}
 }
 

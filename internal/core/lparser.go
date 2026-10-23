@@ -768,6 +768,7 @@ func suffixedexp(ls *LexState, v *expdesc) {
 		switch ls.t.token {
 		case '.':
 			var key expdesc
+			luaK_exp2anyregup(fs, v)
 			luaX_next(ls)
 			checkname(ls, &key)
 			luaK_indexed(fs, v, &key)

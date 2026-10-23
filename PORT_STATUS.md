@@ -7,7 +7,7 @@
 - `lcode.go` / `lparser.go` / `lvm` execute: re-translated for 5.3.4
 - Fastpaths stubbed (disabled)
 - `bit32` library (`lbitlib.go`) wired in `OpenLibs`
-- Smoke: arithmetic, tables, functions, for-loops, if/else, recursion, pcall OK
+- Smoke: arithmetic, tables, field access, functions, for-loops, if/else, recursion, pcall, bit32, string/math OK
 
 ## Remaining
 1. `ldump`/`lundump` still partially 5.4-shaped (varint sizes, constant tags, lineinfo); need full 5.3 fixed-int format + float/int tag swap for binary chunk interchange with PUC 5.3.4
