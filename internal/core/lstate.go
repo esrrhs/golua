@@ -47,20 +47,14 @@ const (
 	CIST_FIN       = 1 << 8 /* call is running a finalizer */
 )
 
-// incnny/decnny manipulate the "non-yieldable" part of nCcalls, which
-// lives in the upper 16 bits (lstate.h).
-//
-// nCcalls is l_uint32 there -- an *unsigned* 32-bit count -- and it has
-// to be: 0xffff0000 does not fit in a signed 32-bit int, so on a 386
-// build the mask itself does not compile.  Unsigned is also what C's
-// own arithmetic on it assumes ('nCcalls += 0x10000' wraps).
-func incnny(L *State) { L.nCcalls += 0x10000 }
+// incnny/decnny bump L.nny (lstate.h 5.3.4: separate unsigned short nny).
+func incnny(L *State) { L.nny++ }
 
-func decnny(L *State) { L.nCcalls -= 0x10000 }
+func decnny(L *State) { L.nny-- }
 
 // yieldable reports whether the thread has no non-yieldable call in the
-// stack (lstate.h).
-func yieldable(L *State) bool { return L.nCcalls&0xffff0000 == 0 }
+// stack (lstate.h 5.3.4: nny == 0).
+func yieldable(L *State) bool { return L.nny == 0 }
 
 func isLua(ci *CallInfo) bool { return ci.callstatus&CIST_LUA != 0 }
 func isLuacode(ci *CallInfo) bool {
@@ -212,7 +206,8 @@ type State struct {
 	concatA, concatB, concatR *TString
 
 	errfunc int    // current error handling function (stack index)
-	nCcalls uint32 // l_uint32: see the note on incnny
+	nCcalls uint16 // number of nested C calls (lstate.h 5.3.4)
+	nny     uint16 // number of non-yieldable calls in stack
 	nci     int
 
 	ciPool []*CallInfo
@@ -420,7 +415,7 @@ func (L *State) growStackNoRaise(n int, raise bool) bool {
 		   using the extra space reserved for errors: it is handling a
 		   stack error and cannot grow any further. */
 		if raise {
-			luaD_errerr(L) /* error inside message handler */
+			luaD_throw(L, LUA_ERRERR) /* error inside message handler */
 		}
 		return false
 	}
@@ -736,10 +731,10 @@ func (L *State) coMain() {
 		var status int
 		var closed bool
 		if req.kind == reqContinue {
-			L.nCcalls = uint32(req.ccalls)
+			L.nCcalls = uint16(req.ccalls)
 			status, closed = L.finishMigrated()
 		} else if req.kind == reqReexec {
-			L.nCcalls = uint32(req.ccalls)
+			L.nCcalls = uint16(req.ccalls)
 			status, closed = L.reexec()
 		} else {
 			status, closed = L.coRun(req.args, req.ccalls)
@@ -810,7 +805,7 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 	   C then bumps 'nCcalls' once more and calls the body with
 	   'ccall(..., 0)', so a running coroutine sits at
 	   getCcalls(from) + 1.  Here luaD_call supplies that +1. */
-	L.nCcalls = uint32(ccalls)
+	L.nCcalls = uint16(ccalls)
 	if L.top == 1 {
 		// function was reset: use the pending function
 		L.stack[0] = L.prevFunc
@@ -892,7 +887,7 @@ func (L *State) Resume(from *State, nargs int) int {
 	co.status = LUA_OK
 	ccalls := 0
 	if from != nil {
-		ccalls = int(from.nCcalls & 0xffff) /* getCcalls(from) */
+		ccalls = int(from.nCcalls) /* getCcalls(from) */
 	}
 	if ccalls >= LUAI_MAXCCALLS {
 		/* C's resume_error: message goes on the resumed thread */
@@ -1048,7 +1043,7 @@ func (L *State) unroll() {
 				n = 0
 			}
 		}
-		luaD_poscall(L, ci, n)
+		luaD_poscall(L, ci, L.top-n, n)
 	}
 }
 
@@ -1094,7 +1089,7 @@ func (L *State) resumeSync(ccalls int) (resp resumeResp) {
 	}
 	if L.fastYield {
 		L.fastYield = false
-		L.nCcalls = uint32(ccalls + 1)
+		L.nCcalls = uint16(ccalls + 1)
 		narg := len(L.co.args)
 		L.checkStack(narg)
 		copy(L.stack[L.top:], L.co.args)
@@ -1115,7 +1110,7 @@ func (L *State) resumeSync(ccalls int) (resp resumeResp) {
 	L.checkStack(n + 1)
 	copy(L.stack[1:], L.co.args)
 	L.top = 1 + n
-	L.nCcalls = uint32(ccalls)
+	L.nCcalls = uint16(ccalls)
 	luaD_call(L, 0, LUA_MULTRET)
 	if L.fastYield {
 		resp.status = LUA_YIELD
@@ -1188,7 +1183,7 @@ func (L *State) finishMigrated() (status int, closed bool) {
 	}
 	ci.migrateFunc = nil
 	n := f(L)
-	luaD_poscall(L, ci, n)
+	luaD_poscall(L, ci, L.top-n, n)
 	L.unroll()
 	L.co.vals = append(L.co.vals[:0], L.stack[:L.top]...)
 	return LUA_OK, false
@@ -1292,7 +1287,7 @@ func (L *State) Yield(nresults int) int {
 	   depth of whoever resumed it *now*: the resumer may be deeper in the
 	   stack than it was when this coroutine started.  'coRun' only runs
 	   once, so the depth is refreshed here. */
-	L.nCcalls = uint32(req.ccalls + 1)
+	L.nCcalls = uint16(req.ccalls + 1)
 	narg := len(req.args)
 	L.checkStack(narg)
 	copy(L.stack[L.top:], req.args)

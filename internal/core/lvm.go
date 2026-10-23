@@ -792,84 +792,85 @@ func luaV_execute(L *State, ci *CallInfo) {
 				b := i.B
 				nresults := i.C - 1
 				if b != 0 {
-					L.top = ra + b
+					L.top = ra + b /* else previous instruction set top */
 				}
 				/* 5.3 RK leaf fast path: only when nargs known (B!=0). */
 				if b != 0 && nresults == 1 && L.hookmask == 0 && fastLeafCall(L, ra, b-1) {
 					break
 				}
 				ci.savedpc = pc
-				if newci := luaD_precall(L, ra, nresults); newci != nil {
-					ci = newci
-					restart = true
-					break loop
-				}
-				/* C/Go call may have installed hooks (setTraps). */
-				trap = ci.trap || L.hookmask != 0
-				if L.fastYield {
-					return
-				}
-			case OP_TAILCALL:
-				/* 5.3.4: a C callee is not actually tailed — precall runs it
-				   like OP_CALL and execution falls through to the RETURN
-				   that the code generator emitted after TAILCALL. A Lua
-				   callee is moved onto this frame (pretailcall) and the
-				   VM restarts. Counting hooks see that extra RETURN for
-				   C callees; matching it matters for debug.sethook. */
-				b := i.B
-				if b != 0 {
-					L.top = ra + b
-				} else {
-					b = L.top - ra
-				}
-				ci.savedpc = pc
-				if cl.p.sizep > 0 {
-					luaF_closeupval(L, base)
-				}
-				fv := &L.stack[ra]
-				switch ttypetag(fv) {
-				case LUA_VCCL, LUA_VLCF:
-					if newci := luaD_precall(L, ra, LUA_MULTRET); newci != nil {
-						ci = newci
-						restart = true
-						break loop
+				if luaD_precall(L, ra, nresults) != 0 { /* C function? */
+					if nresults >= 0 {
+						L.top = ci.top /* adjust results */
 					}
 					trap = ci.trap || L.hookmask != 0
 					if L.fastYield {
 						return
 					}
-					/* fall through to the next opcode (RETURN) */
-				default:
-					if n := luaD_pretailcall(L, ci, ra, b, 0); n < 0 {
-						restart = true
-						break loop
-					} else if L.fastYield {
-						return
-					} else {
-						luaD_poscall(L, ci, n)
-					}
-					if ci.callstatus&CIST_FRESH != 0 {
-						return
-					}
-					ci = ci.prev
+				} else { /* Lua function */
+					ci = L.ci
 					restart = true
-					break loop
+					break loop /* restart luaV_execute over new Lua function */
 				}
-			case OP_RETURN:
-				n := i.B - 1
-				if n < 0 {
-					n = L.top - ra
+			case OP_TAILCALL:
+				/* 5.3.4 lvm.c: precall; if Lua, merge called frame into caller. */
+				b := i.B
+				if b != 0 {
+					L.top = ra + b /* else previous instruction set top */
 				}
 				ci.savedpc = pc
+				if luaD_precall(L, ra, LUA_MULTRET) != 0 { /* C function? */
+					trap = ci.trap || L.hookmask != 0
+					if L.fastYield {
+						return
+					}
+					/* fall through to next opcode (RETURN) like C */
+				} else {
+					/* tail call: put called frame (n) in place of caller one (o) */
+					nci := L.ci /* called frame */
+					oci := nci.prev /* caller frame */
+					nfunc := nci.funcIdx
+					ofunc := oci.funcIdx
+					/* last stack slot filled by 'precall' */
+					lim := nci.base + int(clLvalue(&L.stack[nfunc]).p.numparams)
+					/* close all upvalues from previous call */
+					if cl.p.sizep > 0 {
+						luaF_close(L, oci.base)
+					}
+					/* move new frame into old one */
+					for aux := 0; nfunc+aux < lim; aux++ {
+						L.stack[ofunc+aux] = L.stack[nfunc+aux]
+					}
+					oci.base = ofunc + (nci.base - nfunc) /* correct base */
+					L.top = ofunc + (L.top - nfunc)
+					oci.top = L.top /* correct top */
+					oci.savedpc = nci.savedpc
+					oci.callstatus |= CIST_TAIL /* function was tail called */
+					oci.nExtraArgs = nci.nExtraArgs
+					L.ci = oci /* remove new frame */
+					ci = oci
+					restart = true
+					break loop /* restart luaV_execute over new Lua function */
+				}
+			case OP_RETURN:
+				b := i.B
+				ci.savedpc = pc
 				if cl.p.sizep > 0 {
-					luaF_closeupval(L, base)
+					luaF_close(L, base)
 				}
-				L.top = ra + n
-				luaD_poscall(L, ci, n)
-				if ci.callstatus&CIST_FRESH != 0 {
-					return
+				nres := b - 1
+				if b == 0 {
+					nres = L.top - ra
 				}
-				ci = ci.prev
+				bpos := luaD_poscall(L, ci, ra, nres)
+				if ci.callstatus&CIST_FRESH != 0 { /* local 'ci' still from callee */
+					return /* external invocation: return */
+				}
+				/* invocation via reentry: continue execution */
+				ci = L.ci
+				if bpos != 0 {
+					L.top = ci.top
+				}
 				restart = true
 				break loop
 			case OP_FORLOOP:
@@ -1104,17 +1105,11 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 }
 
 func luaG_tracecall(L *State, ci *CallInfo) bool {
-	ci.trap = true       /* ensure hooks will be checked */
-	if ci.savedpc == 0 { /* first instruction (not resuming)? */
-		/* 5.3: no OP_VARARGPREP. Main chunks and declared-vararg
-		   functions start hooks on the first real instruction; the
-		   5.4 "return false until VARARGPREP" path would leave trap
-		   off for the whole body and silence line hooks (db.lua). */
-		if ci.callstatus&CIST_HOOKYIELD == 0 { /* not yielded? */
-			luaD_hookcall(L, ci) /* check 'call' hook */
-		}
-	}
-	return true /* keep 'trap' on */
+	/* 5.3.4: call hooks run from callhook inside luaD_precall, not here.
+	   Keep trap on so line/count hooks still fire via luaG_traceexec. */
+	ci.trap = true
+	_ = L
+	return true
 }
 
 // getFuncline returns the source line of an instruction (ldebug.c).
@@ -1169,7 +1164,7 @@ func luaG_traceexec(L *State, ci *CallInfo, pc int) bool {
 		L.top = ci.top /* correct top */
 	}
 	if counthook {
-		luaD_hook(L, hookCount, -1, 0, 0) /* call count hook */
+		luaD_hook(L, hookCount, -1) /* call count hook */
 	}
 	if mask&dbMaskLine != 0 {
 		/* 5.3.4 luaG_traceexec: oldpc is a code pointer in C; we keep an
@@ -1187,7 +1182,7 @@ func luaG_traceexec(L *State, ci *CallInfo, pc int) bool {
 			}
 		}
 		if fire {
-			luaD_hook(L, hookLine, newline, 0, 0)
+			luaD_hook(L, hookLine, newline)
 		}
 		L.oldpc = npci /* 'pc' of last call to line hook */
 	}

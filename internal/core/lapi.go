@@ -916,13 +916,13 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 		   5.3.4 has no to-be-closed / __close. */
 		return luaD_pcall(L, func() {
 			luaD_call(L, funcIdx, nresults)
-		}, funcIdx, ef, true)
+		}, funcIdx, ef)
 	}
 	/* the conventional call: C's f_call goes through luaD_pcall, whose
 	   'closepaux' hands 'luaF_close' a 'yy' of 0 */
 	return luaD_pcall(L, func() {
 		luaD_callnoyield(L, funcIdx, nresults)
-	}, funcIdx, ef, false)
+	}, funcIdx, ef)
 }
 
 // LoadBytes compiles a chunk, pushing the resulting function on the stack
