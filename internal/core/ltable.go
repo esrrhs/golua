@@ -73,79 +73,17 @@ func mainpositionTV(L *State, t *Table, key *Value) int {
 	}
 }
 
-// keyisdead is 'keyisdead(n)' of ltable.c: true when the node's key has
-// been turned into a dead key (lgc.c's 'clearkey', and 'removeentry' for
-// a weak table).
-//
-// It must look at the key's type and nothing else.  A node's 'next' is a
-// *chain offset*, and a negative one is ordinary: 'f - mp' is negative
-// whenever the free slot found for a colliding key sits below its main
-// position, which is the common case.  Testing 'next' for a sentinel
-// made any node whose offset happened to be -2 look dead, and 'equalkey'
-// then compared a key of one type against a node holding another -- a
-// closure against a long string, for one -- which is a Go panic inside
-// 'next'.
-func keyisdead(n *node) bool { return n.keytt == LUA_TDEADKEY }
-
-// equalkey reports whether k1 equals the key stored in node n.
-func equalkey(k1 *Value, n *node, deadok bool) bool {
-	if (k1.tt != n.keytt) && !(deadok && keyisdead(n) && iscollectable(k1)) {
-		return false /* cannot be same key */
-	}
-	switch n.keytt {
-	case LUA_VNIL:
-		return true
-	case LUA_TBOOLEAN:
-		return bvalue(k1) == (n.ki != 0)
-	case LUA_VNUMINT:
-		return ivalue(k1) == n.ki
-	case LUA_VNUMFLT:
-		return fltvalue(k1) == math.Float64frombits(uint64(n.ki))
-	case LUA_VLIGHTUSERDATA:
-		return pvalue(k1) == n.kp
-	case ctb(LUA_VLNGSTR):
-		return luaS_eqlngstr(tsvalue(k1), (*TString)(n.kp))
-	case ctb(LUA_VSHRSTR):
-		return luaS_eqshrstr(tsvalue(k1), (*TString)(n.kp))
-	default:
-		return gcvalue(k1) == n.kp
-	}
-}
-
-// luaH_realasize returns the array length (5.3.4 sizearray).
-// In this port t.alimit is always the real length (no 5.4 shrink hint).
-func luaH_realasize(t *Table) uint32 {
-	if isrealasize(t) || ispow2u(t.alimit) {
-		return t.alimit
-	}
-	size := t.alimit
-	size |= (size >> 1)
-	size |= (size >> 2)
-	size |= (size >> 4)
-	size |= (size >> 8)
-	size |= (size >> 16)
-	size++
-	return size
-}
-
-func ispow2u(x uint32) bool { return x != 0 && (x&(x-1)) == 0 }
-
-func limitequalsasize(t *Table) bool { return isrealasize(t) || ispow2u(t.alimit) }
-
-func setlimittosize(t *Table) uint32 {
-	t.alimit = luaH_realasize(t)
-	setrealasize(t)
-	return t.alimit
-}
-
-// getGenericNode looks a key up in the hash part, returning its node index.
-func getGenericNode(L *State, t *Table, key *Value, deadok bool) int {
+// getGenericNode looks a key up in the hash part, returning its node index
+// (ltable.c 5.3.4 getgeneric chain walk; no 5.4 equalkey/deadok).
+func getGenericNode(L *State, t *Table, key *Value) int {
 	if sizenode(t) == 0 {
 		return -1
 	}
 	i := mainpositionTV(L, t, key)
 	for {
-		if equalkey(key, &t.nodes[i], deadok) {
+		var nk Value
+		getnodekey(&nk, &t.nodes[i])
+		if luaV_rawequalobj(&nk, key) {
 			return i
 		}
 		nx := t.nodes[i].next
@@ -156,9 +94,9 @@ func getGenericNode(L *State, t *Table, key *Value, deadok bool) int {
 	}
 }
 
-// getgeneric is the generic get version (ltable.c).
-func getgeneric(L *State, t *Table, key *Value, deadok bool) *Value {
-	if i := getGenericNode(L, t, key, deadok); i >= 0 {
+// getgeneric is the generic get version (ltable.c 5.3.4).
+func getgeneric(L *State, t *Table, key *Value) *Value {
+	if i := getGenericNode(L, t, key); i >= 0 {
 		return &t.nodes[i].val
 	}
 	return &luaO_nilobject
@@ -175,16 +113,15 @@ func arrayindex(k int64) uint32 {
 // luaH_next traverses a table (ltable.c). The key is at 'keyIdx' and the
 // value is written at 'keyIdx + 1'.
 func luaH_next(L *State, t *Table, keyIdx int) bool {
-	asize := luaH_realasize(t)
-	i := findIndex(L, t, &L.stack[keyIdx], asize)
-	for ; i < asize; i++ {
+	i := findIndex(L, t, &L.stack[keyIdx]) /* find original element */
+	for ; i < t.sizearray; i++ { /* try first array part */
 		if !isempty(&t.array[i]) { /* a non-nil entry? */
 			setivalue(&L.stack[keyIdx], int64(i)+1)
 			L.stack[keyIdx+1] = t.array[i]
 			return true
 		}
 	}
-	for j := int(i) - int(asize); j < sizenode(t); j++ {
+	for j := int(i) - int(t.sizearray); j < sizenode(t); j++ { /* hash part */
 		if !isempty(&t.nodes[j].val) {
 			getnodekey(&L.stack[keyIdx], &t.nodes[j])
 			L.stack[keyIdx+1] = t.nodes[j].val
@@ -194,8 +131,10 @@ func luaH_next(L *State, t *Table, keyIdx int) bool {
 	return false
 }
 
-// findIndex returns the traversal index of a key (ltable.c).
-func findIndex(L *State, t *Table, key *Value, asize uint32) uint32 {
+// findIndex returns the traversal index of a key (ltable.c 5.3.4 findindex).
+// Dead keys are matched inline (rawequalobj OR deadvalue==gcvalue), not via
+// the 5.4 equalkey(deadok) helper.
+func findIndex(L *State, t *Table, key *Value) uint32 {
 	if ttisnil(key) {
 		return 0 /* first iteration */
 	}
@@ -203,14 +142,26 @@ func findIndex(L *State, t *Table, key *Value, asize uint32) uint32 {
 	if ttisinteger(key) {
 		i = arrayindex(ivalue(key))
 	}
-	if i != 0 && i-1 < asize {
-		return i /* 'key' is inside the array part */
+	if i != 0 && i <= t.sizearray { /* is 'key' inside array part? */
+		return i /* yes; that's the index */
 	}
-	n := getGenericNode(L, t, key, true)
-	if n < 0 {
-		luaG_runerror(L, "invalid key to 'next'") /* key not found */
+	n := mainpositionTV(L, t, key)
+	for {
+		nd := &t.nodes[n]
+		var nk Value
+		getnodekey(&nk, nd)
+		/* key may be dead already, but it is ok to use it in 'next' */
+		if luaV_rawequalobj(&nk, key) ||
+			(nd.keytt == LUA_TDEADKEY && iscollectable(key) && nd.kp == gcvalue(key)) {
+			/* hash elements are numbered after array ones */
+			return uint32(n+1) + t.sizearray
+		}
+		nx := nd.next
+		if nx == 0 {
+			luaG_runerror(L, "invalid key to 'next'") /* key not found */
+		}
+		n += int(nx)
 	}
-	return uint32(n+1) + asize /* hash elements come after array ones */
 }
 
 // dummyNode is the counterpart of PUC-Lua's static 'dummynode': a one-slot
@@ -269,23 +220,18 @@ func getfreepos(t *Table) int {
 	return -1 /* could not find a free place */
 }
 
-// maskflags is the set of flag bits used for the metamethod cache (ltm.h).
-// Bit 7 is reserved for 'isrealasize', so a new table gets the metamethod
-// bits set ("no metamethods cached as absent yet") but bit 7 clear.
-const maskflags = byte(0x3F)
-
 // luaH_new creates a new table (ltable.c).
 func luaH_new(L *State) *Table {
 	t := &Table{}
-	t.flags = maskflags /* table has no metamethod fields */
+	t.flags = ^byte(0) /* cast_byte(~0): no metamethod fields */
 	t.array = nil
-	t.alimit = 0
+	t.sizearray = 0
 	setnodevector(L, t, 0)
 	return t
 }
 
-// invalidateTMcache invalidates the metamethod cache of a table.
-func invalidateTMcache(t *Table) { t.flags &= ^maskflags }
+// invalidateTMcache invalidates the metamethod cache of a table (ltable.h).
+func invalidateTMcache(t *Table) { t.flags = 0 }
 
 // luaH_free is a no-op: the Go GC reclaims the table (ltable.c).
 func luaH_free(L *State, t *Table) {}
@@ -306,7 +252,7 @@ func luaH_resize(L *State, t *Table, newasize uint32, nhsize uint32) {
 		na := make([]Value, newasize)
 		copy(na, oldArray[:newasize])
 		t.array = na
-		t.alimit = newasize
+		t.sizearray = newasize
 		/* exchange hash parts: the new (empty) one goes to 't' */
 		t.nodes, newt.nodes = newt.nodes, oldNodes
 		t.lsizenode, newt.lsizenode = newt.lsizenode, oldLsizenode
@@ -317,13 +263,11 @@ func luaH_resize(L *State, t *Table, newasize uint32, nhsize uint32) {
 				luaH_setint(L, t, int64(i)+1, &oldArray[i])
 			}
 		}
-		setrealasize(t)
 	} else { /* will array grow? */
 		na := make([]Value, newasize)
 		copy(na, oldArray)
 		t.array = na
-		t.alimit = newasize
-		setrealasize(t)
+		t.sizearray = newasize
 		/* exchange hash parts */
 		t.nodes, newt.nodes = newt.nodes, oldNodes
 		t.lsizenode, newt.lsizenode = newt.lsizenode, oldLsizenode
@@ -377,7 +321,7 @@ func countint(key int64, nums *[MAXABITS + 1]uint32) int {
 func numusearray(t *Table, nums *[MAXABITS + 1]uint32) uint32 {
 	var ause uint32
 	i := uint32(1)
-	asize := t.alimit
+	asize := t.sizearray
 	for lg, ttlg := 0, uint32(1); lg <= MAXABITS; lg, ttlg = lg+1, ttlg*2 {
 		var lc uint32
 		lim := ttlg
@@ -418,7 +362,6 @@ func numusehash(t *Table, nums *[MAXABITS + 1]uint32, pna *uint32) int {
 func rehash(L *State, t *Table, ek *Value) {
 	var nums [MAXABITS + 1]uint32
 	var na uint32
-	setlimittosize(t)
 	na = numusearray(t, &nums)            /* count keys in array part */
 	totaluse := int(na)                   /* all those keys are integer keys */
 	totaluse += numusehash(t, &nums, &na) /* count keys in hash part */
@@ -446,9 +389,6 @@ func luaH_newkey(L *State, t *Table, key, value *Value) {
 			luaG_runerror(L, "table index is NaN")
 			return
 		}
-	}
-	if ttisnil(value) {
-		return /* do not insert nil values */
 	}
 	mp := mainpositionTV(L, t, key)
 	if isdummy(t) || !isempty(&t.nodes[mp].val) { /* main position is taken? */
@@ -486,10 +426,8 @@ func luaH_newkey(L *State, t *Table, key, value *Value) {
 }
 
 // luaH_getint searches an integer key (ltable.c 5.3.4).
-// sizearray is always the real array length (alimit with realasize).
 func luaH_getint(t *Table, key int64) *Value {
-	asize := luaH_realasize(t)
-	if uint64(key)-1 < uint64(asize) { /* 'key' in [1, sizearray]? */
+	if uint64(key)-1 < uint64(t.sizearray) { /* 'key' in [1, sizearray]? */
 		return &t.array[key-1]
 	}
 	/* key is not in the array part; check the hash */
@@ -556,7 +494,7 @@ func luaH_getstrkey(L *State, t *Table, key *TString) *TString {
 	}
 	var ko Value
 	setsvalue(&ko, key)
-	if i := getGenericNode(L, t, &ko, false); i >= 0 {
+	if i := getGenericNode(L, t, &ko); i >= 0 {
 		return (*TString)(t.nodes[i].kp)
 	}
 	return nil
@@ -569,7 +507,7 @@ func luaH_getstr(L *State, t *Table, key *TString) *Value {
 	}
 	var ko Value
 	setsvalue(&ko, key)
-	return getgeneric(L, t, &ko, false)
+	return getgeneric(L, t, &ko)
 }
 
 // luaH_get is the main search function (ltable.c).
@@ -586,7 +524,7 @@ func luaH_get(L *State, t *Table, key *Value) *Value {
 			return luaH_getint(t, k) /* use specialized version */
 		}
 	}
-	return getgeneric(L, t, key, false)
+	return getgeneric(L, t, key)
 }
 
 // luaH_finishset completes a raw set (ltable.c).
@@ -649,12 +587,9 @@ func unboundSearch(t *Table, j uint32) uint32 {
 
 // luaH_getn returns a boundary of the table (ltable.c 5.3.4).
 //
-// 5.3.4 uses sizearray only — no alimit / BITRAS shrinking. '#' must
-// match PUC for the same inserts and deletes, so this follows the C
-// binary search and unbound_search exactly, with luaH_realasize as
-// sizearray.
+// 5.3.4 uses sizearray only — no 5.4 alimit / BITRAS shrinking.
 func luaH_getn(t *Table) uint64 {
-	j := luaH_realasize(t)
+	j := t.sizearray
 	if j > 0 && isempty(&t.array[j-1]) {
 		/* there is a boundary in the array part: (binary) search for it */
 		var i uint32

@@ -14,11 +14,10 @@ import (
 // do not depend on the order keys come out in.
 //
 // It is a fuzz test rather than a fixed case because what it is looking
-// for is a state, not an input: the bug it was written for -- 'keyisdead'
-// answering true for a node whose chain offset was -2 -- only showed up
-// when the hash put a colliding key two slots below its main position,
-// which the per-state seed decides.  A single traversal would pass almost
-// every time.
+// for is a state, not an input: the bug it was written for -- treating
+// chain offset -2 as a dead-key marker -- only showed up when the hash
+// put a colliding key two slots below its main position, which the
+// per-state seed decides.  A single traversal would pass almost every time.
 func TestTableFuzz(t *testing.T) {
 	src, err := os.ReadFile(filepath.Join("testdata", "tablefuzz.lua"))
 	if err != nil {

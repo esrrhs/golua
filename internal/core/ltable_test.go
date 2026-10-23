@@ -7,20 +7,15 @@ import (
 )
 
 // TestNextOverDeletedKeys pins what makes 'next' able to resume from a
-// key that the traversal has just deleted: 'keyisdead' has to look at the
-// key's *type*, and at nothing else.
+// key that the traversal has just deleted.
 //
-// A node's 'next' is a chain offset, and a negative offset is ordinary --
-// 'luaH_newkey' stores 'f - mp', which is negative whenever the free slot
-// it found for a colliding key sits below that key's main position, and
-// that is the common case.  Taking -2 for a "dead" marker therefore made
-// nodes look dead at random, and 'equalkey' -- which lets a dead node
-// match any collectable key, on purpose -- then compared a closure
-// against a node holding a long string.  In C that is a pointer
-// comparison; here it was a type assertion, and it panicked inside
-// 'next'.  Because which node ends up with offset -2 depends on the hash
-// order, it showed up as a failure of nextvar.lua in roughly one run in
-// twenty, and only under '-race' often enough to notice.
+// findindex (5.3.4) matches keys with luaV_rawequalobj, or — for a dead
+// key left by weak-table cleanup — deadvalue==gcvalue.  A node's 'next'
+// is only a chain offset (negative is ordinary: f-mp when the free slot
+// sits below the main position).  An older bug treated next==-2 as a
+// "dead" marker, then compared a closure against a long-string node and
+// panicked inside 'next'.  Hash order made that fail nextvar.lua roughly
+// one run in twenty, more often under '-race'.
 func TestNextOverDeletedKeys(t *testing.T) {
 	/* Before the fix this was a type assertion panic deep inside 'next',
 	   which is not a Lua error and so not something 'pcall' catches:
@@ -71,7 +66,7 @@ func TestNextOverDeletedKeys(t *testing.T) {
 // TestDeadKeyDoesNotBreakTraversal checks the other half: a key that
 // really is dead -- one a weak table has dropped -- still lets 'next'
 // walk past it.  PUC-Lua marks such a node by setting the key's type to
-// LUA_TDEADKEY, which is what 'keyisdead' must answer to.
+// LUA_TDEADKEY (findindex matches deadvalue to the live key pointer).
 func TestDeadKeyDoesNotBreakTraversal(t *testing.T) {
 	t.Skip("Go GC: dead weak keys not guaranteed to clear for traversal test")
 	got := runChunk(t, `

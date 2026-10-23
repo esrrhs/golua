@@ -250,7 +250,7 @@ func vmFastGeti(t *Value, key int64) *Value {
 		return nil
 	}
 	h := hvalue(t)
-	if uint64(key)-1 < uint64(h.alimit) {
+	if uint64(key)-1 < uint64(h.sizearray) {
 		return &h.array[key-1]
 	}
 	return luaH_getint(h, key)
@@ -793,7 +793,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				h := hvalue(&L.stack[ra])
 				last := ((c - 1) * LFIELDS_PER_FLUSH) + n
-				if uint32(last) > h.alimit {
+				if uint32(last) > h.sizearray {
 					luaH_resizearray(L, h, uint32(last))
 				}
 				for ; n > 0; n-- {
