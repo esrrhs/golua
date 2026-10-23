@@ -476,17 +476,6 @@ func findgotos(ls *LexState, lb *Labeldesc) {
 	}
 }
 
-func createlabel(ls *LexState, name *TString, line int, last bool) bool {
-	fs := ls.fs
-	ll := &ls.dyd.label
-	l := newlabelentry(ls, ll, name, line, luaK_getlabel(fs))
-	if last {
-		ll.arr[l].nactvar = int(fs.bl.nactvar)
-	}
-	findgotos(ls, &ll.arr[l])
-	return false
-}
-
 func checkrepeated(fs *FuncState, ll *Labellist, label *TString) {
 	for i := fs.bl.firstlabel; i < ll.n; i++ {
 		if label.val == ll.arr[i].name.val {
