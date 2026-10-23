@@ -213,9 +213,13 @@ func exerciseCAPI(dir string) error {
 
 	for _, what := range []C.int{
 		luaGCStop, luaGCRestart, luaGCCollect, luaGCCount, luaGCCountB,
-		luaGCStep, luaGCSetPause, luaGCSetStepMul, luaGCIsRunning, luaGCGen, luaGCInc,
+		luaGCStep, luaGCSetPause, luaGCSetStepMul, luaGCIsRunning,
 	} {
 		cdl_gc_cb(p, what, 200, 0, 0)
+	}
+	/* 5.3.4: unknown what (incl. 5.4 GCGEN/GCINC) → -1 */
+	if cdl_gc_cb(p, 10, 0, 0, 0) != -1 || cdl_gc_cb(p, 11, 0, 0, 0) != -1 {
+		return fmt.Errorf("lua_gc unknown option")
 	}
 
 	fresh := NewState()

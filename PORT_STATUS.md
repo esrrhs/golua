@@ -37,6 +37,7 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 - LPeg `expected.txt` verified under PUC 5.3.4; `TestLPeg` enabled
 - Stand-alone SIGINT: first INT → `SetInterruptHook` ("interrupted!"); second INT → process exit (Go cannot restore kernel SIG_DFL usefully). Official harness uses Setpgid + group kill on timeout.
 - `collectgarbage`: only `"collect"` / `"count"`; other known option names accepted but ignored (push 0); unknown still `invalid option`; inside `__gc` still nil
+- `coAuxWrap` matches 5.3.4 (no `lua_closethread`); C `lua_gc` unknown/`GCGEN`/`GCINC` → `-1`; no `gcMode` field
 - Bench tables refreshed vs PUC **5.3.4** (Intel Xeon, Go 1.27 cgo, `MIN_MS=600 REPS=7`)
 
 ## Still open (do not thrash)

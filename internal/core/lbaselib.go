@@ -239,14 +239,6 @@ const (
 	baseGCIsRunning
 )
 
-// gcModeInc / gcModeGen are the two collector modes the C API's lua_gc
-// still understands (see cdl_gc_cb).  collectgarbage no longer switches
-// them; the names stay for the C side.
-const (
-	gcModeInc = "incremental"
-	gcModeGen = "generational"
-)
-
 // gcCount is 'lua_gc(L, LUA_GCCOUNT)' expressed the way lbaselib.c does
 // it: Kbytes with a fractional part, i.e. bytes/1024 as a float.
 func gcCount() float64 {
@@ -292,24 +284,6 @@ func baseCollectGarbage(L *State) int {
 		L.PushInteger(0)
 		return 1
 	}
-}
-
-// gcSetParam is 'setgcparam' inside 'lua_gc': the value it is handed
-// replaces the knob -- a 0 is a value like any other, and 'setpause'
-// with no argument really does set the pause to 0 -- and the value the
-// knob had is what is answered.
-func gcSetParam(p *int, v int64) int {
-	prev := *p
-	*p = int(v)
-	return prev
-}
-
-// gcSetMode is 'lua_gc' for LUA_GCGEN and LUA_GCINC: the mode the state
-// was in is answered, and the new one is what is left in it.
-func gcSetMode(L *State, mode string) string {
-	prev := L.g.gcMode
-	L.g.gcMode = mode
-	return prev
 }
 
 // ---------------------------------------------------------------------

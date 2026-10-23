@@ -49,8 +49,8 @@ func index2value(L *State, idx int) *Value {
 }
 
 // stackIndexOf answers the 0-based stack slot an acceptable index names,
-// which is what luaF_* and the to-be-closed list count in: a positive
-// index counts from the frame's own base, a negative one from the top.
+// which is what luaF_* counts in: a positive index counts from the
+// frame's own base, a negative one from the top.
 // It answers -1 for an index that is not a stack slot at all (the
 // registry, or an upvalue).
 func stackIndexOf(L *State, idx int) int {
@@ -624,12 +624,11 @@ func (L *State) GetMetaTable(idx int) bool {
 	return true
 }
 
-// GetUserValue pushes the n-th user value of the userdata at idx.
 // GetUserValue pushes the n-th user value of the full userdata at 'idx'
-// and returns its type, or LUA_TNONE when 'n' is out of range
-// (lua_getiuservalue).  Note that the nil pushed in the failing case is
-// reported as LUA_TNONE, which is what tells 'debug.getuservalue' to
-// return a single nil.
+// and returns its type, or LUA_TNONE when 'n' is out of range.
+// 5.3.4 C lua_getuservalue has no 'n' (always the first); Go keeps 'n'
+// so callers can pass 1. Out-of-range pushes nil and returns LUA_TNONE,
+// which is what tells 'debug.getuservalue' to return a single nil.
 func (L *State) GetUserValue(idx, n int) int {
 	v := index2value(L, idx)
 	if !ttisfulluserdata(v) || n <= 0 {
@@ -899,11 +898,8 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 	}
 	if k && yieldable(L) {
 		/* C's lua_pcallk takes the yieldable path: the call is made
-		   with CIST_YPCALL set and, should it fail, the to-be-closed
-		   variables are closed by 'finishpcallk', whose 'yy' is 1, so a
-		   '__close' there may suspend -- which is what makes
-		   'coroutine.yield' inside the '__close' of a function that
-		   raised work (locals.lua does it three times). */
+		   with CIST_YPCALL set so a 'coroutine.yield' can cross pcall.
+		   5.3.4 has no to-be-closed / __close. */
 		return luaD_pcall(L, func() {
 			luaD_call(L, funcIdx, nresults)
 		}, funcIdx, ef, true)
@@ -1142,7 +1138,7 @@ func (L *State) Status() int { return int(L.status) }
 
 // IsYieldable reports whether the thread can yield (lua_isyieldable).
 // The main thread and any call made through luaD_callnoyield (a
-// metamethod, a 'for' iterator, 'table.sort', a __close handler, ...)
+// metamethod, a 'for' iterator, 'table.sort', ...)
 // are not yieldable.
 func (L *State) IsYieldable() bool { return yieldable(L) }
 

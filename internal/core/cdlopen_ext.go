@@ -42,8 +42,7 @@ const (
 	luaGCSetPause   = 6
 	luaGCSetStepMul = 7
 	luaGCIsRunning  = 9
-	luaGCGen        = 10
-	luaGCInc        = 11
+	/* 5.3.4: no LUA_GCGEN / LUA_GCINC (those are 5.4). */
 
 	luaVersionNum = 503
 )
@@ -771,21 +770,13 @@ func cdl_gc_cb(p *C.lua_State, what, a1, a2, a3 C.int) C.int {
 		return C.int(prev)
 	case luaGCIsRunning:
 		return cBool(!L.g.gcStopped)
-	case luaGCGen:
-		/* C answers the previous mode; 0 is "incremental", 1 "generational" */
-		prev := cBool(L.g.gcMode != gcModeGen)
-		L.g.gcMode = gcModeGen
-		return prev
-	case luaGCInc:
-		prev := cBool(L.g.gcMode == gcModeGen)
-		L.g.gcMode = gcModeInc
-		return prev
+	default:
+		return -1 /* invalid option (lua_gc 5.3.4) */
 	}
-	return 0
 }
 
 // ---------------------------------------------------------------------
-// the rest of lua.h: allocator, upvalues, to-be-closed slots
+// the rest of lua.h: allocator, upvalues
 // ---------------------------------------------------------------------
 
 //export lua_getallocf

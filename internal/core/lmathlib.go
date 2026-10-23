@@ -245,7 +245,7 @@ func mathType(L *State) int {
 }
 
 // ---------------------------------------------------------------------
-// Pseudo-Random Number Generator based on 'xoshiro256**'
+// math.random / math.randomseed (5.3.4 l_rand/l_srand)
 // ---------------------------------------------------------------------
 
 // figs is the number of binary digits in the mantissa of a float64.

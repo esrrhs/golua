@@ -147,7 +147,6 @@ type globalState struct {
 	// write, and Go's collector pays no attention to any of them --
 	// except 'gcStopped', which has an effect of its own: it gates the
 	// step an allocation drives.
-	gcMode    string // "incremental" or "generational"
 	gcStopped bool   // 'gcstp & GCSTPUSR': the program stopped the collector
 	gcPause   int    // 'gcpause': LUAI_GCPAUSE, answered by 'setpause'
 	gcStepMul int    // 'gcstepmul': LUAI_GCMUL, answered by 'setstepmul'
@@ -542,20 +541,12 @@ func NewState() *State {
 	L.baseCI.nresults = 0
 	gcTrackThread(L) /* so that the collector can clear its stale slots */
 
-	/* PUC-Lua declares the incremental mode in 'lua_newstate', but what
-	   'collectgarbage("generational")' reports is 'isdecGCmodegen',
-	   which is also true while 'lastatomic != 0' -- and the
-	   collections of a freshly opened state are always judged "bad",
-	   which sets it.  A fresh state therefore answers
-	   "generational", and only an explicit
-	   'collectgarbage("incremental")' makes it answer "incremental"
-	   (which is why gc.lua switches modes before it asserts). */
 	/* LUAI_GCPAUSE and LUAI_GCMUL: 'setpause' and 'setstepmul' answer
 	   with the value they replaced, so the two are remembered even
-	   though Go's collector pays no attention to them. */
+	   though Go's collector pays no attention to them.  5.3.4 has no
+	   generational/incremental mode switch. */
 	g.gcPause = 200
 	g.gcStepMul = 200 /* LUAI_GCMUL */
-	g.gcMode = gcModeGen
 	g.nilValue = Value{tt: LUA_VNIL}
 	g.strt = newStringTable()
 	g.memErrMsg = luaS_new(L, "not enough memory")
@@ -572,8 +563,8 @@ func NewState() *State {
 	gt := luaH_new(L)
 	sethvalue(&gl, gt)
 	luaH_setint(L, hvalue(&g.registry), 2, &gl)
-	/* luaL_newstate's last act: the default warning function keeps the
-	   warning system off until 'warn("@on")' or the '-W' option. */
+	/* Go-only warnf (5.3.4 has no lua_setwarnf / warn()): default off;
+	   used to route Go-GC __gc failures via Warning. */
 	g.setWarnf(warnfOff)
 	return L
 }
@@ -586,7 +577,7 @@ func (L *State) Close() {
 	caller := L
 	L = L.g.mainthread /* only the main thread can be closed */
 	/* C's close_state (5.3.4): luaF_close on the main stack, then
-	   free. Stop child goroutines; no to-be-closed / __close. */
+	   free. Stop child goroutines (5.3.4 has no to-be-closed). */
 	luaF_close(L, 0)
 	L.closeFinalizers()
 	L.status = LUA_OK
@@ -654,7 +645,7 @@ func (L *State) forceCloseThread() bool {
 		return true
 	}
 	// A synchronous coroutine has no goroutine to signal. lua_close does
-	// not run a child's __close, so marking it dead is the whole of it.
+	// 5.3.4: marking it dead is enough (no child to-be-closed).
 	// A bare coRuntime with sync still false (a test double) keeps the
 	// channel attempt below.
 	if co.sync && !co.live {
@@ -755,9 +746,8 @@ func (L *State) coMain() {
 		}
 		L.dead = true
 		if closed {
-			/* luaE_resetthread leaves the thread with status LUA_OK,
-			   so the error from '__close' is reported only once: a
-			   second 'coroutine.close' succeeds. */
+			/* State.Close / reqClose: mark OK after helper unwind.
+			   5.3.4 has no coroutine.close / to-be-closed. */
 			L.status = LUA_OK
 			co.resp <- resumeResp{status: status, vals: L.co.vals}
 			return
@@ -830,8 +820,8 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 	return status, false
 }
 
-// resetThreadStatus unwinds CallInfo and closes open upvalues (5.3.4 has no
-// luaE_resetthread / to-be-closed). Used when resetting a coroutine helper.
+// resetThreadStatus unwinds CallInfo and closes open upvalues (lfunc
+// luaF_close only — 5.3.4 has no to-be-closed). Used by Close helpers.
 func (L *State) resetThreadStatus(status int) int {
 	ci := &L.baseCI
 	L.ci = ci
@@ -938,8 +928,7 @@ func (L *State) Resume(from *State, nargs int) int {
 		return int(resp.status)
 	}
 	/* error object on the coroutine, as C's lua_resume does. Do not
-	   rewrite the stack: a pending <close> variable may still sit in a
-	   lower slot and must survive until coroutine.close / resetthread. */
+	   rewrite the stack below the error (C leaves lower slots alone). */
 	if len(resp.vals) > 0 {
 		if co.top == 0 || !luaV_rawequalobj(&co.stack[co.top-1], &resp.vals[0]) {
 			co.checkStack(1)
@@ -956,8 +945,7 @@ func (L *State) Resume(from *State, nargs int) int {
 // resumeError is 'resume_error' (ldo.c): it pushes the message on the
 // resumed thread and reports LUA_ERRRUN. co.vals is set so lua_resume's
 // nresults out-parameter is not left holding a prior successful count.
-// The stack below top is left alone so a dead coroutine's pending
-// to-be-closed slots are not destroyed.
+// The stack below top is left alone (C's resume_error does the same).
 func resumeError(L *State, msg string) int {
 	if L == nil {
 		return LUA_ERRRUN
@@ -1408,13 +1396,9 @@ func (L *State) rawRunProtected(f func()) (status int) {
 // warnings (lstate.c)
 // ---------------------------------------------------------------------
 
-// luaE_warning emits one piece of a warning (luaE_warning).
-//
-// The piece is a C string in PUC-Lua: 'lua_warning' takes a
-// 'const char *', and where a warning ends up is a '%s' or a 'strcmp'
-// inside one of the three functions below.  Both stop at the first
-// zero, so 'warn("a\0b")' warns "a" and 'warn("@on\0x")' turns the
-// warnings on — the control is compared as a C string too.
+// luaE_warning emits one piece of a warning (Go-only; 5.3.4 has no
+// lua_warning). Control messages ("@on" / "@off") are compared as C
+// strings (stop at the first NUL).
 func luaE_warning(L *State, msg string, tocont bool) {
 	g := L.g
 	if g.warnf != nil {
@@ -1422,19 +1406,16 @@ func luaE_warning(L *State, msg string, tocont bool) {
 	}
 }
 
-// Warning emits a warning (lua_warning).  Messages that start with '@'
-// and are not continuations are control messages ('@on' / '@off'); the
-// others are written to stderr prefixed with "Lua warning: ".
+// Warning emits a warning (Go-only). Messages that start with '@' and
+// are not continuations are control messages ('@on' / '@off'); others
+// go to stderr prefixed with "Lua warning: " when warnf is on.
 func (L *State) Warning(msg string, tocont bool) {
 	luaE_warning(L, msg, tocont)
 }
 
 // ---------------------------------------------------------------------
-// the default warning functions (lauxlib.c)
-//
-// The warning system is a three-state machine: it is off until
-// 'warn("@on")' (or the '-W' option) turns it on, and a message can be
-// composed of several parts, which the 'tocont' flag announces.
+// the default warning functions (ported from 5.4 lauxlib; Go-only here).
+// Off until Warning("@on") turns it on; 'tocont' composes multi-part msgs.
 // ---------------------------------------------------------------------
 
 // warnCheckControl is checkcontrol: '@off' and '@on' switch the warning
