@@ -18,7 +18,7 @@
 - `funcname` fieldsel uses `luaK_exp2anyregup` before index (method/table function assign)
 
 ## Remaining / known gaps
-1. **Official suite**: ~14/28 identical after this stretch (was ~7). Still diverge: attrib, big, calls (further), closure, db, errors (partial), events, main, nextvar, sort comparison counts, vararg. Not silent — `TestOfficialSuite` fails until greener.
+1. **Official suite**: **15/28 identical** (was ~7 at tip `8a8f434`). Still diverge: attrib, big, closure, db, errors, events, main, nextvar, sort (comparison counts), vararg. Known-diff: all, gc, literals. Not silent — `TestOfficialSuite` fails until greener.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).
