@@ -50,7 +50,7 @@ func TestDirectRemainders(t *testing.T) {
 		co.fastYieldNow(0)
 	}()
 
-	_ = testWarnfSeesUD(L)
+	coverWarnfSeesUD(L)
 
 	// resetThreadStatus more
 	_ = L.resetThreadStatus(LUA_ERRRUN)

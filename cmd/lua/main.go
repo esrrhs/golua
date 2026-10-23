@@ -53,6 +53,14 @@ var pmainArgv []string
 // without terminating the process.
 var exitFunc = os.Exit
 
+// newState creates the interpreter state. Tests may replace it to
+// exercise the "not enough memory" path; default is lua.NewState.
+var newState = lua.NewState
+
+// stdinIsTTYFn is the TTY probe; tests may replace it. Default uses
+// os.Stdin.Stat like lua_stdin_is_tty.
+var stdinIsTTYFn = stdinIsTTYDefault
+
 func main() {
 	exitFunc(pmainDriver(os.Args))
 }
@@ -66,7 +74,7 @@ func main() {
 // reference interpreter's observable behaviour.
 func pmainDriver(argv []string) int {
 	pmainArgv = argv
-	L = lua.NewState() /* create state */
+	L = newState() /* create state */
 	if L == nil {
 		/* lua.c: l_message(argv[0], "cannot create state: not enough memory") */
 		pname := "lua"
@@ -357,7 +365,9 @@ func doLibrary(name string) error {
 
 // stdinIsTTY is lua_stdin_is_tty: without it the interpreter would start
 // a REPL on a redirected standard input.
-func stdinIsTTY() bool {
+func stdinIsTTY() bool { return stdinIsTTYFn() }
+
+func stdinIsTTYDefault() bool {
 	fi, err := os.Stdin.Stat()
 	if err != nil {
 		return false
