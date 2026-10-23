@@ -1,0 +1,226 @@
+== they are all there ==
+atan2	function
+cosh	function
+sinh	function
+tanh	function
+pow	function
+frexp	function
+ldexp	function
+log10	function
+== sinh cosh tanh ==
+sinh	true|0.0
+sinh	true|-0.0
+sinh	true|1.1752011936438
+sinh	true|-1.1752011936438
+sinh	true|3.626860407847
+sinh	true|-3.626860407847
+sinh	true|0.52109530549375
+sinh	true|-0.52109530549375
+sinh	true|20.211290416799
+sinh	true|-20.211290416799
+sinh	true|11013.232874703
+sinh	true|-11013.232874703
+sinh	true|1.3440585709081e+43
+sinh	true|-1.3440585709081e+43
+sinh	true|inf
+sinh	true|-inf
+sinh	true|1e-308
+sinh	true|-1e-308
+sinh	true|1.1169973830809e+308
+sinh	true|-1.1169973830809e+308
+sinh	true|4.1092037307775e+307
+sinh	true|inf
+sinh	true|1e-15
+sinh	true|inf
+sinh	true|-inf
+sinh	true|-nan
+sinh	true|inf
+sinh	true|-inf
+sinh	true|inf
+cosh	true|1.0
+cosh	true|1.0
+cosh	true|1.5430806348152
+cosh	true|1.5430806348152
+cosh	true|3.7621956910836
+cosh	true|3.7621956910836
+cosh	true|1.1276259652064
+cosh	true|1.1276259652064
+cosh	true|20.236013943269
+cosh	true|20.236013943269
+cosh	true|11013.232920103
+cosh	true|11013.232920103
+cosh	true|1.3440585709081e+43
+cosh	true|1.3440585709081e+43
+cosh	true|inf
+cosh	true|inf
+cosh	true|1.0
+cosh	true|1.0
+cosh	true|1.1169973830809e+308
+cosh	true|1.1169973830809e+308
+cosh	true|4.1092037307775e+307
+cosh	true|inf
+cosh	true|1.0
+cosh	true|inf
+cosh	true|inf
+cosh	true|-nan
+cosh	true|inf
+cosh	true|inf
+cosh	true|inf
+tanh	true|0.0
+tanh	true|-0.0
+tanh	true|0.76159415595576
+tanh	true|-0.76159415595576
+tanh	true|0.96402758007582
+tanh	true|-0.96402758007582
+tanh	true|0.46211715726001
+tanh	true|-0.46211715726001
+tanh	true|0.99877824128113
+tanh	true|-0.99877824128113
+tanh	true|0.99999999587769
+tanh	true|-0.99999999587769
+tanh	true|1.0
+tanh	true|-1.0
+tanh	true|1.0
+tanh	true|-1.0
+tanh	true|1e-308
+tanh	true|-1e-308
+tanh	true|1.0
+tanh	true|-1.0
+tanh	true|1.0
+tanh	true|1.0
+tanh	true|1e-15
+tanh	true|1.0
+tanh	true|-1.0
+tanh	true|-nan
+tanh	true|1.0
+tanh	true|-1.0
+tanh	true|1.0
+== the band where exp(|x|) overflows but sinh(x) does not ==
+709	true|4.1092037307775e+307	true|4.1092037307775e+307	true|-4.1092037307775e+307	true|4.1092037307775e+307
+709.5	true|6.7749315965732e+307	true|6.7749315965732e+307	true|-6.7749315965732e+307	true|6.7749315965732e+307
+709.78	true|8.9641139719726e+307	true|8.9641139719726e+307	true|-8.9641139719726e+307	true|8.9641139719726e+307
+709.79	true|9.0542048151523e+307	true|9.0542048151523e+307	true|-9.0542048151523e+307	true|9.0542048151523e+307
+709.8	true|9.1452010863588e+307	true|9.1452010863588e+307	true|-9.1452010863588e+307	true|9.1452010863588e+307
+709.9	true|1.0107010280598e+308	true|1.0107010280598e+308	true|-1.0107010280598e+308	true|1.0107010280598e+308
+710	true|1.1169973830809e+308	true|1.1169973830809e+308	true|-1.1169973830809e+308	true|1.1169973830809e+308
+710.2	true|1.3643036845527e+308	true|1.3643036845527e+308	true|-1.3643036845527e+308	true|1.3643036845527e+308
+710.4	true|1.6663642832806e+308	true|1.6663642832806e+308	true|-1.6663642832806e+308	true|1.6663642832806e+308
+710.47	true|1.7871893267684e+308	true|1.7871893267684e+308	true|-1.7871893267684e+308	true|1.7871893267684e+308
+710.48	true|inf	true|inf	true|-inf	true|inf
+710.5	true|inf	true|inf	true|-inf	true|inf
+711	true|inf	true|inf	true|-inf	true|inf
+800	true|inf	true|inf	true|-inf	true|inf
+== pow ==
+0	1.0 1.0 0.0 inf 0.0 inf 0.0 inf 0.0 0.0 0.0 0.0 inf -nan
+-0.0	1.0 1.0 -0.0 -inf 0.0 inf 0.0 inf -0.0 0.0 0.0 0.0 inf -nan
+1	1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0
+-1	1.0 1.0 -1.0 -1.0 1.0 1.0 -nan -nan -1.0 -nan 1.0 1.0 1.0 -nan
+2	1.0 1.0 2.0 0.5 4.0 0.25 1.4142135623731 0.70710678118655 8.0 1.2598919398737 inf inf 0.0 -nan
+-2	1.0 1.0 -2.0 -0.5 4.0 0.25 -nan -nan -8.0 -nan inf inf 0.0 -nan
+0.5	1.0 1.0 0.5 2.0 0.25 4.0 0.70710678118655 1.4142135623731 0.125 0.79371886457201 0.0 0.0 inf -nan
+-0.5	1.0 1.0 -0.5 -2.0 0.25 4.0 -nan -nan -0.125 -nan 0.0 0.0 inf -nan
+3.7	1.0 1.0 3.7 0.27027027027027 13.69 0.073046018991965 1.9235384061671 0.51987524491004 50.653 1.5466129228197 inf inf 0.0 -nan
+-3.7	1.0 1.0 -3.7 -0.27027027027027 13.69 0.073046018991965 -nan -nan -50.653 -nan inf inf 0.0 -nan
+10	1.0 1.0 10.0 0.1 100.0 0.01 3.1622776601684 0.31622776601684 1000.0 2.1542693374042 inf inf 0.0 -nan
+1e+308	1.0 1.0 1e+308 1e-308 inf 0.0 1e+154 1e-154 inf 4.5331490614641e+102 inf inf 0.0 -nan
+inf	1.0 1.0 inf 0.0 inf 0.0 inf 0.0 inf inf inf inf 0.0 -nan
+-inf	1.0 1.0 -inf -0.0 inf 0.0 inf 0.0 -inf inf inf inf 0.0 -nan
+-nan	1.0 1.0 nan nan -nan -nan -nan -nan nan -nan -nan -nan -nan -nan
+== frexp ==
+0	true|0.0|0
+-0.0	true|-0.0|0
+1	true|0.5|1
+-1	true|-0.5|1
+2	true|0.5|2
+-2	true|-0.5|2
+0.5	true|0.5|0
+-0.5	true|-0.5|0
+3.7	true|0.925|2
+-3.7	true|-0.925|2
+10	true|0.625|4
+-10	true|-0.625|4
+100	true|0.78125|7
+-100	true|-0.78125|7
+1e+308	true|0.5562684646268|1024
+-1e+308	true|-0.5562684646268|1024
+1e-308	true|0.89884656743116|-1023
+-1e-308	true|-0.89884656743116|-1023
+710	true|0.693359375|10
+-710	true|-0.693359375|10
+709	true|0.6923828125|10
+1e+15	true|0.88817841970013|50
+1e-15	true|0.56294995342131|-49
+inf	true|inf|0
+-inf	true|-inf|0
+-nan	true|-nan|0
+9223372036854775807	true|0.5|64
+-9223372036854775808	true|-0.5|64
+9.007199254741e+15	true|0.5|54
+true|0.5|-1073	true|0.0|0
+== ldexp ==
+0	0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0
+-0.0	-0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0 -0.0
+1	1.0 2.0 0.5 4.0 4.5035996273705e+15 9.007199254741e+15 8.9884656743116e+307 inf 1.1125369292536e-308 4.9406564584125e-324 0.0 inf 0.0 0.5 1.0 0.0 0.0 0.0
+-1	-1.0 -2.0 -0.5 -4.0 -4.5035996273705e+15 -9.007199254741e+15 -8.9884656743116e+307 -inf -1.1125369292536e-308 -4.9406564584125e-324 -0.0 -inf -0.0 -0.5 -1.0 -0.0 -0.0 -0.0
+2	2.0 4.0 1.0 8.0 9.007199254741e+15 1.8014398509482e+16 inf inf 2.2250738585072e-308 9.8813129168249e-324 4.9406564584125e-324 inf 0.0 1.0 2.0 0.0 0.0 0.0
+0.5	0.5 1.0 0.25 2.0 2.2517998136852e+15 4.5035996273705e+15 4.4942328371558e+307 8.9884656743116e+307 5.562684646268e-309 0.0 0.0 inf 0.0 0.25 0.5 0.0 0.0 0.0
+-0.5	-0.5 -1.0 -0.25 -2.0 -2.2517998136852e+15 -4.5035996273705e+15 -4.4942328371558e+307 -8.9884656743116e+307 -5.562684646268e-309 -0.0 -0.0 -inf -0.0 -0.25 -0.5 -0.0 -0.0 -0.0
+3.7	3.7 7.4 1.85 14.8 1.6663318621271e+16 3.3326637242542e+16 inf inf 4.1163866382383e-308 1.976262583365e-323 9.8813129168249e-324 inf 0.0 1.85 3.7 0.0 0.0 0.0
+1e+308	1e+308 inf 5e+307 inf inf inf inf inf 1.1125369292536 4.9406564584125e-16 2.4703282292062e-16 inf 0.0 5e+307 1e+308 0.0 0.0 0.0
+inf	inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf inf
+-inf	-inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf -inf
+-nan	-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan -nan
+== log10 ==
+0	true|-inf
+-0.0	true|-inf
+1	true|0.0
+-1	true|nan
+2	true|0.30102999566398
+-2	true|nan
+0.5	true|-0.30102999566398
+-0.5	true|nan
+3.7	true|0.56820172406699
+-3.7	true|nan
+10	true|1.0
+-10	true|nan
+100	true|2.0
+-100	true|nan
+1e+308	true|308.0
+-1e+308	true|nan
+1e-308	true|-308.0
+-1e-308	true|nan
+710	true|2.8512583487191
+-710	true|nan
+709	true|2.8506462351831
+1e+15	true|15.0
+1e-15	true|-15.0
+inf	true|inf
+-inf	true|nan
+-nan	true|-nan
+9223372036854775807	true|18.964889726831
+-9223372036854775808	true|nan
+9.007199254741e+15	true|15.954589770191
+== atan2 ==
+0	0.0 3.1415926535898 0.0 3.1415926535898 0.0 3.1415926535898 0.0 0.0 3.1415926535898 -nan
+-0.0	-0.0 -3.1415926535898 -0.0 -3.1415926535898 -0.0 -3.1415926535898 -0.0 -0.0 -3.1415926535898 -nan
+1	1.5707963267949 1.5707963267949 0.78539816339745 2.3561944901923 0.46364760900081 2.677945044589 1.1071487177941 0.0 3.1415926535898 -nan
+-1	-1.5707963267949 -1.5707963267949 -0.78539816339745 -2.3561944901923 -0.46364760900081 -2.677945044589 -1.1071487177941 -0.0 -3.1415926535898 -nan
+2	1.5707963267949 1.5707963267949 1.1071487177941 2.0344439357957 0.78539816339745 2.3561944901923 1.325817663668 0.0 3.1415926535898 -nan
+-2	-1.5707963267949 -1.5707963267949 -1.1071487177941 -2.0344439357957 -0.78539816339745 -2.3561944901923 -1.325817663668 -0.0 -3.1415926535898 -nan
+0.5	1.5707963267949 1.5707963267949 0.46364760900081 2.677945044589 0.24497866312686 2.8966139904629 0.78539816339745 0.0 3.1415926535898 -nan
+inf	1.5707963267949 1.5707963267949 1.5707963267949 1.5707963267949 1.5707963267949 1.5707963267949 1.5707963267949 0.78539816339745 2.3561944901923 -nan
+-inf	-1.5707963267949 -1.5707963267949 -1.5707963267949 -1.5707963267949 -1.5707963267949 -1.5707963267949 -1.5707963267949 -0.78539816339745 -2.3561944901923 -nan
+-nan	-nan -nan -nan -nan -nan -nan -nan -nan -nan -nan
+1e+308	1.5707963267949 1.5707963267949 1.5707963267949 1.5707963267949 1.5707963267949 1.5707963267949 1.5707963267949 0.0 3.1415926535898 -nan
+== atan2 and atan are the same function ==
+true|0.46364760900081	true|0.46364760900081	true|0.78539816339745
+== argument checks ==
+sinh	false|"bad argument #1 to 'math.sinh' (number expected, got no value)"	false|"bad argument #1 to 'math.sinh' (number expected, got string)"	false|"bad argument #1 to 'math.sinh' (number expected, got nil)"	true|1.1752011936438	false|"bad argument #1 to 'math.sinh' (number expected, got boolean)"	true|1.1752011936438
+cosh	false|"bad argument #1 to 'math.cosh' (number expected, got no value)"	false|"bad argument #1 to 'math.cosh' (number expected, got string)"	false|"bad argument #1 to 'math.cosh' (number expected, got nil)"	true|1.5430806348152	false|"bad argument #1 to 'math.cosh' (number expected, got boolean)"	true|1.5430806348152
+tanh	false|"bad argument #1 to 'math.tanh' (number expected, got no value)"	false|"bad argument #1 to 'math.tanh' (number expected, got string)"	false|"bad argument #1 to 'math.tanh' (number expected, got nil)"	true|0.76159415595576	false|"bad argument #1 to 'math.tanh' (number expected, got boolean)"	true|0.76159415595576
+log10	false|"bad argument #1 to 'math.log10' (number expected, got no value)"	false|"bad argument #1 to 'math.log10' (number expected, got string)"	false|"bad argument #1 to 'math.log10' (number expected, got nil)"	true|0.0	false|"bad argument #1 to 'math.log10' (number expected, got boolean)"	true|0.0
+false|"bad argument #2 to 'math.pow' (number expected, got no value)"	false|"bad argument #1 to 'math.pow' (number expected, got no value)"	false|"bad argument #1 to 'math.pow' (number expected, got string)"	false|"bad argument #2 to 'math.pow' (number expected, got string)"
+false|"bad argument #1 to 'math.frexp' (number expected, got no value)"	false|"bad argument #1 to 'math.frexp' (number expected, got string)"	false|"bad argument #1 to 'math.frexp' (number expected, got nil)"
+false|"bad argument #2 to 'math.ldexp' (number expected, got no value)"	false|"bad argument #1 to 'math.ldexp' (number expected, got string)"	false|"bad argument #2 to 'math.ldexp' (number expected, got string)"
+true|0.78539816339745	true|0.46364760900081
+done

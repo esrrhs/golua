@@ -1,0 +1,63 @@
+== single specifiers ==
+a	"Thu Thu Thu Fri Tue Sun Fri Tue Fri Wed Wed Mon"
+A	"Thursday Thursday Thursday Friday Tuesday Sunday Friday Tuesday Friday Wednesday Wednesday Monday"
+b	"Jan Jan Jan Jan Feb Sep Feb Jan Jan Dec Dec Jan"
+B	"January January January January February September February January January December December January"
+c	"Thu Jan  1 00:00:00 1970 Thu Jan  1 00:00:01 1970 Thu Jan  1 00:00:59 1970 Fri Jan  2 00:00:00 1970 Tue Feb 29 00:00:00 2000 Sun Sep  9 01:46:40 2001 Fri Feb 13 23:31:30 2009 Tue Jan 19 03:14:07 2038 Fri Jan  1 00:00:00 2100 Wed Dec 31 23:59:59 1969 Wed Dec 31 00:00:00 1969 Mon Jan  1 00:00:00 1900"
+C	"19 19 19 19 20 20 20 20 21 19 19 19"
+d	"01 01 01 02 29 09 13 19 01 31 31 01"
+D	"01/01/70 01/01/70 01/01/70 01/02/70 02/29/00 09/09/01 02/13/09 01/19/38 01/01/00 12/31/69 12/31/69 01/01/00"
+e	" 1  1  1  2 29  9 13 19  1 31 31  1"
+F	"1970-01-01 1970-01-01 1970-01-01 1970-01-02 2000-02-29 2001-09-09 2009-02-13 2038-01-19 2100-01-01 1969-12-31 1969-12-31 1900-01-01"
+g	"70 70 70 70 00 01 09 38 99 70 70 00"
+G	"1970 1970 1970 1970 2000 2001 2009 2038 2099 1970 1970 1900"
+h	"Jan Jan Jan Jan Feb Sep Feb Jan Jan Dec Dec Jan"
+H	"00 00 00 00 00 01 23 03 00 23 00 00"
+I	"12 12 12 12 12 01 11 03 12 11 12 12"
+j	"001 001 001 002 060 252 044 019 001 365 365 001"
+m	"01 01 01 01 02 09 02 01 01 12 12 01"
+M	"00 00 00 00 00 46 31 14 00 59 00 00"
+n	"\
+ \
+ \
+ \
+ \
+ \
+ \
+ \
+ \
+ \
+ \
+ \
+"
+p	"AM AM AM AM AM AM PM AM AM PM AM AM"
+r	"12:00:00 AM 12:00:01 AM 12:00:59 AM 12:00:00 AM 12:00:00 AM 01:46:40 AM 11:31:30 PM 03:14:07 AM 12:00:00 AM 11:59:59 PM 12:00:00 AM 12:00:00 AM"
+R	"00:00 00:00 00:00 00:00 00:00 01:46 23:31 03:14 00:00 23:59 00:00 00:00"
+S	"00 01 59 00 00 40 30 07 00 59 00 00"
+t	"\9 \9 \9 \9 \9 \9 \9 \9 \9 \9 \9 \9"
+T	"00:00:00 00:00:01 00:00:59 00:00:00 00:00:00 01:46:40 23:31:30 03:14:07 00:00:00 23:59:59 00:00:00 00:00:00"
+u	"4 4 4 5 2 7 5 2 5 3 3 1"
+U	"00 00 00 00 09 36 06 03 00 52 52 00"
+V	"01 01 01 01 09 36 07 03 53 01 01 01"
+w	"4 4 4 5 2 0 5 2 5 3 3 1"
+W	"00 00 00 00 09 36 06 03 00 52 52 01"
+x	"01/01/70 01/01/70 01/01/70 01/02/70 02/29/00 09/09/01 02/13/09 01/19/38 01/01/00 12/31/69 12/31/69 01/01/00"
+X	"00:00:00 00:00:01 00:00:59 00:00:00 00:00:00 01:46:40 23:31:30 03:14:07 00:00:00 23:59:59 00:00:00 00:00:00"
+y	"70 70 70 70 00 01 09 38 00 69 69 00"
+Y	"1970 1970 1970 1970 2000 2001 2009 2038 2100 1969 1969 1900"
+Z	"GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT GMT"
+%	"% % % % % % % % % % % %"
+== combined ==
+"!%Y-%m-%d"	"2009-02-13"
+"!%H:%M:%S"	"23:31:30"
+"!%A %d %B %Y"	"Friday 13 February 2009"
+"!%c"	"Fri Feb 13 23:31:30 2009"
+"!%x"	"02/13/09"
+"!%X"	"23:31:30"
+"!%I:%M %p"	"11:31 PM"
+"!%j %U %W"	"044 06 06"
+/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/53_date.lua:51: bad argument #1 to 'date' (invalid conversion specifier '%s')
+stack traceback:
+	[C]: in function 'os.date'
+	internal/core/testdata/diff/53_date.lua:51: in main chunk
+	[C]: in ?

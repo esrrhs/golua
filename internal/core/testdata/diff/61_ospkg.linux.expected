@@ -1,0 +1,228 @@
+== os.setlocale ==
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+true|"C"
+false|"bad argument #2 to 'os.setlocale' (invalid option 'bogus')"
+true|nil
+false|"bad argument #2 to 'os.setlocale' (invalid option '5')"
+true|nil
+true|"C"
+== os.time ==
+true|-28800
+true|-28800
+true|951796800
+true|951796800
+"number"
+true|2147454847
+true|-115200
+false|"field 'day' missing in date table"
+true|-28739
+true|31550400
+true|2692800
+true|-2664000
+true|-72000
+true|61200
+true|-28800
+false|"bad argument #1 to 'os.time' (table expected, got number)"
+false|"bad argument #1 to 'os.time' (table expected, got string)"
+== os.date ==
+true|"1970-01-01 00:00:00"
+true|"2033-05-18 03:33:20"
+true|"1969-12-31 23:59:59"
+true|"Thu Thursday Jan January"
+true|"Thu Jan  1 00:00:00 1970"
+true|"01/01/70 00:00:00"
+true|"AM 12"
+true|"001 00 00 4"
+true|"% \
+ \9"
+true|"19 70 1970 70 4 01"
+false|"bad argument #1 to 'os.date' (invalid conversion specifier '%k %l %s')"
+true|"GMT"
+true|"1970"
+true|table: 0x556b808219e0
+true|table: 0x556b80821d80
+true|table: 0x556b808220f0
+false|"time result cannot be represented in this installation"
+false|"time result cannot be represented in this installation"
+true|""
+false|"bad argument #2 to 'os.date' (number expected, got string)"
+true|""
+true|"5"
+false|"bad argument #2 to 'os.date' (number has no integer representation)"
+false|"bad argument #2 to 'os.date' (number has no integer representation)"
+false|"bad argument #1 to 'os.date' (invalid conversion specifier '%Q')"
+== os.difftime / clock / tmpname / getenv ==
+true|50
+true|-50
+false|"bad argument #2 to 'os.difftime' (number expected, got no value)"
+true|50
+false|"bad argument #1 to 'os.difftime' (number expected, got no value)"
+number
+string	true
+string	true
+true|nil
+true|nil
+false|"bad argument #1 to 'os.getenv' (string expected, got no value)"
+true|nil
+== package ==
+"/\
+;\
+?\
+!\
+-\
+"
+"/usr/local/share/lua/5.3/?.lua;/usr/local/share/lua/5.3/?/init.lua;/usr/local/lib/lua/5.3/?.lua;/usr/local/lib/lua/5.3/?/init.lua;./?.lua;./?/init.lua"
+"/usr/local/lib/lua/5.3/?.so;/usr/local/lib/lua/5.3/loadall.so;./?.so"
+table	table	table
+4	function	function	function	function
+function	function
+_G,bit32,coroutine,debug,io,math,os,package,string,table,utf8
+true|nil|"\
+\9no file '/usr/local/share/lua/5.3/no/such/module.lua'\
+\9no file '/usr/local/share/lua/5.3/no/such/module/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/no/such/module.lua'\
+\9no file '/usr/local/lib/lua/5.3/no/such/module/init.lua'\
+\9no file './no/such/module.lua'\
+\9no file './no/such/module/init.lua'"
+true|nil|"\
+\9no file './a.lua'\
+\9no file 'a'"
+true|nil|"\
+\9no file './a.lua'"
+true|nil|"\
+\9no file './a/b.lua'"
+true|nil|"\
+\9no file './a:b.lua'"
+true|nil|""
+true|nil|"\
+\9no file 'a'"
+true|nil|"\
+\9no file '5'"
+false|"bad argument #2 to 'package.searchpath' (string expected, got no value)"
+true|nil|"\
+\9no file '5'"
+== require ==
+false|"module 'no_such_module_xyz' not found:\
+\9no field package.preload['no_such_module_xyz']\
+\9no file '/usr/local/share/lua/5.3/no_such_module_xyz.lua'\
+\9no file '/usr/local/share/lua/5.3/no_such_module_xyz/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/no_such_module_xyz.lua'\
+\9no file '/usr/local/lib/lua/5.3/no_such_module_xyz/init.lua'\
+\9no file './no_such_module_xyz.lua'\
+\9no file './no_such_module_xyz/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/no_such_module_xyz.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './no_such_module_xyz.so'"
+true|table: 0x556b80810b40	true|table: 0x556b80810ef0
+nil
+false|"module 'm1' not found:\
+\9no field package.preload['m1']\
+\9no file './p36dir/m1.lua'\
+\9no file './p36dir/m1/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/m1.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './m1.so'"	false|"module 'm1' not found:\
+\9no field package.preload['m1']\
+\9no file './p36dir/m1.lua'\
+\9no file './p36dir/m1/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/m1.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './m1.so'"
+false|"module 'm2' not found:\
+\9no field package.preload['m2']\
+\9no file './p36dir/m2.lua'\
+\9no file './p36dir/m2/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/m2.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './m2.so'"	false|"module 'm2' not found:\
+\9no field package.preload['m2']\
+\9no file './p36dir/m2.lua'\
+\9no file './p36dir/m2/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/m2.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './m2.so'"
+false|"module 'm3' not found:\
+\9no field package.preload['m3']\
+\9no file './p36dir/m3.lua'\
+\9no file './p36dir/m3/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/m3.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './m3.so'"
+false|"module 'sub/m4' not found:\
+\9no field package.preload['sub/m4']\
+\9no file './p36dir/sub/m4.lua'\
+\9no file './p36dir/sub/m4/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/sub/m4.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './sub/m4.so'"
+false|"module 'sub.m4' not found:\
+\9no field package.preload['sub.m4']\
+\9no file './p36dir/sub/m4.lua'\
+\9no file './p36dir/sub/m4/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/sub/m4.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './sub/m4.so'\
+\9no file '/usr/local/lib/lua/5.3/sub.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './sub.so'"
+false|"module 'bad' not found:\
+\9no field package.preload['bad']\
+\9no file './p36dir/bad.lua'\
+\9no file './p36dir/bad/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/bad.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './bad.so'"
+false|"module 'err' not found:\
+\9no field package.preload['err']\
+\9no file './p36dir/err.lua'\
+\9no file './p36dir/err/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/err.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './err.so'"
+false|"module 'argm' not found:\
+\9no field package.preload['argm']\
+\9no file './p36dir/argm.lua'\
+\9no file './p36dir/argm/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/argm.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './argm.so'"
+nil	nil	nil
+false|"module 'circ1' not found:\
+\9no field package.preload['circ1']\
+\9no file './p36dir/circ1.lua'\
+\9no file './p36dir/circ1/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/circ1.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './circ1.so'"
+false|"bad argument #1 to 'require' (string expected, got no value)"
+false|"module '5' not found:\
+\9no field package.preload['5']\
+\9no file './p36dir/5.lua'\
+\9no file './p36dir/5/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/5.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './5.so'"
+true|"pre:pre1"	true|"pre:pre1"
+true|"already"
+false|"module 'pre3' not found:\
+\9no field package.preload['pre3']\
+\9no file './p36dir/pre3.lua'\
+\9no file './p36dir/pre3/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/pre3.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './pre3.so'"
+false|"module 'pre3' not found:\
+\9no field package.preload['pre3']\
+\9no file './p36dir/pre3.lua'\
+\9no file './p36dir/pre3/init.lua'\
+\9no file '/usr/local/lib/lua/5.3/pre3.so'\
+\9no file '/usr/local/lib/lua/5.3/loadall.so'\
+\9no file './pre3.so'"
+done

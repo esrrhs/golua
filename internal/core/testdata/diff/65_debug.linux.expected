@@ -1,0 +1,122 @@
+== getinfo: who ==
+nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil nil=nil nil=nil nil=nil nil=nil nil=nil nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil=nil nil=nil nil=nil nil=nil nil=nil nil=nil nil=nil
+nil=nil nil=nil
+nil=nil nil=nil
+nil=nil nil=nil
+nil=nil nil=nil
+nil=nil
+nil=nil
+nil=nil
+nil
+nil
+false|"bad argument #1 to 'debug.getinfo' (number expected, got string)"
+false|"bad argument #1 to 'debug.getinfo' (number expected, got table)"
+false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
+false|"bad argument #2 to 'debug.getinfo' (invalid option)"
+false|"bad argument #2 to 'debug.getinfo' (invalid option)"
+== getinfo at a level ==
+nil=nil nil=nil nil=nil	nil=nil nil=nil nil=nil	nil=nil nil=nil nil=nil
+true|"nil=nil nil=nil nil=nil"|"nil=nil nil=nil nil=nil"|"nil=nil nil=nil nil=nil"
+== getinfo of a coroutine ==
+nil=nil nil=nil nil=nil
+nil=nil nil=nil nil=nil
+true|nil
+nil
+true|nil
+== getlocal / setlocal ==
+a	b	c	(*temporary)	nil	nil
+99
+true|"(*temporary)"|true
+false|"bad argument #1 to 'debug.getlocal' (level out of range)"
+true|nil
+true|nil
+false|"bad argument #2 to 'debug.getlocal' (number expected, got string)"
+false|"bad argument #1 to 'debug.setlocal' (level out of range)"
+true|nil
+false|"bad argument #1 to 'debug.setlocal' (number expected, got no value)"
+false|"bad argument #2 to 'debug.getlocal' (number expected, got no value)"
+true|"(*temporary)"|true
+== getupvalue / setupvalue ==
+up	5
+
+
+up	7
+true
+false|"bad argument #1 to 'debug.getupvalue' (function expected, got number)"
+false|"bad argument #2 to 'debug.getupvalue' (number expected, got string)"
+true
+false|"bad argument #1 to 'debug.setupvalue' (function expected, got number)"
+false|"bad argument #2 to 'debug.getupvalue' (number expected, got no value)"
+false|"bad argument #3 to 'debug.setupvalue' (value expected)"
+== getmetatable / setmetatable ==
+nil	table: 0x55cd13577e50	nil
+nil	nil
+table
+table
+table
+true|1
+false|"bad argument #2 to 'debug.setmetatable' (nil or table expected)"
+false|"bad argument #1 to 'debug.getmetatable' (value expected)"
+false|"bad argument #2 to 'debug.setmetatable' (nil or table expected)"
+== getuservalue / setuservalue ==
+nil
+true|nil
+true|nil
+true|nil
+true|file (0x7f21456b05c0)
+false|"bad argument #1 to 'debug.setuservalue' (userdata expected, got number)"
+true|nil
+false|"bad argument #1 to 'debug.setuservalue' (userdata expected, got no value)"
+== traceback ==
+string	stack traceb
+true
+"msg\
+"
+"msg"
+"msg"
+string
+string
+string
+true|"m\
+stack traceback:\
+\9internal/core/testdata/diff/65_debug.lua:78: in function <internal/core/testdata/diff/65_debug.lua:78>"
+true|"5\
+stack traceback:\
+\9[C]: in function 'pcall'\
+\9internal/core/testdata/diff/65_debug.lua:18: in local 'rec'\
+\9internal/core/testdata/diff/65_debug.lua:162: in main chunk\
+\9[C]: in ?"
+false|"bad argument #2 to 'debug.traceback' (number expected, got string)"
+true|table: 0x55cd135867d0
+"m\
+stack traceback:\
+\9[C]: in function 'debug.traceback'\
+\9internal/core/testdata/diff/65_debug.lua:165: in main chunk\
+\9[C]: in ?"
+"m\
+stack traceback:"
+== getregistry ==
+table	thread	table	nil	nil
+true
+true|table: 0x55cd13573b50
+== setcstacklimit ==
+false|"attempt to call a nil value"
+/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/65_debug.lua:176: attempt to call a nil value (field 'setcstacklimit')
+stack traceback:
+	internal/core/testdata/diff/65_debug.lua:176: in main chunk
+	[C]: in ?

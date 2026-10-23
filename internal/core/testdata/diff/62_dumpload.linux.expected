@@ -1,0 +1,82 @@
+== dump of a simple function ==
+162	string
+1b4c7561530019930d0a1a0a0408040808785600000000000000000000002877
+true
+function	3
+7	0	3.0
+== strip ==
+86	162	true
+3
+true
+true
+== what dump refuses ==
+false|"unable to dump given function"
+false|"bad argument #1 to 'string.dump' (function expected, got number)"
+false|"bad argument #1 to 'string.dump' (function expected, got no value)"
+true|"\27LuaS\0\25ì\13\
+\26\
+\4\8\4\8\8xV\0\0\0\0\0\0\0\0\0\0\0(w@\0\0\26\0\0\0\26\0\0\0\2\0\3\3\0\0\0ç@\0\0¶\0\0\1&\0Ä\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+true|"\27LuaS\0\25ì\13\
+\26\
+\4\8\4\8\8xV\0\0\0\0\0\0\0\0\0\0\0(w@\0\0\26\0\0\0\26\0\0\0\2\0\3\3\0\0\0ç@\0\0¶\0\0\1&\0Ä\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+true|"\27LuaS\0\25ì\13\
+\26\
+\4\8\4\8\8xV\0\0\0\0\0\0\0\0\0\0\0(w@\1\9return 1\0\0\0\0\0\0\0\0\0\1\2\3\0\0\0\1\0\0\0&\0\0\1&\0Ä\0\1\0\0\0\19\1\0\0\0\0\0\0\0\1\0\0\0\1\0\0\0\0\0\3\0\0\0\1\0\0\0\1\0\0\0\1\0\0\0\0\0\0\0\1\0\0\0\5_ENV"
+true|"\27LuaS\0\25ì\13\
+\26\
+\4\8\4\8\8xV\0\0\0\0\0\0\0\0\0\0\0(w@\0-@internal/core/testdata/diff/62_dumpload.lua2\0\0\0002\0\0\0\0\0\2\1\0\0\0&\0Ä\0\0\0\0\0\0\0\0\0\0\0\0\0\1\0\0\0002\0\0\0\0\0\0\0\0\0\0\0"
+true|"\27LuaS\0\25ì\13\
+\26\
+\4\8\4\8\8xV\0\0\0\0\0\0\0\0\0\0\0(w@\0-@internal/core/testdata/diff/62_dumpload.lua3\0\0\0003\0\0\0\0\0\2\3\0\0\0\1\0\0\0&\0\0\1&\0Ä\0\1\0\0\0\19\1\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\3\0\0\0003\0\0\0003\0\0\0003\0\0\0\0\0\0\0\0\0\0\0"
+== kinds of function ==
+table: 0x560dbcf2cbc0
+42
+3
+3
+s	1.5	true	nil
+t
+loop
+1
+1024.0
+ab
+7
+xxx
+goto
+9223372036854775807	-9223372036854775808
+false|"internal/core/testdata/diff/62_dumpload.lua:72: in chunk"
+== load ==
+true|function: 0x560dbcf42580
+2
+true|nil|"binary string: truncated precompiled chunk"
+true|nil|"binary string: version mismatch in precompiled chunk"
+true|nil|"[string \"return 1 +\"]:1: unexpected symbol near <eof>"
+true|nil|":1: unexpected symbol near '@'"
+true|nil|"x:1: unexpected symbol near '='"
+true|function: 0x560dbcf43870
+
+true|function: 0x560dbcf39ee0
+function	nil
+true|nil|"attempt to load a binary chunk (mode is 't')"
+true|nil|"attempt to load a text chunk (mode is 'b')"
+true|nil|"attempt to load a text chunk (mode is 'z')"
+true|nil|"attempt to load a binary chunk (mode is 'z')"
+function	function
+true|nil|"attempt to load a text chunk (mode is 'x')"
+true|nil|"attempt to load a text chunk (mode is '5')"
+true|function: 0x560dbcf3a580
+function	function	function
+== load with an environment ==
+nil
+7
+1	1	nil
+table: 0x560dbcf3f110
+true|function: 0x560dbcf3a710
+true|function: 0x560dbcf3e990
+== load of a dumped chunk keeps its upvalues ==
+table: 0x560dbcf2cbc0
+== a chunk written by the reference interpreter ==
+78	true
+nil
+true|nil|"binary string: version mismatch in precompiled chunk"
+false
+done

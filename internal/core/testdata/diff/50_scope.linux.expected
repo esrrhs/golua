@@ -1,0 +1,17 @@
+== repeat sees its own body ==
+4
+3
+true|nil
+== numeric for ==
+1,2,3
+3,2,1
+[]
+0.0,0.5,1.0
+true|function: 0x5621267fe3e0
+true|function: 0x5621267fe770
+true|function: 0x5621267fe8e0
+true|function: 0x5621267fec40
+true|function: 0x5621267fefa0
+true|function: 0x5621267ff300
+true|function: 0x5621267ff660
+true|function: 0x5621267ffbd0

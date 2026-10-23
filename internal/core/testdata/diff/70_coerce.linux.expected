@@ -1,0 +1,56 @@
+== arithmetic on strings ==
+10:float
+10:float
+10.5:float
+16:float
+16:float
+256:float
+100:float
+100:float
+0.5:float
+5:float
+10:float
+10:float
+-10:float
+10:float
+10:float
+10:float
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+ok|
+ok|
+== the same, through concatenation and comparison ==
+"10":string
+"10.0":string
+"0.5":string
+"inf":string
+"-nan":string
+"9223372036854775807":string
+"-9223372036854775808":string
+ok|
+err|attempt to compare string with number
+err|attempt to concatenate a nil value
+err|attempt to concatenate a table value
+err|attempt to get length of a number value
+ok|
+== integer and float distinction ==
+integer	float	nil	nil
+1:integer	1:float	3:float	2:float	3:integer	-4:integer
+2147483648:float	9.2233720368547758e+18:float	0.5:float
+1000000000000000:float	10000000000000000:float	9.2233720368547758e+18:float
+1:integer	1:float	1:integer	-1:integer
+/workspace/lua-sources/lua-5.3.4/src/lua: internal/core/testdata/diff/70_coerce.lua:82: number has no integer representation
+stack traceback:
+	internal/core/testdata/diff/70_coerce.lua:82: in main chunk
+	[C]: in ?
