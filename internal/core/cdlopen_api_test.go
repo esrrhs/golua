@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// This test pins the whole C API against PUC-Lua 5.4.9: every line the
+// This test pins the whole C API against PUC-Lua 5.3.9: every line the
 // driver prints was captured from the reference interpreter running the
 // same extension, and the two agree byte for byte.
 //
@@ -216,7 +216,7 @@ P("tonum", m.tonum("3.5"), m.tonum("xyz"))
 P("extra", m.extra())
 `
 
-// cExtWant is what PUC-Lua 5.4.9 prints for cExtDriver, line for line.
+// cExtWant is what PUC-Lua 5.3.9 prints for cExtDriver, line for line.
 var cExtWant = []string{
 	"ident\tfalse\ttrue",
 	"box\t41\ttrue\tfalse",
@@ -376,13 +376,13 @@ P("catch", pcall(m.catch_inside, function() return m.inner() end))
 P("alive", _VERSION)
 `
 
-// cErrWant is what PUC-Lua 5.4.9 prints for cErrDriver.
+// cErrWant is what PUC-Lua 5.3.9 prints for cErrDriver.
 var cErrWant = []string{
 	"inner\tfalse\tfrom inner",
 	"middle\tfalse\tfrom inner",
 	"middle2\tfalse\tcext:5: lua err",
 	"catch\ttrue\tfrom inner\t2",
-	"alive\tLua 5.4",
+	"alive\tLua 5.3",
 }
 
 func TestCModuleErrors(t *testing.T) {

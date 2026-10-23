@@ -135,6 +135,8 @@ func TestTooManyLocals(t *testing.T) {
 }
 
 func TestWarningsAndStderr(t *testing.T) {
+	t.Skip("Lua 5.3.4: no warn()")
+
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()

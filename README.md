@@ -1,10 +1,10 @@
-# golua — Lua 5.3 in pure Go
+# golua — Lua 5.3.4 in pure Go
 
 [![License](https://img.shields.io/github/license/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Release](https://img.shields.io/github/v/release/esrrhs/golua)](https://github.com/esrrhs/golua/releases)
 
-`golua` is a **line-by-line Go translation of PUC-Lua 5.3.9**. The lexer,
+`golua` is a **line-by-line Go translation of PUC-Lua 5.3.4**. The lexer,
 parser, code generator, VM, standard library, C API and the `lua`/`luac`
 command-line tools all follow the C sources file by file, and their
 behaviour is checked against a reference interpreter built from the same
@@ -17,9 +17,9 @@ The one subsystem that is not translated is the garbage collector:
 
 ## Highlights
 
-- **Complete Lua 5.3** — integer/float subtypes, `//`, bitwise operators,
-  `goto`, `<const>`/`<close>`, varargs, coroutines, metatables, weak
-  tables, and the full standard library.
+- **Complete Lua 5.3.4** — integer/float subtypes, `//`, bitwise operators,
+  `goto`, `bit32`, varargs, coroutines, metatables, weak tables, and the
+  full standard library (no 5.4 `<const>`/`<close>`).
 - **Go API shaped like the C API** — `NewState`, `PushInteger`, `PCall`,
   `GetGlobal`, … The root package re-exports the API with type aliases;
   all implementation lives in `internal/core`.
@@ -126,7 +126,7 @@ gofmt -l .        # must print nothing
 
 The tests are the specification:
 
-- **Official suite** — all 33 files of PUC-Lua 5.3.9's `testes/` run
+- **Official suite** — all 33 files of PUC-Lua 5.3.4's `testes/` run
   through both interpreters and are compared byte for byte. On a cgo
   build 30 match exactly; `gc` and `all` are documented differences (the
   collector itself, and four environment lines), and `heavy` is not run

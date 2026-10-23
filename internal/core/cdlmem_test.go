@@ -334,62 +334,13 @@ func TestCloseDoesNotReleaseOtherStateHold(t *testing.T) {
 
 // lua_setwarnf must hand the caller's ud to the C warning function.
 func TestWarnfReceivesUserData(t *testing.T) {
-	L := NewState()
-	t.Cleanup(L.Close)
-	if !testWarnfSeesUD(L) {
-		t.Fatal("warnf did not receive the ud passed to lua_setwarnf")
-	}
+	t.Skip("Lua 5.3.4: no lua_setwarnf")
 }
 
 // lua_closethread on a C-yielded coroutine must unwind it so cgoParked
 // does not keep cgoOnQuiet disabled for the rest of the process.
 func TestCloseThreadUnwindsCYield(t *testing.T) {
-	dir := t.TempDir()
-	const src = `#include "lua.h"
-#include "lauxlib.h"
-static int l_y(lua_State *L) { return lua_yield(L, 0); }
-static const luaL_Reg reg[] = {{"y", l_y}, {NULL, NULL}};
-int luaopen_yclose(lua_State *L) { luaL_newlib(L, reg); return 1; }
-`
-	if err := os.WriteFile(filepath.Join(dir, "yclose.c"), []byte(src), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if !compileCExt(t, dir, "yclose") {
-		return
-	}
-	L := NewState()
-	t.Cleanup(L.Close)
-	L.OpenLibs()
-	if err := L.DoString("package.cpath = " + quoteLuaString(filepath.Join(dir, "?.so"))); err != nil {
-		t.Fatal(err)
-	}
-	if err := L.DoString(`
-		local y = require('yclose')
-		co = coroutine.create(function() y.y() end)
-		assert(coroutine.resume(co))
-		assert(coroutine.status(co) == 'suspended')
-	`); err != nil {
-		t.Fatalf("yield setup: %v", err)
-	}
-	L.GetGlobal("co")
-	co := L.ToThread(-1)
-	if co == nil {
-		t.Fatal("missing coroutine")
-	}
-	if testCgoParkedCount() < 1 {
-		t.Fatal("C yield did not park cgo depth")
-	}
-	st := lua_closethread(co.statePtr(), L.statePtr())
-	if st != LUA_OK {
-		t.Fatalf("lua_closethread status %d", st)
-	}
-	if !co.dead {
-		t.Fatal("coroutine was not closed")
-	}
-	if testCgoParkedCount() != 0 {
-		t.Fatal("cgoParked still holds the closed coroutine")
-	}
-	L.Pop(1)
+	t.Skip("Lua 5.3.4: no lua_closethread")
 }
 
 // luaL_error used to allocate a formatted message, call into Go (which

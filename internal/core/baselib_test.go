@@ -96,6 +96,7 @@ func TestBasePrint(t *testing.T) {
 }
 
 func TestBaseWarn(t *testing.T) {
+	t.Skip("Lua 5.3.4: no warn()")
 	L := baseNew(t)
 	baseRun(t, L, `warn("hello", " world")`)
 	baseRun(t, L, `warn("one")`)

@@ -1,10 +1,10 @@
-# golua — 纯 Go 版 Lua 5.3
+# golua — 纯 Go 版 Lua 5.3.4
 
 [![License](https://img.shields.io/github/license/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Release](https://img.shields.io/github/v/release/esrrhs/golua)](https://github.com/esrrhs/golua/releases)
 
-`golua` 是 **PUC-Lua 5.3.9 的逐行 Go 直译**。词法分析、语法分析、代码生成、
+`golua` 是 **PUC-Lua 5.3.4 的逐行 Go 直译**。词法分析、语法分析、代码生成、
 虚拟机、标准库、C API 以及 `lua`/`luac` 两个命令行工具都按 C 源码逐文件对应，
 行为则与同一版本源码编译出的参考解释器逐项比对。
 
@@ -15,11 +15,12 @@
 
 ## 特性
 
-- **完整的 Lua 5.3** —— 整数/浮点子类型、`//`、位运算、`goto`、
-  `<const>`/`<close>`、变参、协程、元表、弱表，以及全部标准库。
+- **完整的 Lua 5.3.4** —— 整数/浮点子类型、`//`、位运算、`goto`、
+  `bit32`、变参、协程、元表、弱表，以及全部标准库（无 5.4 的
+  `<const>`/`<close>`）。
 - **沿用 C API 形状的 Go API** —— `NewState`、`PushInteger`、`PCall`、
   `GetGlobal`……根包用类型别名重导出 API，全部实现位于 `internal/core`。
-- **字节码兼容** —— 与 PUC-Lua 5.3.9 相同的二进制 chunk 格式：
+- **字节码兼容** —— 与 PUC-Lua 5.3.4 相同的二进制 chunk 格式：
   `string.dump` 的产物两边都能加载，`luac -l -l` 的 listing 也一致。
 - **可选的 C 模块** —— 带 cgo 构建时，`package.loadlib`/`require` 可以在
   Linux 与 macOS 上加载真实的 C 扩展；`CGO_ENABLED=0` 时是纯 Go 实现，
@@ -117,7 +118,7 @@ gofmt -l .        # 必须无输出
 
 测试就是规格说明：
 
-- **官方套件** —— PUC-Lua 5.3.9 `testes/` 的全部 33 个文件分别喂给两个
+- **官方套件** —— PUC-Lua 5.3.4 `testes/` 的全部 33 个文件分别喂给两个
   解释器，逐字节比对。在带 cgo 的构建上 30 个完全一致；`gc` 与 `all`
   是记录在案的差异（前者测的是收集器本身，后者只差四行环境信息），
   `heavy` 两边都会超时因此不跑。`api.lua` 能对上，但它一条断言也没执行：
