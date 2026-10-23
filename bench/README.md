@@ -19,33 +19,33 @@ Each workload is one function in `suite.lua`. One call is often a few millisecon
 
 ## The run in the root README
 
-Intel Xeon (8 cores), **PUC-Lua 5.3.4** against a cgo build of this tree (Go 1.27). `MIN_MS=600 REPS=7`; every row had `p < 0.01`. Startup CV on the golua side was about 10%; other rows a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
+Intel Xeon (8 cores), **PUC-Lua 5.3.4** against a cgo build of this tree (Go 1.27). `MIN_MS=600 REPS=7`; every row had `p < 0.01`. Startup CV on the golua side was about 15%; other rows a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
 
 | workload | PUC-Lua | golua | ratio | what runs |
 | --- | ---: | ---: | ---: | --- |
-| startup | 1.27 ms | 3.02 ms | 2.38× | a new process, no script body |
-| nop | 23.4 ns | 28.8 ns | 1.23× | `return 0` |
-| intloop | 156 ms | 338 ms | 2.16× | integer sum |
-| floatloop | 225 ms | 549 ms | 2.45× | float multiply-add |
-| bitwise | 233 ms | 613 ms | 2.63× | and, xor, shift |
-| fib | 64.8 ms | 123 ms | 1.89× | recursive Fibonacci |
-| tailcall | 174 ms | 300 ms | 1.73× | countdown tail call |
-| call3 | 231 ms | 445 ms | 1.93× | `return a + b + c` |
-| upvalue | 385 ms | 759 ms | 1.97× | `n = n + 1` |
-| method | 229 ms | 471 ms | 2.06× | `object:add(constant)` |
-| pcall | 108 ms | 199 ms | 1.84× | `pcall` of an identity |
-| global | 175 ms | 407 ms | 2.32× | `_G.g = _G.g + i` |
-| array | 192 ms | 420 ms | 2.19× | dense integer keys |
-| hash | 188 ms | 329 ms | 1.75× | short-string key lookup |
-| metaindex | 141 ms | 263 ms | 1.86× | stable integer field |
-| ipairs | 150 ms | 336 ms | 2.23× | base `ipairs`, dense array |
-| concat | 91.4 ms | 119 ms | 1.31× | loop-invariant `a .. b` |
-| strings | 81.4 ms | 69.6 ms | 0.86× | format, concat, gmatch |
-| sort | 72.1 ms | 40.8 ms | 0.56× | `table.sort`, Lua comparator |
-| yield | 143 ms | 205 ms | 1.44× | `yield` of `1..n`, then sum |
-| alloc | 134 ms | 318 ms | 2.37× | four-element constructor |
+| startup | 1.27 ms | 3.38 ms | 2.67× | a new process, no script body |
+| nop | 24.2 ns | 40.1 ns | 1.66× | `return 0` |
+| intloop | 162 ms | 347 ms | 2.15× | integer sum |
+| floatloop | 226 ms | 520 ms | 2.31× | float multiply-add |
+| bitwise | 229 ms | 698 ms | 3.05× | and, xor, shift |
+| fib | 60.8 ms | 99.6 ms | 1.64× | recursive Fibonacci |
+| tailcall | 154 ms | 278 ms | 1.80× | countdown tail call |
+| call3 | 219 ms | 386 ms | 1.76× | `return a + b + c` |
+| upvalue | 385 ms | 693 ms | 1.80× | `n = n + 1` |
+| method | 232 ms | 403 ms | 1.74× | `object:add(constant)` |
+| pcall | 95.5 ms | 170 ms | 1.78× | `pcall` of an identity |
+| global | 187 ms | 366 ms | 1.96× | `_G.g = _G.g + i` |
+| array | 189 ms | 435 ms | 2.30× | dense integer keys |
+| hash | 219 ms | 400 ms | 1.83× | short-string key lookup |
+| metaindex | 140 ms | 259 ms | 1.85× | stable integer field |
+| ipairs | 146 ms | 361 ms | 2.47× | base `ipairs`, dense array |
+| concat | 89.8 ms | 230 ms | 2.55× | loop-invariant `a .. b` |
+| strings | 81.5 ms | 545 ms | 6.69× | format, concat, gmatch |
+| sort | 72.2 ms | 114 ms | 1.58× | `table.sort`, Lua comparator |
+| yield | 138 ms | 180 ms | 1.30× | `yield` of `1..n`, then sum |
+| alloc | 127 ms | 266 ms | 2.10× | four-element constructor |
 
-Most rows are interpreter-bound and land between about 1.2× and 2.6×. `strings` and `sort` spend most of their time in library code and come out ahead. Process startup is dominated by the Go runtime.
+Most rows are interpreter-bound and land between about 1.6× and 2.5×. `yield` is closest to C; `bitwise` is about 3×. `strings` is the outlier (~6.7×): almost all of the gap is `string.format` allocating an 8 KiB heap buffer on every call (C keeps `LUAL_BUFFERSIZE` on the stack). Process startup is dominated by the Go runtime.
 
 ## run.sh
 

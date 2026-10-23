@@ -160,19 +160,19 @@ One run on an Intel Xeon (8 cores), PUC-Lua **5.3.4** against a cgo build of thi
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 2.38× | global | 2.32× |
-| nop | 1.23× | array | 2.19× |
-| intloop | 2.16× | hash | 1.75× |
-| floatloop | 2.45× | metaindex | 1.86× |
-| bitwise | 2.63× | ipairs | 2.23× |
-| fib | 1.89× | concat | 1.31× |
-| tailcall | 1.73× | strings | 0.86× |
-| call3 | 1.93× | sort | 0.56× |
-| upvalue | 1.97× | yield | 1.44× |
-| method | 2.06× | alloc | 2.37× |
-| pcall | 1.84× |  |  |
+| startup | 2.67× | global | 1.96× |
+| nop | 1.66× | array | 2.30× |
+| intloop | 2.15× | hash | 1.83× |
+| floatloop | 2.31× | metaindex | 1.85× |
+| bitwise | 3.05× | ipairs | 2.47× |
+| fib | 1.64× | concat | 2.55× |
+| tailcall | 1.80× | strings | 6.69× |
+| call3 | 1.76× | sort | 1.58× |
+| upvalue | 1.80× | yield | 1.30× |
+| method | 1.74× | alloc | 2.10× |
+| pcall | 1.78× |  |  |
 
-Most bytecode-heavy rows sit around 1.7–2.6×. `strings` and `sort` are faster here (library work dominates). `startup` pays for the Go runtime.
+Most bytecode-heavy rows sit around 1.6–2.5×. `yield` is closest to C; `bitwise` is about 3×. `strings` is the outlier (~6.7×): almost all of the gap is `string.format` allocating an 8 KiB buffer on every call (C keeps that buffer on the stack). `startup` pays for the Go runtime.
 
 ## Known differences
 

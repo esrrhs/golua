@@ -149,19 +149,19 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 2.38× | global | 2.32× |
-| nop | 1.23× | array | 2.19× |
-| intloop | 2.16× | hash | 1.75× |
-| floatloop | 2.45× | metaindex | 1.86× |
-| bitwise | 2.63× | ipairs | 2.23× |
-| fib | 1.89× | concat | 1.31× |
-| tailcall | 1.73× | strings | 0.86× |
-| call3 | 1.93× | sort | 0.56× |
-| upvalue | 1.97× | yield | 1.44× |
-| method | 2.06× | alloc | 2.37× |
-| pcall | 1.84× |  |  |
+| startup | 2.67× | global | 1.96× |
+| nop | 1.66× | array | 2.30× |
+| intloop | 2.15× | hash | 1.83× |
+| floatloop | 2.31× | metaindex | 1.85× |
+| bitwise | 3.05× | ipairs | 2.47× |
+| fib | 1.64× | concat | 2.55× |
+| tailcall | 1.80× | strings | 6.69× |
+| call3 | 1.76× | sort | 1.58× |
+| upvalue | 1.80× | yield | 1.30× |
+| method | 1.74× | alloc | 2.10× |
+| pcall | 1.78× |  |  |
 
-多数字节码密集行大约 1.7–2.6×。`strings` 与 `sort` 更快（库代码占主导）。`startup` 付的是 Go 运行时的成本。
+多数字节码密集行大约 1.6–2.5×。`yield` 最接近 C；`bitwise` 约 3×。`strings` 是离群值（约 6.7×）：差距几乎全在 `string.format`——每次调用都会在堆上分配 8 KiB 缓冲（C 对应缓冲在栈上）。`startup` 付的是 Go 运行时的成本。
 
 ## 已知差异
 
