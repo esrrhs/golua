@@ -408,11 +408,9 @@ type AbsLineInfo struct {
 
 // Proto is a function prototype (lobject.h).
 type Proto struct {
-	numparams    byte
-	isVararg     byte // C: is_vararg
-	maxstacksize byte
-	fastLeaf     byte // Go SPEC: cached straight-line numeric leaf (not in C)
-
+	numparams       byte
+	isVararg        byte // C: is_vararg
+	maxstacksize    byte
 	sizeupvalues    int
 	sizek           int
 	sizecode        int

@@ -5,12 +5,6 @@
 // forprep counter, floatforloop). ljumptab.h is reference only: Go uses
 // a switch, not a computed-goto dispatch table.
 //
-// Go SPECs (FLAG — see NOTES.md / lvm_fast*.go): integer arith fast paths
-// inside the loop, concat pair cache, luaH_newarray4, and the optional
-// fastLeaf / fastNumericFor / fastCountTail / fastFibCall overlays. Each
-// falls back to the C-shaped path when the pattern or operands do not
-// match, so observable 5.4.9 semantics are preserved.
-//
 // Intentional omissions / adaptations (BRIEF KEEP / NOTES.md):
 //   - GC barriers / checkGC → gcAfterAlloc (Go GC)
 //   - luaV_finishOp absent (goroutine yield; no longjmp out of the loop)
@@ -473,20 +467,6 @@ func luaV_execute(L *State, ci *CallInfo) {
 		if trap {
 			trap = luaG_tracecall(L, ci)
 		}
-		/* A tail-recursive countdown ('return f(n - 1, acc + 1)')
-		   otherwise restarts this loop once per call. Fold it into one
-		   straight iteration and land on its RETURN. */
-		if pc == 0 && !trap && L.hookmask == 0 && len(code) >= 9 && code[0].Op == OP_EQI {
-			if npc, ok := fastCountTail(L, ci, cl, code); ok {
-				pc = npc
-			}
-		}
-		if pc == 0 && !trap && L.hookmask == 0 && len(code) == 15 && code[0].Op == OP_LTI {
-			if npc, ok := fastFibCall(L, ci, cl, code); ok {
-				pc = npc
-			}
-		}
-
 	loop:
 		for {
 			if trap {
@@ -1016,31 +996,6 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_CALL:
 				b := i.B
 				nresults := i.C - 1
-				if b != 0 && nresults == 1 && L.hookmask == 0 {
-					fv := &L.stack[ra]
-					if fv.tt == ctb(LUA_VLCL) {
-						p := clLvalue(fv).p
-						if p.fastLeaf == fastLeafUnknown && constantLeaf(p) {
-							p.fastLeaf = fastLeafConstant
-						}
-						if p.fastLeaf == fastLeafConstant {
-							load := p.code[0]
-							switch load.Op {
-							case OP_LOADI:
-								setivalue(fv, int64(load.B-OFFSET_sBx))
-							case OP_LOADF:
-								setfltvalue(fv, float64(load.B-OFFSET_sBx))
-							case OP_LOADK:
-								*fv = p.k[load.B]
-							}
-							L.top = ra + 1
-							break
-						}
-					}
-					if fastLeafCall(L, ra, b-1) {
-						break
-					}
-				}
 				if b != 0 {
 					L.top = ra + b
 				}
@@ -1177,10 +1132,6 @@ func luaV_execute(L *State, ci *CallInfo) {
 				savestate(L, ci, pc)
 				if forprep(L, ra) {
 					pc += i.B + 1 /* skip the loop */
-				} else if npc, ok := fastNumericFor(L, ci, code, k, pc, i.B, i.A); ok {
-					/* The whole loop ran against a register file, or it
-					   bailed at npc and the stack already matches. */
-					pc = npc
 				}
 			case OP_TFORPREP:
 				luaF_newtbcupval(L, ra+3)
