@@ -429,18 +429,6 @@ func luaV_execute(L *State, ci *CallInfo) {
 		if trap {
 			trap = luaG_tracecall(L, ci)
 		}
-		/* A tail-recursive countdown otherwise restarts this loop once
-		   per call. Fold the recognised 5.3.4 shape into one iteration. */
-		if pc == 0 && !trap && L.hookmask == 0 && len(code) >= 8 && code[0].Op == OP_EQ {
-			if npc, ok := fastCountTail(L, ci, cl, code); ok {
-				pc = npc
-			}
-		}
-		if pc == 0 && !trap && L.hookmask == 0 && len(code) >= 11 && code[0].Op == OP_LT {
-			if npc, ok := fastFibCall(L, ci, cl, code); ok {
-				pc = npc
-			}
-		}
 	loop:
 		for {
 			/* 5.3 has no trap bit: vmfetch checks hookmask every
@@ -722,7 +710,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					/* fall through to next opcode (RETURN) like C */
 				} else {
 					/* tail call: put called frame (n) in place of caller one (o) */
-					nci := L.ci     /* called frame */
+					nci := L.ci /* called frame */
 					oci := nci.prev /* caller frame */
 					nfunc := nci.funcIdx
 					ofunc := oci.funcIdx
@@ -802,14 +790,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 			case OP_FORPREP:
 				forprep(L, ra)
-				jump := sBx(i.B)
-				/* After FORPREP, pc is the first body instruction and
-				   jump is the distance to FORLOOP (5.3.4 AsBx). */
-				if npc, ok := fastNumericFor(L, ci, code, k, pc, jump, i.A); ok {
-					pc = npc
-				} else {
-					pc += jump
-				}
+				pc += sBx(i.B)
 			case OP_TFORCALL:
 				cb := ra + 3
 				L.stack[cb+2] = L.stack[ra+2]
@@ -1358,6 +1339,7 @@ func luaV_objlen(L *State, ra int, rb *Value) {
 	}
 	luaT_callTMres(L, tm, rb, rb, ra)
 }
+
 
 func luaG_tracecall(L *State, ci *CallInfo) bool {
 	/* 5.3.4: call hooks run from callhook inside luaD_precall, not here.
