@@ -317,7 +317,13 @@ func luaD_poscall(L *State, ci *CallInfo, firstResult, nres int) int {
 			firstResult = fr
 		}
 		if prev := ci.prev; prev != nil && isLua(prev) {
-			L.oldpc = prev.savedpc /* 'oldpc' for caller function */
+			/* C stores Instruction* (= next pc); Go's oldpc is pcRel-style
+			   (index of last traced insn). pcRel(savedpc) == savedpc-1. */
+			if prev.savedpc > 0 {
+				L.oldpc = prev.savedpc - 1
+			} else {
+				L.oldpc = 0
+			}
 		}
 	}
 	res := ci.funcIdx /* res == final position of 1st result */

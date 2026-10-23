@@ -682,13 +682,14 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				ci.savedpc = pc
 				if luaD_precall(L, ra, nresults) != 0 { /* C function? */
+					if L.fastYield {
+						/* yield already set top; do not apply ci.top */
+						return
+					}
 					if nresults >= 0 {
 						L.top = ci.top /* adjust results */
 					}
 					trap = ci.trap || L.hookmask != 0
-					if L.fastYield {
-						return
-					}
 				} else { /* Lua function */
 					ci = L.ci
 					restart = true
@@ -702,10 +703,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				ci.savedpc = pc
 				if luaD_precall(L, ra, LUA_MULTRET) != 0 { /* C function? */
-					trap = ci.trap || L.hookmask != 0
 					if L.fastYield {
 						return
 					}
+					trap = ci.trap || L.hookmask != 0
 					/* fall through to next opcode (RETURN) like C */
 				} else {
 					/* tail call: put called frame (n) in place of caller one (o) */
@@ -1403,24 +1404,17 @@ func luaG_traceexec(L *State, ci *CallInfo, pc int) bool {
 		luaD_hook(L, hookCount, -1) /* call count hook */
 	}
 	if mask&dbMaskLine != 0 {
-		/* 5.3.4 luaG_traceexec: oldpc is a code pointer in C; we keep an
-		   integer pc index. When entering a new function npc==0 always
-		   fires (L.oldpc may still refer to the caller). */
-		npci := pc - 1 /* pcRel: 'pc' relative to the first instruction */
+		/* 5.3.4 luaG_traceexec: C's oldpc is Instruction*; Go stores
+		   pcRel(oldpc) (index of last traced insn). Conditions match C:
+		   npc==0, jump back (npci<=oldpc), or line change. */
+		npci := pc - 1 /* pcRel(ci->u.l.savedpc, p) */
 		newline := getFuncline(p, npci)
-		oldpc := L.oldpc
-		fire := npci == 0 /* enter a new function */
-		if !fire {
-			if oldpc < 0 || oldpc >= len(p.code) {
-				fire = true /* oldpc not in this proto: treat as new line */
-			} else if npci <= oldpc || newline != getFuncline(p, oldpc) {
-				fire = true /* jump back (loop) or enter a new line */
-			}
-		}
-		if fire {
+		if npci == 0 || /* enter a new function */
+			npci <= L.oldpc || /* jump back (loop) */
+			newline != getFuncline(p, L.oldpc) { /* enter a new line */
 			luaD_hook(L, hookLine, newline)
 		}
-		L.oldpc = npci /* 'pc' of last call to line hook */
+		L.oldpc = npci
 	}
 	/* deviation: a hook cannot yield here, so the CIST_HOOKYIELD dance
 	   that ends luaG_traceexec is not needed. */

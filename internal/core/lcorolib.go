@@ -66,7 +66,7 @@ func coAuxResume(L *State, co *State, narg int) int {
 	co.XMove(L, narg)         /* C's auxresume: lua_xmove(L, co, narg) */
 	status := co.Resume(L, narg)
 	if status == LUA_OK || status == LUA_YIELD {
-		nres := len(co.co.vals) /* results left on the coroutine */
+		nres := co.GetTop() /* C auxresume: lua_gettop(co) */
 		if !L.CheckStack(nres + 1) {
 			co.top -= nres /* remove results from the coroutine */
 			if co.top < 0 {

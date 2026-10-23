@@ -536,6 +536,16 @@ func (L *State) installHook(hook func(L *State, ar *dbAr), mask, count int, exte
 		mask = 0
 		hook = nil
 	}
+	/* ldebug.c lua_sethook: if (isLua(L->ci)) L->oldpc = L->ci->u.l.savedpc;
+	   Go oldpc is pcRel-style, so savedpc-1. Avoids a spurious line hook
+	   for the remainder of the current line after debug.sethook. */
+	if ci := L.ci; ci != nil && isLua(ci) {
+		if ci.savedpc > 0 {
+			L.oldpc = ci.savedpc - 1
+		} else {
+			L.oldpc = 0
+		}
+	}
 	L.hook = hook
 	L.basehookcount = count
 	L.hookcount = count /* resethookcount(L) */

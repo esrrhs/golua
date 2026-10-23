@@ -925,6 +925,13 @@ func (L *State) Resume(from *State, nargs int) int {
 			copy(co.stack[1:1+n], resp.vals)
 			setnilvalue(&co.stack[0])
 			co.top = 1 + n
+		} else if resp.status == LUA_OK && co.ci != nil && co.top <= co.ci.funcIdx {
+			/* Empty return: keep base CI dummy function so gettop is 0,
+			   not -1 (C: top == ci->func + 1). */
+			co.top = co.ci.funcIdx + 1
+			if co.ci.funcIdx == 0 {
+				setnilvalue(&co.stack[0])
+			}
 		}
 		return int(resp.status)
 	}
