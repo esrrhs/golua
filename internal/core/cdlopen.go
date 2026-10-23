@@ -44,7 +44,7 @@
 // user values, lua_dump, and the auxiliary functions that go with them.
 // Together they are every name in include/lua.h and include/lauxlib.h
 // except the four that take '...', which cdlbridge.c has instead.
-// cdlopen_api_test.go pins them all against PUC-Lua 5.4.9.
+// cdlopen_api_test.go pins them all against PUC-Lua 5.3.4 where APIs overlap.
 //
 // On lua_error: PUC-Lua longjmps out of the extension's own frame. This
 // port raises instead, and the panic unwinds through that frame -- which
