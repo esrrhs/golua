@@ -474,7 +474,7 @@ func TestMathApproximationsAndSmallAPI(t *testing.T) {
 		t.Fatal("long string")
 	}
 	setabstkey(&v)
-	if v.tt != LUA_VABSTKEY {
+	if !ttisnil(&v) { /* 5.3.4: absent sentinel is nilobject copy / nil tag */
 		t.Fatal("abstkey")
 	}
 	if makevariant(4, 1) != 4|1<<4 {

@@ -82,14 +82,10 @@ func novariant(t int) int      { return t & 0x0F }
 // Variant tags from lobject.h (PUC-Lua 5.3.4 primary names + Go aliases).
 //
 // 5.3.4 number variants: FLT is variant 0, INT is variant 1 (ldump/lundump).
-// Historical port names LUA_VNUM* are aliases with those same values.
-//
-// Remaining tag debt vs 5.3.4 TValue:
-//   - LUA_VFALSE/LUA_VTRUE: 5.3.4 stores booleans as LUA_TBOOLEAN + b in the
-//     value union; this port still uses variant tags (behavior OK via ttype).
-//   - LUA_VEMPTY/LUA_VABSTKEY: unused for table slots after nilobject switch;
-//     kept as numeric constants only.
-//   - LUA_TUPVAL: Go-GC bookkeeping tag, not in 5.3.4 typenames.
+// Booleans: single tag LUA_TBOOLEAN with b in Value.i (0/1), matching
+// setbvalue/bvalue in lobject.h — not 5.4 LUA_VFALSE/LUA_VTRUE variants.
+// Empty/absent table slots: nil / &luaO_nilobject (no VEMPTY/VABSTKEY).
+// LUA_TUPVAL: Go-GC bookkeeping tag, not in 5.3.4 typenames.
 const (
 	/* 5.3.4 primary */
 	LUA_TNUMFLT = LUA_TNUMBER | (0 << 4) // 3  float
@@ -101,12 +97,7 @@ const (
 	LUA_TCCL    = LUA_TFUNCTION | (2 << 4) // 38
 
 	/* aliases used across the port */
-	LUA_VNIL     = LUA_TNIL + 0<<4 // 0
-	LUA_VEMPTY   = LUA_TNIL + 1<<4 // 16 — unused (empty slots are nil)
-	LUA_VABSTKEY = LUA_TNIL + 2<<4 // 32 — unused (absent is &luaO_nilobject)
-
-	LUA_VFALSE = LUA_TBOOLEAN + 0<<4 // 1 — 5.4-style; debt vs bvalue union
-	LUA_VTRUE  = LUA_TBOOLEAN + 1<<4 // 17
+	LUA_VNIL = LUA_TNIL + 0<<4 // 0
 
 	LUA_VLIGHTUSERDATA = LUA_TLIGHTUSERDATA + 0<<4 // 2
 
@@ -202,12 +193,13 @@ func isabstkey(v *Value) bool { return v == &luaO_nilobject }
 // isempty reports a nil value (5.3.4 empty slots are nil).
 func isempty(v *Value) bool { return ttisnil(v) }
 
-func ttisboolean(v *Value) bool { return ttype(v) == LUA_TBOOLEAN }
-func ttisfalse(v *Value) bool   { return v.tt == LUA_VFALSE }
-func ttistrue(v *Value) bool    { return v.tt == LUA_VTRUE }
-func isFalse(v *Value) bool     { return ttisfalse(v) || ttisnil(v) }
-func l_isfalse(v *Value) bool    { return isFalse(v) }
-func bvalue(v *Value) bool      { return v.tt == LUA_VTRUE }
+func ttisboolean(v *Value) bool { return v.tt == LUA_TBOOLEAN } /* checktag LUA_TBOOLEAN */
+func ttisfalse(v *Value) bool   { return ttisboolean(v) && v.i == 0 }
+func ttistrue(v *Value) bool    { return ttisboolean(v) && v.i != 0 }
+/* l_isfalse: nil or boolean false (lobject.h). */
+func isFalse(v *Value) bool  { return ttisnil(v) || (ttisboolean(v) && v.i == 0) }
+func l_isfalse(v *Value) bool { return isFalse(v) }
+func bvalue(v *Value) bool   { return v.i != 0 } /* val_(o).b when ttisboolean */
 
 func ttisnumber(v *Value) bool  { return ttype(v) == LUA_TNUMBER }
 func ttisinteger(v *Value) bool { return v.tt == LUA_VNUMINT }
@@ -265,8 +257,9 @@ func iscollectable(v *Value) bool { return v.tt&BIT_ISCOLLECTABLE != 0 }
 func setnilvalue(v *Value) { *v = Value{tt: LUA_TNIL} }
 func setempty(v *Value)    { setnilvalue(v) } /* 5.3.4: empty == nil */
 func setabstkey(v *Value)  { *v = luaO_nilobject } /* rarely used; prefer &luaO_nilobject */
-func setbfvalue(v *Value)  { *v = Value{tt: LUA_VFALSE} }
-func setbtvalue(v *Value)  { *v = Value{tt: LUA_VTRUE, i: 1} }
+/* setbvalue: LUA_TBOOLEAN + b in i (lobject.h setbvalue). */
+func setbfvalue(v *Value) { *v = Value{tt: LUA_TBOOLEAN, i: 0} }
+func setbtvalue(v *Value) { *v = Value{tt: LUA_TBOOLEAN, i: 1} }
 func setbvalue(v *Value, b bool) {
 	if b {
 		setbtvalue(v)

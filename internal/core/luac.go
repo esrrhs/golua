@@ -331,10 +331,12 @@ func (c *luac) printConstant(f *Proto, i int) {
 	switch ttypetag(o) {
 	case LUA_VNIL:
 		fmt.Fprint(c.out, "nil")
-	case LUA_VFALSE:
-		fmt.Fprint(c.out, "false")
-	case LUA_VTRUE:
-		fmt.Fprint(c.out, "true")
+	case LUA_TBOOLEAN:
+		if bvalue(o) {
+			fmt.Fprint(c.out, "true")
+		} else {
+			fmt.Fprint(c.out, "false")
+		}
 	case LUA_VNUMFLT:
 		s := fmtFloat(fltvalue(o)) /* LUA_NUMBER_FMT: "%.14g" */
 		fmt.Fprint(c.out, s)

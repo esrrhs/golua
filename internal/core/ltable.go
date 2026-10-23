@@ -61,10 +61,11 @@ func mainpositionTV(L *State, t *Table, key *Value) int {
 		return hashstr(t, tsvalue(key))
 	case LUA_VLNGSTR:
 		return hashpow2(t, luaS_hashlongstr(L, tsvalue(key)))
-	case LUA_VFALSE:
+	case LUA_TBOOLEAN:
+		if bvalue(key) {
+			return hashboolean(t, 1)
+		}
 		return hashboolean(t, 0)
-	case LUA_VTRUE:
-		return hashboolean(t, 1)
 	case LUA_VLIGHTUSERDATA:
 		return hashpointer(t, pvalue(key))
 	default:
@@ -92,8 +93,10 @@ func equalkey(k1 *Value, n *node, deadok bool) bool {
 		return false /* cannot be same key */
 	}
 	switch n.keytt {
-	case LUA_VNIL, LUA_VFALSE, LUA_VTRUE:
+	case LUA_VNIL:
 		return true
+	case LUA_TBOOLEAN:
+		return bvalue(k1) == (n.ki != 0)
 	case LUA_VNUMINT:
 		return ivalue(k1) == n.ki
 	case LUA_VNUMFLT:

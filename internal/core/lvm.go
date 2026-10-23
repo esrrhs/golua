@@ -1142,8 +1142,10 @@ func luaV_equalobj(L *State, t1, t2 *Value) bool {
 	}
 	/* values have the same type and the same variant */
 	switch ttypetag(t1) {
-	case LUA_VNIL, LUA_VFALSE, LUA_VTRUE:
+	case LUA_VNIL:
 		return true
+	case LUA_TBOOLEAN:
+		return bvalue(t1) == bvalue(t2)
 	case LUA_VNUMINT:
 		return ivalue(t1) == ivalue(t2)
 	case LUA_VNUMFLT:
