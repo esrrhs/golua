@@ -437,7 +437,9 @@ func luaG_concaterror(L *State, p1, p2 *Value) {
 }
 
 func luaG_opinterror(L *State, p1, p2 *Value, msg string) {
-	if !ttisnumber(p1) { /* first operand is wrong? */
+	/* 5.3: tonumber (string coerce), not ttisnumber */
+	var temp float64
+	if !luaV_tonumber_(L, p1, &temp) { /* first operand is wrong? */
 		p2 = p1 /* now second is wrong */
 	}
 	luaG_typeerror(L, p2, msg)
@@ -453,7 +455,8 @@ func luaG_opinterror(L *State, p1, p2 *Value, msg string) {
 // "number (field 'huge') has no integer representation".
 func luaG_tointerror(L *State, p1, p2 *Value) {
 	var temp int64
-	if !tointegerns(p1, &temp) {
+	/* 5.3: tointeger coerces strings; 5.4 used tointegerns */
+	if !tointeger(L, p1, &temp) {
 		p2 = p1 /* first operand is wrong */
 	}
 	luaG_runerror(L, "number%s has no integer representation", varinfo(L, p2))

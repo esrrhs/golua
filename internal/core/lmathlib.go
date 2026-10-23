@@ -334,6 +334,7 @@ func mathProject(ran, n uint64, state *mathRanState) uint64 {
 }
 
 func mathRandom(L *State) int {
+	/* Lua 5.3.4 math_random: no 'random(0) -> full int' (that is 5.4). */
 	var low, up int64
 	state, _ := L.ToUserData(UpvalueIndex(1)).(*mathRanState)
 	rv := mathNextRand(&state.s) /* next pseudo-random value */
@@ -344,10 +345,6 @@ func mathRandom(L *State) int {
 	case 1: /* only upper limit */
 		low = 1
 		up = L.CheckInteger(1)
-		if up == 0 { /* single 0 as argument? */
-			L.PushInteger(int64(rv)) /* full random integer */
-			return 1
-		}
 	case 2: /* lower and upper limits */
 		low = L.CheckInteger(1)
 		up = L.CheckInteger(2)
@@ -356,6 +353,8 @@ func mathRandom(L *State) int {
 	}
 	/* random integer in the interval [low, up] */
 	L.ArgCheck(low <= up, 1, "interval is empty")
+	/* low >= 0 || up <= LUA_MAXINTEGER + low  (no overflow in up-low) */
+	L.ArgCheck(low >= 0 || up <= LUA_MAXINTEGER+low, 1, "interval too large")
 	/* project random integer into the interval [0, up - low] */
 	p := mathProject(rv, uint64(up)-uint64(low), state)
 	L.PushInteger(int64(p + uint64(low)))

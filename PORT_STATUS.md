@@ -11,9 +11,11 @@
 - Regression: float literal `3.0` stays float (`TestFloatLiteralTag`)
 - Arith/bitwise coerce strings via `luaV_tonumber_` / `tointeger` (5.3), not 5.4 `*ns`
 - `test_then_block` goto/break path matches PUC 5.3.4 (`jf` skip + no corrupt patch of `v.t`); goto.lua compiles (`TestGotoIfThenElseifLabels`)
+- Bitwise TM errors: `tonumber`/`tointeger` (not `ttisnumber`/`tointegerns`) so `2.3 ~ '0.0'` → no integer representation
+- `math.random` 5.3 empty/too-large interval checks (no `random(0)` full-int); `utf8.char`/`decode` MAXUNICODE; utf8 msgs; `string.unpack` pos 0 via 5.3 `posrelat`
 
 ## Remaining / known gaps
-1. **Official suite** under captured goldens: still many diverge (math/utf8/tpack edge cases, sort comparison counts, error-message wording, etc.). Re-measure after goto + coerce. Not silent — `TestOfficialSuite` fails until parity improves.
+1. **Official suite** under captured goldens: bitwise/goto/math/utf8/tpack fixed toward identical; remaining diverge (calls, closure, constructs short-circuit count, db, errors, events, main, nextvar, sort comparison counts, strings, vararg, attrib, big, …). Re-measure after each push. Not silent — `TestOfficialSuite` fails until parity improves.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).

@@ -179,7 +179,10 @@ func luaT_trybinTM(L *State, p1, p2 *Value, res int, event TMS) {
 	if !callbinTM(L, p1, p2, res, event) {
 		switch event {
 		case TM_BAND, TM_BOR, TM_BXOR, TM_SHL, TM_SHR, TM_BNOT:
-			if ttisnumber(p1) && ttisnumber(p2) {
+			/* 5.3: tonumber (with string coerce), not ttisnumber — so
+			   2.3 ~ '0.0' is "no integer representation", not "bitwise on a string". */
+			var dummy float64
+			if luaV_tonumber_(L, p1, &dummy) && luaV_tonumber_(L, p2, &dummy) {
 				luaG_tointerror(L, p1, p2)
 			} else {
 				luaG_opinterror(L, p1, p2, "perform bitwise operation on")

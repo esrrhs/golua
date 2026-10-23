@@ -43,6 +43,19 @@ func strPosRelatI(pos int64, l int) int {
 	return l + int(pos) + 1
 }
 
+// strPosRelat is PUC-Lua 5.3.4 posrelat: zero stays zero (unlike 5.4's
+// posrelatI which maps 0→1). Used by string.unpack so that an initial
+// position of 0 errors as "out of string".
+func strPosRelat(pos int64, l int) int64 {
+	if pos >= 0 {
+		return pos
+	}
+	if uint64(-pos) > uint64(l) {
+		return 0
+	}
+	return int64(l) + pos + 1
+}
+
 // strGetEndPos gets an optional ending string position from argument
 // 'arg', with default value 'def' (getendpos).
 func strGetEndPos(L *State, arg int, def int64, l int) int {
@@ -2195,9 +2208,10 @@ func strUnpack(L *State) int {
 	fmtstr := strFmtOpts(L.CheckString(1))
 	data := L.CheckString(2)
 	ld := len(data)
-	pos := strPosRelatI(L.OptInteger(3, 1), ld) - 1
+	/* 5.3: posrelat keeps 0; (size_t)0-1 wraps so ArgCheck fails. */
+	pos := int(strPosRelat(L.OptInteger(3, 1), ld) - 1)
 	h := strHeader{}
-	L.ArgCheck(pos <= ld, 3, "initial position out of string")
+	L.ArgCheck(pos >= 0 && pos <= ld, 3, "initial position out of string")
 	strInitHeader(L, &h)
 	n := 0 /* number of results */
 	for i := 0; i < len(fmtstr); {

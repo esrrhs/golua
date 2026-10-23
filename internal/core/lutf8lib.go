@@ -67,7 +67,7 @@ func utf8libDecode(s string, i int, strict bool) (uint32, int, bool) {
 			c <<= 1
 		}
 		res |= (c & 0x7F) << (count * 5) /* add first byte */
-		if res > utf8MaxUTF || res < limits[count] {
+		if res > utf8MaxUnicode || res < limits[count] {
 			return 0, 0, false /* invalid byte sequence */
 		}
 		next = i + count + 1 /* skip continuation bytes read */
@@ -93,11 +93,12 @@ func utf8Len(L *State) int {
 	posi := utf8PosRelat(L.OptInteger(2, 1), l)
 	posj := utf8PosRelat(L.OptInteger(3, -1), l)
 	lax := L.ToBoolean(4)
-	L.ArgCheck(posi >= 1, 2, "initial position out of bounds")
+	/* 5.3.4: "out of string" (5.4 says "out of bounds") */
+	L.ArgCheck(posi >= 1, 2, "initial position out of string")
 	posi--
-	L.ArgCheck(posi <= int64(l), 2, "initial position out of bounds")
+	L.ArgCheck(posi <= int64(l), 2, "initial position out of string")
 	posj--
-	L.ArgCheck(posj < int64(l), 3, "final position out of bounds")
+	L.ArgCheck(posj < int64(l), 3, "final position out of string")
 	for posi <= posj {
 		_, next, ok := utf8libDecode(s, int(posi), !lax)
 		if !ok { /* conversion error? */
@@ -122,8 +123,8 @@ func utf8Codepoint(L *State) int {
 	posi := utf8PosRelat(L.OptInteger(2, 1), l)
 	pose := utf8PosRelat(L.OptInteger(3, posi), l)
 	lax := L.ToBoolean(4)
-	L.ArgCheck(posi >= 1, 2, "out of bounds")
-	L.ArgCheck(pose <= int64(l), 3, "out of bounds")
+	L.ArgCheck(posi >= 1, 2, "out of range")
+	L.ArgCheck(pose <= int64(l), 3, "out of range")
 	if posi > pose {
 		return 0 /* empty interval; return no values */
 	}
@@ -147,8 +148,9 @@ func utf8Codepoint(L *State) int {
 }
 
 func utf8PushChar(L *State, arg int) {
-	code := uint64(L.CheckInteger(arg))
-	L.ArgCheck(code <= utf8MaxUTF, arg, "value out of range")
+	code := L.CheckInteger(arg)
+	/* 5.3.4: MAXUNICODE 0x10FFFF (5.4 allows up to 0x7FFFFFFF). */
+	L.ArgCheck(0 <= code && code <= utf8MaxUnicode, arg, "value out of range")
 	L.PushString(string(luaO_utf8esc(uint32(code))))
 }
 
@@ -185,9 +187,9 @@ func utf8ByteOffset(L *State) int {
 		posi = int64(l) + 1
 	}
 	posi = utf8PosRelat(L.OptInteger(3, posi), l)
-	L.ArgCheck(posi >= 1, 3, "position out of bounds")
+	L.ArgCheck(posi >= 1, 3, "position out of range")
 	posi--
-	L.ArgCheck(posi <= int64(l), 3, "position out of bounds")
+	L.ArgCheck(posi <= int64(l), 3, "position out of range")
 	if n == 0 {
 		/* find beginning of current byte sequence */
 		for posi > 0 && utf8IsContAt(s, int(posi)) {

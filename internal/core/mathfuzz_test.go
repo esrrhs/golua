@@ -813,25 +813,22 @@ func TestMathInProcess(t *testing.T) {
 		draws = {}
 		for i = 1, 6 do draws[i] = tostring(math.random(10, 20)) end
 		eq(table.concat(draws, " "), "11 12 16 13 15 10", "random 10 20")
-		draws = {}
-		for i = 1, 4 do draws[i] = tostring(math.random(0)) end
-		eq(table.concat(draws, " "),
-		  "1277017674798028800 2783622852547049994 4665041579528616964 "..
-		  "3815894124499419399", "random 0")
+		-- 5.3.4: math.random(0) is empty interval (1..0); 5.4 returned a full int
+		ok, e = pcall(math.random, 0)
+		eq(ok, false, "random 0 empty")
+		eq(string.find(e, "interval is empty") ~= nil, true, "random 0 msg")
+		-- pcall already consumed one nextrand; burn 3 more to match 5.4's four random(0)
+		for _ = 1, 3 do math.random() end
 		draws = {}
 		for i = 1, 3 do draws[i] = tostring(math.random(-5, 5)) end
 		eq(table.concat(draws, " "), "-2 -2 0", "random -5 5")
 		draws = {}
 		for i = 1, 3 do draws[i] = tostring(math.random(1, 1)) end
 		eq(table.concat(draws, " "), "1 1 1", "random 1 1")
-		draws = {}
-		for i = 1, 3 do
-		  draws[i] = tostring(math.random(math.mininteger,
-		    math.maxinteger))
-		end
-		eq(table.concat(draws, " "),
-		  "6306273601645999760 -619241958622880532 448692890370651667",
-		  "random minint maxint")
+		-- 5.3.4 rejects [minint, maxint] as "interval too large" (5.4 projects it)
+		ok, e = pcall(math.random, math.mininteger, math.maxinteger)
+		eq(ok, false, "random minint maxint")
+		eq(string.find(e, "interval too large") ~= nil, true, "random minint maxint msg")
 		a, b = math.randomseed(7)
 		eq(a, 7, "randomseed 7")
 		eq(b, 0, "randomseed 7 second")
