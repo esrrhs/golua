@@ -19,6 +19,8 @@ import (
 func ispseudo(i int) bool { return i <= LUA_REGISTRYINDEX }
 
 // index2value translates an API index into a stack slot.
+// Invalid indices return &L.g.nilValue (C: NONVALIDVALUE / luaO_nilobject).
+// Callers that write through the result must check isvalid first.
 func index2value(L *State, idx int) *Value {
 	ci := L.ci
 	if idx > 0 {
@@ -46,6 +48,12 @@ func index2value(L *State, idx int) *Value {
 		}
 		return &L.g.nilValue
 	}
+}
+
+// isvalid reports whether o is a real addressable slot, not the shared
+// invalid-index sentinel (lapi.c: isvalid / NONVALIDVALUE).
+func isvalid(L *State, o *Value) bool {
+	return o != &L.g.nilValue
 }
 
 // stackIndexOf answers the 0-based stack slot an acceptable index names,
@@ -159,6 +167,9 @@ func (L *State) Remove(idx int) {
 // Replace moves the top element into position idx (lua_replace).
 func (L *State) Replace(idx int) {
 	p := index2value(L, idx)
+	if !isvalid(L, p) { /* api_checkvalidindex */
+		panic("invalid index")
+	}
 	*p = L.stack[L.top-1]
 	L.top--
 }
@@ -167,6 +178,9 @@ func (L *State) Replace(idx int) {
 func (L *State) Copy(fromIdx, toIdx int) {
 	f := index2value(L, fromIdx)
 	t := index2value(L, toIdx)
+	if !isvalid(L, t) { /* api_checkvalidindex */
+		panic("invalid index")
+	}
 	*t = *f
 }
 
@@ -1080,20 +1094,30 @@ func (L *State) Error() int {
 func (L *State) Equal(idx1, idx2 int) bool {
 	o1 := index2value(L, idx1)
 	o2 := index2value(L, idx2)
-	if idx1 == LUA_REGISTRYINDEX || idx2 == LUA_REGISTRYINDEX {
-		// nil comparisons against the registry are false
+	if !isvalid(L, o1) || !isvalid(L, o2) {
+		return false
 	}
 	return luaV_equalobj(L, o1, o2)
 }
 
-// RawEqual compares two values without metamethods.
+// RawEqual compares two values without metamethods (lua_rawequal).
 func (L *State) RawEqual(idx1, idx2 int) bool {
-	return luaV_rawequalobj(index2value(L, idx1), index2value(L, idx2))
+	o1 := index2value(L, idx1)
+	o2 := index2value(L, idx2)
+	if !isvalid(L, o1) || !isvalid(L, o2) {
+		return false
+	}
+	return luaV_rawequalobj(o1, o2)
 }
 
 // LessThan compares two values with '<' (lua_compare with LUA_OPLT).
 func (L *State) LessThan(idx1, idx2 int) bool {
-	return luaV_lessthan(L, index2value(L, idx1), index2value(L, idx2))
+	o1 := index2value(L, idx1)
+	o2 := index2value(L, idx2)
+	if !isvalid(L, o1) || !isvalid(L, o2) {
+		return false
+	}
+	return luaV_lessthan(L, o1, o2)
 }
 
 // Concat concatenates the n values on top of the stack (lua_concat).
