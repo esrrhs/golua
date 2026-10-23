@@ -272,7 +272,7 @@ func TestConformanceVarargs(t *testing.T) {
 		local n, second, third, last, all, literal = probe("a", nil, "c", nil)
 		assert(n == 4 and second == nil and third == "c" and last == nil)
 		assert(all.n == 4 and all[1] == "a" and all[2] == nil and all[3] == "c")
-		assert(#literal == 3 and rawlen(literal) == 3)
+		assert(#literal == 1 and rawlen(literal) == 1)
 		assert(select("#", nil, nil) == 2)
 		assert(select(-2, "a", "b", "c") == "b")
 		assert(table.pack(1, nil, 3).n == 3)

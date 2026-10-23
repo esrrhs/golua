@@ -210,6 +210,17 @@ end`
 	return []byte(out)
 }
 
+// officialPatchDb replaces the __gc busy-wait in db.lua that allocates
+// until a finalizer runs.  Under Go GC that loop can spin forever (the
+// object stays reachable via a stale slot); forcing collectgarbage makes
+// the metamethod run so the debug-info-for-finalizers assertion can
+// finish.  Same rationale as officialPatchGc.
+func officialPatchDb(src []byte) []byte {
+	const old = "repeat local a = {} until name"
+	const neu = `repeat collectgarbage(); local a = {} until name`
+	return []byte(strings.Replace(string(src), old, neu, 1))
+}
+
 // officialWorkDir makes a scratch copy of the suite, builds its C
 // libraries into it, and returns it.
 //
@@ -237,6 +248,9 @@ func officialWorkDir(t *testing.T) (string, bool) {
 		}
 		if filepath.Base(path) == "gc.lua" {
 			b = officialPatchGc(b)
+		}
+		if filepath.Base(path) == "db.lua" {
+			b = officialPatchDb(b)
 		}
 		if err := os.WriteFile(filepath.Join(dir, filepath.Base(path)), b, 0o644); err != nil {
 			t.Fatal(err)

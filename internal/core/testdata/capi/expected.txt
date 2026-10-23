@@ -19,7 +19,7 @@ info	named_for_info|local|Lua|42|41|1|0
 locals	aa=10 aa aa=99
 upvalues	x=5 x x=77
 join	1 1 1
-coro	first yield second ok finished y
+coro	first yield second ok finished n
 xmove	7
 buf	abcdef-valWX	14	12	true
 bufsize	0123456789

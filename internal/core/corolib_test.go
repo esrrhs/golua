@@ -244,10 +244,11 @@ func TestCoroutineIsYieldable(t *testing.T) {
 			coroutine.yield()
 		end)
 		coroutine.resume(co)
+		-- 5.3.4 isyieldable takes no thread arg; extra args ignored → main.
 		out = tostring(a) .. "," .. tostring(inside) ..
 		      "," .. tostring(coroutine.isyieldable(co))
 	`)
-	if got, want := coGlobal(t, L, "out"), "false,true,true"; got != want {
+	if got, want := coGlobal(t, L, "out"), "false,true,false"; got != want {
 		t.Errorf("out = %q, want %q", got, want)
 	}
 	if L.GetTop() != 0 {
