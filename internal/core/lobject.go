@@ -371,18 +371,13 @@ type LocVar struct {
 	endpc   int
 }
 
-// AbsLineInfo associates an absolute line with an instruction.
-type AbsLineInfo struct {
-	pc   int
-	line int
-}
 
 // Proto is a function prototype.
 type Proto struct {
 	numparams    byte
 	isVararg     byte
 	maxstacksize byte
-	fastLeaf     byte // cached straight-line numeric leaf classification
+	fastLeaf     byte // Go-only: cached straight-line numeric leaf (lvm_fastcall)
 
 	sizeupvalues int
 	sizek        int
@@ -399,10 +394,8 @@ type Proto struct {
 	p        []*Proto
 	upvalues []Upvaldesc
 	// lineinfo holds the absolute source line of each instruction.
-	// (PUC-Lua stores line deltas plus an 'abslineinfo' array; the
-	// absolute form is equivalent and much simpler.)
-	lineinfo    []int32
-	abslineinfo []AbsLineInfo
+	// 5.3.4 C stores signed line deltas; absolute form is equivalent.
+	lineinfo []int32
 	locvars     []LocVar
 	source      *TString
 	cache       *LClosure /* last-created closure of this proto (5.3 reuse) */

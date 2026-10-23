@@ -361,7 +361,7 @@ func TestNamesUpvaluesAndWeakClosures(t *testing.T) {
 	p := &Proto{locvars: []LocVar{{varname: luaS_new(L, "x"), startpc: 0, endpc: 10}}}
 	setclLvalue(&L.stack[0], &LClosure{p: p})
 	saved := L.ci.callstatus
-	L.ci.callstatus &^= CIST_C
+	L.ci.callstatus |= CIST_LUA
 	L.ci.savedpc = 1
 	if L.getLocalNameAt(&Value{}) != "x" {
 		t.Fatalf("local %q", L.getLocalNameAt(&Value{}))

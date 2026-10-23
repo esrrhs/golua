@@ -1095,10 +1095,9 @@ func TestDebugHookSurvivesInheritance(t *testing.T) {
 	}
 	if err := runLua(t, L, `
 		debug.sethook()
-		-- one value, not three: 'db_gethook' answers a single fail
-		-- before it ever reaches the mask and the count
+		-- 5.3.4 db_gethook always returns 3: hook, mask, count
 		local a = table.pack(debug.gethook(coroutine.create(function() end)))
-		return a.n == 1 and a[1] == nil
+		return a.n == 3 and a[1] == nil and a[2] == "" and a[3] == 0
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -1129,17 +1128,15 @@ func TestDebugUpvaluesAndUserValues(t *testing.T) {
 		assert(i1 ~= debug.upvalueid(f2, 2))
 		debug.upvaluejoin(f2, 2, f1, 1)
 		assert(select(2, f2()) == 7, "the join moved the value")
-		-- and the two that need a userdata, which a file handle is.
-		-- A FILE is made with no user value slot at all, so the set is
-		-- accepted and changes nothing: that is PUC-Lua's answer, and
-		-- the grid is what says so.
+		-- 5.3.4: userdata (incl. FILE) has one uservalue; set/get work.
+		-- Extra index '2' is ignored by 5.3 setuservalue (no n arg).
 		local h = io.tmpfile()
 		assert(debug.getuservalue(h) == nil)
 		local ok, e = pcall(debug.setuservalue, h, "v")
 		assert(ok, tostring(e))
-		assert(debug.getuservalue(h) == nil)
+		assert(debug.getuservalue(h) == "v")
 		ok, e = pcall(debug.setuservalue, h, "v", 2)
-		assert(ok == false or e == nil, tostring(e))
+		assert(ok, tostring(e)) -- 5.3 ignores extra args
 		h:close()
 		return true
 	`); err != nil {

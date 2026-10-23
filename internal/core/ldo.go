@@ -94,7 +94,7 @@ func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
 // precallC calls a Go function (ldo.c).
 func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
 	L.checkStack(LUA_MINSTACK)
-	ci := prepCallInfo(L, funcIdx, nresults, CIST_C, L.top+LUA_MINSTACK)
+	ci := prepCallInfo(L, funcIdx, nresults, 0, L.top+LUA_MINSTACK) /* C frame: no CIST_LUA */
 	if L.hookmask&dbMaskCall != 0 { /* is call hook on? */
 		narg := L.top - funcIdx - 1
 		luaD_hook(L, hookCall, -1, 1, narg)
@@ -124,17 +124,17 @@ func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
 // luaD_hook calls the hook for the given event, making sure there is one
 // to be called (ldo.c).
 func luaD_hook(L *State, event, line, ftransfer, ntransfer int) {
+	/* 5.3.4 luaD_hook(L, event, line) — no transfer bit in callstatus. */
 	hook := L.hook
 	if hook == nil || L.allowhook == 0 {
 		return
 	}
-	mask := uint16(CIST_HOOKED)
+	/* 5.3.4: no CIST_TRAN; ftransfer/ntransfer stored on ci only. */
 	ci := L.ci
 	top := L.top    /* preserve original 'top' */
 	ciTop := ci.top /* idem for 'ci->top' */
 	ar := &dbAr{event: event, currentline: line, ci: ci}
 	if ntransfer != 0 {
-		mask |= CIST_TRAN /* 'ci' has transfer information */
 		ci.ftransfer = ftransfer
 		ci.ntransfer = ntransfer
 	}
@@ -146,12 +146,12 @@ func luaD_hook(L *State, event, line, ftransfer, ntransfer int) {
 		ci.top = L.top + LUA_MINSTACK
 	}
 	L.allowhook = 0 /* cannot call hooks inside a hook */
-	ci.callstatus |= mask
+	ci.callstatus |= CIST_HOOKED
 	hook(L, ar)
 	L.allowhook = 1
 	ci.top = ciTop
 	L.top = top
-	ci.callstatus &= ^mask
+	ci.callstatus &= ^uint16(CIST_HOOKED)
 }
 
 // luaD_hookcall executes a call hook for Lua functions (ldo.c).
@@ -255,7 +255,7 @@ retry:
 			if nExtra < 0 {
 				nExtra = 0
 			}
-			ci := prepCallInfo(L, funcIdx, nresults, 0, base+fsize)
+			ci := prepCallInfo(L, funcIdx, nresults, CIST_LUA, base+fsize)
 			ci.base = base
 			ci.nExtraArgs = nExtra
 			L.top = ci.top
@@ -266,7 +266,7 @@ retry:
 			L.top++
 		}
 		base = funcIdx + 1
-		ci := prepCallInfo(L, funcIdx, nresults, 0, base+fsize)
+		ci := prepCallInfo(L, funcIdx, nresults, CIST_LUA, base+fsize)
 		ci.base = base
 		L.top = ci.top
 		return ci
@@ -354,7 +354,7 @@ func ccall(L *State, funcIdx, nresults int, inc int) {
 		luaE_checkcstack(L)
 	}
 	if ci := luaD_precall(L, funcIdx, nresults); ci != nil {
-		ci.callstatus = CIST_FRESH /* mark that it is a "fresh" execute */
+		ci.callstatus |= CIST_FRESH /* fresh invocation of luaV_execute */
 		luaV_execute(L, ci)
 	}
 	L.nCcalls -= uint32(inc)

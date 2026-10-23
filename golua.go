@@ -24,7 +24,6 @@ type (
 	Udata       = core.Udata
 	Upvaldesc   = core.Upvaldesc
 	LocVar      = core.LocVar
-	AbsLineInfo = core.AbsLineInfo
 	Proto       = core.Proto
 	Instruction = core.Instruction
 	Reg         = core.Reg
@@ -246,14 +245,14 @@ const (
 	ERRORSTACKSIZE   = core.ERRORSTACKSIZE
 
 	CIST_OAH       = core.CIST_OAH
-	CIST_C         = core.CIST_C
-	CIST_FRESH     = core.CIST_FRESH
+	CIST_LUA       = core.CIST_LUA
 	CIST_HOOKED    = core.CIST_HOOKED
+	CIST_FRESH     = core.CIST_FRESH
 	CIST_YPCALL    = core.CIST_YPCALL
 	CIST_TAIL      = core.CIST_TAIL
 	CIST_HOOKYIELD = core.CIST_HOOKYIELD
+	CIST_LEQ       = core.CIST_LEQ
 	CIST_FIN       = core.CIST_FIN
-	CIST_TRAN      = core.CIST_TRAN
 )
 
 // ---------------------------------------------------------------------------

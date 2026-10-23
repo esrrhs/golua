@@ -203,24 +203,21 @@ func luaT_tryconcatTM(L *State) {
 
 // luaT_callorderTM calls an order metamethod; raises an error if none.
 //
-// 'LUA_COMPAT_LT_LE' is on, as it is in the reference build: a value with
-// no '__le' still answers '<=' by trying '!(p2 < p1)'.  Without that a
-// type that only defines '__lt' cannot be ordered at all, and 'a <= b'
-// would raise "attempt to compare two table values" where PUC-Lua answers
-// false.
-//
-// deviation: C marks the call with 'CIST_LEQ' so that the VM can negate
-// the result if the metamethod yields across the comparison.  This port
-// runs the metamethod to completion inside 'callbinTM', so the result is
-// already there and the negation happens here instead.
+// LUA_COMPAT_LT_LE (on in the reference 5.3.4 build): no '__le' still
+// answers '<=' via '!(p2 < p1)'. C marks that path with CIST_LEQ so a
+// yield across the comparison can negate on resume (lvm.c); we set the
+// same bit while calling '__lt' even though Go runs the TM to completion.
 func luaT_callorderTM(L *State, p1, p2 *Value, event TMS) bool {
 	if callbinTM(L, p1, p2, L.top, event) { /* try original event */
 		return !isFalse(&L.stack[L.top])
 	}
 	if event == TM_LE {
-		/* try '!(p2 < p1)' for '(p1 <= p2)' */
-		if callbinTM(L, p2, p1, L.top, TM_LT) { /* inverted operands */
-			return isFalse(&L.stack[L.top])
+		/* try '!(p2 < p1)' for '(p1 <= p2)' — luaV_lessequal in lvm.c */
+		L.ci.callstatus |= CIST_LEQ /* mark it is doing 'lt' for 'le' */
+		ok := callbinTM(L, p2, p1, L.top, TM_LT)
+		L.ci.callstatus ^= CIST_LEQ /* clear mark */
+		if ok {
+			return isFalse(&L.stack[L.top]) /* result is negated */
 		}
 	}
 	luaG_ordererror(L, p1, p2) /* no metamethod found */

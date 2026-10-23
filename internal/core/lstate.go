@@ -4,8 +4,6 @@
 //   - Go GC replaces lgc (finalizers approximated; warnf path for __gc errors).
 //   - Error handling uses panic/recover instead of setjmp/longjmp.
 //   - Each coroutine runs on its own goroutine so a Go function can yield.
-//   - CallInfo status bits follow the 5.4 layout (CIST_C vs 5.3 CIST_LUA) but
-//     isLua() preserves the same predicate; bit values are not ABI-exposed.
 package core
 
 import (
@@ -36,23 +34,17 @@ type GoFunc func(L *State) int
 // instead raises LUA_ERRGCMM.
 type WarnFunc func(L *State, msg string, tocont bool)
 
-// CallInfo status bits.
-//
-// 5.3.4 lstate.h uses CIST_LUA (1<<1) for "running a Lua function" and
-// CIST_LEQ (1<<7) for __lt-as-__le. This port keeps the inverted CIST_C
-// form (and CIST_TRAN for transfer info) used elsewhere in the Go VM;
-// isLua() is still "not a C frame". CIST_LEQ is unused: lessequal goes
-// through luaV_lessequal without needing the bit (see ltm.go).
+// CallInfo status bits (lstate.h 5.3.4).
 const (
-	CIST_OAH       = 1 << 0
-	CIST_C         = 1 << 1 /* opposite sense of 5.3 CIST_LUA */
-	CIST_FRESH     = 1 << 2
-	CIST_HOOKED    = 1 << 3
-	CIST_YPCALL    = 1 << 4
-	CIST_TAIL      = 1 << 5
-	CIST_HOOKYIELD = 1 << 6
-	CIST_FIN       = 1 << 7
-	CIST_TRAN      = 1 << 8 /* transferinfo present (hook); not in 5.3 getinfo 'r' */
+	CIST_OAH       = 1 << 0 /* original value of 'allowhook' */
+	CIST_LUA       = 1 << 1 /* call is running a Lua function */
+	CIST_HOOKED    = 1 << 2 /* call is running a debug hook */
+	CIST_FRESH     = 1 << 3 /* fresh invocation of luaV_execute */
+	CIST_YPCALL    = 1 << 4 /* yieldable protected call */
+	CIST_TAIL      = 1 << 5 /* call was tail called */
+	CIST_HOOKYIELD = 1 << 6 /* last hook called yielded */
+	CIST_LEQ       = 1 << 7 /* using __lt for __le */
+	CIST_FIN       = 1 << 8 /* call is running a finalizer */
 )
 
 // incnny/decnny manipulate the "non-yieldable" part of nCcalls, which
@@ -70,8 +62,10 @@ func decnny(L *State) { L.nCcalls -= 0x10000 }
 // stack (lstate.h).
 func yieldable(L *State) bool { return L.nCcalls&0xffff0000 == 0 }
 
-func isLua(ci *CallInfo) bool     { return ci.callstatus&CIST_C == 0 }
-func isLuacode(ci *CallInfo) bool { return ci.callstatus&(CIST_C|CIST_HOOKED) == 0 }
+func isLua(ci *CallInfo) bool { return ci.callstatus&CIST_LUA != 0 }
+func isLuacode(ci *CallInfo) bool {
+	return ci.callstatus&(CIST_LUA|CIST_HOOKED) == CIST_LUA
+}
 
 // CallInfo holds information about a call.
 type CallInfo struct {
@@ -89,8 +83,8 @@ type CallInfo struct {
 	// trap is ci->u.l.trap: whether the VM must stop at the next
 	// instruction to check hooks (and to correct a moved stack).
 	trap bool
-	// ftransfer/ntransfer are ci->u2.transferinfo: the position and the
-	// number of values being transferred, for the return/call hook.
+	// ftransfer/ntransfer: Go-only hook bookkeeping (5.4 transferinfo).
+	// 5.3.4 lua_Debug has neither; getinfo has no 'r'. Not in callstatus.
 	ftransfer int
 	ntransfer int
 
@@ -544,7 +538,7 @@ func NewState() *State {
 	L.ci = &L.baseCI
 	L.baseCI.funcIdx = 0
 	L.baseCI.top = 1
-	L.baseCI.callstatus = CIST_C
+	L.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
 	L.baseCI.nresults = 0
 	gcTrackThread(L) /* so that the collector can clear its stale slots */
 
@@ -707,7 +701,7 @@ func (L *State) NewThread() *State {
 	L1.ci = &L1.baseCI
 	L1.baseCI.funcIdx = 0
 	L1.baseCI.top = 1
-	L1.baseCI.callstatus = CIST_C
+	L1.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
 	L1.baseCI.nresults = 0
 	gcTrackThread(L1) /* so that the collector can clear its stale slots */
 	/* a new thread inherits the hook of the creating thread: C copies
@@ -843,7 +837,7 @@ func (L *State) resetThreadStatus(status int) int {
 	L.ci = ci
 	setnilvalue(&L.stack[0]) /* 'function' entry for basic 'ci' */
 	ci.funcIdx = 0
-	ci.callstatus = CIST_C
+	ci.callstatus = 0 /* C level (no CIST_LUA) */
 	if status == LUA_YIELD {
 		status = LUA_OK
 	}
@@ -1248,7 +1242,7 @@ func (L *State) unwindForClose() int {
 	L.baseCI.next = nil
 	L.baseCI.funcIdx = 0
 	L.baseCI.top = 1
-	L.baseCI.callstatus = CIST_C
+	L.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
 	setnilvalue(&L.stack[0])
 	L.errfunc = 0
 	st := int(L.status)
