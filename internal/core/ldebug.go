@@ -1,4 +1,5 @@
-// Translation of ldebug.h / ldebug.c (PUC-Lua 5.3.4), minus the debug hooks.
+// Translation of ldebug.h / ldebug.c (PUC-Lua 5.3.4).
+// Hook install/get and getstack/getinfo wrappers; luaG_traceexec is in lvm.go.
 package core
 
 import (
@@ -557,3 +558,20 @@ func (L *State) GetHookMask() int { return int(L.hookmask) }
 
 // GetHookCount returns the current hook count (lua_gethookcount).
 func (L *State) GetHookCount() int { return L.basehookcount }
+
+// ---------------------------------------------------------------------
+// Debug API (ldebug.c LUA_API) — implementations live as db* helpers
+// used by ldblib; wrappers match lua_getstack / lua_getinfo / locals.
+// ---------------------------------------------------------------------
+
+// GetStack fills ar with the activation record at level (lua_getstack).
+func (L *State) GetStack(level int, ar *dbAr) bool { return dbGetStack(L, level, ar) }
+
+// GetInfo fills ar according to what (lua_getinfo).
+func (L *State) GetInfo(what string, ar *dbAr) bool { return dbGetInfo(L, what, ar) }
+
+// GetLocal pushes local n of ar and returns its name (lua_getlocal).
+func (L *State) GetLocal(ar *dbAr, n int) string { return dbGetLocal(L, ar, n) }
+
+// SetLocal pops into local n of ar (lua_setlocal).
+func (L *State) SetLocal(ar *dbAr, n int) string { return dbSetLocal(L, ar, n) }
