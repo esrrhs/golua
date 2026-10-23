@@ -156,24 +156,24 @@ differential, third-party and fuzz suites with `LUA_REF` pointing at it.
 
 ## Performance
 
-One run on an AMD EPYC 7551: PUC-Lua 5.4.7 against a cgo build (Go 1.24). The ratio is golua / PUC-Lua; below 1 is faster. Every row had `p < 0.0001`. Timing and what each row matches are in [bench/README.md](bench/README.md).
+One run on Linux x86_64 (Intel Xeon, kernel 6.12.94+): PUC-Lua 5.4.7 against a cgo build (Go 1.27.3). The port tracks Lua 5.4.9. The ratio is golua / PUC-Lua; below 1 is faster. Every row had `p < 0.0001`. Timing and what each row measures are in [bench/README.md](bench/README.md).
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 1.72× | fib | 2.29×10⁻⁶ |
-| nop | 1.99× | concat | 2.54×10⁻⁶ |
-| hash | 1.25× | yield | 0.0023× |
-| intloop | 0.060× | pcall | 0.0040× |
-| floatloop | 0.12× | upvalue | 0.012× |
-| bitwise | 0.20× | global | 0.011× |
-| array | 0.48× | ipairs | 0.014× |
-| strings | 0.52× | tailcall | 0.016× |
-| sort | 0.53× | metaindex | 0.016× |
-|  |  | method | 0.015× |
-|  |  | call3 | 0.031× |
-|  |  | alloc | 0.070× |
+| startup | 2.38× | fib | 2.73× |
+| nop | 2.93× | concat | 2.67× |
+| hash | 2.08× | yield | 1.31× |
+| intloop | 2.41× | pcall | 2.34× |
+| floatloop | 2.85× | upvalue | 2.22× |
+| bitwise | 3.42× | global | 2.25× |
+| array | 2.99× | ipairs | 2.59× |
+| strings | 3.28× | tailcall | 2.48× |
+| sort | 1.55× | metaindex | 1.78× |
+|  |  | method | 2.50× |
+|  |  | call3 | 3.09× |
+|  |  | alloc | 2.17× |
 
-`startup`, `nop` and `hash` are slower. `intloop` through `sort` still do the work. `fib` through `alloc` match one bytecode shape; a different program stays on the interpreter, and the checksum is the same.
+Every listed workload is slower on this run. The interpreter stays line-faithful to PUC-Lua 5.4.9 (no Go-only specialized shortcuts), and the checksum is the same.
 
 ## Known differences
 

@@ -30,7 +30,7 @@ func mathAbs(L *State) int {
 		}
 		L.PushInteger(n)
 	} else {
-		L.PushNumber(math.Abs(L.CheckNumber(1))) /* C l_mathop(fabs); platform OK */
+		L.PushNumber(math2Abs(L.CheckNumber(1))) /* C: l_mathop(fabs) */
 	}
 	return 1
 }
@@ -102,7 +102,8 @@ func mathLibFloor(L *State) int {
 	if L.IsInteger(1) {
 		L.SetTop(1) /* integer is its own floor */
 	} else {
-		mathPushNumInt(L, mathFloor(L.CheckNumber(1)))
+		d := math2Floor(L.CheckNumber(1)) /* C: l_mathop(floor) */
+		mathPushNumInt(L, d)
 	}
 	return 1
 }
@@ -111,7 +112,8 @@ func mathLibCeil(L *State) int {
 	if L.IsInteger(1) {
 		L.SetTop(1) /* integer is its own ceil */
 	} else {
-		mathPushNumInt(L, mathCeil(L.CheckNumber(1)))
+		d := math2Ceil(L.CheckNumber(1)) /* C: l_mathop(ceil) */
+		mathPushNumInt(L, d)
 	}
 	return 1
 }
@@ -127,7 +129,7 @@ func mathFmod(L *State) int {
 			L.PushInteger(n % d)
 		}
 	} else {
-		L.PushNumber(libmFmod(L.CheckNumber(1), L.CheckNumber(2)))
+		L.PushNumber(math2Fmod(L.CheckNumber(1), L.CheckNumber(2))) /* C: l_mathop(fmod) */
 	}
 	return 1
 }
@@ -145,25 +147,23 @@ func mathModf(L *State) int {
 		/* integer part (rounds toward zero) — C: l_mathop(ceil)/floor */
 		var ip float64
 		if n < 0 {
-			ip = mathCeil(n)
+			ip = math2Ceil(n) /* C: l_mathop(ceil) */
 		} else {
-			ip = mathFloor(n)
+			ip = math2Floor(n) /* C: l_mathop(floor) */
 		}
 		mathPushNumInt(L, ip)
 		/* fractional part (test needed for inf/-inf) */
-		var f float64
 		if n == ip {
-			f = 0.0 /* l_mathop(0.0) */
+			L.PushNumber(0.0) /* l_mathop(0.0) */
 		} else {
-			f = n - ip
+			L.PushNumber(n - ip)
 		}
-		L.PushNumber(f)
 	}
 	return 2
 }
 
 func mathSqrt(L *State) int {
-	L.PushNumber(libmSqrt(L.CheckNumber(1)))
+	L.PushNumber(math2Sqrt(L.CheckNumber(1))) /* C: l_mathop(sqrt) */
 	return 1
 }
 
@@ -220,7 +220,7 @@ func mathMin(L *State) int {
 	imin := 1       /* index of current minimum value */
 	L.ArgCheck(n >= 1, 1, "value expected")
 	for i := 2; i <= n; i++ {
-		if L.LessThan(i, imin) {
+		if L.LessThan(i, imin) { /* lua_compare(..., LUA_OPLT) */
 			imin = i
 		}
 	}
@@ -233,7 +233,7 @@ func mathMax(L *State) int {
 	imax := 1       /* index of current maximum value */
 	L.ArgCheck(n >= 1, 1, "value expected")
 	for i := 2; i <= n; i++ {
-		if L.LessThan(imax, i) {
+		if L.LessThan(imax, i) { /* lua_compare(..., LUA_OPLT) */
 			imax = i
 		}
 	}
@@ -259,7 +259,7 @@ func mathType(L *State) int {
 ** {==================================================================
 ** Pseudo-Random Number Generator based on 'xoshiro256**'.
 ** ===================================================================
-*/
+ */
 
 // figs is the number of binary digits in the mantissa of a float64.
 const mathFigs = 53
@@ -309,6 +309,7 @@ func mathI2d(x uint64) float64 {
 	if sx < 0 {
 		res += 1.0 /* correct the two's complement if negative */
 	}
+	/* C: lua_assert(0 <= res && res < 1); release assert omitted */
 	return res
 }
 
@@ -323,7 +324,7 @@ func mathI2d(x uint64) float64 {
 ** until we have a result inside the interval.
  */
 func mathProject(ran, n uint64, state *mathRanState) uint64 {
-	if n&(n+1) == 0 { /* is 'n + 1' a power of 2? */
+	if (n & (n + 1)) == 0 { /* is 'n + 1' a power of 2? */
 		return ran & n /* no bias */
 	}
 	lim := n
@@ -333,10 +334,11 @@ func mathProject(ran, n uint64, state *mathRanState) uint64 {
 	lim |= lim >> 4
 	lim |= lim >> 8
 	lim |= lim >> 16
-	lim |= lim >> 32
+	lim |= lim >> 32 /* integer type has more than 32 bits */
+	/* C: lua_assert((lim&(lim+1))==0 && lim>=n && (lim>>1)<n); omitted */
 	for {
-		ran &= lim
-		if ran <= n { /* project 'ran' into [0..lim] */
+		ran &= lim /* project 'ran' into [0..lim] */
+		if ran <= n {
 			return ran
 		}
 		ran = mathNextRand(&state.s) /* not inside [0..n]? try again */
@@ -428,7 +430,7 @@ func mathSetRandFunc(L *State) {
 ** {==================================================================
 ** Deprecated functions (for compatibility only)
 ** ===================================================================
-*/
+ */
 //
 // luaconf.h defines 'LUA_COMPAT_MATHLIB' and the reference build does
 // not turn it off, so 'math.sinh', 'math.cosh', 'math.tanh', 'math.pow',
@@ -437,16 +439,9 @@ func mathSetRandFunc(L *State) {
 // that calls them cannot be run by a port that leaves them out, so
 // they are all here (always compiled — FLAG: C gates with #if).
 
-const (
-	// mathMaxLog is log(MaxFloat64): the argument at which exp(x)
-	// overflows.  exp(x)/2 holds out for another ln 2 beyond it, up to
-	// log(2 * MaxFloat64) = 710.47586007394386.
-	mathMaxLog  = 7.09782712893383973096e+02
-	mathMaxLog2 = 7.10475860073943863429e+02
-)
-
 // mathLn2Hi and mathLn2Lo are ln 2 split in two, so that 'n * ln 2'
-// keeps the low bits that a single float64 would drop.
+// keeps the low bits that a single float64 would drop. Used only by the
+// !haveLibm salvage path (mathExpScaled); not present in lmathlib.c.
 const (
 	mathLn2Hi = 6.93147180369123816490e-01
 	mathLn2Lo = 1.90821492927058770002e-10
@@ -582,6 +577,24 @@ func mathLog2Scaled(x float64) float64 {
 	return math.Log2(x)
 }
 
+func mathCosh(L *State) int {
+	x := L.CheckNumber(1)
+	if haveLibm {
+		L.PushNumber(libmCosh(x))
+		return 1
+	}
+	s := math.Cosh(x)
+	if math.IsInf(s, 0) && !math.IsInf(x, 0) {
+		/* 'cosh' tends to the same value as 'sinh', and is never negative */
+		if y := mathHalfExp(math.Abs(x)); !math.IsInf(y, 1) {
+			L.PushNumber(y)
+			return 1
+		}
+	}
+	L.PushNumber(s)
+	return 1
+}
+
 func mathSinh(L *State) int {
 	x := L.CheckNumber(1)
 	if haveLibm {
@@ -598,24 +611,6 @@ func mathSinh(L *State) int {
 			} else {
 				L.PushNumber(y)
 			}
-			return 1
-		}
-	}
-	L.PushNumber(s)
-	return 1
-}
-
-func mathCosh(L *State) int {
-	x := L.CheckNumber(1)
-	if haveLibm {
-		L.PushNumber(libmCosh(x))
-		return 1
-	}
-	s := math.Cosh(x)
-	if math.IsInf(s, 0) && !math.IsInf(x, 0) {
-		/* 'cosh' tends to the same value as 'sinh', and is never negative */
-		if y := mathHalfExp(math.Abs(x)); !math.IsInf(y, 1) {
-			L.PushNumber(y)
 			return 1
 		}
 	}
@@ -685,7 +680,7 @@ var mathLib = []Reg{
 	{Name: "sqrt", Func: mathSqrt},
 	{Name: "tan", Func: mathTan},
 	{Name: "type", Func: mathType},
-	/* the ones 'LUA_COMPAT_MATHLIB' adds (lmathlib.c) */
+	/* LUA_COMPAT_MATHLIB (always on in this port — FLAG: C gates with #if) */
 	{Name: "atan2", Func: mathAtan},
 	{Name: "cosh", Func: mathCosh},
 	{Name: "sinh", Func: mathSinh},
@@ -694,8 +689,13 @@ var mathLib = []Reg{
 	{Name: "frexp", Func: mathFrexp},
 	{Name: "ldexp", Func: mathLdexp},
 	{Name: "log10", Func: mathLog10},
-	/* C mathlib[] also has NULL placeholders for random/randomseed/
-	   pi/huge/maxinteger/mininteger — filled in OpenMath / setrandfunc */
+	/* placeholders — overwritten in OpenMath / mathSetRandFunc */
+	{Name: "random", Func: nil},
+	{Name: "randomseed", Func: nil},
+	{Name: "pi", Func: nil},
+	{Name: "huge", Func: nil},
+	{Name: "maxinteger", Func: nil},
+	{Name: "mininteger", Func: nil},
 }
 
 // OpenMath opens the math library (luaopen_math in lmathlib.c).

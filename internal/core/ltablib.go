@@ -135,9 +135,8 @@ func tableMove(L *State) int {
 func tableAddField(L *State, b *Buffer, i int64) {
 	L.GetI(1, i)
 	if !L.IsString(-1) {
-		/* C: "%I" / LUAI_UACINT; Go fmt uses %d for int64 */
-		L.Error2("invalid value (%s) at index %d in table for 'concat'",
-			TypeName(L.Type(-1)), i)
+		L.Error2("invalid value (%s) at index %I in table for 'concat'",
+			L.TypeName(-1), i)
 	}
 	b.AddValue()
 }
@@ -166,9 +165,9 @@ func tableConcat(L *State) int {
  */
 
 func tablePack(L *State) int {
-	n := L.GetTop()     /* number of elements to pack */
-	L.CreateTable(n, 1) /* create result table */
-	L.Insert(1)         /* put it at index 1 */
+	n := L.GetTop()           /* number of elements to pack */
+	L.CreateTable(n, 1)       /* create result table */
+	L.Insert(1)               /* put it at index 1 */
 	for i := n; i >= 1; i-- { /* assign elements */
 		L.SetI(1, int64(i))
 	}

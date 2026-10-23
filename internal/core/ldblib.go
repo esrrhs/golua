@@ -4,8 +4,9 @@
 // lua_getlocal, lua_getupvalue, ...); counterparts are translated here
 // (dbGetStack, dbGetInfo, dbGetLocal, dbGetUpvalue, ...) on top of
 // currentLine, luaG_getfuncline, luaF_getlocalname, luaO_chunkid,
-// upvalValue, getFuncName. See align-wip-54/ldblib/NOTES.md for FLAG
-// intentional diffs and Apply debt.
+// upvalValue, getFuncName. Upvalue bodies delegate to lapi
+// (GetUpvalue/SetUpvalue/UpvalueId). FLAG intentional diffs: see
+// /workspace/mafang/golua-align/reports2/ldblib.md.
 package core
 
 import (
@@ -104,26 +105,23 @@ func dbPush(L *State, v *Value) {
 	L.top++
 }
 
-// dbFindLocal is luaG_findlocal: it returns the name and the stack slot
-// of the local variable at index 'n' (1-based) of a frame. An empty name
-// means "no such variable".
-//
-// Uses currentpc = savedpc-1 like C. ci.next nil-guard is defensive
-// (C assumes ci->next when ci != L->ci). Note: ldebug.luaG_findlocal is
-// a narrower stub; the full findlocal lives here (packaging FLAG).
+// dbFindLocal is luaG_findlocal with a stack-slot return (C: StkId *pos).
+// Control flow matches ldebug.c; vararg names/slots via findvararg;
+// PC via currentpc. ci.next nil-guard is defensive (C assumes ci->next
+// when ci != L->ci). Name-only callers use ldebug.luaG_findlocal.
 func dbFindLocal(L *State, ci *CallInfo, n int) (string, int) {
 	base := ci.funcIdx + 1
-	if isLua(ci) && n < 0 { /* access to vararg values? */
-		cl := clLvalue(&L.stack[ci.funcIdx])
-		if cl.p.isVararg != 0 && n >= -ci.nExtraArgs {
-			return "(vararg)", ci.funcIdx - ci.nExtraArgs - (n + 1)
-		}
-		return "", 0 /* no such vararg */
-	}
 	var name string
 	if isLua(ci) {
-		cl := clLvalue(&L.stack[ci.funcIdx])
-		name = luaF_getlocalname(cl.p, n, ci.savedpc-1)
+		if n < 0 { /* access to vararg values? */
+			var pos int
+			name = findvararg(L, ci, n, &pos)
+			if name == "" {
+				return "", 0 /* no such vararg */
+			}
+			return name, pos
+		}
+		name = luaF_getlocalname(clLvalue(&L.stack[ci.funcIdx]).p, n, currentpc(ci))
 	}
 	if name == "" { /* no 'standard' name? */
 		limit := L.top
@@ -133,18 +131,29 @@ func dbFindLocal(L *State, ci *CallInfo, n int) (string, int) {
 		if limit-base >= n && n > 0 { /* is 'n' inside 'ci' stack? */
 			/* generic name for any valid slot */
 			if isLua(ci) {
-				return "(temporary)", base + (n - 1)
+				name = "(temporary)"
+			} else {
+				name = "(C temporary)"
 			}
-			return "(C temporary)", base + (n - 1)
+		} else {
+			return "", 0 /* no name */
 		}
-		return "", 0 /* no name */
 	}
-	return name, base + (n - 1)
+	return name, base + (n - 1) /* C: if (pos) *pos = base + (n - 1) */
 }
 
 // dbGetLocal is lua_getlocal(L, ar, n): it pushes the value of the local
 // variable and returns its name ("" when there is no such variable).
+// ar == nil is the non-active function path (name only; value not pushed).
 func dbGetLocal(L *State, ar *dbAr, n int) string {
+	if ar == nil { /* information about non-active function? */
+		fv := &L.stack[L.top-1]
+		if !ttisLclosure(fv) { /* not a Lua function? */
+			return ""
+		}
+		/* consider live variables at function start (parameters) */
+		return luaF_getlocalname(clLvalue(fv).p, n, 0)
+	}
 	ci := ar.ci
 	name, slot := dbFindLocal(L, ci, n)
 	if name == "" {
@@ -305,84 +314,28 @@ func dbGetInfo(L *State, what string, ar *dbAr) bool {
 	return status
 }
 
-// dbGetUpvalue is lua_getupvalue: it pushes the value of upvalue 'n' of
-// the closure at 'idx' and returns its name.
+// dbGetUpvalue is lua_getupvalue (body in lapi.GetUpvalue / aux_upvalue).
 func dbGetUpvalue(L *State, idx, n int) (string, bool) {
-	fv := index2value(L, idx)
-	switch {
-	case ttisCclosure(fv):
-		f := clCvalue(fv)
-		if n < 1 || n > f.nupvalues {
-			return "", false
-		}
-		dbPush(L, &f.upvalue[n-1])
-		return "", true /* C closures have no upvalue names */
-	case ttisLclosure(fv):
-		f := clLvalue(fv)
-		p := f.p
-		if n < 1 || n > len(p.upvalues) {
-			return "", false
-		}
-		name := "(no name)"
-		if p.upvalues[n-1].name != nil {
-			name = p.upvalues[n-1].name.val
-		}
-		dbPush(L, upvalValue(f.upvals[n-1]))
-		return name, true
-	}
-	return "", false /* not a closure */
+	return L.GetUpvalue(idx, n)
 }
 
-// dbSetUpvalue is lua_setupvalue: it pops a value from the stack and
-// stores it in upvalue 'n' of the closure at 'idx'.
+// dbSetUpvalue is lua_setupvalue (body in lapi.SetUpvalue / aux_upvalue).
+// Barrier omitted in lapi (Go GC).
 func dbSetUpvalue(L *State, idx, n int) (string, bool) {
-	fv := index2value(L, idx)
-	val := L.stack[L.top-1]
-	switch {
-	case ttisCclosure(fv):
-		f := clCvalue(fv)
-		if n < 1 || n > f.nupvalues {
-			return "", false
-		}
-		f.upvalue[n-1] = val
-		L.top--
-		return "", true
-	case ttisLclosure(fv):
-		f := clLvalue(fv)
-		p := f.p
-		if n < 1 || n > len(p.upvalues) {
-			return "", false
-		}
-		name := "(no name)"
-		if p.upvalues[n-1].name != nil {
-			name = p.upvalues[n-1].name.val
-		}
-		*upvalValue(f.upvals[n-1]) = val
-		L.top--
-		return name, true
-	}
-	return "", false /* not a closure */
+	return L.SetUpvalue(idx, n)
 }
 
-// dbUpvalueID is lua_upvalueid: it returns an identity for an upvalue
-// (a light userdata in C, any pointer here).
+// dbUpvalueID is lua_upvalueid (body in lapi.UpvalueId). Soft-nil for
+// non-functions so cdlopen exports do not panic on a bad index tag;
+// C would api_check. Closure cases match getupvalref / sizeupvalues.
 func dbUpvalueID(L *State, idx, n int) unsafe.Pointer {
 	fv := index2value(L, idx)
-	switch {
-	case ttisCclosure(fv):
-		f := clCvalue(fv)
-		if n < 1 || n > f.nupvalues {
-			return nil
-		}
-		return unsafe.Pointer(&f.upvalue[n-1])
-	case ttisLclosure(fv):
-		f := clLvalue(fv)
-		if n < 1 || n > f.nupvalues {
-			return nil
-		}
-		return unsafe.Pointer(f.upvals[n-1])
+	switch ttypetag(fv) {
+	case LUA_VLCL, LUA_VCCL, LUA_VLCF:
+		return L.UpvalueId(idx, n)
+	default:
+		return nil
 	}
-	return nil
 }
 
 // ---------------------------------------------------------------------
@@ -413,7 +366,7 @@ func dbSetMetaTable(L *State) int {
 func dbGetUserValue(L *State) int {
 	n := int(L.OptInteger(2, 1))
 	if L.Type(1) != LUA_TUSERDATA {
-		L.PushNil() /* luaL_pushfail */
+		L.PushFail() /* luaL_pushfail */
 		return 1
 	}
 	if L.GetUserValue(1, n) != LUA_TNONE {
@@ -429,7 +382,7 @@ func dbSetUserValue(L *State) int {
 	L.CheckAny(2)
 	L.SetTop(2)
 	if L.SetUserValue(1, n) == 0 {
-		L.PushNil() /* luaL_pushfail: fail ≡ nil in this port */
+		L.PushFail() /* luaL_pushfail */
 	}
 	return 1
 }
@@ -487,7 +440,7 @@ func dbGetInfoFunc(L *State) int {
 	} else { /* stack level */
 		level := int(L.CheckInteger(arg + 1))
 		if !dbGetStack(L1, level, &ar) {
-			L.PushNil() /* luaL_pushfail: level out of range */
+			L.PushFail() /* luaL_pushfail: level out of range */
 			return 1
 		}
 	}
@@ -540,15 +493,9 @@ func dbGetLocalFunc(L *State) int {
 	nvar := int(L.CheckInteger(arg + 2)) /* local-variable index */
 	if L.IsFunction(arg + 1) {           /* function argument? */
 		L.PushValue(arg + 1) /* push function */
-		/* information about a non-active function: the name of a
-		   parameter, as it is at the start of the function */
-		name := ""
-		if ttisLclosure(&L.stack[L.top-1]) {
-			cl := clLvalue(&L.stack[L.top-1])
-			name = luaF_getlocalname(cl.p, nvar, 0)
-		}
-		/* 'lua_pushstring(L, NULL)' pushes nil, so an out-of-range index
-		   yields nil here -- not an empty string. */
+		/* C: lua_pushstring(L, lua_getlocal(L, NULL, nvar));
+		   NULL name → push nil (not an empty string). */
+		name := dbGetLocal(L, nil, nvar)
 		if name == "" {
 			L.PushNil()
 		} else {
@@ -569,7 +516,7 @@ func dbGetLocalFunc(L *State) int {
 		L.Rotate(-2, 1)    /* re-order */
 		return 2
 	}
-	L.PushNil() /* luaL_pushfail: no name (nor value) */
+	L.PushFail() /* luaL_pushfail: no name (nor value) */
 	return 1
 }
 
@@ -589,6 +536,9 @@ func dbSetLocalFunc(L *State) int {
 	name := dbSetLocal(L1, &ar, nvar)
 	if name == "" {
 		L1.Pop(1) /* pop value (if not popped by dbSetLocal) */
+	}
+	/* C: lua_pushstring(L, name) — NULL → nil */
+	if name == "" {
 		L.PushNil()
 	} else {
 		L.PushString(name)
@@ -642,7 +592,7 @@ func dbUpValueIDFunc(L *State) int {
 	if id != nil {
 		L.PushLightUserData(id)
 	} else {
-		L.PushNil() /* luaL_pushfail */
+		L.PushFail() /* luaL_pushfail */
 	}
 	return 1
 }
@@ -653,9 +603,7 @@ func dbUpValueJoin(L *State) int {
 	dbCheckUpVal(L, 3, 4, &n2)
 	L.ArgCheck(!L.IsGoFunction(1), 1, "Lua function expected")
 	L.ArgCheck(!L.IsGoFunction(3), 3, "Lua function expected")
-	f1 := clLvalue(index2value(L, 1))
-	f2 := clLvalue(index2value(L, 3))
-	f1.upvals[n1-1] = f2.upvals[n2-1]
+	L.UpvalueJoin(1, n1, 3, n2) /* lua_upvaluejoin; barrier omitted in lapi (Go GC) */
 	return 0
 }
 
@@ -790,8 +738,8 @@ func dbGetHook(L *State) int {
 	arg := 0
 	L1 := dbGetThread(L, &arg)
 	mask := int(L1.hookmask) /* lua_gethookmask(L1) */
-	if L1.hook == nil { /* no hook? */
-		L.PushNil() /* luaL_pushfail */
+	if L1.hook == nil {      /* no hook? */
+		L.PushFail() /* luaL_pushfail */
 		return 1
 	} else if L1.hookExternal { /* external hook (C: hook != hookf) */
 		L.PushString("external hook")

@@ -1,7 +1,7 @@
 // Translation of ldebug.h / ldebug.c (PUC-Lua 5.4.9).
 // Hook install/get and getstack/getinfo wrappers; luaG_traceexec /
-// luaG_tracecall live in lvm.go. LUA_API bodies for getstack/getinfo/
-// getlocal/setlocal live in ldblib.go (db*).
+// luaG_tracecall / changedline live in lvm.go. LUA_API bodies for
+// getstack/getinfo/getlocal/setlocal live in ldblib.go (db*).
 package core
 
 import (
@@ -9,15 +9,25 @@ import (
 	"strings"
 )
 
-// ABSLINEINFO / MAXIWTHABS (ldebug.h): unused at runtime here — Proto
-// stores absolute lines in lineinfo (lobject.go). Constants live in
-// lundump.go for dump/undump round-trip of C delta+abslineinfo form.
+// Header macros from ldebug.h. ABSLINEINFO / MAXIWTHABS are unused at
+// runtime here — Proto stores absolute lines in lineinfo (lobject.go).
+// Dump/undump still use the C delta+abslineinfo form (lundump/ldump).
+const (
+	ABSLINEINFO = -0x80 /* mark: absolute info in abslineinfo */
+	MAXIWTHABS  = 128   /* max successive instrs without abs line info */
+)
 
 // Kind strings returned by symbolic-exec helpers (C's strlocal / strupval).
 const (
 	strLocal = "local"
 	strUpval = "upvalue"
 )
+
+// currentpc is currentpc (ldebug.c): pcRel(savedpc) ≡ savedpc-1 with an
+// index-stack (savedpc is an instruction index, not a code pointer).
+func currentpc(ci *CallInfo) int {
+	return ci.savedpc - 1
+}
 
 // luaG_getfuncline is luaG_getfuncline (ldebug.c): source line of
 // instruction pc. Absolute lineinfo; C walks deltas from getbaseline.
@@ -32,15 +42,14 @@ func luaG_getfuncline(f *Proto, pc int) int {
 	return int(f.lineinfo[pc])
 }
 
-// currentLine is getcurrentline / currentpc (ldebug.c): line of the
-// instruction being executed (currentpc = savedpc-1). Extra !isLua → -1
-// is Go safety.
+// currentLine is getcurrentline (ldebug.c): line of the instruction
+// being executed. Extra !isLua → -1 is Go safety (C asserts isLua).
 func currentLine(L *State, ci *CallInfo) int {
 	if !isLua(ci) {
 		return -1
 	}
 	cl := clLvalue(&L.stack[ci.funcIdx])
-	return luaG_getfuncline(cl.p, ci.savedpc-1)
+	return luaG_getfuncline(cl.p, currentpc(ci))
 }
 
 // pushMessage pushes a string without ever going through checkStack.
@@ -56,6 +65,7 @@ func (L *State) pushMessage(ts *TString) {
 }
 
 // luaG_addinfo prefixes a message with "chunk:line: " (ldebug.c).
+// C pushes via luaO_pushfstring; here pushMessage avoids checkStack.
 func luaG_addinfo(L *State, msg string, src *TString, line int) string {
 	buff := "?"
 	if src != nil {
@@ -70,28 +80,28 @@ func luaG_addinfo(L *State, msg string, src *TString, line int) string {
 // (ldebug.c).
 func luaG_errormsg(L *State) {
 	if L.errfunc != 0 { /* is there an error handling function? */
-		errfunc := L.errfunc
-		L.checkStack(2)
-		L.stack[L.top] = L.stack[L.top-1] /* move argument */
-		L.stack[L.top-1] = L.stack[errfunc]
-		L.top++                         /* assume EXTRA_STACK */
-		luaD_callnoyield(L, L.top-2, 1) /* call it */
+		errfunc := L.errfunc                /* C: restorestack(L, L->errfunc); index-stack */
+		L.stack[L.top] = L.stack[L.top-1]   /* move argument */
+		L.stack[L.top-1] = L.stack[errfunc] /* push function */
+		L.top++                             /* assume EXTRA_STACK */
+		luaD_callnoyield(L, L.top-2, 1)     /* call it */
 	}
 	luaD_throw(L, LUA_ERRRUN)
 }
 
 // luaG_runerror raises a runtime error with a formatted message (ldebug.c).
-// pushfString (lobject) builds the TString without stacking it; this path
-// pushes via addinfo / pushMessage so luaD_seterrorobj sees the message.
-// C: luaC_checkGC + luaO_pushvfstring then optionally addinfo and shrink.
 func luaG_runerror(L *State, format string, args ...any) {
+	ci := L.ci
+	/* C: luaC_checkGC(L) skipped — Go GC; luaO_pushvfstring then
+	   optionally addinfo and shrink the original msg. pushfString does
+	   not stack-push; addinfo/pushMessage put the final message on top. */
 	ts := pushfString(L, format, args...)
-	if L.ci != nil && isLua(L.ci) { /* if Lua function, add source:line */
-		cl := clLvalue(&L.stack[L.ci.funcIdx])
-		luaG_addinfo(L, ts.val, cl.p.source, currentLine(L, L.ci))
+	if ci != nil && isLua(ci) { /* if Lua function, add source:line */
+		cl := clLvalue(&L.stack[ci.funcIdx])
+		luaG_addinfo(L, ts.val, cl.p.source, currentLine(L, ci))
+		/* C: setobjs2s remove original msg; nothing to remove here */
 	} else {
-		/* no Lua frame to add position info to: push the message
-		   itself, so that luaD_seterrorobj finds it on the top */
+		/* no Lua frame: push the message so luaD_seterrorobj finds it */
 		L.pushMessage(ts)
 	}
 	luaG_errormsg(L)
@@ -127,7 +137,7 @@ func (L *State) installHook(hook func(L *State, ar *dbAr), mask, count int, exte
 	L.hookmask = byte(mask)
 	L.hookExternal = external && hook != nil
 	if mask != 0 {
-		setTraps(L) /* to trace inside luaV_execute (C: settraps) */
+		setTraps(L) /* to trace inside luaV_execute (C: settraps(L->ci)) */
 	}
 }
 
@@ -174,46 +184,72 @@ func upvalName(p *Proto, uv int) string {
 	return p.upvalues[uv].name.val
 }
 
+// findvararg is findvararg (ldebug.c). When pos != nil it receives the
+// stack index of the vararg (C: *pos = StkId). L is required for the
+// index-stack (C reads via ci->func.p).
+func findvararg(L *State, ci *CallInfo, n int, pos *int) string {
+	if clLvalue(&L.stack[ci.funcIdx]).p.isVararg != 0 {
+		nextra := ci.nExtraArgs
+		if n >= -nextra { /* 'n' is negative */
+			if pos != nil { /* Go: C writes *pos unconditionally */
+				*pos = ci.funcIdx - nextra - (n + 1)
+			}
+			return "(vararg)" /* generic name for any vararg */
+		}
+	}
+	return "" /* no such vararg */
+}
+
 // luaG_findlocal returns the name of local/vararg/temporary at 1-based
-// index n (ldebug.c). Slot selection for getlocal/setlocal is in
-// ldblib.dbFindLocal (same logic + pos). Used by lfunc.checkclosemth.
+// index n (ldebug.c). Name-only entry for existing callers (lfunc
+// checkclosemth); C also takes StkId *pos — see findlocal.
+// ldblib.dbFindLocal still duplicates name+slot for getlocal/setlocal.
 func luaG_findlocal(L *State, ci *CallInfo, n int) string {
+	return findlocal(L, ci, n, nil)
+}
+
+// findlocal is the full luaG_findlocal (ldebug.c) including optional
+// stack-slot out-param (C: StkId *pos → Go *int index).
+func findlocal(L *State, ci *CallInfo, n int, pos *int) string {
 	base := ci.funcIdx + 1
+	var name string
 	if isLua(ci) {
 		if n < 0 { /* access to vararg values? */
-			cl := clLvalue(&L.stack[ci.funcIdx])
-			if cl.p.isVararg != 0 && n >= -ci.nExtraArgs {
-				return "(vararg)"
+			return findvararg(L, ci, n, pos)
+		}
+		name = luaF_getlocalname(clLvalue(&L.stack[ci.funcIdx]).p, n, currentpc(ci))
+	}
+	if name == "" { /* no 'standard' name? */
+		limit := L.top
+		if ci != L.ci {
+			/* C: ci->next->func.p; nil-guard is Go safety */
+			if ci.next == nil {
+				return ""
 			}
-			return ""
+			limit = ci.next.funcIdx
 		}
-		name := luaF_getlocalname(clLvalue(&L.stack[ci.funcIdx]).p, n, ci.savedpc-1)
-		if name != "" {
-			return name
+		if limit-base >= n && n > 0 { /* is 'n' inside 'ci' stack? */
+			/* generic name for any valid slot */
+			if isLua(ci) {
+				name = "(temporary)"
+			} else {
+				name = "(C temporary)"
+			}
+		} else {
+			return "" /* no name */
 		}
 	}
-	/* no 'standard' name? */
-	limit := L.top
-	if ci != L.ci && ci.next != nil {
-		limit = ci.next.funcIdx
+	if pos != nil {
+		*pos = base + (n - 1)
 	}
-	if limit-base >= n && n > 0 { /* is 'n' inside 'ci' stack? */
-		if isLua(ci) {
-			return "(temporary)"
-		}
-		return "(C temporary)"
-	}
-	return ""
+	return name
 }
 
 // ---------------------------------------------------------------------
 // Symbolic Execution (ldebug.c)
 // ---------------------------------------------------------------------
 
-// testAMode reports whether the opcode sets register A (lopcodes.h).
-
-// testMMMode reports whether the opcode is a metamethod helper
-// (lopcodes.h: testMMMode).
+// testAMode / testMMMode: see lopcodes.go (luaP_opmodes bits).
 
 // filterpc is filterpc (ldebug.c).
 func filterpc(pc, jmptarget int) int {
@@ -246,7 +282,7 @@ func findsetreg(p *Proto, lastpc, reg int) int {
 		case OP_CALL, OP_TAILCALL: /* affect all registers above base */
 			change = reg >= a
 		case OP_JMP: /* doesn't change registers, but changes 'jmptarget' */
-			dest := pc + 1 + (i.B - OFFSET_sJ) /* GETARG_sJ */
+			dest := pc + 1 + sJ(i.B) /* GETARG_sJ */
 			/* jump does not skip 'lastpc' and is larger than current one? */
 			if dest <= lastpc && dest > jmptarget {
 				jmptarget = dest /* update 'jmptarget' */
@@ -415,25 +451,24 @@ func funcNameFromCode(L *State, p *Proto, pc int, name *string) string {
 		return "" /* cannot find a reasonable name */
 	}
 	/* C: getshrstr(G(L)->tmname[tm]) + 2  (skip "__") */
-	_ = L
-	*name = strings.TrimPrefix(luaT_eventname[tm], "__")
+	*name = L.g.tmNames[tm].val[2:]
 	return "metamethod"
 }
 
 // funcNameFromCall is funcnamefromcall (ldebug.c).
 func funcNameFromCall(L *State, ci *CallInfo, name *string) string {
-	switch {
-	case ci == nil:
-		return ""
-	case ci.callstatus&CIST_HOOKED != 0: /* was it called inside a hook? */
+	if ci == nil {
+		return "" /* Go safety; C assumes non-NULL */
+	}
+	if ci.callstatus&CIST_HOOKED != 0 { /* was it called inside a hook? */
 		*name = "?"
 		return "hook"
-	case ci.callstatus&CIST_FIN != 0: /* was it called as a finalizer? */
+	} else if ci.callstatus&CIST_FIN != 0 { /* was it called as a finalizer? */
 		*name = "__gc"
 		return "metamethod" /* report it as such */
-	case isLua(ci):
+	} else if isLua(ci) {
 		return funcNameFromCode(L, clLvalue(&L.stack[ci.funcIdx]).p,
-			ci.savedpc-1, name) /* currentpc */
+			currentpc(ci), name)
 	}
 	return ""
 }
@@ -492,15 +527,17 @@ func formatvarinfo(kind, name string) string {
 // value (ldebug.c).
 func varinfo(L *State, o *Value) string {
 	ci := L.ci
-	if ci == nil || !isLua(ci) || o == nil {
-		return ""
-	}
 	var name string
-	kind := getUpvalName(L, ci, o, &name) /* check whether 'o' is an upvalue */
-	if kind == "" {                       /* not an upvalue? */
-		if reg := instack(L, ci, o); reg >= 0 { /* is 'o' a register? */
-			p := clLvalue(&L.stack[ci.funcIdx]).p
-			kind = getobjname(p, ci.savedpc-1, reg, &name) /* currentpc */
+	var kind string
+	/* C assumes ci and o; nil-guards are Go safety (index-stack / API). */
+	if ci != nil && isLua(ci) && o != nil {
+		kind = getUpvalName(L, ci, o, &name) /* check whether 'o' is an upvalue */
+		if kind == "" {                      /* not an upvalue? */
+			reg := instack(L, ci, o) /* try a register */
+			if reg >= 0 {            /* is 'o' a register? */
+				kind = getobjname(clLvalue(&L.stack[ci.funcIdx]).p,
+					currentpc(ci), reg, &name)
+			}
 		}
 	}
 	return formatvarinfo(kind, name)
@@ -524,8 +561,9 @@ func luaG_typeerror(L *State, o *Value, op string) {
 // luaG_callerror raises "attempt to call a <type> value" (ldebug.c).
 // Prefers funcnamefromcall; falls back to varinfo.
 func luaG_callerror(L *State, o *Value) {
+	ci := L.ci
 	var name string
-	kind := funcNameFromCall(L, L.ci, &name)
+	kind := funcNameFromCall(L, ci, &name)
 	extra := ""
 	if kind != "" {
 		extra = formatvarinfo(kind, name)
@@ -577,3 +615,5 @@ func luaG_ordererror(L *State, p1, p2 *Value) {
 
 // luaG_tracecall / luaG_traceexec / changedline / getbaseline: see lvm.go
 // (trap fastpath; absolute lineinfo; hooks cannot yield).
+// getbaseline / nextline / collectvalidlines / funcinfo / auxgetinfo:
+// see ldblib.go (absolute lineinfo; LUA_API bodies).

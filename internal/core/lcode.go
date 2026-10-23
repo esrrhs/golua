@@ -1,11 +1,17 @@
-// Translation of lcode.h / lcode.c (PUC-Lua 5.4.9).
+// Translation of lcode.h / lcode.c (PUC-Lua 5.4.9) — line-faithful C→Go.
 //
-// Adaptations:
-//   - instructions are structs, so GETARG_x/SETARG_x become field accesses;
-//   - Proto.lineinfo holds absolute lines, so savelineinfo/removelastlineinfo
-//     lose the abslineinfo machinery;
-//   - luaC_barrier is gone (no GC);
-//   - luaM_growvector becomes append.
+// Intentional adaptations (FLAG — port-wide; see lobject.go / lparser.go):
+//   - Instruction is a struct (GETARG_*/SETARG_*/CREATE_* → field access /
+//     newABC/newABx/newAx); Bx/sBx/sJ live in .B;
+//   - Proto.lineinfo stores absolute lines (C: signed-byte deltas +
+//     abslineinfo). savelineinfo/removelastlineinfo therefore omit
+//     LIMLINEDIFF / ABSLINEINFO / iwthabs / nabslineinfo; ldump regenerates
+//     the C on-disk form. FuncState has no nabslineinfo/iwthabs.
+//     removelastlineinfo does not shrink the slice (C never does); the next
+//     savelineinfo overwrites at pc (write-at-pc), like luaK_code for code[];
+//   - luaC_barrier omitted (Go GC); luaM_growvector → append / write-at-pc;
+//   - previousinstruction returns a code index (-1 if invalid) instead of
+//     an Instruction* to a static invalid word.
 package core
 
 import "math"
@@ -19,6 +25,11 @@ const MAXREGS = 255
 
 // hasjumps reports whether an expression has pending jumps.
 func hasjumps(e *expdesc) bool { return e.t != e.f }
+
+// getinstruction returns a pointer to the instruction of expression 'e' (lcode.h).
+func getinstruction(fs *FuncState, e *expdesc) *Instruction {
+	return &fs.f.code[e.info]
+}
 
 // BinOpr enumerates binary operators (ORDER OPR).
 type BinOpr int
@@ -176,7 +187,7 @@ func fixjump(fs *FuncState, pc, dest int) {
 	if !(-OFFSET_sJ <= offset && offset <= MAXARG_sJ-OFFSET_sJ) {
 		luaX_syntaxerror(fs.ls, "control structure too long")
 	}
-	fs.f.code[pc].Op = OP_JMP
+	/* C: lua_assert(GET_OPCODE(*jmp) == OP_JMP); SETARG_sJ(*jmp, offset) */
 	fs.f.code[pc].B = offset + OFFSET_sJ
 }
 
@@ -290,28 +301,43 @@ func luaK_jumpto(fs *FuncState, t int) {
 // line information
 // ---------------------------------------------------------------------
 
-// savelineinfo saves the line of the last coded instruction. PUC-Lua stores
-// line deltas plus an abslineinfo array; here 'lineinfo' holds absolute
-// lines, which is equivalent and much simpler.
+// savelineinfo saves line info for a new instruction.
+// FLAG: C stores a signed-byte delta (or ABSLINEINFO + abslineinfo entry)
+// when |linedif| >= LIMLINEDIFF or iwthabs >= MAXIWTHABS. This port keeps
+// absolute lines in Proto.lineinfo (ldump rebuilds the C form on write).
 func savelineinfo(fs *FuncState, f *Proto, line int) {
-	fs.f.lineinfo = append(fs.f.lineinfo, int32(line))
-	fs.previousline = line
+	pc := fs.pc - 1 /* last instruction coded */
+	if pc < len(f.lineinfo) {
+		f.lineinfo[pc] = int32(line)
+	} else {
+		f.lineinfo = append(f.lineinfo, int32(line))
+	}
+	fs.previousline = line /* last line saved */
 }
 
 // removelastlineinfo removes the line information of the last instruction.
+// FLAG: no abslineinfo / iwthabs; restore previousline from the prior absolute
+// entry (or linedefined). Do not shrink lineinfo — C never shrinks here;
+// the next savelineinfo overwrites [pc] (write-at-pc), matching growvector.
 func removelastlineinfo(fs *FuncState) {
-	if n := len(fs.f.lineinfo); n > 0 {
-		fs.f.lineinfo = fs.f.lineinfo[:n-1]
+	f := fs.f
+	pc := fs.pc - 1 /* last instruction coded */
+	if pc < 0 {
+		return
+	}
+	if pc > 0 {
+		fs.previousline = int(f.lineinfo[pc-1])
+	} else {
+		fs.previousline = f.linedefined
 	}
 }
 
-// removelastinstruction removes the last instruction created.
+// removelastinstruction removes the last instruction created, correcting
+// line information accordingly. (C only decrements pc; capacity is reused
+// by the next luaK_code write-at-pc.)
 func removelastinstruction(fs *FuncState) {
 	removelastlineinfo(fs)
 	fs.pc--
-	if n := len(fs.f.code); n > fs.pc {
-		fs.f.code = fs.f.code[:fs.pc]
-	}
 }
 
 // ---------------------------------------------------------------------
@@ -319,12 +345,18 @@ func removelastinstruction(fs *FuncState) {
 // ---------------------------------------------------------------------
 
 // luaK_code emits instruction 'i', returning its position.
+// C: luaM_growvector then f->code[fs->pc++] = i; here write-at-pc when
+// capacity remains after removelastinstruction, else append.
 func luaK_code(fs *FuncState, i Instruction) int {
 	f := fs.f
-	f.code = append(f.code, i)
+	if fs.pc < len(f.code) {
+		f.code[fs.pc] = i
+	} else {
+		f.code = append(f.code, i)
+	}
 	fs.pc++
 	savelineinfo(fs, f, fs.ls.lastline)
-	return fs.pc - 1
+	return fs.pc - 1 /* index of new instruction */
 }
 
 // luaK_codeABCk formats and emits an iABC instruction.
@@ -339,7 +371,7 @@ func luaK_codeABC(fs *FuncState, o, a, b, c int) int {
 
 // luaK_codeABx formats and emits an iABx instruction.
 func luaK_codeABx(fs *FuncState, o, a, bc int) int {
-	return luaK_code(fs, newABC(o, a, bc, 0, 0))
+	return luaK_code(fs, newABx(o, a, bc)) /* CREATE_ABx */
 }
 
 // codeAsBx formats and emits an iAsBx instruction.
@@ -347,17 +379,15 @@ func codeAsBx(fs *FuncState, o, a, bc int) int {
 	return luaK_codeABx(fs, o, a, bc+OFFSET_sBx)
 }
 
-// codesJ formats and emits an isJ instruction. PUC-Lua packs the 'sJ'
-// operand in the same bit position as 'A'; here it goes in the B field,
-// which is what luaV_execute, getjump and fixjump read.
+// codesJ formats and emits an isJ instruction.
+// C CREATE_sJ packs sJ across A/k/B/C bits; here newSJ stores biased sJ in .B.
 func codesJ(fs *FuncState, o, sj, k int) int {
-	j := sj + OFFSET_sJ
-	return luaK_code(fs, newABC(o, 0, j, 0, k))
+	return luaK_code(fs, newSJ(o, sj, k)) /* CREATE_sJ */
 }
 
-// codeextraarg emits an "extra argument" instruction.
+// codeextraarg emits an "extra argument" instruction (format iAx).
 func codeextraarg(fs *FuncState, a int) int {
-	return luaK_code(fs, newABC(OP_EXTRAARG, a, 0, 0, 0))
+	return luaK_code(fs, newAx(OP_EXTRAARG, a)) /* CREATE_Ax */
 }
 
 // luaK_codek emits a "load constant" instruction.
@@ -461,8 +491,9 @@ func addk(fs *FuncState, key, v *Value) int {
 	var val Value
 	setivalue(&val, int64(k))
 	luaH_finishset(L, fs.ls.h, key, idx, &val)
-	f.k = append(f.k, *v) /* grows by one; nk == len(f.k) - 1 */
+	f.k = append(f.k, *v) /* C: luaM_growvector + setobj; sizek via len */
 	fs.nk++
+	/* C: luaC_barrier(L, f, v); omitted — Go GC */
 	return k
 }
 
@@ -490,15 +521,16 @@ func luaK_numberK(fs *FuncState, r float64) int {
 		return addk(fs, &o, &o) /* use number itself as key */
 	}
 	/* must build an alternative key */
-	const nbm = 53 /* MANT_DIG of a double */
+	const nbm = 53 /* l_floatatt(MANT_DIG) for IEEE754 binary64 */
 	q := math.Ldexp(1.0, -nbm+1)
-	k := q
+	k := q /* C: (ik == 0) ? q : r + r*q */
 	if ik != 0 {
 		k = r + r*q
 	}
 	var kv Value
 	setfltvalue(&kv, k)
 	/* result is not an integral value, unless value is too large */
+	/* C: lua_assert(!luaV_flttointeger(k, &ik, F2Ieq) || fabs(r) >= 1e6) */
 	return addk(fs, &kv, &o)
 }
 
@@ -573,7 +605,7 @@ func const2exp(v *Value, e *expdesc) {
 
 // luaK_setreturns fixes an expression to return 'nresults' results.
 func luaK_setreturns(fs *FuncState, e *expdesc, nresults int) {
-	pc := &fs.f.code[e.info]
+	pc := getinstruction(fs, e)
 	if e.k == VCALL { /* expression is an open function call? */
 		pc.C = nresults + 1
 	} else {
@@ -599,9 +631,9 @@ func luaK_setoneret(fs *FuncState, e *expdesc) {
 	if e.k == VCALL { /* expression is an open function call? */
 		/* already returns 1 value */
 		e.k = VNONRELOC /* result has fixed position */
-		e.info = fs.f.code[e.info].A
+		e.info = getinstruction(fs, e).A
 	} else if e.k == VVARARG {
-		fs.f.code[e.info].C = 2
+		getinstruction(fs, e).C = 2
 		e.k = VRELOC /* can relocate its simple result */
 	}
 }
@@ -661,13 +693,15 @@ func discharge2reg(fs *FuncState, e *expdesc, reg int) {
 	case VKINT:
 		luaK_int(fs, reg, e.ival)
 	case VRELOC:
-		fs.f.code[e.info].A = reg /* instruction will put result in 'reg' */
+		pc := getinstruction(fs, e)
+		pc.A = reg /* instruction will put result in 'reg' */
 	case VNONRELOC:
 		if reg != e.info {
 			luaK_codeABC(fs, OP_MOVE, reg, e.info, 0)
 		}
 	default:
-		return /* VJMP: nothing to do */
+		/* C: lua_assert(e->k == VJMP); return — skip e.info/e.k update */
+		return /* nothing to do... */
 	}
 	e.info = reg
 	e.k = VNONRELOC
@@ -707,7 +741,7 @@ func exp2reg(fs *FuncState, e *expdesc, reg int) {
 		p_f := NO_JUMP /* position of an eventual LOAD false */
 		p_t := NO_JUMP /* position of an eventual LOAD true */
 		if need_value(fs, e.t) || need_value(fs, e.f) {
-			fj := NO_JUMP
+			fj := NO_JUMP /* C: (e->k == VJMP) ? NO_JUMP : luaK_jump(fs) */
 			if e.k != VJMP {
 				fj = luaK_jump(fs)
 			}
@@ -811,7 +845,7 @@ func exp2RK(fs *FuncState, e *expdesc) bool {
 }
 
 func codeABRK(fs *FuncState, o, a, b int, ec *expdesc) {
-	k := 0
+	k := 0 /* C: int k = exp2RK(fs, ec); bool→0/1 */
 	if exp2RK(fs, ec) {
 		k = 1
 	}
@@ -861,15 +895,13 @@ func negatecondition(fs *FuncState, e *expdesc) {
 // jumponcond emits code to jump if 'e' is 'cond'.
 func jumponcond(fs *FuncState, e *expdesc, cond int) int {
 	if e.k == VRELOC {
-		ie := fs.f.code[e.info]
+		ie := *getinstruction(fs, e)
 		if ie.Op == OP_NOT {
 			removelastinstruction(fs) /* remove previous OP_NOT */
-			k := 0
-			if cond == 0 {
-				k = 1
-			}
-			return condjump(fs, OP_TEST, ie.B, 0, 0, k)
+			/* C: condjump(..., !cond) */
+			return condjump(fs, OP_TEST, ie.B, 0, 0, 1-cond)
 		}
+		/* else go through */
 	}
 	discharge2anyreg(fs, e)
 	freeexp(fs, e)
@@ -1336,8 +1368,8 @@ func luaK_settablesize(fs *FuncState, pc, ra, asize, hsize int) {
 	if extra > 0 {
 		k = 1 /* true iff needs extra argument */
 	}
-	fs.f.code[pc] = newABC(OP_NEWTABLE, ra, rb, rc, k)
-	fs.f.code[pc+1] = newABC(OP_EXTRAARG, extra, 0, 0, 0)
+	fs.f.code[pc] = newABC(OP_NEWTABLE, ra, rb, rc, k) /* CREATE_ABCk */
+	fs.f.code[pc+1] = newAx(OP_EXTRAARG, extra)        /* CREATE_Ax */
 }
 
 // luaK_setlist emits a SETLIST instruction.
@@ -1363,7 +1395,7 @@ func finaltarget(code []Instruction, i int) int {
 		if pc.Op != OP_JMP {
 			break
 		}
-		i += pc.B - OFFSET_sJ + 1
+		i += pc.B - OFFSET_sJ + 1 /* C: i += GETARG_sJ(pc) + 1 */
 	}
 	return i
 }

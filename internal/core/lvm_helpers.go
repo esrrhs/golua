@@ -8,45 +8,194 @@
 
 package core
 
-func luaV_tonumber_(L *State, o *Value, n *float64) bool {
-	switch {
-	case ttisinteger(o):
-		*n = float64(ivalue(o))
+/*
+** 'l_intfitsf' checks whether a given integer is in the range that
+** can be converted to a float without rounding. Used in comparisons.
+ */
+
+/* number of bits in the mantissa of a float (IEEE-754 double) */
+const NBM = 53
+
+/* limit for integers that fit in a float */
+const MAXINTFITSF = uint64(1) << NBM
+
+/* check whether 'i' is in the interval [-MAXINTFITSF, MAXINTFITSF] */
+func l_intfitsf(i int64) bool {
+	return MAXINTFITSF+uint64(i) <= 2*MAXINTFITSF
+}
+
+/*
+** Try to convert a value from string to a number value.
+** If the value is not a string or is a string not representing
+** a valid numeral (or if coercions from strings to numbers
+** are disabled via macro 'cvt2num'), do not modify 'result'
+** and return false.
+ */
+func l_strton(obj *Value, result *Value) bool {
+	/* lua_assert(obj != result) */
+	if !cvt2num(obj) { /* is object not a string? */
+		return false
+	} else {
+		st := tsvalue(obj)
+		/* C: return (luaO_str2num(getstr(st), result) == tsslen(st) + 1);
+		   Go's luaO_str2num already requires a full-numeral parse. */
+		return luaO_str2num(getstr(st), result)
+	}
+}
+
+/*
+** Try to convert a value to a float. The float case is already handled
+** by the macro 'tonumber'.
+**
+** C signature has no lua_State*; the unused L is kept so existing
+** call sites that still pass a state (and that should eventually call
+** tonumber) keep compiling.
+**
+** DEVIATION: also accepts floats. C's luaV_tonumber_ does not — the
+** tonumber macro does. Several siblings still call luaV_tonumber_
+** where C uses tonumber; until those switch, float handling stays here.
+ */
+func luaV_tonumber_(L *State, obj *Value, n *float64) bool {
+	_ = L
+	var v Value
+	if ttisinteger(obj) {
+		*n = float64(ivalue(obj))
 		return true
-	case ttisfloat(o):
+	} else if l_strton(obj, &v) { /* string coercible to number? */
+		*n = nvalue(&v) /* convert result of 'luaO_str2num' to a float */
+		return true
+	} else if ttisfloat(obj) { /* see DEVIATION above */
+		*n = fltvalue(obj)
+		return true
+	}
+	return false /* conversion failed */
+}
+
+/*
+** try to convert a float to an integer, rounding according to 'mode'.
+ */
+func luaV_flttointeger(n float64, p *int64, mode F2Imod) bool {
+	f := math2Floor(n) /* l_floor(n) */
+	if n != f {        /* not an integral value? */
+		if mode == F2Ieq {
+			return false /* fails if mode demands integral value */
+		} else if mode == F2Iceil { /* needs ceil? */
+			f += 1 /* convert floor to ceil (remember: n != f) */
+		}
+	}
+	return lua_numbertointeger(f, p)
+}
+
+/* lua_numbertointeger (luaconf.h) — also used as floatToInt below. */
+func lua_numbertointeger(n float64, p *int64) bool {
+	if n >= float64(LUA_MININTEGER) && n < -float64(LUA_MININTEGER) {
+		*p = int64(n)
+		return true
+	}
+	return false
+}
+
+/*
+** try to convert a value to an integer, rounding according to 'mode',
+** without string coercion.
+** ("Fast track" handled by macro 'tointegerns'.)
+ */
+func luaV_tointegerns(obj *Value, p *int64, mode F2Imod) bool {
+	if ttisfloat(obj) {
+		return luaV_flttointeger(fltvalue(obj), p, mode)
+	} else if ttisinteger(obj) {
+		*p = ivalue(obj)
+		return true
+	} else {
+		return false
+	}
+}
+
+/*
+** try to convert a value to an integer.
+**
+** C has no lua_State*; L is kept for call-site compatibility.
+ */
+func luaV_tointeger(L *State, obj *Value, p *int64, mode F2Imod) bool {
+	_ = L
+	var v Value
+	if l_strton(obj, &v) { /* does 'obj' point to a numerical string? */
+		obj = &v /* change it to point to its corresponding number */
+	}
+	return luaV_tointegerns(obj, p, mode)
+}
+
+// ---------------------------------------------------------------------
+// lvm.h macros / types
+// ---------------------------------------------------------------------
+
+// cvt2num: always convert strings to numbers in this port (lvm.h; LUA_NOCVTS2N unset).
+func cvt2num(o *Value) bool { return ttisstring(o) }
+
+// F2Imod is the rounding mode for float -> integer conversion (lvm.h).
+type F2Imod int
+
+const (
+	F2Ieq    F2Imod = iota /* no rounding; accepts only integral values */
+	F2Ifloor               /* takes the floor of the number */
+	F2Iceil                /* takes the ceil of the number */
+)
+
+/*
+** You can define LUA_FLOORN2I if you want to convert floats to integers
+** by flooring them (instead of raising an error if they are not
+** integral values)
+ */
+const LUA_FLOORN2I = F2Ieq
+
+/* convert an object to a float (including string coercion) */
+func tonumber(o *Value, n *float64) bool {
+	if ttisfloat(o) {
 		*n = fltvalue(o)
 		return true
-	case ttisstring(o): // string coercion
-		var v Value
-		return luaO_str2num(tsvalue(o).val, &v) && numberToFloat(&v, n)
+	}
+	return luaV_tonumber_(nil, o, n)
+}
+
+/* convert an object to a float (without string coercion) */
+func tonumberns(o *Value, n *float64) bool {
+	if ttisfloat(o) {
+		*n = fltvalue(o)
+		return true
+	}
+	if ttisinteger(o) {
+		*n = float64(ivalue(o))
+		return true
 	}
 	return false
 }
 
-func numberToFloat(v *Value, n *float64) bool {
-	if ttisinteger(v) {
-		*n = float64(ivalue(v))
+/* convert an object to an integer (including string coercion) */
+func tointeger(L *State, o *Value, i *int64) bool {
+	if ttisinteger(o) { /* l_likely */
+		*i = ivalue(o)
 		return true
 	}
-	if ttisfloat(v) {
-		*n = fltvalue(v)
-		return true
-	}
-	return false
+	return luaV_tointeger(L, o, i, LUA_FLOORN2I)
 }
 
-// luaV_flttointeger converts a float to an integer with a rounding mode.
-func luaV_flttointeger(n float64, p *int64, mode F2Imod) bool {
-	var f float64
-	switch mode {
-	case F2Ifloor:
-		f = mathFloor(n)
-	case F2Iceil:
-		f = mathCeil(n)
-	default:
-		f = n
+/* convert an object to an integer (without string coercion) */
+func tointegerns(o *Value, i *int64) bool {
+	if ttisinteger(o) { /* l_likely */
+		*i = ivalue(o)
+		return true
 	}
-	return floatToInt(f, p)
+	return luaV_tointegerns(o, i, LUA_FLOORN2I)
+}
+
+// ---------------------------------------------------------------------
+// floatToInt / mathFloor / mathCeil — kept for siblings (ltable, lmathlib).
+// floatToInt ≡ luaV_flttointeger(..., F2Ieq). mathFloor/Ceil are l_floor /
+// ceil wrappers used by lmathlib.go (not part of lvm.c).
+// ---------------------------------------------------------------------
+
+func floatToInt(n float64, p *int64) bool {
+	return luaV_flttointeger(n, p, F2Ieq)
 }
 
 func mathFloor(n float64) float64 {
@@ -63,114 +212,207 @@ func mathCeil(n float64) float64 {
 	return math2Ceil(n)
 }
 
-func floatToInt(n float64, p *int64) bool {
-	if n == math2Trunc(n) && !math2IsNaN(n) && n >= -9.223372036854775808e18 && n < 9.223372036854775808e18 {
-		*p = int64(n)
-		return true
-	}
-	return false
-}
-
-// luaV_tointeger converts a value to an integer (with string coercion).
-//
-// C converts the string to a number first and *then* applies the rounding
-// mode, so '"10.8"' becomes 10 under F2Ifloor and 11 under F2Iceil.
-// Dropping the mode (as a plain conversion would) makes 'for i = 1,"10.8"'
-// fail to convert and fall into the wrong, unbounded loop.
-func luaV_tointeger(L *State, o *Value, p *int64, mode F2Imod) bool {
-	if ttisstring(o) {
-		var v Value
-		if luaO_str2num(tsvalue(o).val, &v) {
-			o = &v /* change it to point to its corresponding number */
+/*
+** Check whether integer 'i' is less than float 'f'. If 'i' has an
+** exact representation as a float ('l_intfitsf'), compare numbers as
+** floats. Otherwise, use the equivalence 'i < f <=> i < ceil(f)'.
+** If 'ceil(f)' is out of integer range, either 'f' is greater than
+** all integers or less than all integers.
+** When 'f' is NaN, comparisons must result in false.
+ */
+func LTintfloat(i int64, f float64) bool {
+	if l_intfitsf(i) {
+		return float64(i) < f /* luai_numlt */
+	} else { /* i < f <=> i < ceil(f) */
+		var fi int64
+		if luaV_flttointeger(f, &fi, F2Iceil) { /* fi = ceil(f) */
+			return i < fi /* compare them as integers */
+		} else { /* 'f' is either greater or less than all integers */
+			return f > 0 /* greater? */
 		}
 	}
-	return luaV_tointegerns(o, p, mode)
 }
 
-// luaV_tointegerns converts a number to an integer without string coercion.
-func luaV_tointegerns(o *Value, p *int64, mode F2Imod) bool {
-	switch {
-	case ttisinteger(o):
-		*p = ivalue(o)
-		return true
-	case ttisfloat(o):
-		return luaV_flttointeger(fltvalue(o), p, mode)
+/*
+** Check whether integer 'i' is less than or equal to float 'f'.
+ */
+func LEintfloat(i int64, f float64) bool {
+	if l_intfitsf(i) {
+		return float64(i) <= f /* luai_numle */
+	} else { /* i <= f <=> i <= floor(f) */
+		var fi int64
+		if luaV_flttointeger(f, &fi, F2Ifloor) { /* fi = floor(f) */
+			return i <= fi /* compare them as integers */
+		} else { /* 'f' is either greater or less than all integers */
+			return f > 0 /* greater? */
+		}
 	}
-	return false
 }
 
-// F2Imod is the rounding mode for float -> integer conversion (lvm.h).
-type F2Imod int
-
-const (
-	F2Ieq F2Imod = iota
-	F2Ifloor
-	F2Iceil
-)
-
-// LUA_FLOORN2I is the rounding mode used to convert floats to integers
-// (lvm.h). It is F2Ieq unless overridden.
-const LUA_FLOORN2I = F2Ieq
-
-// tonumberns converts to float without string coercion (lvm.h).
-func tonumberns(o *Value, n *float64) bool {
-	switch {
-	case ttisfloat(o):
-		*n = fltvalue(o)
-		return true
-	case ttisinteger(o):
-		*n = float64(ivalue(o))
-		return true
+/*
+** Check whether float 'f' is less than integer 'i'.
+ */
+func LTfloatint(f float64, i int64) bool {
+	if l_intfitsf(i) {
+		return f < float64(i) /* luai_numlt */
+	} else { /* f < i <=> floor(f) < i */
+		var fi int64
+		if luaV_flttointeger(f, &fi, F2Ifloor) { /* fi = floor(f) */
+			return fi < i /* compare them as integers */
+		} else { /* 'f' is either greater or less than all integers */
+			return f < 0 /* less? */
+		}
 	}
-	return false
 }
 
-// tointegerns converts to integer without string coercion (lvm.h).
-func tointegerns(o *Value, i *int64) bool {
-	if ttisinteger(o) {
-		*i = ivalue(o)
-		return true
+/*
+** Check whether float 'f' is less than or equal to integer 'i'.
+ */
+func LEfloatint(f float64, i int64) bool {
+	if l_intfitsf(i) {
+		return f <= float64(i) /* luai_numle */
+	} else { /* f <= i <=> ceil(f) <= i */
+		var fi int64
+		if luaV_flttointeger(f, &fi, F2Iceil) { /* fi = ceil(f) */
+			return fi <= i /* compare them as integers */
+		} else { /* 'f' is either greater or less than all integers */
+			return f < 0 /* less? */
+		}
 	}
-	return luaV_tointegerns(o, i, F2Ieq)
 }
 
-// tointeger converts to integer with string coercion (lvm.h).
-func tointeger(L *State, o *Value, i *int64) bool {
-	if ttisinteger(o) {
-		*i = ivalue(o)
-		return true
+/* aliases retained for covermore_test.go (C names are LEintfloat / LEfloatint) */
+func leIntFloat(i int64, f float64) bool { return LEintfloat(i, f) }
+func leFloatInt(f float64, i int64) bool { return LEfloatint(f, i) }
+
+/*
+** Return 'l < r', for numbers.
+ */
+func LTnum(l, r *Value) bool {
+	/* lua_assert(ttisnumber(l) && ttisnumber(r)) */
+	if ttisinteger(l) {
+		li := ivalue(l)
+		if ttisinteger(r) {
+			return li < ivalue(r) /* both are integers */
+		} else { /* 'l' is int and 'r' is float */
+			return LTintfloat(li, fltvalue(r)) /* l < r ? */
+		}
+	} else {
+		lf := fltvalue(l) /* 'l' must be float */
+		if ttisfloat(r) {
+			return lf < fltvalue(r) /* both are float; luai_numlt */
+		} else { /* 'l' is float and 'r' is int */
+			return LTfloatint(lf, ivalue(r))
+		}
 	}
-	return luaV_tointeger(L, o, i, F2Ieq)
 }
 
-// luaV_equalobj / luaV_lessthan / luaV_lessequal implement comparisons
-// with metamethods (lvm.c).
+/*
+** Return 'l <= r', for numbers.
+ */
+func LEnum(l, r *Value) bool {
+	/* lua_assert(ttisnumber(l) && ttisnumber(r)) */
+	if ttisinteger(l) {
+		li := ivalue(l)
+		if ttisinteger(r) {
+			return li <= ivalue(r) /* both are integers */
+		} else { /* 'l' is int and 'r' is float */
+			return LEintfloat(li, fltvalue(r)) /* l <= r ? */
+		}
+	} else {
+		lf := fltvalue(l) /* 'l' must be float */
+		if ttisfloat(r) {
+			return lf <= fltvalue(r) /* both are float; luai_numle */
+		} else { /* 'l' is float and 'r' is int */
+			return LEfloatint(lf, ivalue(r))
+		}
+	}
+}
+
+/*
+** return 'l < r' for non-numbers.
+ */
+func lessthanothers(L *State, l, r *Value) bool {
+	/* lua_assert(!ttisnumber(l) || !ttisnumber(r)) */
+	if ttisstring(l) && ttisstring(r) { /* both are strings? */
+		return l_strcmp(tsvalue(l), tsvalue(r)) < 0
+	} else {
+		return luaT_callorderTM(L, l, r, TM_LT)
+	}
+}
+
+/*
+** Main operation less than; return 'l < r'.
+ */
+func luaV_lessthan(L *State, l, r *Value) bool {
+	if ttisnumber(l) && ttisnumber(r) { /* both operands are numbers? */
+		return LTnum(l, r)
+	} else {
+		return lessthanothers(L, l, r)
+	}
+}
+
+/*
+** return 'l <= r' for non-numbers.
+ */
+func lessequalothers(L *State, l, r *Value) bool {
+	/* lua_assert(!ttisnumber(l) || !ttisnumber(r)) */
+	if ttisstring(l) && ttisstring(r) { /* both are strings? */
+		return l_strcmp(tsvalue(l), tsvalue(r)) <= 0
+	} else {
+		return luaT_callorderTM(L, l, r, TM_LE)
+	}
+}
+
+/*
+** Main operation less than or equal to; return 'l <= r'.
+ */
+func luaV_lessequal(L *State, l, r *Value) bool {
+	if ttisnumber(l) && ttisnumber(r) { /* both operands are numbers? */
+		return LEnum(l, r)
+	} else {
+		return lessequalothers(L, l, r)
+	}
+}
+
+/* l_strcmp (lvm.c) — locale-aware string order; body lives in locale.go. */
+func l_strcmp(ts1, ts2 *TString) int {
+	return luaV_strcmp(getstr(ts1), getstr(ts2))
+}
+
+/*
+** Main operation for equality of Lua values; return 't1 == t2'.
+** L == nil means raw equality (no metamethods)
+ */
 func luaV_equalobj(L *State, t1, t2 *Value) bool {
 	var tm *Value
 	if ttypetag(t1) != ttypetag(t2) { /* not the same variant? */
 		if ttype(t1) != ttype(t2) || ttype(t1) != LUA_TNUMBER {
 			return false /* only numbers can be equal with different variants */
+		} else { /* two numbers with different variants */
+			/* One of them is an integer. If the other does not have an
+			   integer value, they cannot be equal; otherwise, compare their
+			   integer values. */
+			var i1, i2 int64
+			return luaV_tointegerns(t1, &i1, F2Ieq) &&
+				luaV_tointegerns(t2, &i2, F2Ieq) &&
+				i1 == i2
 		}
-		/* two numbers with different variants: one of them is an
-		   integer; if the other has no exact integer value they
-		   cannot be equal, otherwise compare the integer values */
-		var i1, i2 int64
-		return tointegerns(t1, &i1) && tointegerns(t2, &i2) && i1 == i2
 	}
-	/* values have the same type and the same variant */
+	/* values have same type and same variant */
 	switch ttypetag(t1) {
 	case LUA_VNIL, LUA_VFALSE, LUA_VTRUE:
 		return true
 	case LUA_VNUMINT:
 		return ivalue(t1) == ivalue(t2)
 	case LUA_VNUMFLT:
-		return fltvalue(t1) == fltvalue(t2)
+		return fltvalue(t1) == fltvalue(t2) /* luai_numeq */
 	case LUA_VLIGHTUSERDATA:
 		return pvalue(t1) == pvalue(t2)
-	case LUA_VLCF: /* light C functions: identity */
-		return gcvalue(t1) == gcvalue(t2)
+	case LUA_VLCF:
+		return pvalue(t1) == pvalue(t2) /* C: fvalue(t1) == fvalue(t2); Go funcs are not comparable */
 	case LUA_VSHRSTR:
-		return luaS_eqshrstr(tsvalue(t1), tsvalue(t2))
+		return luaS_eqshrstr(tsvalue(t1), tsvalue(t2)) /* eqshrstr */
 	case LUA_VLNGSTR:
 		return luaS_eqlngstr(tsvalue(t1), tsvalue(t2))
 	case LUA_VUSERDATA:
@@ -183,6 +425,7 @@ func luaV_equalobj(L *State, t1, t2 *Value) bool {
 		if tm == nil {
 			tm = fasttm(L, uvalue(t2).metatable, TM_EQ)
 		}
+		/* will try TM */
 	case LUA_VTABLE:
 		if hvalue(t1) == hvalue(t2) {
 			return true
@@ -193,145 +436,41 @@ func luaV_equalobj(L *State, t1, t2 *Value) bool {
 		if tm == nil {
 			tm = fasttm(L, hvalue(t2).metatable, TM_EQ)
 		}
+		/* will try TM */
 	default:
 		return gcvalue(t1) == gcvalue(t2)
 	}
 	if tm == nil { /* no TM? */
 		return false /* objects are different */
+	} else {
+		luaT_callTMres(L, tm, t1, t2, L.top) /* call TM */
+		return !l_isfalse(&L.stack[L.top])
 	}
-	luaT_callTMres(L, tm, t1, t2, L.top) /* call TM */
-	return !isFalse(&L.stack[L.top])
 }
 
-// maxIntFitsF is MAXINTFITSF: 1 << NBM, with NBM the number of bits in
-// the mantissa of a float (53 for an IEEE-754 double).
-const maxIntFitsF = uint64(1) << 53
-
-// lIntfitsf reports whether 'i' has an exact representation as a float
-// (l_intfitsf in lvm.c). The addition is unsigned and wraps, exactly as
-// in C, which is what turns the test into "is i in [-2^53, 2^53]".
-func lIntfitsf(i int64) bool {
-	return maxIntFitsF+uint64(i) <= 2*maxIntFitsF
-}
-
-// ltIntFloat returns 'i < f' (LTintfloat). When 'i' has no exact float
-// representation, the two cannot be compared as floats: use the
-// equivalence 'i < f <=> i < ceil(f)'.
-func ltIntFloat(i int64, f float64) bool {
-	if lIntfitsf(i) {
-		return float64(i) < f
-	}
-	var fi int64
-	if luaV_flttointeger(f, &fi, F2Iceil) { /* fi = ceil(f) */
-		return i < fi
-	}
-	return f > 0 /* 'f' is either greater or less than all integers */
-}
-
-func leIntFloat(i int64, f float64) bool {
-	if lIntfitsf(i) {
-		return float64(i) <= f
-	}
-	var fi int64
-	if luaV_flttointeger(f, &fi, F2Ifloor) { /* fi = floor(f) */
-		return i <= fi
-	}
-	return f > 0
-}
-
-func ltFloatInt(f float64, i int64) bool {
-	if lIntfitsf(i) {
-		return f < float64(i)
-	}
-	var fi int64
-	if luaV_flttointeger(f, &fi, F2Ifloor) { /* fi = floor(f) */
-		return fi < i
-	}
-	return f < 0
-}
-
-func leFloatInt(f float64, i int64) bool {
-	if lIntfitsf(i) {
-		return f <= float64(i)
-	}
-	var fi int64
-	if luaV_flttointeger(f, &fi, F2Iceil) { /* fi = ceil(f) */
-		return fi <= i
-	}
-	return f < 0
-}
-
-// ltNum returns 'l < r' for two numbers (LTnum in lvm.c).
-func ltNum(l, r *Value) bool {
-	if ttisinteger(l) {
-		li := ivalue(l)
-		if ttisinteger(r) {
-			return li < ivalue(r)
-		}
-		return ltIntFloat(li, fltvalue(r))
-	}
-	lf := fltvalue(l)
-	if ttisfloat(r) {
-		return lf < fltvalue(r)
-	}
-	return ltFloatInt(lf, ivalue(r))
-}
-
-// leNum returns 'l <= r' for two numbers (LEnum in lvm.c).
-func leNum(l, r *Value) bool {
-	if ttisinteger(l) {
-		li := ivalue(l)
-		if ttisinteger(r) {
-			return li <= ivalue(r)
-		}
-		return leIntFloat(li, fltvalue(r))
-	}
-	lf := fltvalue(l)
-	if ttisfloat(r) {
-		return lf <= fltvalue(r)
-	}
-	return leFloatInt(lf, ivalue(r))
-}
-
-// luaV_lessthan is the main operation 'l < r' (lvm.c).
-func luaV_lessthan(L *State, l, r *Value) bool {
-	if ttisnumber(l) && ttisnumber(r) {
-		return ltNum(l, r)
-	}
-	if ttisstring(l) && ttisstring(r) {
-		return luaV_strcmp(tsvalue(l).val, tsvalue(r).val) < 0
-	}
-	return luaT_callorderTM(L, l, r, TM_LT)
-}
-
-// luaV_lessequal is the main operation 'l <= r' (lvm.c).
-func luaV_lessequal(L *State, l, r *Value) bool {
-	if ttisnumber(l) && ttisnumber(r) {
-		return leNum(l, r)
-	}
-	if ttisstring(l) && ttisstring(r) {
-		return luaV_strcmp(tsvalue(l).val, tsvalue(r).val) <= 0
-	}
-	return luaT_callorderTM(L, l, r, TM_LE)
-}
-
-// luaV_objlen is the main operation 'ra = #rb' (lvm.c).
+/*
+** Main operation 'ra = #rb'.
+ */
 func luaV_objlen(L *State, ra int, rb *Value) {
 	var tm *Value
 	switch ttypetag(rb) {
 	case LUA_VTABLE:
 		h := hvalue(rb)
 		tm = fasttm(L, h.metatable, TM_LEN)
-		if tm == nil {
-			setivalue(&L.stack[ra], int64(luaH_getn(h)))
-			return
+		if tm != nil {
+			break /* metamethod? break switch to call it */
 		}
-	case LUA_VSHRSTR, LUA_VLNGSTR:
-		setivalue(&L.stack[ra], int64(len(tsvalue(rb).val)))
+		setivalue(&L.stack[ra], int64(luaH_getn(h))) /* else primitive len */
 		return
-	default:
+	case LUA_VSHRSTR:
+		setivalue(&L.stack[ra], int64(tsslen(tsvalue(rb))))
+		return
+	case LUA_VLNGSTR:
+		setivalue(&L.stack[ra], int64(tsslen(tsvalue(rb))))
+		return
+	default: /* try metamethod */
 		tm = luaT_gettmbyobj(L, rb, TM_LEN)
-		if notm(tm) {
+		if notm(tm) { /* no metamethod? */
 			luaG_typeerror(L, rb, "get length of")
 			return
 		}

@@ -42,41 +42,66 @@ const (
 ** in the flag of a (meta)table means the metatable does not have the
 ** corresponding metamethod field. (Bit 7 of the flag is used for
 ** 'isrealasize'.)
-** C: #define maskflags (~(~0u << (TM_EQ + 1))) → 0x3F
-** Defined/used in ltable.go (same value); not duplicated here.
+** C: #define maskflags (~(~0u << (TM_EQ + 1)))
+** Defined/used in ltable.go (same value 0x3F); not duplicated here.
  */
 
-// nilObject stands in for C G(L)->nilvalue when a metatable is absent.
-var nilObject = Value{tt: LUA_VNIL}
+/*
+** Test whether there is no tagmethod.
+** (Because tagmethods use raw accesses, the result may be an "empty" nil.)
+** C: #define notm(tm) ttisnil(tm)
+** Go also accepts a nil *Value (luaT_gettm / fasttm return nil when absent).
+ */
+func notm(tm *Value) bool { return tm == nil || ttisnil(tm) }
 
-/* ORDER TM — event names for luaT_init */
-var luaT_eventname = [TM_N]string{
-	"__index", "__newindex",
-	"__gc", "__mode", "__len", "__eq",
-	"__add", "__sub", "__mul", "__mod", "__pow",
-	"__div", "__idiv",
-	"__band", "__bor", "__bxor", "__shl", "__shr",
-	"__unm", "__bnot", "__lt", "__le",
-	"__concat", "__call", "__close",
+/*
+** function to be used with macro "fasttm": optimized for absence of
+** tag methods. C: gfasttm / fasttm macros in ltm.h.
+ */
+func gfasttm(g *globalState, et *Table, e TMS) *Value {
+	if et == nil {
+		return nil
+	}
+	if (et.flags & (1 << uint(e))) != 0 {
+		return nil
+	}
+	return luaT_gettm(et, e, g.tmNames[e])
 }
+
+func fasttm(L *State, et *Table, e TMS) *Value {
+	return gfasttm(L.g, et, e)
+}
+
+// ttypename is C #define ttypename(x) luaT_typenames_[(x) + 1]
+func ttypename(x int) string { return luaT_typenames_[x+1] }
 
 /* C shares one static udatatypename[] for light + full userdata slots */
 const udatatypename = "userdata"
 
-/* luaT_typenames_ — LUA_TOTALTYPES = LUA_TPROTO+2 = LUA_NUMTYPES+3 */
-var luaT_typenames = [LUA_NUMTYPES + 3]string{
+/* luaT_typenames_ — C: LUAI_DDEF const char *const luaT_typenames_[LUA_TOTALTYPES] */
+var luaT_typenames_ = [LUA_TOTALTYPES]string{
 	"no value",
 	"nil", "boolean", udatatypename, "number",
 	"string", "table", "function", udatatypename, "thread",
 	"upvalue", "proto", /* these last cases are used for tests only */
 }
 
-// ttypename is C #define ttypename(x) luaT_typenames_[(x) + 1]
-func ttypename(x int) string { return luaT_typenames[x+1] }
+// luaT_typenames keeps the historical name used by lapi.go (C: luaT_typenames_).
+var luaT_typenames = luaT_typenames_
 
 // luaT_init initialises the tag-method names (ltm.c).
 // FLAG: C also luaC_fix's each name; omitted — intentional Go-GC (BRIEF KEEP).
 func luaT_init(L *State) {
+	/* ORDER TM */
+	luaT_eventname := [TM_N]string{
+		"__index", "__newindex",
+		"__gc", "__mode", "__len", "__eq",
+		"__add", "__sub", "__mul", "__mod", "__pow",
+		"__div", "__idiv",
+		"__band", "__bor", "__bxor", "__shl", "__shr",
+		"__unm", "__bnot", "__lt", "__le",
+		"__concat", "__call", "__close",
+	}
 	for i := 0; i < int(TM_N); i++ {
 		L.g.tmNames[i] = luaS_new(L, luaT_eventname[i])
 		/* C: luaC_fix(L, obj2gco(G(L)->tmname[i])); — never collect these names */
@@ -87,28 +112,6 @@ func luaT_init(L *State) {
 // FLAG: placement — lives in C lvm.h; kept here because callers (lapi/lvm/ldebug)
 // already import via this package symbol. Apply debt: move to lvm.go on merge if desired.
 func cvt2str(o *Value) bool { return ttisnumber(o) }
-
-/*
-** Test whether there is no tagmethod.
-** (Because tagmethods use raw accesses, the result may be an "empty" nil.)
-** C: #define notm(tm) ttisnil(tm)
-** Go also accepts a nil *Value (luaT_gettm returns nil when caching absence).
- */
-func notm(tm *Value) bool { return tm == nil || ttisnil(tm) }
-
-/*
-** function to be used with macro "fasttm": optimized for absence of
-** tag methods. C: gfasttm / fasttm macros in ltm.h.
- */
-func fasttm(L *State, et *Table, e TMS) *Value {
-	if et == nil {
-		return nil
-	}
-	if (et.flags & (1 << uint(e))) != 0 {
-		return nil
-	}
-	return luaT_gettm(et, e, L.g.tmNames[e])
-}
 
 // luaT_gettm looks up a metamethod in a metatable (ltm.c).
 func luaT_gettm(events *Table, event TMS, ename *TString) *Value {
@@ -132,10 +135,10 @@ func luaT_gettmbyobj(L *State, o *Value, event TMS) *Value {
 	default:
 		mt = L.g.mt[ttype(o)]
 	}
-	if mt == nil {
-		return &nilObject /* C: &G(L)->nilvalue */
+	if mt != nil {
+		return luaH_getshortstr(mt, L.g.tmNames[event])
 	}
-	return luaH_getshortstr(mt, L.g.tmNames[event])
+	return &L.g.nilValue /* C: &G(L)->nilvalue */
 }
 
 /*
@@ -144,21 +147,19 @@ func luaT_gettmbyobj(L *State, o *Value, event TMS) *Value {
  */
 func luaT_objtypename(L *State, o *Value) string {
 	var mt *Table
-	ok := false
+	/* C: if ((ttistable(o) && (mt = hvalue(o)->metatable) != NULL) ||
+	   (ttisfulluserdata(o) && (mt = uvalue(o)->metatable) != NULL)) */
 	if ttistable(o) {
 		mt = hvalue(o).metatable
-		ok = mt != nil
 	}
-	if !ok && ttisfulluserdata(o) {
+	if mt == nil && ttisfulluserdata(o) {
 		mt = uvalue(o).metatable
-		ok = mt != nil
 	}
-	if ok {
+	if mt != nil {
 		name := luaH_getshortstr(mt, luaS_new(L, "__name"))
 		if ttisstring(name) { /* is '__name' a string? */
-			/* C hands the name back as a 'const char *' for whoever
-			   asked to format it with '%s', which stops at the zero. */
-			return luaCStr(tsvalue(name).val) /* use it as type name */
+			/* C: return getstr(tsvalue(name));  (%s stops at NUL) */
+			return luaCStr(getstr(tsvalue(name))) /* use it as type name */
 		}
 	}
 	return ttypename(ttype(o)) /* else use standard type name */
@@ -166,11 +167,11 @@ func luaT_objtypename(L *State, o *Value) string {
 
 // luaT_callTM calls a metamethod with three arguments (ltm.c).
 // FLAG: migrateNested — intentional Go coroutine bridge (BRIEF KEEP / task OK).
+// C assumes EXTRA_STACK; no luaD_checkstack here.
 func luaT_callTM(L *State, f, p1, p2, p3 *Value) {
 	L.migrateNested()
 	funcIdx := L.top
-	L.checkStack(4) /* assume EXTRA_STACK in C; index-stack growth here */
-	L.stack[funcIdx] = *f    /* push function */
+	L.stack[funcIdx] = *f    /* push function (assume EXTRA_STACK) */
 	L.stack[funcIdx+1] = *p1 /* 1st argument */
 	L.stack[funcIdx+2] = *p2 /* 2nd argument */
 	L.stack[funcIdx+3] = *p3 /* 3rd argument */
@@ -186,11 +187,13 @@ func luaT_callTM(L *State, f, p1, p2, p3 *Value) {
 // luaT_callTMres calls a metamethod with two arguments and moves the
 // result to 'res' (ltm.c).
 // FLAG: migrateNested — intentional Go coroutine bridge (BRIEF KEEP / task OK).
+// C uses savestack/restorestack because StkId is a pointer; Go res is a
+// stable stack index across realloc. C assumes EXTRA_STACK.
 func luaT_callTMres(L *State, f, p1, p2 *Value, res int) {
 	L.migrateNested()
+	result := res /* C: ptrdiff_t result = savestack(L, res) */
 	funcIdx := L.top
-	L.checkStack(3)
-	L.stack[funcIdx] = *f    /* push function */
+	L.stack[funcIdx] = *f    /* push function (assume EXTRA_STACK) */
 	L.stack[funcIdx+1] = *p1 /* 1st argument */
 	L.stack[funcIdx+2] = *p2 /* 2nd argument */
 	L.top = funcIdx + 3
@@ -200,8 +203,9 @@ func luaT_callTMres(L *State, f, p1, p2 *Value, res int) {
 	} else {
 		luaD_callnoyield(L, funcIdx, 1)
 	}
-	L.stack[res] = L.stack[L.top-1] /* move result to its place */
+	/* C: res = restorestack(L, result); setobjs2s(L, res, --L->top.p) */
 	L.top--
+	L.stack[result] = L.stack[L.top] /* move result to its place */
 }
 
 func callbinTM(L *State, p1, p2 *Value, res int, event TMS) bool {
@@ -237,7 +241,7 @@ func luaT_trybinTM(L *State, p1, p2 *Value, res int, event TMS) {
 // using the __concat metamethod if needed (ltm.c).
 func luaT_tryconcatTM(L *State) {
 	top := L.top
-	if !callbinTM(L, &L.stack[top-2], &L.stack[top-1], top-2, TM_CONCAT) {
+	if !callbinTM(L, &L.stack[top-2], &L.stack[top-1], top-2, TM_CONCAT) { /* l_unlikely */
 		luaG_concaterror(L, &L.stack[top-2], &L.stack[top-1])
 	}
 }
@@ -271,28 +275,33 @@ func luaT_trybiniTM(L *State, p1 *Value, i2 int64, flip bool, res int, event TMS
 **
 ** FLAG: C marks the call with CIST_LEQ so the VM can negate the result
 ** if the metamethod yields across the comparison. This port runs the
-** metamethod to completion inside callbinTM, so the result is already
-** there and the negation happens here instead (no CIST_LEQ).
+** metamethod to completion inside callbinTM (migrateNested), so the
+** result is already there and the negation happens here instead.
+** CIST_LEQ is defined here (belongs in lstate.h; not yet in lstate.go).
  */
+// CIST_LEQ is lstate.h's bit under LUA_COMPAT_LT_LE: using __lt for __le.
+const CIST_LEQ = uint16(1 << 13)
+
 func luaT_callorderTM(L *State, p1, p2 *Value, event TMS) bool {
 	if callbinTM(L, p1, p2, L.top, event) { /* try original event */
-		return !isFalse(&L.stack[L.top])
+		return !l_isfalse(&L.stack[L.top])
 	}
 	/* #if defined(LUA_COMPAT_LT_LE) — always on in 5.4.9 */
 	if event == TM_LE {
 		/* try '!(p2 < p1)' for '(p1 <= p2)' */
-		/* C: L->ci->callstatus |= CIST_LEQ; — omitted, see FLAG above */
+		L.ci.callstatus |= CIST_LEQ /* mark it is doing 'lt' for 'le' */
 		if callbinTM(L, p2, p1, L.top, TM_LT) {
-			/* C: L->ci->callstatus ^= CIST_LEQ; */
-			return isFalse(&L.stack[L.top])
+			L.ci.callstatus ^= CIST_LEQ /* clear mark */
+			return l_isfalse(&L.stack[L.top])
 		}
 		/* else error will remove this 'ci'; no need to clear mark */
 	}
 	luaG_ordererror(L, p1, p2) /* no metamethod found */
-	return false /* to avoid warnings */
+	return false               /* to avoid warnings */
 }
 
 // luaT_callorderiTM is luaT_callorderTM with an integer/float operand (ltm.c).
+// C takes int v2; Go uses int64 (lua_Integer / opcode immediate as int64).
 func luaT_callorderiTM(L *State, p1 *Value, v2 int64, flip, isfloat bool, event TMS) bool {
 	var aux Value
 	var p2 *Value
@@ -314,9 +323,9 @@ func luaT_callorderiTM(L *State, p1 *Value, v2 int64, flip, isfloat bool, event 
 // the extra arguments of a vararg function (ltm.c).
 func luaT_adjustvarargs(L *State, nfixparams int, ci *CallInfo, p *Proto) {
 	actual := L.top - ci.funcIdx - 1 /* number of arguments */
-	nextra := actual - nfixparams     /* number of extra arguments */
+	nextra := actual - nfixparams    /* number of extra arguments */
 	ci.nExtraArgs = nextra
-	L.checkStack(int(p.maxstacksize) + 1)
+	L.checkStack(int(p.maxstacksize) + 1) /* C: luaD_checkstack */
 	/* copy function to the top of the stack */
 	L.stack[L.top] = L.stack[ci.funcIdx]
 	L.top++
@@ -335,8 +344,8 @@ func luaT_adjustvarargs(L *State, nfixparams int, ci *CallInfo, p *Proto) {
 func luaT_getvarargs(L *State, ci *CallInfo, where int, wanted int) {
 	nextra := ci.nExtraArgs
 	if wanted < 0 {
-		wanted = nextra /* get all extra arguments available */
-		L.checkStack(nextra) /* C: checkstackGCp(L, nextra, where) */
+		wanted = nextra        /* get all extra arguments available */
+		L.checkStack(nextra)   /* C: checkstackGCp(L, nextra, where) — GC skipped */
 		L.top = where + nextra /* next instruction will need top */
 	}
 	i := 0

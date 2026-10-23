@@ -143,24 +143,24 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 ## 性能
 
-一次运行，机器是 AMD EPYC 7551：PUC-Lua 5.4.7 对比 cgo 构建（Go 1.24）。比值是 golua / PUC-Lua，小于 1 表示更快。每一行 `p < 0.0001`。计时方式以及每一行对上的是什么，见 [bench/README_CN.md](bench/README_CN.md)。
+一次运行，机器是 Linux x86_64（Intel Xeon，内核 6.12.94+）：PUC-Lua 5.4.7 对比 cgo 构建（Go 1.27.3）。移植本身跟踪 Lua 5.4.9。比值是 golua / PUC-Lua，小于 1 表示更快。每一行 `p < 0.0001`。计时方式以及每一行测量的是什么，见 [bench/README_CN.md](bench/README_CN.md)。
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 1.72× | fib | 2.29×10⁻⁶ |
-| nop | 1.99× | concat | 2.54×10⁻⁶ |
-| hash | 1.25× | yield | 0.0023× |
-| intloop | 0.060× | pcall | 0.0040× |
-| floatloop | 0.12× | upvalue | 0.012× |
-| bitwise | 0.20× | global | 0.011× |
-| array | 0.48× | ipairs | 0.014× |
-| strings | 0.52× | tailcall | 0.016× |
-| sort | 0.53× | metaindex | 0.016× |
-|  |  | method | 0.015× |
-|  |  | call3 | 0.031× |
-|  |  | alloc | 0.070× |
+| startup | 2.38× | fib | 2.73× |
+| nop | 2.93× | concat | 2.67× |
+| hash | 2.08× | yield | 1.31× |
+| intloop | 2.41× | pcall | 2.34× |
+| floatloop | 2.85× | upvalue | 2.22× |
+| bitwise | 3.42× | global | 2.25× |
+| array | 2.99× | ipairs | 2.59× |
+| strings | 3.28× | tailcall | 2.48× |
+| sort | 1.55× | metaindex | 1.78× |
+|  |  | method | 2.50× |
+|  |  | call3 | 3.09× |
+|  |  | alloc | 2.17× |
 
-`startup`、`nop`、`hash` 更慢。`intloop` 到 `sort` 该做的计算还在做。`fib` 到 `alloc` 只匹配一种字节码形状；别的程序仍走解释器，校验和相同。
+这次运行里列出的负载都更慢。解释器保持与 PUC-Lua 5.4.9 行级对齐（没有 Go 侧专用捷径），校验和相同。
 
 ## 已知差异
 

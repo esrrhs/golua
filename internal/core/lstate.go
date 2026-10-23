@@ -46,7 +46,7 @@ const (
 	CIST_TRAN      = 1 << 8 /* 'ci' has transfer information */
 	CIST_CLSRET    = 1 << 9 /* function is closing tbc variables */
 	/* Bits 10-12 are used for CIST_RECST (see below) */
-	CIST_RECST     = 10
+	CIST_RECST = 10
 )
 
 // setoah / getoah store/load allowhook in CIST_OAH (lstate.h).
@@ -88,6 +88,11 @@ func yieldable(L *State) bool { return L.nCcalls&0xffff0000 == 0 }
 
 func isLua(ci *CallInfo) bool     { return ci.callstatus&CIST_C == 0 }
 func isLuacode(ci *CallInfo) bool { return ci.callstatus&(CIST_C|CIST_HOOKED) == 0 }
+
+// completestate is C's completestate(g): g.nilvalue being a nil flags that
+// the state was completely built (lstate.h). Incomplete states use a
+// non-nil sentinel (setivalue 0) until f_luaopen finishes.
+func completestate(g *globalState) bool { return ttisnil(&g.nilValue) }
 
 // CallInfo holds information about a call.
 type CallInfo struct {
@@ -497,29 +502,46 @@ func (L *State) shrinkStack() {
 // CallInfo management (lstate.c)
 // ---------------------------------------------------------------------
 
-// extendCI is luaE_extendCI (lstate.c). C takes an 'err' flag and may
-// return NULL on OOM; Go allocation cannot fail, so there is no err path.
-// C returns the new CI without assigning L->ci; here L.ci is advanced
-// (callers in ldo expect that). trap is cleared like C's ci->u.l.trap = 0.
-func (L *State) extendCI() *CallInfo {
-	var ci *CallInfo
+// allocCI gets a CallInfo from the pool or the heap.
+func (L *State) allocCI() *CallInfo {
 	if n := len(L.ciPool); n > 0 {
-		ci = L.ciPool[n-1]
+		ci := L.ciPool[n-1]
 		L.ciPool = L.ciPool[:n-1]
-	} else {
-		ci = new(CallInfo)
+		*ci = CallInfo{}
+		return ci
 	}
-	L.nci++
-	ci.prev = L.ci
+	return new(CallInfo)
+}
+
+// luaE_extendCI is luaE_extendCI (lstate.c). C takes err and may return
+// NULL on OOM; Go allocation cannot fail (err is ignored). Returns the
+// new CI without assigning L.ci — C semantics. next_ci / extendCI then
+// advance L.ci for the VM.
+func luaE_extendCI(L *State, err bool) *CallInfo {
+	_ = err
+	ci := L.allocCI()
+	ci.next = nil
 	if L.ci != nil {
+		ci.next = L.ci.next
+		ci.prev = L.ci
 		L.ci.next = ci
 	}
-	ci.next = nil
+	if ci.next != nil {
+		ci.next.prev = ci
+	}
 	ci.trap = false /* C: ci->u.l.trap = 0 */
+	L.nci++
+	return ci
+}
+
+// extendCI advances L.ci to a new frame (used by next_ci in ldo.go).
+func (L *State) extendCI() *CallInfo {
+	ci := luaE_extendCI(L, true)
 	L.ci = ci
 	return ci
 }
 
+// freeCI returns a CallInfo to the pool (Go recycle; C luaM_free).
 func (L *State) freeCI(ci *CallInfo) {
 	*ci = CallInfo{}
 	if len(L.ciPool) < 64 {
@@ -528,11 +550,24 @@ func (L *State) freeCI(ci *CallInfo) {
 	L.nci--
 }
 
+// freeUnusedCI is C's static freeCI: free every CallInfo after L.ci.
+func freeUnusedCI(L *State) {
+	if L.ci == nil {
+		return
+	}
+	next := L.ci.next
+	L.ci.next = nil
+	for next != nil {
+		n := next.next
+		L.freeCI(next)
+		next = n
+	}
+}
+
 // unwindCIToBase frees every active CallInfo back to baseCI.
-// NOT luaE_shrinkCI (that frees half of the *unused* CI tail — C keeps
-// it in lstate.c; this port's equivalent free/shrink of unused CI lives
-// with stack helpers or is omitted under the CI pool). Prior name
-// shrinkCI collided with C; covermore_test must retarget on apply.
+// NOT luaE_shrinkCI (that frees half of the *unused* CI tail — lives in
+// ldo.go because luaD_shrinkstack calls it; cannot move without editing
+// that file). Prior name shrinkCI collided with C.
 func (L *State) unwindCIToBase() {
 	for L.ci != &L.baseCI && L.ci != nil {
 		prev := L.ci.prev
@@ -550,92 +585,169 @@ func (L *State) unwindCIToBase() {
 
 var stateIDSeed uint64
 
-// NewState creates a new Lua state (replaces lua_newstate).
-func NewState() *State {
-	g := &globalState{}
-	L := &State{g: g}
-	g.mainthread = L
-	g.seed = uint32(rand.Uint64())
-	atomic.AddUint64(&stateIDSeed, 1)
+// stack_init is stack_init (lstate.c).
+func stack_init(L1, L *State) {
+	_ = L /* C allocates via L; Go uses the heap */
+	L1.reallocStack(BASIC_STACK_SIZE)
+	L1.top = 0
+	ci := &L1.baseCI
+	ci.next, ci.prev = nil, nil
+	ci.callstatus = CIST_C
+	ci.funcIdx = 0
+	ci.cK = nil
+	ci.nresults = 0
+	setnilvalue(&L1.stack[0]) /* 'function' entry for this 'ci' */
+	L1.top = 1
+	ci.top = L1.top + LUA_MINSTACK
+	L1.ci = ci
+}
 
+// freestack is freestack (lstate.c). Frees unused CallInfos after L.ci.
+//
+// SAFE vs stubbed os.exit: C freestack also frees the stack array, then
+// frealloc's the whole LG — and exit() never returns. Tests replace
+// osExitHook so Close returns into a live coroutine (see
+// TestCloseFromCoroutineDoesNotHang). Releasing L.stack (or a child's)
+// there yields "attempt to call a nil value". Only free unused CIs;
+// leave the slice for Go GC when the State becomes unreachable.
+// close_state also skips freestack entirely when Close was entered from
+// a child coroutine (main's live CallInfo must survive resume).
+func freestack(L *State) {
+	if L.stack == nil {
+		return /* stack not completely built yet */
+	}
+	L.ci = &L.baseCI /* free the entire 'ci' list beyond base */
+	freeUnusedCI(L)
+}
+
+// preinit_thread is preinit_thread (lstate.c): consistent values, no alloc.
+func preinit_thread(L *State, g *globalState) {
+	L.g = g
+	L.stack = nil
+	L.ci = nil
+	L.nci = 0
 	L.nCcalls = 0
-	L.isMain = true
-	L.status = LUA_OK
+	L.hook = nil
+	L.hookmask = 0
+	L.basehookcount = 0
 	L.allowhook = 1
+	L.hookcount = 0 /* resethookcount(L) */
+	L.openupval = nil
+	L.tbclist = nil
+	L.status = LUA_OK
 	L.errfunc = 0
-	incnny(L) /* main thread is always non yieldable */
+	L.oldpc = 0
+}
 
-	L.reallocStack(BASIC_STACK_SIZE)
-	L.top = 1
-	L.ci = &L.baseCI
-	L.baseCI.funcIdx = 0
-	L.baseCI.top = L.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
-	L.baseCI.callstatus = CIST_C
-	L.baseCI.nresults = 0
-	gcTrackThread(L) /* so that the collector can clear its stale slots */
-
-	/* PUC-Lua declares the incremental mode in 'lua_newstate', but what
-	   'collectgarbage("generational")' reports is 'isdecGCmodegen',
-	   which is also true while 'lastatomic != 0' -- and the
-	   collections of a freshly opened state are always judged "bad",
-	   which sets it.  A fresh state therefore answers
-	   "generational", and only an explicit
-	   'collectgarbage("incremental")' makes it answer "incremental"
-	   (which is why gc.lua switches modes before it asserts). */
-	/* LUAI_GCPAUSE and LUAI_GCMUL: 'setpause' and 'setstepmul' answer
-	   with the value they replaced, so the two are remembered even
-	   though Go's collector pays no attention to them. */
-	g.gcPause = 200
-	g.gcStepMul = 100
-	g.gcMode = gcModeGen
-	g.nilValue = Value{tt: LUA_VNIL} /* completestate(g): ttisnil(&g->nilvalue) */
-	g.strt = newStringTable()
-	g.memErrMsg = luaS_new(L, "not enough memory")
-	/* f_luaopen order: luaS_init, luaT_init, luaX_init (C lstate.c) */
-	luaS_init(L)
-	luaT_init(L)
-	luaX_init(L)
-	/* init_registry */
+// init_registry is init_registry (lstate.c).
+func init_registry(L *State, g *globalState) {
 	sethvalue(&g.registry, luaH_new(L))
 	luaH_resize(L, hvalue(&g.registry), LUA_RIDX_LAST, 0)
 	var th Value
 	setthvalue(&th, L)
 	luaH_setint(L, hvalue(&g.registry), LUA_RIDX_MAINTHREAD, &th)
 	var gl Value
-	gt := luaH_new(L)
-	sethvalue(&gl, gt)
+	sethvalue(&gl, luaH_new(L))
 	luaH_setint(L, hvalue(&g.registry), LUA_RIDX_GLOBALS, &gl)
+}
+
+// f_luaopen is f_luaopen (lstate.c): parts that may allocate.
+func f_luaopen(L *State) {
+	g := L.g
+	stack_init(L, L)
+	init_registry(L, g)
+	luaS_init(L)
+	luaT_init(L)
+	luaX_init(L)
+	g.gcStopped = false      /* C: g->gcstp = 0; allow gc */
+	setnilvalue(&g.nilValue) /* now state is complete */
+}
+
+// close_state is close_state (lstate.c) plus Go coroutine shutdown.
+// caller is the thread that entered Close (may be a coroutine inside
+// os.exit); it is skipped by closeAllThreads and keeps a usable stack
+// when osExitHook is stubbed and returns into Lua.
+func close_state(L *State, caller *State) {
+	g := L.g
+	/* Stubbed osExitHook returns into a live coroutine while main is
+	   still inside coroutine.resume. C's close_state then exit() never
+	   returns; wiping main's CI/top here would leave resume returning
+	   into a destroyed CallInfo ("attempt to call a table/nil value"). */
+	fromChild := caller != nil && caller != L && !caller.isMain
+	if !completestate(g) { /* closing a partially built state? */
+		L.closeFinalizers() /* just collect its objects (Go-GC) */
+	} else if fromChild {
+		/* Close tbc/upvalues without unwinding main's live frames. */
+		_ = luaD_closeprotected(L, 0, closeKTOP, false)
+		L.closeFinalizers()
+	} else { /* closing a fully built state (C close_state shape) */
+		L.ci = &L.baseCI                             /* unwind CallInfo list */
+		L.errfunc = 0                                /* stack unwind can "throw away" the error function */
+		_ = luaD_closeprotected(L, 1, LUA_OK, false) /* close all upvalues */
+		L.top = 1                                    /* empty the stack to run finalizers */
+		L.closeFinalizers()                          /* Go-GC stand-in for luaC_freeallobjects */
+	}
+	L.status = LUA_OK
+	L.dead = true
+	/* Stop child goroutines. With g.closing set, forceClose skips child
+	   __close (C does not run child __close on lua_close; a suspended
+	   wrap whose __close is os.exit must stay collectable). */
+	if g != nil {
+		g.closeAllThreads(caller)
+	}
+	if fromChild {
+		caller.dead = true
+	}
+	if !fromChild {
+		freestack(L)
+	}
+	if releaseCState != nil {
+		releaseCState(L)
+	}
+}
+
+// NewState creates a new Lua state (lua_newstate). May return nil if
+// f_luaopen fails (C returns NULL); Go alloc rarely fails.
+func NewState() *State {
+	g := &globalState{}
+	L := &State{}
+	preinit_thread(L, g)
+	g.mainthread = L
+	L.isMain = true
+	incnny(L) /* main thread is always non yieldable */
+	g.seed = uint32(rand.Uint64())
+	atomic.AddUint64(&stateIDSeed, 1)
+	g.panic = nil
+	/* PUC-Lua declares incremental mode in lua_newstate, but what
+	   collectgarbage("generational") reports is isdecGCmodegen, which
+	   is also true while lastatomic != 0 — and collections of a freshly
+	   opened state are always judged "bad", which sets it. A fresh state
+	   therefore answers "generational". */
+	g.gcPause = 200   /* LUAI_GCPAUSE */
+	g.gcStepMul = 100 /* LUAI_GCMUL */
+	g.gcMode = gcModeGen
+	g.gcStopped = true        /* C: gcstp = GCSTPGC while building */
+	setivalue(&g.nilValue, 0) /* signal state not yet built */
+	g.strt = newStringTable()
+	if L.rawRunProtected(func() { f_luaopen(L) }) != LUA_OK {
+		close_state(L, L)
+		return nil
+	}
+	gcTrackThread(L)
 	/* FLAG: C's lua_newstate leaves warnf NULL; luaL_newstate installs
 	   the default. This NewState folds that lauxlib last act in. */
 	g.setWarnf(warnfOff)
 	return L
 }
 
-// Close closes a state (replaces lua_close / close_state).
+// Close closes a state (lua_close → close_state).
 func (L *State) Close() {
 	/* os.exit(…, true) and lua_close may run on a coroutine. That
 	   caller cannot be asked to exit via co.req — it is the goroutine
-	   running Close — so it is skipped below and marked dead at the end. */
+	   running Close — so close_state skips it in closeAllThreads. */
 	caller := L
 	L = L.g.mainthread /* only the main thread can be closed */
-	/* C's close_state: luaF_close on the main stack, then
-	   luaC_freeallobjects. Child coroutine __close is not run — a
-	   suspended wrap whose __close is os.exit must be collectable
-	   without being force-closed. Finalizers first; then stop any
-	   remaining child goroutines (with closing set, they exit without
-	   running __close). */
-	_ = luaD_closeprotected(L, 0, closeKTOP, false)
-	L.closeFinalizers()
-	L.status = LUA_OK
-	L.dead = true
-	L.g.closeAllThreads(caller)
-	if caller != L && !caller.isMain {
-		caller.dead = true
-	}
-	/* the block C was handed as this state's `lua_State *`, if any */
-	if releaseCState != nil {
-		releaseCState(L)
-	}
+	close_state(L, caller)
 }
 
 // closeAllThreads wakes every non-main thread of this state so its
@@ -723,40 +835,64 @@ func (L *State) forceCloseThread() bool {
 // G returns the global state (G(L)).
 func (L *State) G() *globalState { return L.g }
 
-// NewThread creates a new coroutine (replaces lua_newthread).
+// luaE_setdebt stores debt (lstate.c). Go GC ignores totalbytes; only
+// gcDebt is kept for lua_gc / collectgarbage knobs.
+func luaE_setdebt(g *globalState, debt int) {
+	if g == nil {
+		return
+	}
+	g.gcDebt = debt
+}
+
+// SetCStackLimit is lua_setcstacklimit (lstate.c): stub returns LUAI_MAXCCALLS.
+func (L *State) SetCStackLimit(limit uint) int {
+	_ = L
+	_ = limit
+	return LUAI_MAXCCALLS
+}
+
+// CloseThread is lua_closethread (lstate.c): reset the thread with the
+// closer's C-call depth. Coroutine.close / cgo use coCloseThread, which
+// also signals the goroutine; this matches C's API shape for direct calls.
+func (L *State) CloseThread(from *State) int {
+	if from != nil {
+		L.nCcalls = uint32(getCcalls(from))
+	} else {
+		L.nCcalls = 0
+	}
+	return L.resetThreadStatus(int(L.status))
+}
+
+// luaE_freethread is luaE_freethread (lstate.c): close upvalues and free
+// the thread's stack/CI. Go GC reclaims the State; freestack is CI-only
+// (see freestack comment).
+func luaE_freethread(L, L1 *State) {
+	_ = L
+	luaF_closeupval(L1, 0) /* close all upvalues */
+	freestack(L1)
+}
+
+// NewThread creates a new coroutine (lua_newthread).
 func (L *State) NewThread() *State {
 	g := L.g
-	L1 := &State{g: g}
+	L1 := &State{}
+	preinit_thread(L1, g)
 	L1.isMain = false
-	L1.allowhook = 1
+	/* Go coroutine status: not-yet-started threads answer LUA_YIELD so
+	   coroutine.status says "suspended" (C's lua_status is LUA_OK). */
 	L1.status = LUA_YIELD
 	L1.started = false
-	L1.nCcalls = 0
-	L1.errfunc = 0
-	L1.reallocStack(BASIC_STACK_SIZE)
-	L1.top = 1
-	L1.ci = &L1.baseCI
-	L1.baseCI.funcIdx = 0
-	L1.baseCI.top = L1.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
-	L1.baseCI.callstatus = CIST_C
-	L1.baseCI.nresults = 0
-	gcTrackThread(L1) /* so that the collector can clear its stale slots */
-	/* a new thread inherits the hook of the creating thread: C copies
-	   'hook', 'hookmask' and 'basehookcount' in 'lua_newthread', so a
-	   coroutine made while a hook is on is hooked too, and
-	   'debug.gethook(co)' answers the mask and the count it inherited
-	   even though nobody ever set a hook on that coroutine */
-	L1.hook = L.hook
 	L1.hookmask = L.hookmask
 	L1.basehookcount = L.basehookcount
+	L1.hook = L.hook
 	L1.hookcount = L.basehookcount /* resethookcount(L1) */
 	L1.hookExternal = L.hookExternal
 	/* FLAG: C memcpy's LUA_EXTRASPACE from mainthread; Go allocates
-	   cstate lazily on first C hand-off, so extraspace inherit is omitted
-	   (optional apply debt when first allocating L1.cstate). */
+	   cstate lazily on first C hand-off, so extraspace inherit is omitted. */
+	stack_init(L1, L)
+	gcTrackThread(L1)
 	L1.co = newCoRuntime()
 	L1.co.sync = true
-	// the thread object goes on the stack of the creating state
 	L.checkStack(1)
 	var th Value
 	setthvalue(&th, L1)
@@ -925,10 +1061,13 @@ func (L *State) resetThreadStatus(status int) int {
 		L.top = 1
 	}
 	ci.top = L.top + LUA_MINSTACK
+	luaD_reallocstack(L, ci.top, false) /* C: luaD_reallocstack(L, ci->top - stack, 0) */
 	return status
 }
 
-// ResetThread resets a coroutine so that it can be reused (lua_resetthread).
+// ResetThread resets a coroutine so that it can be reused.
+// Not C's deprecated lua_resetthread (= lua_closethread); that is CloseThread /
+// coCloseThread. This rebuilds the goroutine machinery for reuse.
 func (L *State) ResetThread() int {
 	if L.isMain {
 		return LUA_ERRRUN

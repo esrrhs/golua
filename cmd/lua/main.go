@@ -32,303 +32,170 @@ import (
 	lua "github.com/esrrhs/golua"
 )
 
-// progName is argv[0], as in lua.c (which uses it to prefix the messages
-// of uncaught errors).
+// progName is progname of lua.c (LUA_PROGNAME). Empty string stands for
+// C's NULL: no prefix on error messages (REPL clears it).
 var progName = "lua"
 
-const (
-	luaPrompt  = "> "
-	luaPrompt2 = ">> "
-)
+// globalL is globalL of lua.c: visible to laction for SIGINT→hook.
+// FLAG: set in docall when signal_* companions are present.
+var globalL *lua.State
 
-// version is LUA_COPYRIGHT, which is what lua.c's 'print_version' writes
-// for '-v'.  This port is a translation of PUC-Lua 5.4.9, whose licence
-// (MIT) requires the notice to be kept, and the standalone interpreter
-// has to be indistinguishable from the reference one anyway: scripts
-// spawn 'lua -v' and look for "PUC-Rio" in its output.
-const version = lua.LUA_COPYRIGHT
-
-var L *lua.State
-
-// pmainArgv is the argv handed down to 'pmain'. lua.c passes it as a light
-// userdata; this port has no light userdata, so it is a package variable.
+// pmainArgv is the argv handed to pmain. lua.c passes it as a light
+// userdata; this port has no useful light-userdata argv, so it is a
+// package variable (FLAG).
 var pmainArgv []string
 
+const (
+	luaPrompt  = "> "  // LUA_PROMPT
+	luaPrompt2 = ">> " // LUA_PROMPT2
+)
+
+// version is LUA_COPYRIGHT (print_version).
+const version = lua.LUA_COPYRIGHT
+
+const (
+	luaInitVar        = "LUA_INIT"     // LUA_INIT_VAR
+	luaInitVarVersion = "LUA_INIT_5_4" // LUA_INITVARVERSION
+	luaIgMark         = '-'            // LUA_IGMARK
+	eofMark           = "<eof>"        // EOFMARK
+)
+
 func main() {
-	os.Exit(pmainDriver(os.Args))
+	os.Exit(luaMain(os.Args))
 }
 
-// pmainDriver is 'main' of lua.c. It creates the state and runs 'pmain'
-// under a protected call, just like lua.c does with
-// 'lua_pushcfunction(L, &pmain); lua_pcall(L, 2, 1, 0)'.
-//
-// That indirection is not cosmetic: it is what makes the host show up as
-// the trailing "[C]: in ?" frame of every traceback, which is part of the
-// reference interpreter's observable behaviour.
-func pmainDriver(argv []string) int {
+// luaMain is main of lua.c.
+func luaMain(argv []string) int {
 	pmainArgv = argv
-	if len(argv) > 0 && argv[0] != "" {
-		progName = argv[0]
-	}
-	L = lua.NewState() /* luaL_newstate */
+	L := lua.NewState() /* create state */
 	if L == nil {
-		/* C: cannot create state: not enough memory — Go NewState does not
-		   return nil (FLAG: Go allocator); kept for lua.c shape. */
-		fmt.Fprintf(os.Stderr, "%s: cannot create state: not enough memory\n", progName)
-		return 1
+		/* FLAG: Go NewState does not return nil; kept for lua.c shape. */
+		name := "lua"
+		if len(argv) > 0 {
+			name = argv[0]
+		}
+		lMessage(name, "cannot create state: not enough memory")
+		return 1 /* EXIT_FAILURE */
 	}
-	defer L.Close()
-	/* lua_gc(L, LUA_GCSTOP): stop GC while building state.
-	   FLAG: Go GC — no-op (intentional; see NOTES). */
-	/* the libraries are opened inside 'pmain', after '-E' has had its
-	   say about the environment (see pmain) */
+	/* lua_gc(L, LUA_GCSTOP): FLAG Go GC — no-op (intentional). */
+	L.PushGoFunc(pmain)                      /* to call 'pmain' in protected mode */
+	L.PushInteger(int64(len(argv)))          /* 1st argument */
+	L.PushLightUserData(unsafe.Pointer(nil)) /* 2nd argument (argv; see pmainArgv) */
+	status := L.PCall(2, 1, 0)               /* do the call */
+	result := L.ToBoolean(-1)                /* get result */
+	report(L, status)
+	L.Close()
+	if result && status == lua.LUA_OK {
+		return 0 /* EXIT_SUCCESS */
+	}
+	return 1 /* EXIT_FAILURE */
+}
 
-	L.PushGoClosure(pmain, 0) /* to call 'pmain' in protected mode */
-	L.PushInteger(int64(len(argv))) /* 1st argument: argc */
-	L.PushInteger(0)                /* 2nd argument: argv (a pointer in C) */
-	status := L.PCall(2, 1, 0)
-	result := L.ToBoolean(-1) /* get result */
-	/* 'report' is what removes the error object, as in C: it reads the
-	   message off the top of the stack and pops it.  Popping it here
-	   first -- which is what this used to do, before deciding whether
-	   there was anything to report -- leaves 'report' holding whatever
-	   happened to be underneath, so an error that escaped 'pmain'
-	   printed as "lua: " with nothing after it.  The order in lua.c is
-	   'toboolean' (a read), then 'report' (the pop). */
-	if status != lua.LUA_OK {
-		report(lastError()) /* an error outside 'pmain': report it too */
-		return 1
-	}
-	L.Pop(1)
-	/* 'pmain' returns false when a chunk it ran failed: the message has
-	   already been reported, only the exit status is left to decide. */
-	if !result {
-		return 1
-	}
+/*
+** Hook set by signal function to stop the interpreter (lstop).
+** C: lua_sethook(L, NULL, 0, 0); luaL_error(L, "interrupted!");
+** FLAG: live SIGINT→SetHook belongs in signal_*.go when present —
+** SetHook's *dbAr is not exported to cmd/lua, so this stub only keeps
+** the error string and lua.c shape.
+ */
+func lstop(L *lua.State) int {
+	/* lua_sethook(L, NULL, 0, 0) — FLAG: hook API not usable from cmd/lua */
+	L.Error2("interrupted!")
 	return 0
 }
 
-// pmain is 'pmain' of lua.c: everything the interpreter does, run inside a
-// protected call so that an uncaught error becomes the single result of
-// that call.
-func pmain(L *lua.State) int {
-	argv := pmainArgv
-	argc := len(argv)
-	args, script := collectArgs(argv)
-	optlim := argc /* first argv not an option */
-	if script > 0 {
-		optlim = script
-	}
-	/* luaL_checkversion(L) — version num 504, LUAL_NUMSIZES */
-	L.CheckVersion_(504, unsafe.Sizeof(int64(0))*16+unsafe.Sizeof(float64(0)))
-	if args == hasError { /* bad arg? */
-		printUsage(argv[script]) /* 'script' has the index of the bad arg */
-		L.PushBoolean(false)
-		return 1
-	}
-	if args&hasV != 0 { /* option '-v'? */
-		printVersion()
-	}
-	if args&hasEnv != 0 { /* option '-E'? */
-		L.PushBoolean(true) /* signal for libraries to ignore env. vars. */
-		L.SetField(lua.LUA_REGISTRYINDEX, "LUA_NOENV")
-	}
-	/* lua.c opens the libraries here, not before 'pmain': the packages
-	   read LUA_PATH from the environment, and '-E' must already have
-	   signalled that they should not. */
-	L.OpenLibs() /* open standard libraries */
-	createArgTable(L, argv, argc, script) /* create table 'arg' */
-	/* lua_gc(L, LUA_GCRESTART); lua_gc(L, LUA_GCGEN, 0, 0);
-	   FLAG: Go GC — no-op (intentional; see NOTES). */
-	if args&hasEnv == 0 { /* no option '-E'? */
-		if !handleLuaInit() { /* run LUA_INIT */
-			L.PushBoolean(false)
-			return 1
-		}
-	}
-	if !runArgs(argv, optlim) { /* execute arguments -e and -l */
-		L.PushBoolean(false)
-		return 1
-	}
-	if script > 0 { /* execute main script (if there is one) */
-		if !handleScript(argv[script], script > 1 && argv[script-1] == "--") {
-			L.PushBoolean(false)
-			return 1 /* interrupt in case of error */
-		}
-	}
-	if args&hasI != 0 { /* -i option? */
-		doREPL()
-	} else if script < 1 && args&(hasE|hasV) == 0 { /* no active option? */
-		if stdinIsTTY() { /* running in interactive mode? */
-			printVersion()
-			doREPL()
-		} else if err := runStdin(); err != nil { /* executes stdin as a file */
-			report(err)
-			L.PushBoolean(false)
-			return 1
-		}
-	}
-	L.PushBoolean(true) /* signal no errors */
-	return 1
+/*
+** Function to be called at a C signal (laction).
+** C: setsignal(i, SIG_DFL); lua_sethook(globalL, lstop, MASK*, 1);
+** FLAG: see signal_*.go companions when present (do not delete).
+ */
+func laction(_ int) {
+	_ = lstop
+	_ = globalL
+	/* flag := LUA_MASKCALL|LUA_MASKRET|LUA_MASKLINE|LUA_MASKCOUNT */
 }
 
-// ---------------------------------------------------------------------
-// option handling
-// ---------------------------------------------------------------------
-
-// bits of various argument indicators in 'args' (lua.c)
-const (
-	hasError = 1  /* has_error — bad option */
-	hasI     = 2  /* has_i — -i */
-	hasV     = 4  /* has_v — -v */
-	hasE     = 8  /* has_e — -e */
-	hasEnv   = 16 /* has_E — -E */
-)
-
-func usage() string {
-	return "usage: " + progName + " [options] [script [args]]\n" +
-		"Available options are:\n" +
-		"  -e stat   execute string 'stat'\n" +
-		"  -i        enter interactive mode after executing 'script'\n" +
-		"  -l mod    require library 'mod' into global 'mod'\n" +
-		"  -l g=mod  require library 'mod' into global 'g'\n" +
-		"  -v        show version information\n" +
-		"  -E        ignore environment variables\n" +
-		"  -W        turn warnings on\n" +
-		"  --        stop handling options\n" +
-		"  -         stop handling options and execute stdin\n"
-}
-
-// printUsage is print_usage: it names the offending option and then the
-// usage message, all on stderr.
+// printUsage is print_usage.
 func printUsage(badoption string) {
 	fmt.Fprintf(os.Stderr, "%s: ", progName)
-	if len(badoption) > 1 && (badoption[1] == 'e' || badoption[1] == 'l') {
+	/* C: badoption[1] — bare "-" has [1]=='\0', not e/l */
+	if optChar(badoption) == 'e' || optChar(badoption) == 'l' {
 		fmt.Fprintf(os.Stderr, "'%s' needs argument\n", badoption)
 	} else {
 		fmt.Fprintf(os.Stderr, "unrecognized option '%s'\n", badoption)
 	}
-	fmt.Fprint(os.Stderr, usage())
+	fmt.Fprintf(os.Stderr,
+		"usage: %s [options] [script [args]]\n"+
+			"Available options are:\n"+
+			"  -e stat   execute string 'stat'\n"+
+			"  -i        enter interactive mode after executing 'script'\n"+
+			"  -l mod    require library 'mod' into global 'mod'\n"+
+			"  -l g=mod  require library 'mod' into global 'g'\n"+
+			"  -v        show version information\n"+
+			"  -E        ignore environment variables\n"+
+			"  -W        turn warnings on\n"+
+			"  --        stop handling options\n"+
+			"  -         stop handling options and execute stdin\n",
+		progName)
 }
 
-// printVersion is print_version: LUA_COPYRIGHT and a newline on stdout.
-func printVersion() { fmt.Println(version) }
-
-// optChar is argv[i][1] of lua.c: the NUL terminator of a bare "-" reads
-// as a zero byte there, which is the option that means "read stdin".
-func optChar(a string) byte {
-	if len(a) < 2 {
-		return 0
+// lMessage is l_message: pname empty means C's NULL (no prefix).
+func lMessage(pname, msg string) {
+	if pname != "" {
+		fmt.Fprintf(os.Stderr, "%s: ", pname)
 	}
-	return a[1]
+	fmt.Fprintf(os.Stderr, "%s\n", msg)
 }
 
-// collectArgs is 'collectargs' of lua.c.  It walks the options, saving
-// the program name in 'progName', and returns the option flags plus the
-// index of the script in argv (0 when there is no script).  When an
-// option is invalid it returns hasError and 'script' is the index of the
-// offending argument.
-func collectArgs(argv []string) (args, script int) {
-	if len(argv) > 0 && argv[0] != "" { /* is there a program name? */
-		progName = argv[0] /* save it */
-	}
-	for i := 1; i < len(argv); i++ { /* handle arguments */
-		a := argv[i]
-		script = i
-		if len(a) == 0 || a[0] != '-' {
-			return args, script /* not an option: this is the script */
+// report is report: on error, print the message on top of the stack and pop it.
+func report(L *lua.State, status int) int {
+	if status != lua.LUA_OK {
+		msg, ok := L.ToString(-1)
+		if !ok {
+			msg = "(error message not a string)"
 		}
-		/* C reads argv[i][1], which is the NUL of a bare "-"; Go would
-		   panic on that index, so the option character is fetched with
-		   the same "zero if absent" meaning. */
-		switch optChar(a) {
-		case '-': /* '--' */
-			if len(a) > 2 { /* extra characters after '--'? */
-				return hasError, i /* invalid option */
-			}
-			/* if there is a script name, it comes after '--' */
-			if i+1 < len(argv) {
-				script = i + 1
-			} else {
-				script = 0
-			}
-			return args, script
-		case 0: /* '-' */
-			return args, script /* script "name" is '-' */
-		case 'E': /* ignore environment */
-			if len(a) > 2 {
-				return hasError, i
-			}
-			args |= hasEnv
-		case 'W': /* turn warnings on */
-			if len(a) > 2 {
-				return hasError, i
-			}
-		case 'i':
-			args |= hasI /* (-i implies -v) */
-			if len(a) > 2 {
-				return hasError, i
-			}
-			args |= hasV
-		case 'v':
-			if len(a) > 2 {
-				return hasError, i
-			}
-			args |= hasV
-		case 'e':
-			args |= hasE /* FALLTHROUGH */
-			fallthrough
-		case 'l': /* both options need an argument */
-			if len(a) == 2 { /* no concatenated argument? */
-				i++ /* try next argv */
-				if i >= len(argv) || (len(argv[i]) > 0 && argv[i][0] == '-') {
-					return hasError, script /* no arg, or another option */
-				}
-			}
-		default: /* invalid option */
-			return hasError, i
-		}
+		lMessage(progName, msg)
+		L.Pop(1) /* remove message */
 	}
-	script = 0 /* no script name */
-	return args, script
+	return status
 }
 
-// runArgs is 'runargs' of lua.c: it executes the -e statements and -l
-// libraries, in the order they appear, up to (but not including) the
-// script.  It stops at the first failure, whose message has already been
-// reported.
-func runArgs(argv []string, optlim int) bool {
-	for i := 1; i < optlim; i++ {
-		option := optChar(argv[i])
-		switch option {
-		case 'e', 'l':
-			extra := argv[i][2:] /* both options need an argument */
-			if extra == "" {
-				i++
-				extra = argv[i]
-			}
-			var err error
-			if option == 'e' {
-				err = doString(extra, "=(command line)")
-			} else {
-				err = doLibrary(extra)
-			}
-			if err != nil {
-				report(err)
-				return false
-			}
-		case 'W':
-			L.Warning("@on", false) /* warnings on */
+// msghandler is msghandler.
+func msghandler(L *lua.State) int {
+	msg, ok := L.ToString(1)
+	if !ok { /* is error object not a string? */
+		if L.CallMeta(1, "__tostring") && /* does it have a metamethod */
+			L.Type(-1) == lua.LUA_TSTRING { /* that produces a string? */
+			return 1 /* that is the message */
 		}
+		msg = L.PushFString("(error object is a %s value)", L.TypeName(1))
 	}
-	return true
+	L.Traceback(L, msg, true, 1) /* append a standard traceback */
+	return 1                     /* return the traceback */
 }
 
-// createArgTable is 'createargtable' of lua.c: arg[i - script] = argv[i]
-// for every argument, so arg[0] is the script name, arg[1..] the script
-// arguments and the negative indices hold the interpreter and the options.
-// 'script' is the index of the script in argv, or 0 when there is none.
-// If there is no script name, assume interpreter's name as base.
+// docall is docall: lua_pcall with msghandler and C-signal handler.
+//
+// FLAG signal: globalL = L; setsignal(SIGINT, laction); ...; setsignal(SIGINT, SIG_DFL).
+// Companions live in signal_*.go when present (do not delete).
+func docall(L *lua.State, narg, nres int) int {
+	base := L.GetTop() - narg /* function index */
+	L.PushGoFunc(msghandler)  /* push message handler */
+	L.Insert(base)            /* put it under function and args */
+	globalL = L               /* to be available to 'laction' */
+	_ = laction               /* FLAG signal: setsignal(SIGINT, laction) — signal_*.go */
+	status := L.PCall(narg, nres, base)
+	_ = laction    /* FLAG signal: setsignal(SIGINT, SIG_DFL) */
+	L.Remove(base) /* remove message handler from the stack */
+	return status
+}
+
+// printVersion is print_version.
+func printVersion() {
+	fmt.Println(version) /* lua_writestring + lua_writeline */
+}
+
+// createArgTable is createargtable.
 func createArgTable(L *lua.State, argv []string, argc, script int) {
 	narg := argc - (script + 1) /* number of positive indices */
 	L.CreateTable(narg, script+1)
@@ -339,57 +206,270 @@ func createArgTable(L *lua.State, argv []string, argc, script int) {
 	L.SetGlobal("arg")
 }
 
-// handleLuaInit is 'handle_luainit': it runs LUA_INIT_5_4 (or LUA_INIT),
-// as a file when the value starts with '@' and as a chunk otherwise.
-func handleLuaInit() bool {
-	name := "=LUA_INIT_5_4"
-	init, ok := os.LookupEnv("LUA_INIT_5_4")
-	if !ok {
-		name = "=LUA_INIT"
-		init, ok = os.LookupEnv("LUA_INIT")
+// dochunk is dochunk.
+func dochunk(L *lua.State, status int) int {
+	if status == lua.LUA_OK {
+		status = docall(L, 0, 0)
 	}
-	if !ok {
-		return true
-	}
-	var err error
-	if len(init) > 0 && init[0] == '@' {
-		err = runFile(init[1:])
-	} else {
-		err = doString(init, name)
-	}
-	if err != nil {
-		report(err)
-		return false
-	}
-	return true
+	return report(L, status)
 }
 
-// doLibrary is 'dolibrary': it requires 'mod' and stores the result in
-// the global 'globname'.  A '-l g=mod' argument names the global
-// explicitly; without a suffix mark the global is the module name.
-func doLibrary(globname string) error {
-	modname := globname
+// loadErrStatus pushes a Load* error message (Go Load* clears the stack
+// on failure; C's luaL_load* leaves it) and returns its status.
+func loadErrStatus(L *lua.State, err error) int {
+	if err == nil {
+		return lua.LUA_OK
+	}
+	if le, ok := err.(*lua.LuaError); ok {
+		L.PushString(le.Message)
+		return le.Status
+	}
+	L.PushString(err.Error())
+	return lua.LUA_ERRFILE
+}
+
+// loadFile is luaL_loadfile: empty name means stdin (NULL in C).
+func loadFile(L *lua.State, name string) int {
+	if name == "" {
+		return loadStdin(L)
+	}
+	return loadErrStatus(L, L.LoadFile(name))
+}
+
+// loadStdin is luaL_loadfile(L, NULL): chunk named "=stdin", with
+// skipBOM/skipcomment (same rules as LoadFile on disk).
+func loadStdin(L *lua.State) int {
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		L.PushString(err.Error())
+		return lua.LUA_ERRFILE
+	}
+	return loadErrStatus(L, L.LoadBytes(skipFileComment(data), "=stdin"))
+}
+
+// skipFileComment is skipBOM/skipcomment from lauxlib.c (kept local:
+// core.skipFileComment is unexported; same algorithm as LoadFile).
+//
+// When a shebang line is present, C's loadfilex always inserts a fresh
+// '\n' (for line numbers) and then the first byte after the shebang.
+// If the shebang runs to EOF with no newline, that is just '\n' — not an
+// empty chunk.
+func skipFileComment(data []byte) []byte {
+	const bom = "\xEF\xBB\xBF"
+	if len(data) >= len(bom) && string(data[:len(bom)]) == bom {
+		data = data[len(bom):] /* BOM is discarded only when complete */
+	}
+	if len(data) > 0 && data[0] == '#' { /* Unix exec. file? */
+		i := 0
+		for i < len(data) && data[i] != '\n' {
+			i++
+		}
+		if i < len(data) {
+			return data[i:] /* keep the newline + rest (≡ C's synthetic \n + rest) */
+		}
+		return []byte{'\n'} /* shebang to EOF: C inserts \n only */
+	}
+	return data
+}
+
+// dofile is dofile.
+func dofile(L *lua.State, name string) int {
+	return dochunk(L, loadFile(L, name))
+}
+
+// dostring is dostring.
+func dostring(L *lua.State, s, name string) int {
+	return dochunk(L, loadErrStatus(L, L.LoadBytes([]byte(s), name)))
+}
+
+// dolibrary is dolibrary: globname[=modname] → globname = require(modname).
+func dolibrary(L *lua.State, globname string) int {
+	var status int
 	suffix := -1
+	modname := globname
 	if i := strings.IndexByte(globname, '='); i >= 0 {
 		modname = globname[i+1:] /* module name starts after the '=' */
 		globname = globname[:i]  /* global name ends here */
-	} else if i := strings.IndexByte(modname, '-'); i >= 0 {
-		suffix = i /* the ignore mark starts a suffix */
+	} else {
+		modname = globname /* module name is equal to global name */
+		if i := strings.IndexByte(modname, luaIgMark); i >= 0 {
+			suffix = i /* look for a suffix mark */
+		}
 	}
 	L.GetGlobal("require")
 	L.PushString(modname)
-	if err := docall(1, 1); err != nil { /* call 'require(modname)' */
-		return err
+	status = docall(L, 1, 1) /* call 'require(modname)' */
+	if status == lua.LUA_OK {
+		if suffix >= 0 { /* is there a suffix mark? */
+			globname = globname[:suffix] /* remove suffix from global name */
+		}
+		L.SetGlobal(globname) /* globname = require(modname) */
 	}
-	if suffix >= 0 { /* is there a suffix mark? */
-		globname = globname[:suffix] /* remove suffix from global name */
-	}
-	L.SetGlobal(globname) /* globname = require(modname) */
-	return nil
+	return report(L, status)
 }
 
-// stdinIsTTY is lua_stdin_is_tty: without it the interpreter would start
-// a REPL on a redirected standard input.
+// pushArgs is pushargs.
+func pushArgs(L *lua.State) int {
+	if L.GetGlobal("arg") != lua.LUA_TTABLE {
+		L.Error2("'arg' is not a table")
+	}
+	n := int(L.Len2(-1))
+	L.CheckStack2(n+3, "too many arguments to script")
+	for i := 1; i <= n; i++ {
+		L.RawGetI(-i, int64(i))
+	}
+	L.Remove(-(n + 1)) /* remove table from the stack (C: -i after loop) */
+	return n
+}
+
+// handleScript is handle_script. argv[0] is the script; argv[-1] is the
+// preceding argument (checked for "--"), mirrored via fullArgv/script.
+func handleScript(L *lua.State, fullArgv []string, script int) int {
+	fname := fullArgv[script]
+	if fname == "-" && !(script > 0 && fullArgv[script-1] == "--") {
+		fname = "" /* stdin */
+	}
+	status := loadFile(L, fname)
+	if status == lua.LUA_OK {
+		n := pushArgs(L) /* push arguments to script */
+		status = docall(L, n, lua.LUA_MULTRET)
+	}
+	return report(L, status)
+}
+
+/* bits of various argument indicators in 'args' */
+const (
+	hasError = 1  /* has_error — bad option */
+	hasI     = 2  /* has_i — -i */
+	hasV     = 4  /* has_v — -v */
+	hasE     = 8  /* has_e — -e */
+	hasEnv   = 16 /* has_E — -E */
+)
+
+// optChar is argv[i][1]: the NUL of a bare "-" reads as 0 in C.
+func optChar(a string) byte {
+	if len(a) < 2 {
+		return 0
+	}
+	return a[1]
+}
+
+// collectArgs is collectargs. Returns (args mask, first). first is -1 if
+// there is no program name, 0 if there is no script, or the script index.
+func collectArgs(argv []string) (args, first int) {
+	if len(argv) == 0 { /* C: argv[0] == NULL */
+		return 0, -1
+	}
+	if argv[0] != "" { /* not empty? */
+		progName = argv[0] /* save it */
+	}
+	for i := 1; i < len(argv); i++ { /* handle arguments */
+		first = i
+		a := argv[i]
+		if len(a) == 0 || a[0] != '-' { /* not an option? */
+			return args, first /* stop handling options */
+		}
+		switch optChar(a) { /* else check option */
+		case '-': /* '--' */
+			if len(a) > 2 { /* extra characters after '--'? */
+				return hasError, first /* invalid option */
+			}
+			/* if there is a script name, it comes after '--' */
+			if i+1 < len(argv) {
+				first = i + 1
+			} else {
+				first = 0
+			}
+			return args, first
+		case 0: /* '-' */
+			return args, first /* script "name" is '-' */
+		case 'E':
+			if len(a) > 2 { /* extra characters? */
+				return hasError, first
+			}
+			args |= hasEnv
+		case 'W':
+			if len(a) > 2 {
+				return hasError, first
+			}
+		case 'i':
+			args |= hasI /* (-i implies -v) */
+			fallthrough  /* FALLTHROUGH */
+		case 'v':
+			if len(a) > 2 {
+				return hasError, first
+			}
+			args |= hasV
+		case 'e':
+			args |= hasE /* FALLTHROUGH */
+			fallthrough
+		case 'l': /* both options need an argument */
+			if len(a) == 2 { /* no concatenated argument? */
+				i++ /* try next 'argv' */
+				if i >= len(argv) || (len(argv[i]) > 0 && argv[i][0] == '-') {
+					return hasError, first /* no next argument or it is another option */
+				}
+			}
+		default: /* invalid option */
+			return hasError, first
+		}
+	}
+	first = 0 /* no script name */
+	return args, first
+}
+
+// runArgs is runargs: process -e, -l, and -W up to (not including) n.
+func runArgs(L *lua.State, argv []string, n int) int {
+	for i := 1; i < n; i++ {
+		option := optChar(argv[i])
+		/* lua_assert(argv[i][0] == '-') — already checked */
+		switch option {
+		case 'e', 'l':
+			extra := argv[i][2:] /* both options need an argument */
+			if extra == "" {
+				i++
+				extra = argv[i]
+			}
+			var status int
+			if option == 'e' {
+				status = dostring(L, extra, "=(command line)")
+			} else {
+				status = dolibrary(L, extra)
+			}
+			if status != lua.LUA_OK {
+				return 0
+			}
+		case 'W':
+			L.Warning("@on", false) /* warnings on */
+		}
+	}
+	return 1
+}
+
+// handleLuaInit is handle_luainit.
+func handleLuaInit(L *lua.State) int {
+	name := "=" + luaInitVarVersion
+	init, ok := os.LookupEnv(luaInitVarVersion)
+	if !ok {
+		name = "=" + luaInitVar
+		init, ok = os.LookupEnv(luaInitVar) /* try alternative name */
+	}
+	if !ok {
+		return lua.LUA_OK
+	} else if len(init) > 0 && init[0] == '@' {
+		return dofile(L, init[1:])
+	}
+	return dostring(L, init, name)
+}
+
+/*
+** {==================================================================
+** Read-Eval-Print Loop (REPL)
+** ===================================================================
+ */
+
+// stdinIsTTY is lua_stdin_is_tty (POSIX isatty(0) / Windows _isatty).
+// ISO C default in lua.c is 1; this port follows the POSIX sense.
 func stdinIsTTY() bool {
 	fi, err := os.Stdin.Stat()
 	if err != nil {
@@ -398,322 +478,224 @@ func stdinIsTTY() bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
-// ---------------------------------------------------------------------
-// running chunks
-// ---------------------------------------------------------------------
+/*
+** lua_readline / lua_saveline / lua_freeline / lua_initreadline
+** (non-LUA_USE_READLINE path). FLAG: no libreadline; bufio.Scanner
+** instead of fgets(LUA_MAXINPUT). Line length is not capped at 512;
+** ScanLines also strips a trailing \r (C's fgets+strip keeps \r on
+** \r\n), which is an intentional platform divergence.
+ */
+const luaMaxInput = 512 // LUA_MAXINPUT — not enforced (Scanner FLAG)
 
-// handleScript is 'handle_script': it loads the script and runs it with
-// its arguments (the positive entries of 'arg') as varargs.  A '-' means
-// standard input, unless it was quoted with '--'.
-func handleScript(fname string, afterDashDash bool) bool {
-	var err error
-	if fname == "-" && !afterDashDash {
-		err = runStdinScript()
+var replIn *bufio.Scanner
+
+func initReadline(L *lua.State) {
+	_ = L           /* lua_initreadline */
+	_ = luaMaxInput /* not enforced — Scanner FLAG (C uses fgets(LUA_MAXINPUT)) */
+	replIn = bufio.NewScanner(os.Stdin)
+	replIn.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+}
+
+func saveLine(L *lua.State, line string) { _, _ = L, line /* lua_saveline no-op */ }
+
+func freeLine(L *lua.State, b string) { _, _ = L, b /* lua_freeline no-op */ }
+
+// getPrompt is get_prompt: leave the string (or nil for default) on the
+// stack to keep it anchored.
+func getPrompt(L *lua.State, firstline bool) string {
+	name, def := "_PROMPT2", luaPrompt2
+	if firstline {
+		name, def = "_PROMPT", luaPrompt
+	}
+	if L.GetGlobal(name) == lua.LUA_TNIL {
+		return def /* use the default */
+	}
+	/* apply 'tostring' over the value (luaL_tolstring) */
+	p := L.ToLString(-1)
+	L.Remove(-2) /* remove original value */
+	return p
+}
+
+// incomplete is incomplete: syntax error whose message ends with <eof>.
+func incomplete(L *lua.State, status int) bool {
+	if status == lua.LUA_ERRSYNTAX {
+		msg, ok := L.ToString(-1)
+		if ok && len(msg) >= len(eofMark) && strings.HasSuffix(msg, eofMark) {
+			return true
+		}
+	}
+	return false
+}
+
+// pushLine is pushline: show prompt, read a line, push it.
+func pushLine(L *lua.State, firstline bool) bool {
+	prmt := getPrompt(L, firstline)
+	fmt.Print(prmt)
+	readstatus := replIn.Scan()
+	L.Pop(1) /* remove prompt */
+	if !readstatus {
+		return false /* no input */
+	}
+	b := replIn.Text()                          /* Scanner already strips the newline */
+	if firstline && len(b) > 0 && b[0] == '=' { /* for compatibility with 5.2, ... */
+		L.PushFString("return %s", b[1:]) /* change '=' to 'return' */
 	} else {
-		err = runScript(fname)
+		L.PushString(b)
 	}
-	if err != nil {
-		report(err)
-		return false
-	}
+	freeLine(L, b)
 	return true
 }
 
-// runScript loads 'path' and runs it, pushing the script arguments first
-// the way lua.c's 'pushargs' does.
-func runScript(path string) error {
-	if err := L.LoadFile(path); err != nil {
-		return err
-	}
-	n, err := pushArgs()
-	if err != nil {
-		return err
-	}
-	return docall(n, lua.LUA_MULTRET)
-}
-
-// pushArgs is 'pushargs': it pushes arg[1..n] -- the arguments given to
-// the script -- and returns how many there are.
-func pushArgs() (int, error) {
-	if L.GetGlobal("arg") != lua.LUA_TTABLE {
-		return 0, fmt.Errorf("'arg' is not a table")
-	}
-	n := int(L.Len2(-1)) /* luaL_len */
-	if !L.CheckStack(n + 3) {
-		return 0, fmt.Errorf("too many arguments to script")
-	}
-	for i := 1; i <= n; i++ {
-		L.RawGetI(-i, int64(i)) /* the table moves down as values are pushed */
-	}
-	L.Remove(-(n + 1)) /* remove the table from the stack */
-	return n, nil
-}
-
-func runFile(path string) error {
-	if err := L.LoadFile(path); err != nil {
-		return err
-	}
-	return callChunk()
-}
-
-// runStdin is 'dofile(L, NULL)' of lua.c: standard input run when there
-// is no script to run.  It gets no arguments -- 'arg' holds the
-// interpreter's own, and lua.c's dochunk calls the chunk with none.
-func runStdin() error { return doReader(os.Stdin, "=stdin") }
-
-// runStdinScript is what 'handle_script' does when the script is named
-// "-": standard input *is* the script, and a script runs with the
-// positive entries of 'arg' as its varargs.  That is not the same thing
-// as runStdin, and mixing the two up shows: 'echo "print(...)" | lua -e
-// "arg[1] = 100" -' prints 100 in PUC-Lua and nothing here.
-func runStdinScript() error {
-	if err := loadStdin(); err != nil {
-		return err
-	}
-	n, err := pushArgs()
-	if err != nil {
-		return err
-	}
-	return docall(n, lua.LUA_MULTRET)
-}
-
-func loadStdin() error { return loadReader(os.Stdin, "=stdin") }
-
-func doReader(f *os.File, name string) error {
-	if err := loadReader(f, name); err != nil {
-		return err
-	}
-	return callChunk()
-}
-
-func loadReader(f *os.File, name string) error {
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return err
-	}
-	/* luaL_loadfile(NULL) runs skipBOM and skipcomment before compiling.
-	   The newline that ends a shebang has to stay, or every later line
-	   number is one too small. */
-	return L.LoadBytes(skipStdinComment(data), name)
-}
-
-// skipStdinComment is skipBOM/skipcomment from lauxlib.c, the same rules
-// LoadFile uses for a script on disk.
-func skipStdinComment(data []byte) []byte {
-	const bom = "\xEF\xBB\xBF"
-	if len(data) >= len(bom) && string(data[:len(bom)]) == bom {
-		data = data[len(bom):]
-	}
-	if len(data) > 0 && data[0] == '#' {
-		i := 0
-		for i < len(data) && data[i] != '\n' {
-			i++
+// addReturn is addreturn: try to compile as 'return <line>;'.
+func addReturn(L *lua.State) int {
+	line, _ := L.ToString(-1) /* original line */
+	retline := L.PushFString("return %s;", line)
+	status := loadErrStatus(L, L.LoadBytes([]byte(retline), "=stdin"))
+	if status == lua.LUA_OK {
+		L.Remove(-2)    /* remove modified line */
+		if line != "" { /* non empty? */
+			saveLine(L, line) /* keep history */
 		}
-		return data[i:]
+	} else {
+		L.Pop(2) /* pop result from loadbuffer and modified line */
 	}
-	return data
+	return status
 }
 
-func doString(src, name string) error {
-	if err := L.LoadBytes([]byte(src), name); err != nil {
-		return err
-	}
-	return callChunk()
-}
-
-// msghandler is the message handler that lua.c installs under every
-// chunk it runs: it turns the error object into a string (honouring
-// '__tostring') and appends a standard traceback.
-func msghandler(L *lua.State) int {
-	msg, ok := L.ToString(1) /* strings and numbers are messages as they are */
-	if !ok {
-		if L.CallMeta(1, "__tostring") && L.Type(-1) == lua.LUA_TSTRING {
-			return 1 /* that is the message */
+// multiline is multiline: read continuation lines until a complete statement.
+func multiline(L *lua.State) int {
+	for { /* repeat until gets a complete statement */
+		line, _ := L.ToString(1)                                        /* get what it has */
+		status := loadErrStatus(L, L.LoadBytes([]byte(line), "=stdin")) /* try it */
+		if !incomplete(L, status) || !pushLine(L, false) {
+			saveLine(L, line) /* keep history */
+			return status     /* should not or cannot try to add continuation line */
 		}
-		msg = fmt.Sprintf("(error object is a %s value)", L.TypeName(1))
-		ok = true
+		L.Remove(-2)       /* remove error message (from incomplete line) */
+		L.PushString("\n") /* add newline... */
+		L.Insert(-2)       /* ...between the two lines */
+		L.Concat(3)        /* join them */
 	}
-	L.Traceback(L, msg, ok, 1)
-	return 1
 }
 
-// docall is 'docall' of lua.c: it runs the function that sits below
-// 'narg' arguments with 'msghandler' installed under it, so that an
-// uncaught error comes back with a traceback.
-//
-// C also does: globalL = L; setsignal(SIGINT, laction); ...; setsignal(SIGINT, SIG_DFL).
-// FLAG: platform signal_* companions (lstop/laction/setsignal) — intentional;
-// SetHook's *dbAr is not exported to cmd/lua, so SIGINT→hook lives in
-// signal_*.go when present (do not delete). No-op here without those files.
-func docall(narg, nres int) error {
-	base := L.GetTop() - narg /* function index */
-	L.PushGoClosure(msghandler, 0) /* push message handler */
-	L.Insert(base)                 /* put it under function and args */
-	/* FLAG signal: setsignal(SIGINT, laction) — see signal_* */
-	status := L.PCall(narg, nres, base)
-	/* FLAG signal: setsignal(SIGINT, SIG_DFL) */
-	L.Remove(base) /* remove message handler from the stack */
-	if status != lua.LUA_OK {
-		return lastError()
+// loadLine is loadline.
+func loadLine(L *lua.State) int {
+	L.SetTop(0)
+	if !pushLine(L, true) {
+		return -1 /* no input */
 	}
-	return nil
-}
-
-// callChunk runs a chunk the way lua.c's 'dochunk' does: no arguments and
-// *no* results, so that the stack is left exactly where it was before the
-// chunk was pushed.  That matters: 'lua -e "..." script.lua' runs the
-// chunk from a deeper stack when '-e' leaves anything behind, and the
-// depth of the stack is observable (the official test suite counts the
-// calls it takes to overflow it).
-func callChunk() error {
-	return docall(0, 0)
-}
-
-func lastError() error {
-	/* lua_tostring, not luaL_tolstring: a table (or any other
-	   non-string) is not converted again. C prints a fixed sentence
-	   when the pointer comes back NULL. */
-	s, ok := L.ToString(-1)
-	L.Pop(1)
-	if !ok {
-		return fmt.Errorf("(error message not a string)")
+	status := addReturn(L)
+	if status != lua.LUA_OK { /* 'return ...' did not work? */
+		status = multiline(L) /* try as command, maybe with continuation lines */
 	}
-	return fmt.Errorf("%s", s)
+	L.Remove(1) /* remove line from the stack */
+	/* lua_assert(lua_gettop(L) == 1) */
+	return status
 }
 
-// report is 'report' plus 'l_message' of lua.c: the message on stderr,
-// prefixed with progname -- except inside the REPL, where lua.c clears
-// progname precisely so that an error in a line has no prefix at all.
-func report(err error) {
-	if progName == "" {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		return
+// lPrint is l_print.
+func lPrint(L *lua.State) {
+	n := L.GetTop()
+	if n > 0 { /* any result to be printed? */
+		L.CheckStack2(lua.LUA_MINSTACK, "too many results to print")
+		L.GetGlobal("print")
+		L.Insert(1)
+		if L.PCall(n, 0, 0) != lua.LUA_OK {
+			msg, _ := L.ToString(-1)
+			lMessage(progName, L.PushFString("error calling 'print' (%s)", msg))
+		}
 	}
-	fmt.Fprintf(os.Stderr, "%s: %v\n", progName, err)
 }
 
-// ---------------------------------------------------------------------
-// REPL
-// ---------------------------------------------------------------------
-
-func doREPL() {
+// doREPL is doREPL.
+func doREPL(L *lua.State) {
 	oldProgName := progName
 	progName = "" /* no 'progname' on errors in interactive mode */
-	/* C assigns the saved name back only after the loop. An error
-	   that escapes — the prompt's __tostring, for one — longjmps
-	   past that assignment, so report prints no program name.
-	   Restoring it in every defer would put "lua: " in front of
-	   that message. */
+	/* C assigns the saved name back only after the loop. An error that
+	   escapes (prompt __tostring, for one) longjmps past that assignment,
+	   so report prints no program name. Restoring in every defer would put
+	   "lua: " in front of that message. */
 	defer func() {
 		if e := recover(); e != nil {
 			panic(e)
 		}
 		progName = oldProgName
 	}()
-
-	in := bufio.NewScanner(os.Stdin)
-	in.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	initReadline(L)
 	for {
-		/* loadline starts by emptying the stack: a line is read against
-		   nothing but what the REPL itself has put there, and the
-		   results of the previous line are gone.  Without this the
-		   REPL would hand 'print' the arguments pmain was called with
-		   -- 'lua -i' and then '1+1' would print three numbers. */
-		L.SetTop(0)
-		fmt.Print(replPrompt(true))
-		if !in.Scan() {
+		status := loadLine(L)
+		if status == -1 {
 			break
 		}
-		chunk := in.Text()
-		/* lua.c's 'pushline': a line starting with '=' means "print the
-		   value of what follows", kept from 5.0. */
-		if strings.HasPrefix(chunk, "=") {
-			chunk = "return " + chunk[1:]
+		if status == lua.LUA_OK {
+			status = docall(L, 0, lua.LUA_MULTRET)
 		}
-		loadErr := loadLine(&chunk, in)
-		if loadErr != nil {
-			report(loadErr)
-		} else if err := docall(0, lua.LUA_MULTRET); err != nil {
-			report(err) /* with a traceback: docall installs msghandler */
+		if status == lua.LUA_OK {
+			lPrint(L)
 		} else {
-			printResults()
+			report(L, status)
 		}
 	}
-	L.SetTop(0)
-	fmt.Println() /* lua_writeline, which ends doREPL */
+	L.SetTop(0)   /* clear stack */
+	fmt.Println() /* lua_writeline */
+	progName = oldProgName
 }
 
-// replPrompt is lua.c's 'get_prompt': the global _PROMPT, or _PROMPT2 on
-// a continuation line, passed through luaL_tolstring.  That is the only
-// reason a prompt that is not a string can work at all.  A _PROMPT that
-// is nil means the default; one that is the empty string is an empty
-// prompt and not the default.
-func replPrompt(first bool) string {
-	name, def := "_PROMPT2", luaPrompt2
-	if first {
-		name, def = "_PROMPT", luaPrompt
-	}
-	top := L.GetTop()
-	defer L.SetTop(top)
-	L.GetGlobal(name)
-	if L.Type(-1) == lua.LUA_TNIL {
-		return def
-	}
-	/* luaL_tolstring. A table with no metamethod is "table: 0x...",
-	   and a __tostring that does not return a string is an error;
-	   neither of those is the default prompt. */
-	return L.ToLString(-1)
-}
+/* }================================================================== */
 
-// loadLine compiles one REPL line, reading continuation lines from 'in'
-// while the line is unfinished, and leaves the chunk on the stack.  It
-// answers the error to report, if any: the syntax error of a finished
-// line, or -- when input runs out in the middle of one -- the error of
-// the last try, which is what lua.c's 'multiline' returns and 'report'
-// then prints.
-//
-// It is 'addreturn' and 'multiline' of lua.c together: "return <line>"
-// first, so that an expression prints its value, and the line on its own
-// when that does not compile.
-func loadLine(chunk *string, in *bufio.Scanner) error {
-	for {
-		if err := L.LoadBytes([]byte("return "+*chunk), "=stdin"); err == nil {
-			return nil
-		}
-		L.SetTop(0)
-		err := L.LoadBytes([]byte(*chunk), "=stdin")
-		if err == nil {
-			return nil
-		}
-		/* lua.c's 'incomplete': the message ends with <eof>. */
-		if !strings.HasSuffix(err.Error(), "<eof>") {
-			return err /* a real syntax error: report it and go on */
-		}
-		fmt.Print(replPrompt(false))
-		if !in.Scan() {
-			return err /* input ran out mid-line: lua.c reports this too */
-		}
-		*chunk += "\n" + in.Text()
+// pmain is pmain: main body of the stand-alone interpreter (protected mode).
+func pmain(L *lua.State) int {
+	argc64, _ := L.ToInteger(1)
+	argc := int(argc64)
+	_ = L.ToUserData(2) /* argv lightuserdata stand-in; real argv is pmainArgv */
+	argv := pmainArgv
+	if argc > len(argv) {
+		argc = len(argv)
 	}
-}
-
-// printResults is 'l_print' of lua.c: the results of a line are handed
-// to the global 'print' -- the whole point being that 'print' is a
-// global and not a built-in, so a REPL whose 'print' has been replaced
-// prints with the replacement and complains when it cannot call it.
-// Building the line here from 'tostring' would silently swallow that,
-// which is what 'lua -e "print=nil" -i' is testing.
-func printResults() {
-	n := L.GetTop()
-	if n == 0 { /* any result to be printed? */
-		return
+	args, script := collectArgs(argv)
+	optlim := argc /* first argv not an option */
+	if script > 0 {
+		optlim = script
 	}
-	L.CheckStack(lua.LUA_MINSTACK) /* "too many results to print" */
-	L.GetGlobal("print")
-	L.Insert(1)
-	if L.PCall(n, 0, 0) != lua.LUA_OK {
-		msg, _ := L.ToString(-1)
-		L.Pop(1)
-		fmt.Fprintf(os.Stderr, "error calling 'print' (%s)\n", msg)
+	L.CheckVersion()      /* check that interpreter has correct version */
+	if args == hasError { /* bad arg? */
+		printUsage(argv[script]) /* 'script' has index of bad arg */
+		return 0
 	}
+	if args&hasV != 0 { /* option '-v'? */
+		printVersion()
+	}
+	if args&hasEnv != 0 { /* option '-E'? */
+		L.PushBoolean(true) /* signal for libraries to ignore env. vars. */
+		L.SetField(lua.LUA_REGISTRYINDEX, "LUA_NOENV")
+	}
+	L.OpenLibs()                          /* open standard libraries */
+	createArgTable(L, argv, argc, script) /* create table 'arg' */
+	/* lua_gc(L, LUA_GCRESTART); lua_gc(L, LUA_GCGEN, 0, 0);
+	   FLAG: Go GC — no-op (intentional). */
+	if args&hasEnv == 0 { /* no option '-E'? */
+		if handleLuaInit(L) != lua.LUA_OK { /* run LUA_INIT */
+			return 0 /* error running LUA_INIT */
+		}
+	}
+	if runArgs(L, argv, optlim) == 0 { /* execute arguments -e and -l */
+		return 0 /* something failed */
+	}
+	if script > 0 { /* execute main script (if there is one) */
+		if handleScript(L, argv, script) != lua.LUA_OK {
+			return 0 /* interrupt in case of error */
+		}
+	}
+	if args&hasI != 0 { /* -i option? */
+		doREPL(L) /* do read-eval-print loop */
+	} else if script < 1 && args&(hasE|hasV) == 0 { /* no active option? */
+		if stdinIsTTY() { /* running in interactive mode? */
+			printVersion()
+			doREPL(L) /* do read-eval-print loop */
+		} else {
+			dofile(L, "") /* executes stdin as a file; status ignored (lua.c) */
+		}
+	}
+	L.PushBoolean(true) /* signal no errors */
+	return 1
 }

@@ -5,16 +5,15 @@
 // forprep counter, floatforloop). ljumptab.h is reference only: Go uses
 // a switch, not a computed-goto dispatch table.
 //
-// Intentional omissions / adaptations (BRIEF KEEP / NOTES.md):
+// Intentional omissions / adaptations (BRIEF KEEP):
 //   - GC barriers / checkGC → gcAfterAlloc (Go GC)
 //   - luaV_finishOp absent (goroutine yield; no longjmp out of the loop)
 //   - index stack / UpVal.open list; panic/recover error path
-//   - number/compare helpers live in ldebug.go in golua (C: this file)
+//   - number/compare/objlen helpers live in lvm_helpers.go (C: this file)
 package core
 
 import (
 	"math"
-	"strconv"
 	"strings"
 )
 
@@ -30,56 +29,49 @@ func upvalValue(uv *UpVal) *Value {
 }
 
 /*
-luaV_modcore and luaV_idivcore are the arithmetic of Lua's '%' and '//'
-
-	for a divisor that is neither 0 nor -1. They are separate from
-	luaV_mod and luaV_idiv for one reason: those two can raise, and the
-	cost of the call that raises is what keeps them over the compiler's
-	inline budget -- and '%' and '//' are the slowest arithmetic
-	operations, so it is exactly them that the interpreter loop wants
-	inlined. The loop therefore tests the divisor itself and only falls
-	back to luaV_mod / luaV_idiv for the two divisors that need care.
-*/
-func luaV_modcore(m, n int64) int64 {
-	r := m % n
-	if r != 0 && (r^n) < 0 { /* 'm/n' would be non-integer negative? */
-		r += n
-	}
-	return r
-}
-
-func luaV_idivcore(m, n int64) int64 {
-	q := m / n
-	if (m^n) < 0 && m%n != 0 { /* 'm/n' would be negative non-integer? */
-		q--
-	}
-	return q
-}
-
+** Integer division; return 'm // n', that is, floor(m/n).
+** C division truncates its result (rounds towards zero).
+** 'floor(q) == trunc(q)' when 'q >= 0' or when 'q' is integer,
+** otherwise 'floor(q) == trunc(q) - 1'.
+ */
 func luaV_idiv(L *State, m, n int64) int64 {
 	if uint64(n)+1 <= 1 { /* special cases: -1 or 0 */
 		if n == 0 {
 			luaG_runerror(L, "attempt to divide by zero")
 			return 0
 		}
-		return -m /* n == -1; avoid overflow with mininteger // -1 */
+		return int64(uint64(0) - uint64(m)) /* intop(-, 0, m); n == -1 */
 	}
-	return luaV_idivcore(m, n)
+	q := m / n                 /* perform C division */
+	if (m^n) < 0 && m%n != 0 { /* 'm/n' would be negative non-integer? */
+		q-- /* correct result for different rounding */
+	}
+	return q
 }
 
+/*
+** Integer modulus; return 'm % n'. (Assume that C '%' with
+** negative operands follows C99 behavior. See previous comment
+** about luaV_idiv.)
+ */
 func luaV_mod(L *State, m, n int64) int64 {
 	if uint64(n)+1 <= 1 { /* special cases: -1 or 0 */
 		if n == 0 {
 			luaG_runerror(L, "attempt to perform 'n%%0'")
 			return 0
 		}
-		return 0 /* m % -1 == 0; avoid overflow */
+		return 0 /* m % -1 == 0; avoid overflow with 0x80000...%-1 */
 	}
-	return luaV_modcore(m, n)
+	r := m % n
+	if r != 0 && (r^n) < 0 { /* 'm/n' would be non-integer negative? */
+		r += n /* correct result for different rounding */
+	}
+	return r
 }
 
-// luaV_modf is the float modulus (lvm.c). Unlike the integer version it
-// never raises: 'luai_nummod' is plain 'fmod', so '1.0 % 0.0' is NaN.
+/*
+** Float modulus
+ */
 func luaV_modf(L *State, m, n float64) float64 {
 	r := math2Fmod(m, n)
 	/* luai_nummod: give the result the same sign as the divisor.  The
@@ -91,9 +83,12 @@ func luaV_modf(L *State, m, n float64) float64 {
 	return r
 }
 
+/* number of bits in an integer */
 const NBITS = 64
 
-// luaV_shiftl shifts x left by y (a negative y shifts right).
+/*
+** Shift left operation. (Shift right just negates 'y'.)
+ */
 func luaV_shiftl(x, y int64) int64 {
 	if y < 0 { /* shift right? */
 		if y <= -NBITS {
@@ -107,76 +102,7 @@ func luaV_shiftl(x, y int64) int64 {
 	return int64(uint64(x) << uint64(y))
 }
 
-// luaV_concat concatenates the 'total' values on top of the stack.
-func luaV_concat(L *State, total int) {
-	for {
-		top := L.top
-		n := 2
-		o1 := &L.stack[top-2]
-		o2 := &L.stack[top-1]
-		if total == 2 && ttisstring(o1) && ttisinteger(o2) {
-			/* Formatting an integer directly after the string avoids
-			   interning a temporary decimal string only to copy it into
-			   the concatenation. OP_CONCAT still performs its one GC
-			   check after this returns. */
-			var scratch [128]byte
-			out := append(scratch[:0], tsvalue(o1).val...)
-			out = strconv.AppendInt(out, o2.i, 10)
-			setsvalue(&L.stack[top-2], luaS_newlstr(L, string(out)))
-			n = 2
-		} else if !(ttisstring(o1) || cvt2str(o1)) || !tostringInPlace(L, o2) {
-			luaT_tryconcatTM(L)
-		} else if isEmptyStr(o2) { /* second operand is empty? */
-			tostringInPlace(L, o1) /* result is first operand */
-		} else if isEmptyStr(o1) { /* first operand is empty string? */
-			L.stack[top-2] = L.stack[top-1] /* result is second operand */
-		} else if total == 2 && tostringInPlace(L, o1) {
-			/* Two strings is the common opcode. Joining them directly
-			   skips the slice and the builder the general path needs
-			   when it is gathering an arbitrary run. Remember the last
-			   pair too: interning otherwise discovers the same result
-			   only after a+b has allocated its temporary string. */
-			a, b := tsvalue(o1), tsvalue(o2)
-			r := L.concatR
-			if a != L.concatA || b != L.concatB || r == nil {
-				r = luaS_newlstr(L, a.val+b.val)
-				L.concatA, L.concatB, L.concatR = a, b, r
-			}
-			setsvalue(&L.stack[top-2], r)
-			n = 2
-		} else {
-			/* at least two non-empty string values; get as many as possible */
-			parts := make([]string, 0, total)
-			totalLen := 0
-			parts = append(parts, tsvalue(o2).val)
-			totalLen += len(tsvalue(o2).val)
-			for n = 1; n < total && tostringInPlace(L, &L.stack[top-n-1]); n++ {
-				s := tsvalue(&L.stack[top-n-1]).val
-				parts = append(parts, s)
-				totalLen += len(s)
-			}
-			var sb strings.Builder
-			sb.Grow(totalLen)
-			for i := len(parts) - 1; i >= 0; i-- {
-				sb.WriteString(parts[i])
-			}
-			setsvalue(&L.stack[top-n], luaS_newlstr(L, sb.String()))
-		}
-		total -= n - 1 /* got 'n' strings to create one new */
-		L.top -= n - 1 /* popped 'n' strings and pushed one */
-		if total <= 1 {
-			return
-		}
-	}
-}
-
-// isEmptyStr is C isemptystr: only a short empty string is "empty"
-// (long empty strings do not exist under PUC sizing, but match the tag).
-func isEmptyStr(v *Value) bool {
-	return ttypetag(v) == LUA_VSHRSTR && len(tsvalue(v).val) == 0
-}
-
-// tostringInPlace converts a number to a string, in place.
+/* tostring: ensure element at 'o' is a string (lvm.c macro). */
 func tostringInPlace(L *State, o *Value) bool {
 	if ttisstring(o) {
 		return true
@@ -186,6 +112,62 @@ func tostringInPlace(L *State, o *Value) bool {
 		return true
 	}
 	return false
+}
+
+/* isemptystr: short empty string only (lvm.c). */
+func isEmptyStr(v *Value) bool {
+	return ttypetag(v) == LUA_VSHRSTR && len(tsvalue(v).val) == 0
+}
+
+/* copy strings in stack from top - n up to top - 1 to buffer (lvm.c). */
+func copy2buff(stack []Value, top, n int, buff *strings.Builder) {
+	for ; n > 0; n-- {
+		buff.WriteString(tsvalue(&stack[top-n]).val)
+	}
+}
+
+/*
+** Main operation for concatenation: concat 'total' values in the stack,
+** from 'L.top - total' up to 'L.top - 1'.
+ */
+func luaV_concat(L *State, total int) {
+	if total == 1 {
+		return /* "all" values already concatenated */
+	}
+	for {
+		top := L.top
+		n := 2 /* number of elements handled in this pass (at least 2) */
+		o1 := &L.stack[top-2]
+		o2 := &L.stack[top-1]
+		if !(ttisstring(o1) || cvt2str(o1)) || !tostringInPlace(L, o2) {
+			luaT_tryconcatTM(L) /* may invalidate 'top' */
+		} else if isEmptyStr(o2) { /* second operand is empty? */
+			tostringInPlace(L, o1) /* result is first operand */
+		} else if isEmptyStr(o1) { /* first operand is empty string? */
+			L.stack[top-2] = L.stack[top-1] /* result is second op. */
+		} else {
+			/* at least two non-empty string values; get as many as possible */
+			tl := len(tsvalue(&L.stack[top-1]).val)
+			for n = 1; n < total && tostringInPlace(L, &L.stack[top-n-1]); n++ {
+				l := len(tsvalue(&L.stack[top-n-1]).val)
+				if l >= math.MaxInt-tl { /* string length overflow? */
+					L.top = top - total /* pop strings to avoid wasting stack */
+					luaG_runerror(L, "string length overflow")
+					return
+				}
+				tl += l
+			}
+			var buff strings.Builder
+			buff.Grow(tl)
+			copy2buff(L.stack, top, n, &buff)
+			setsvalue(&L.stack[top-n], luaS_newlstr(L, buff.String()))
+		}
+		total -= n - 1 /* got 'n' strings to create one new */
+		L.top -= n - 1 /* popped 'n' strings and pushed one */
+		if total <= 1 {
+			return
+		}
+	}
 }
 
 // luaV_finishget finishes a table access 'val = t[key]' (lvm.c).
@@ -286,6 +268,22 @@ func vmFastGeti(t *Value, key int64) *Value {
 	return luaH_getint(h, key)
 }
 
+// vmFastGetShortStr mirrors luaV_fastget(..., luaH_getshortstr).
+func vmFastGetShortStr(t *Value, key *TString) *Value {
+	if !ttistable(t) {
+		return nil
+	}
+	return luaH_getshortstr(hvalue(t), key)
+}
+
+// vmFastGetStr mirrors luaV_fastget(..., luaH_getstr) for OP_SELF.
+func vmFastGetStr(L *State, t *Value, key *TString) *Value {
+	if !ttistable(t) {
+		return nil
+	}
+	return luaH_getstr(L, hvalue(t), key)
+}
+
 // pushclosure creates a new Lua closure and initializes its upvalues.
 func pushclosure(L *State, p *Proto, encup []*UpVal, base, ra int) {
 	nup := p.sizeupvalues
@@ -312,7 +310,7 @@ func forlimit(L *State, init int64, lim *Value, p *int64, step int64) bool {
 	}
 	if !luaV_tointeger(L, lim, p, mode) {
 		var flim float64
-		if !luaV_tonumber_(L, lim, &flim) {
+		if !tonumber(lim, &flim) { /* cannot convert to float? */
 			luaG_forerror(L, lim, "limit")
 			return true
 		}
@@ -366,13 +364,13 @@ func forprep(L *State, ra int) bool {
 	}
 	/* else try making all values floats */
 	var init, limit, step float64
-	if !luaV_tonumber_(L, plimit, &limit) {
+	if !tonumber(plimit, &limit) {
 		luaG_forerror(L, plimit, "limit")
 	}
-	if !luaV_tonumber_(L, pstep, &step) {
+	if !tonumber(pstep, &step) {
 		luaG_forerror(L, pstep, "step")
 	}
-	if !luaV_tonumber_(L, pinit, &init) {
+	if !tonumber(pinit, &init) {
 		luaG_forerror(L, pinit, "initial value")
 	}
 	if step == 0 {
@@ -507,7 +505,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_GETTABUP:
 				upval := upvalValue(cl.upvals[i.B])
 				key := &k[i.C]
-				slot := vmFastGet(L, upval, key)
+				slot := vmFastGetShortStr(upval, tsvalue(key)) /* luaH_getshortstr */
 				if slot != nil && !isempty(slot) {
 					L.stack[ra] = *slot
 				} else {
@@ -517,7 +515,12 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_GETTABLE:
 				rb := &L.stack[base+i.B]
 				rc := &L.stack[base+i.C]
-				slot := vmFastGet(L, rb, rc)
+				var slot *Value
+				if ttisinteger(rc) { /* fast track for integers? */
+					slot = vmFastGeti(rb, ivalue(rc))
+				} else {
+					slot = vmFastGet(L, rb, rc)
+				}
 				if slot != nil && !isempty(slot) {
 					L.stack[ra] = *slot
 				} else {
@@ -538,7 +541,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_GETFIELD:
 				rb := &L.stack[base+i.B]
 				key := &k[i.C]
-				slot := vmFastGet(L, rb, key)
+				slot := vmFastGetShortStr(rb, tsvalue(key)) /* luaH_getshortstr */
 				if slot != nil && !isempty(slot) {
 					L.stack[ra] = *slot
 				} else {
@@ -554,25 +557,30 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					rc = &L.stack[base+i.C]
 				}
-				slot := vmFastGet(L, upval, key)
+				slot := vmFastGetShortStr(upval, tsvalue(key)) /* luaH_getshortstr */
 				if slot != nil && !isempty(slot) {
-					*slot = *rc
+					*slot = *rc /* luaV_finishfastset (barrier skipped: Go GC) */
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, upval, key, rc, slot)
 				}
 			case OP_SETTABLE:
 				rt := &L.stack[ra]
-				rb := &L.stack[base+i.B]
+				rb := &L.stack[base+i.B] /* key (table is in 'ra') */
 				var rc *Value
 				if i.K != 0 {
 					rc = &k[i.C]
 				} else {
 					rc = &L.stack[base+i.C]
 				}
-				slot := vmFastGet(L, rt, rb)
+				var slot *Value
+				if ttisinteger(rb) { /* fast track for integers? */
+					slot = vmFastGeti(rt, ivalue(rb))
+				} else {
+					slot = vmFastGet(L, rt, rb)
+				}
 				if slot != nil && !isempty(slot) {
-					*slot = *rc
+					*slot = *rc /* luaV_finishfastset (barrier skipped: Go GC) */
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, rt, rb, rc, slot)
@@ -603,40 +611,30 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					rc = &L.stack[base+i.C]
 				}
-				slot := vmFastGet(L, rt, key)
+				slot := vmFastGetShortStr(rt, tsvalue(key)) /* luaH_getshortstr */
 				if slot != nil && !isempty(slot) {
-					*slot = *rc
+					*slot = *rc /* luaV_finishfastset (barrier skipped: Go GC) */
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, rt, key, rc, slot)
 				}
 			case OP_NEWTABLE:
-				b := i.B
-				c := i.C
+				b := i.B /* log2(hash size) + 1 */
+				c := i.C /* array size */
 				if b > 0 {
-					b = 1 << (b - 1)
+					b = 1 << (b - 1) /* size is 2^(b - 1) */
 				}
-				if i.K != 0 {
-					c += code[pc].A * (MAXARG_C + 1)
+				if i.K != 0 { /* non-zero extra argument? */
+					c += code[pc].A * (MAXARG_C + 1) /* add it to size */
 				}
-				pc++ /* skip extra argument */
-				L.top = ra + 1
-				var t *Table
-				if b == 0 && c == 4 {
-					t = luaH_newarray4(L)
-				} else {
-					t = luaH_new(L)
-				}
+				pc++             /* skip extra argument */
+				L.top = ra + 1   /* correct top in case of emergency GC */
+				t := luaH_new(L) /* memory allocation */
 				sethvalue(&L.stack[ra], t)
-				if (b != 0 || c != 0) && !(b == 0 && c == 4) {
-					luaH_resize(L, t, uint32(c), uint32(b))
+				if b != 0 || c != 0 {
+					luaH_resize(L, t, uint32(c), uint32(b)) /* idem */
 				}
-				/* PUC-Lua runs a collector step -- and with it any
-				   '__gc' metamethod -- right after an allocation; see
-				   gcAfterAlloc.  A metamethod can run arbitrary Lua
-				   code, so the frame, the stack and the instruction
-				   pointer are re-read: 'continue' does that, as
-				   'Protect' does in C. */
+				/* checkGC → gcAfterAlloc (Go GC); Protect-style restart */
 				if L.gcAfterAlloc() {
 					continue
 				}
@@ -649,165 +647,118 @@ func luaV_execute(L *State, ci *CallInfo) {
 					rc = &L.stack[base+i.C]
 				}
 				L.stack[ra+1] = *rb
-				slot := vmFastGet(L, rb, rc)
+				slot := vmFastGetStr(L, rb, tsvalue(rc)) /* luaH_getstr; key is a string */
 				if slot != nil && !isempty(slot) {
 					L.stack[ra] = *slot
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, rc, ra, slot)
 				}
-			case OP_ADDI, OP_ADDK, OP_SUBK, OP_MULK, OP_MODK, OP_POWK,
-				OP_DIVK, OP_IDIVK, OP_BANDK, OP_BORK, OP_BXORK:
-				/* Fast path, not in lvm.c: an integer register with
-				   an integer immediate or constant can never reach a
-				   metamethod and always produces an integer, so the
-				   arithmetic is done here instead of walking
-				   opCodeToArith -> luaO_rawarith -> intarith. It is
-				   spelled out inside the loop rather than moved to a
-				   helper because the compiler will not inline such a
-				   helper (it is over the cost budget as soon as it
-				   can raise), and the call would cost about as much
-				   as the operation itself. */
+			case OP_ADDI:
+				/* op_arithI(L, l_addi, luai_numadd) */
 				rb := &L.stack[base+i.B]
-				if rb.tt == LUA_VNUMINT && i.Op != OP_POWK && i.Op != OP_DIVK {
-					v2 := int64(i.C - OFFSET_sC) /* the OP_ADDI immediate */
-					if i.Op != OP_ADDI {
-						kc := &k[i.C]
-						if kc.tt != LUA_VNUMINT {
-							vmArithK(L, ci, i, ra, base, k, &pc)
-							break
-						}
-						v2 = kc.i
-					}
-					/* '%' and '//' can raise (division by zero), so the
-					   current instruction must be saved first: that is
-					   what puts the right line in the error message. */
-					if i.Op == OP_MODK || i.Op == OP_IDIVK {
-						savestate(L, ci, pc)
-					}
+				imm := int64(i.C - OFFSET_sC)
+				if ttisinteger(rb) {
 					pc++
-					switch i.Op {
-					case OP_ADDI, OP_ADDK:
-						setivalue(&L.stack[ra], rb.i+v2)
-					case OP_SUBK:
-						setivalue(&L.stack[ra], rb.i-v2)
-					case OP_MULK:
-						setivalue(&L.stack[ra], rb.i*v2)
-					case OP_MODK:
-						if uint64(v2)+1 <= 1 {
-							setivalue(&L.stack[ra], luaV_mod(L, rb.i, v2))
-						} else {
-							setivalue(&L.stack[ra], luaV_modcore(rb.i, v2))
-						}
-					case OP_IDIVK:
-						if uint64(v2)+1 <= 1 {
-							setivalue(&L.stack[ra], luaV_idiv(L, rb.i, v2))
-						} else {
-							setivalue(&L.stack[ra], luaV_idivcore(rb.i, v2))
-						}
-					case OP_BANDK:
-						setivalue(&L.stack[ra], rb.i&v2)
-					case OP_BORK:
-						setivalue(&L.stack[ra], rb.i|v2)
-					case OP_BXORK:
-						setivalue(&L.stack[ra], rb.i^v2)
-					}
-					break
+					setivalue(&L.stack[ra], ivalue(rb)+imm)
+				} else if ttisfloat(rb) {
+					pc++
+					setfltvalue(&L.stack[ra], fltvalue(rb)+float64(imm))
 				}
-				vmArithK(L, ci, i, ra, base, k, &pc)
-			case OP_SHRI, OP_SHLI:
+			case OP_ADDK:
+				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
+					func(_ *State, a, b int64) int64 { return a + b },
+					func(a, b float64) float64 { return a + b }, &pc)
+			case OP_SUBK:
+				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
+					func(_ *State, a, b int64) int64 { return a - b },
+					func(a, b float64) float64 { return a - b }, &pc)
+			case OP_MULK:
+				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
+					func(_ *State, a, b int64) int64 { return a * b },
+					func(a, b float64) float64 { return a * b }, &pc)
+			case OP_MODK:
+				savestate(L, ci, pc) /* in case of division by 0 */
+				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
+					luaV_mod, luaV_modfWrap, &pc)
+			case OP_POWK:
+				opArithfK(L, ra, &L.stack[base+i.B], &k[i.C],
+					func(a, b float64) float64 { return math2Pow(a, b) }, &pc)
+			case OP_DIVK:
+				opArithfK(L, ra, &L.stack[base+i.B], &k[i.C],
+					func(a, b float64) float64 { return a / b }, &pc)
+			case OP_IDIVK:
+				savestate(L, ci, pc) /* in case of division by 0 */
+				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
+					luaV_idiv,
+					func(a, b float64) float64 { return math2Floor(a / b) }, &pc)
+			case OP_BANDK:
+				opBitwiseK(L, ra, &L.stack[base+i.B], &k[i.C],
+					func(a, b int64) int64 { return a & b }, &pc)
+			case OP_BORK:
+				opBitwiseK(L, ra, &L.stack[base+i.B], &k[i.C],
+					func(a, b int64) int64 { return a | b }, &pc)
+			case OP_BXORK:
+				opBitwiseK(L, ra, &L.stack[base+i.B], &k[i.C],
+					func(a, b int64) int64 { return a ^ b }, &pc)
+			case OP_SHRI:
 				rb := &L.stack[base+i.B]
 				ic := int64(i.C - OFFSET_sC)
 				var ib int64
 				if tointegerns(rb, &ib) {
 					pc++
-					if i.Op == OP_SHRI {
-						setivalue(&L.stack[ra], luaV_shiftl(ib, -ic))
-					} else {
-						setivalue(&L.stack[ra], luaV_shiftl(ic, ib))
-					}
+					setivalue(&L.stack[ra], luaV_shiftl(ib, -ic))
 				}
-			case OP_ADD, OP_SUB, OP_MUL, OP_BAND, OP_BOR, OP_BXOR,
-				OP_SHL, OP_SHR:
-				/* Fast path, as for the immediate and constant forms
-				   above: two integers can never reach a metamethod
-				   and always produce an integer. None of these eight
-				   can raise, so nothing has to be saved first. */
+			case OP_SHLI:
 				rb := &L.stack[base+i.B]
-				rc := &L.stack[base+i.C]
-				if rb.tt == LUA_VNUMINT && rc.tt == LUA_VNUMINT {
-					v1, v2 := rb.i, rc.i
-					var r int64
-					switch i.Op {
-					case OP_ADD:
-						r = v1 + v2
-					case OP_SUB:
-						r = v1 - v2
-					case OP_MUL:
-						r = v1 * v2
-					case OP_BAND:
-						r = v1 & v2
-					case OP_BOR:
-						r = v1 | v2
-					case OP_BXOR:
-						r = v1 ^ v2
-					case OP_SHL:
-						r = int64(luaV_shiftl(v1, v2))
-					case OP_SHR:
-						r = int64(luaV_shiftl(v1, -v2))
-					}
+				ic := int64(i.C - OFFSET_sC)
+				var ib int64
+				if tointegerns(rb, &ib) {
 					pc++
-					setivalue(&L.stack[ra], r)
-					break
+					setivalue(&L.stack[ra], luaV_shiftl(ic, ib))
 				}
-				var res Value
-				op := opCodeToArith(i.Op)
-				if luaO_rawarith(L, op, rb, rc, &res) {
-					pc++
-					L.stack[ra] = res
-				}
-			case OP_MOD, OP_IDIV:
-				/* these two can raise (division by zero), so the
-				   current instruction must be saved before running
-				   them: that is what puts the right line in the
-				   error message. */
-				savestate(L, ci, pc)
-				rb := &L.stack[base+i.B]
-				rc := &L.stack[base+i.C]
-				if rb.tt == LUA_VNUMINT && rc.tt == LUA_VNUMINT {
-					pc++
-					if uint64(rc.i)+1 <= 1 {
-						/* the divisor is -1 or 0: the two that need
-						   care, one of them fatally */
-						if i.Op == OP_MOD {
-							setivalue(&L.stack[ra], luaV_mod(L, rb.i, rc.i))
-						} else {
-							setivalue(&L.stack[ra], luaV_idiv(L, rb.i, rc.i))
-						}
-					} else if i.Op == OP_MOD {
-						setivalue(&L.stack[ra], luaV_modcore(rb.i, rc.i))
-					} else {
-						setivalue(&L.stack[ra], luaV_idivcore(rb.i, rc.i))
-					}
-					break
-				}
-				var res Value
-				op := opCodeToArith(i.Op)
-				if luaO_rawarith(L, op, rb, rc, &res) {
-					pc++
-					L.stack[ra] = res
-				}
-			case OP_POW, OP_DIV:
-				/* these two always produce a float, so there is no
-				   integer fast path for them */
-				rb := &L.stack[base+i.B]
-				rc := &L.stack[base+i.C]
-				var res Value
-				op := opCodeToArith(i.Op)
-				if luaO_rawarith(L, op, rb, rc, &res) {
-					pc++
-					L.stack[ra] = res
-				}
+			case OP_ADD:
+				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(_ *State, a, b int64) int64 { return a + b },
+					func(a, b float64) float64 { return a + b }, &pc)
+			case OP_SUB:
+				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(_ *State, a, b int64) int64 { return a - b },
+					func(a, b float64) float64 { return a - b }, &pc)
+			case OP_MUL:
+				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(_ *State, a, b int64) int64 { return a * b },
+					func(a, b float64) float64 { return a * b }, &pc)
+			case OP_MOD:
+				savestate(L, ci, pc) /* in case of division by 0 */
+				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					luaV_mod, luaV_modfWrap, &pc)
+			case OP_POW:
+				opArithf(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(a, b float64) float64 { return math2Pow(a, b) }, &pc)
+			case OP_DIV: /* float division (always with floats) */
+				opArithf(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(a, b float64) float64 { return a / b }, &pc)
+			case OP_IDIV: /* floor division */
+				savestate(L, ci, pc) /* in case of division by 0 */
+				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					luaV_idiv,
+					func(a, b float64) float64 { return math2Floor(a / b) }, &pc)
+			case OP_BAND:
+				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(a, b int64) int64 { return a & b }, &pc)
+			case OP_BOR:
+				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(a, b int64) int64 { return a | b }, &pc)
+			case OP_BXOR:
+				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(a, b int64) int64 { return a ^ b }, &pc)
+			case OP_SHR:
+				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(a, b int64) int64 { return luaV_shiftl(a, -b) }, &pc)
+			case OP_SHL:
+				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
+					func(a, b int64) int64 { return luaV_shiftl(a, b) }, &pc)
 			case OP_MMBIN:
 				pi := code[pc-2]
 				rb := &L.stack[base+i.B]
@@ -829,7 +780,8 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_UNM:
 				rb := &L.stack[base+i.B]
 				if ttisinteger(rb) {
-					setivalue(&L.stack[ra], -ivalue(rb))
+					ib := ivalue(rb)
+					setivalue(&L.stack[ra], int64(uint64(0)-uint64(ib))) /* intop(-, 0, ib) */
 				} else {
 					var nb float64
 					if tonumberns(rb, &nb) {
@@ -843,13 +795,17 @@ func luaV_execute(L *State, ci *CallInfo) {
 				rb := &L.stack[base+i.B]
 				var ib int64
 				if tointegerns(rb, &ib) {
-					setivalue(&L.stack[ra], ^ib)
+					setivalue(&L.stack[ra], int64(^uint64(0)^uint64(ib))) /* intop(^, ~0, ib) */
 				} else {
 					savestate(L, ci, pc)
 					luaT_trybinTM(L, rb, rb, ra, TM_BNOT)
 				}
 			case OP_NOT:
-				setbvalue(&L.stack[ra], isFalse(&L.stack[base+i.B]))
+				if isFalse(&L.stack[base+i.B]) {
+					setbtvalue(&L.stack[ra])
+				} else {
+					setbfvalue(&L.stack[ra])
+				}
 			case OP_LEN:
 				savestate(L, ci, pc)
 				luaV_objlen(L, ra, &L.stack[base+i.B])
@@ -871,6 +827,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				luaF_newtbcupval(L, ra)
 			case OP_JMP:
 				pc += i.B - OFFSET_sJ
+				trap = ci.trap /* dojump → updatetrap */
 			case OP_EQ:
 				savestate(L, ci, pc)
 				cond := luaV_equalobj(L, &L.stack[ra], &L.stack[base+i.B])
@@ -882,10 +839,19 @@ func luaV_execute(L *State, ci *CallInfo) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
+					trap = ci.trap /* donextjump → dojump → updatetrap */
 				}
-			case OP_LT:
-				savestate(L, ci, pc)
-				cond := luaV_lessthan(L, &L.stack[ra], &L.stack[base+i.B])
+			case OP_LT: /* op_order(L, l_lti, LTnum, lessthanothers) */
+				rb := &L.stack[base+i.B]
+				var cond bool
+				if ttisinteger(&L.stack[ra]) && ttisinteger(rb) {
+					cond = ivalue(&L.stack[ra]) < ivalue(rb)
+				} else if ttisnumber(&L.stack[ra]) && ttisnumber(rb) {
+					cond = LTnum(&L.stack[ra], rb)
+				} else {
+					savestate(L, ci, pc)
+					cond = lessthanothers(L, &L.stack[ra], rb)
+				}
 				condBool := 0
 				if cond {
 					condBool = 1
@@ -894,10 +860,19 @@ func luaV_execute(L *State, ci *CallInfo) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
+					trap = ci.trap /* donextjump → dojump → updatetrap */
 				}
-			case OP_LE:
-				savestate(L, ci, pc)
-				cond := luaV_lessequal(L, &L.stack[ra], &L.stack[base+i.B])
+			case OP_LE: /* op_order(L, l_lei, LEnum, lessequalothers) */
+				rb := &L.stack[base+i.B]
+				var cond bool
+				if ttisinteger(&L.stack[ra]) && ttisinteger(rb) {
+					cond = ivalue(&L.stack[ra]) <= ivalue(rb)
+				} else if ttisnumber(&L.stack[ra]) && ttisnumber(rb) {
+					cond = LEnum(&L.stack[ra], rb)
+				} else {
+					savestate(L, ci, pc)
+					cond = lessequalothers(L, &L.stack[ra], rb)
+				}
 				condBool := 0
 				if cond {
 					condBool = 1
@@ -906,6 +881,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
+					trap = ci.trap /* donextjump → dojump → updatetrap */
 				}
 			case OP_EQK:
 				cond := luaV_rawequalobj(&L.stack[ra], &k[i.B])
@@ -917,15 +893,33 @@ func luaV_execute(L *State, ci *CallInfo) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
+					trap = ci.trap /* donextjump → dojump → updatetrap */
 				}
-			case OP_EQI, OP_LTI, OP_LEI, OP_GTI, OP_GEI:
+			case OP_EQI:
+				im := int64(i.B - OFFSET_sC)
+				a := &L.stack[ra]
+				cond := false
+				if ttisinteger(a) {
+					cond = ivalue(a) == im
+				} else if ttisfloat(a) {
+					cond = fltvalue(a) == float64(im)
+				} /* else other types cannot be equal to a number */
+				condBool := 0
+				if cond {
+					condBool = 1
+				}
+				if condBool != i.K {
+					pc++
+				} else {
+					pc += code[pc].B - OFFSET_sJ + 1
+					trap = ci.trap /* donextjump → dojump → updatetrap */
+				}
+			case OP_LTI, OP_LEI, OP_GTI, OP_GEI: /* op_orderI */
 				im := int64(i.B - OFFSET_sC)
 				a := &L.stack[ra]
 				cond := false
 				if ttisinteger(a) {
 					switch i.Op {
-					case OP_EQI:
-						cond = ivalue(a) == im
 					case OP_LTI:
 						cond = ivalue(a) < im
 					case OP_LEI:
@@ -939,8 +933,6 @@ func luaV_execute(L *State, ci *CallInfo) {
 					fa := fltvalue(a)
 					fim := float64(im)
 					switch i.Op {
-					case OP_EQI:
-						cond = fa == fim
 					case OP_LTI:
 						cond = fa < fim
 					case OP_LEI:
@@ -973,6 +965,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
+					trap = ci.trap /* donextjump → dojump → updatetrap */
 				}
 			case OP_TEST:
 				cond := !isFalse(&L.stack[ra])
@@ -984,6 +977,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
+					trap = ci.trap /* donextjump → dojump → updatetrap */
 				}
 			case OP_TESTSET:
 				rb := &L.stack[base+i.B]
@@ -992,6 +986,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					L.stack[ra] = *rb
 					pc += code[pc].B - OFFSET_sJ + 1
+					trap = ci.trap /* donextjump → updatetrap */
 				}
 			case OP_CALL:
 				b := i.B
@@ -1008,6 +1003,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				if L.fastYield {
 					return /* synchronous yield: back to Resume */
 				}
+				trap = ci.trap /* C call; updatetrap */
 			case OP_TAILCALL:
 				b := i.B
 				nparams1 := i.C
@@ -1031,9 +1027,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 					break loop
 				} else if L.fastYield {
 					return /* synchronous yield: back to Resume */
-				} else { /* Go function */
+				} else { /* Go/C function */
 					ci.funcIdx -= delta    /* restore 'func' (if vararg) */
 					luaD_poscall(L, ci, n) /* finish the caller */
+					trap = ci.trap         /* updatetrap */
 				}
 				/* ret: the caller returns after the tail call */
 				if ci.callstatus&CIST_FRESH != 0 {
@@ -1060,6 +1057,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				L.top = ra + n
 				luaD_poscall(L, ci, n)
+				trap = ci.trap /* updatetrap */
 				if ci.callstatus&CIST_FRESH != 0 {
 					return
 				}
@@ -1120,7 +1118,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 						step := ivalue(&L.stack[ra+2])
 						idx := ivalue(&L.stack[ra])
 						chgivalue(&L.stack[ra+1], int64(count-1))
-						idx += step
+						idx = int64(uint64(idx) + uint64(step)) /* intop(+, idx, step) */
 						chgivalue(&L.stack[ra], idx)
 						setivalue(&L.stack[ra+3], idx)
 						pc -= i.B
@@ -1128,12 +1126,14 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else if floatforloop(L, ra) {
 					pc -= i.B
 				}
+				trap = ci.trap /* updatetrap: allow a signal to break the loop */
 			case OP_FORPREP:
 				savestate(L, ci, pc)
 				if forprep(L, ra) {
 					pc += i.B + 1 /* skip the loop */
 				}
 			case OP_TFORPREP:
+				savestate(L, ci, pc) /* halfProtect: create to-be-closed upvalue */
 				luaF_newtbcupval(L, ra+3)
 				pc += i.B
 				/* go to the next instruction (OP_TFORCALL) */
@@ -1197,7 +1197,11 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 			case OP_CLOSURE:
 				pushclosure(L, p.p[i.B], cl.upvals, base, ra)
+				if L.gcAfterAlloc() { /* checkGC(L, ra + 1) */
+					continue
+				}
 			case OP_VARARG:
+				savestate(L, ci, pc) /* Protect */
 				luaT_getvarargs(L, ci, ra, i.C-1)
 			case OP_VARARGPREP:
 				ci.savedpc = pc /* in case of errors */
@@ -1212,15 +1216,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 			default:
 				panic("unknown opcode " + opName(i.Op))
 			}
-			/* updatetrap: the operation may have changed the hooks (or
-			   moved the stack), so re-read the mark of this frame.  C
-			   does this only where 'Protect'/'ProtectNT' wraps such an
-			   operation; doing it on every instruction is the same
-			   thing as far as the hooks are concerned (it is a strict
-			   superset) but it costs a store on the hottest path of
-			   the interpreter, so it is skipped while no hook is
-			   installed -- which is the only situation in which
-			   'ci.trap' can have changed behind our back anyway. */
+			/* Catch-all updatetrap for Protect sites that do not set trap
+			   locally (finishget/set, MMBIN*, comparisons, CLOSE, ...).
+			   JMP / FORLOOP / docondjump / CALL / RETURN already update
+			   trap explicitly like C. Skipped when no hooks are installed. */
 			if L.hookmask != 0 {
 				trap = ci.trap
 			}
@@ -1315,70 +1314,62 @@ func luaG_traceexec(L *State, ci *CallInfo, pc int) bool {
 	return true /* keep 'trap' on */
 }
 
-// vmArithK handles the immediate/constant arithmetic opcodes; on success
-// it skips the following MMBIN* instruction (as PUC-Lua does).
-func vmArithK(L *State, ci *CallInfo, i Instruction, ra, base int, k []Value, pc *int) {
-	rb := &L.stack[base+i.B]
-	var res Value
-	ok := false
-	switch i.Op {
-	case OP_ADDI:
-		imm := int64(i.C - OFFSET_sC)
-		if ttisinteger(rb) {
-			setivalue(&res, ivalue(rb)+imm)
-			ok = true
-		} else if ttisfloat(rb) {
-			setfltvalue(&res, fltvalue(rb)+float64(imm))
-			ok = true
-		}
-	default:
-		v2 := &k[i.C]
-		op := opCodeToArith(i.Op)
-		/* '%' and '//' can raise (division by zero): save the current
-		   instruction first, as C does */
-		if i.Op == OP_MODK || i.Op == OP_IDIVK {
-			savestate(L, ci, *pc)
-		}
-		ok = luaO_rawarith(L, op, rb, v2, &res)
-	}
-	if ok {
+/*
+** Arithmetic helpers mirroring lvm.c op_arith* / op_bitwise* macros.
+** On success they skip the following MMBIN* instruction (pc++), as C does.
+ */
+
+func luaV_modfWrap(a, b float64) float64 {
+	/* float mod used from op_arith; L is unused by luaV_modf body */
+	return luaV_modf(nil, a, b)
+}
+
+func opArithfAux(L *State, ra int, v1, v2 *Value, fop func(float64, float64) float64, pc *int) {
+	var n1, n2 float64
+	if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
 		*pc++
-		L.stack[ra] = res
+		setfltvalue(&L.stack[ra], fop(n1, n2))
 	}
 }
 
-// opCodeToArith maps an opcode to its LUA_OP* code. It is only used by
-// the slow (non integer/integer) paths; the integer fast paths are
-// spelled out in luaV_execute.
-func opCodeToArith(op int) int {
-	switch op {
-	case OP_ADDI, OP_ADDK, OP_ADD:
-		return LUA_OPADD
-	case OP_SUBK, OP_SUB:
-		return LUA_OPSUB
-	case OP_MULK, OP_MUL:
-		return LUA_OPMUL
-	case OP_MODK, OP_MOD:
-		return LUA_OPMOD
-	case OP_POWK, OP_POW:
-		return LUA_OPPOW
-	case OP_DIVK, OP_DIV:
-		return LUA_OPDIV
-	case OP_IDIVK, OP_IDIV:
-		return LUA_OPIDIV
-	case OP_BANDK, OP_BAND:
-		return LUA_OPBAND
-	case OP_BORK, OP_BOR:
-		return LUA_OPBOR
-	case OP_BXORK, OP_BXOR:
-		return LUA_OPBXOR
-	case OP_SHL:
-		return LUA_OPSHL
-	case OP_SHR:
-		return LUA_OPSHR
-	}
-	panic("not an arithmetic opcode")
+func opArithf(L *State, ra int, v1, v2 *Value, fop func(float64, float64) float64, pc *int) {
+	opArithfAux(L, ra, v1, v2, fop, pc)
 }
 
-// math helper used by float loops
-func numIsNaN(n float64) bool { return math.IsNaN(n) }
+func opArithfK(L *State, ra int, v1, v2 *Value, fop func(float64, float64) float64, pc *int) {
+	opArithfAux(L, ra, v1, v2, fop, pc)
+}
+
+func opArithAux(L *State, ra int, v1, v2 *Value, iop func(*State, int64, int64) int64, fop func(float64, float64) float64, pc *int) {
+	if ttisinteger(v1) && ttisinteger(v2) {
+		*pc++
+		setivalue(&L.stack[ra], iop(L, ivalue(v1), ivalue(v2)))
+	} else {
+		opArithfAux(L, ra, v1, v2, fop, pc)
+	}
+}
+
+func opArith(L *State, ra int, v1, v2 *Value, iop func(*State, int64, int64) int64, fop func(float64, float64) float64, pc *int) {
+	opArithAux(L, ra, v1, v2, iop, fop, pc)
+}
+
+func opArithK(L *State, ra int, v1, v2 *Value, iop func(*State, int64, int64) int64, fop func(float64, float64) float64, pc *int) {
+	opArithAux(L, ra, v1, v2, iop, fop, pc)
+}
+
+func opBitwiseK(L *State, ra int, v1, v2 *Value, op func(int64, int64) int64, pc *int) {
+	var i1 int64
+	i2 := ivalue(v2)
+	if tointegerns(v1, &i1) {
+		*pc++
+		setivalue(&L.stack[ra], op(i1, i2))
+	}
+}
+
+func opBitwise(L *State, ra int, v1, v2 *Value, op func(int64, int64) int64, pc *int) {
+	var i1, i2 int64
+	if tointegerns(v1, &i1) && tointegerns(v2, &i2) {
+		*pc++
+		setivalue(&L.stack[ra], op(i1, i2))
+	}
+}

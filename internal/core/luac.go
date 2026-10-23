@@ -44,8 +44,9 @@ type luac struct {
 	listing   int
 	dumping   int
 	stripping int
-	output    string // "" means standard output ('-o -')
+	output    string         // "" means standard output ('-o -')
 	tmname    [TM_N]*TString // C: static TString **tmname (= G(L)->tmname)
+	lastErr   error          // last I/O error for cannot (C: errno / strerror)
 }
 
 // Luac runs the Lua compiler and returns the process exit status. The
@@ -104,7 +105,11 @@ func (c *luac) cannot(what string) {
 	if name == "" {
 		name = "(null)" /* C prints NULL with '%s' */
 	}
-	fmt.Fprintf(c.err, "%s: cannot %s %s: %s\n", c.progname, what, name, "I/O error")
+	msg := "I/O error"
+	if c.lastErr != nil {
+		msg = c.lastErr.Error()
+	}
+	fmt.Fprintf(c.err, "%s: cannot %s %s: %s\n", c.progname, what, name, msg)
 }
 
 // doargs is luac.c's 'doargs'. It returns the index of the first
@@ -231,7 +236,7 @@ func (c *luac) combine(L *State, n int) *Proto {
 	f := clLvalue(&L.stack[L.top-1]).p
 	for i := 0; i < n; i++ {
 		f.p[i] = clLvalue(&L.stack[L.top+i-n-1]).p
-		if len(f.p[i].upvalues) > 0 {
+		if f.p[i].sizeupvalues > 0 { /* C: f->p[i]->sizeupvalues>0 */
 			/* the chunk's _ENV was a register of its own frame; as a
 			   nested prototype it is an upvalue of the enclosing one */
 			f.p[i].upvalues[0].instack = 0
@@ -241,13 +246,19 @@ func (c *luac) combine(L *State, n int) *Proto {
 }
 
 // dump writes the precompiled chunk (luac.c's 'pmain' when dumping).
+// C: fopen("wb")/fwrite/ferror/fclose; writer returns nonzero on fwrite fail
+// when size!=0. Check write (ferror) before close, matching pmain.
+// output=="" writes to c.out and does not fclose it (C fclose(stdout) on
+// '-o -' is intentionally not mirrored).
 func (c *luac) dump(L *State, f *Proto) bool {
 	w := c.out
 	var file *os.File
 	if c.output != "" {
 		var err error
-		file, err = os.Create(c.output) /* C: fopen(output,"wb") */
+		/* C: fopen(output,"wb") — write-only truncate, not os.Create (RDWR) */
+		file, err = os.OpenFile(c.output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
+			c.lastErr = err
 			c.cannot("open")
 			return false
 		}
@@ -255,24 +266,34 @@ func (c *luac) dump(L *State, f *Proto) bool {
 	}
 	werr := false
 	luaU_dump(L, f, func(L *State, b []byte) int {
+		/* C writer: (fwrite(...)!=1) && (size!=0) */
 		if werr {
 			return 1
 		}
+		if len(b) == 0 {
+			return 0
+		}
 		if _, err := w.Write(b); err != nil {
+			c.lastErr = err
 			werr = true
 			return 1
 		}
 		return 0
 	}, c.stripping != 0)
+	/* C: if (ferror(D)) cannot("write"); if (fclose(D)) cannot("close"); */
+	if werr {
+		if file != nil {
+			_ = file.Close() /* C exits in cannot before fclose; release FD */
+		}
+		c.cannot("write")
+		return false
+	}
 	if file != nil {
-		if err := file.Close(); err != nil { /* C checks ferror and fclose */
+		if err := file.Close(); err != nil {
+			c.lastErr = err
 			c.cannot("close")
 			return false
 		}
-	}
-	if werr {
-		c.cannot("write")
-		return false
 	}
 	return true
 }
@@ -411,22 +432,24 @@ func (c *luac) printHeader(f *Proto) {
 	if f.linedefined == 0 {
 		what = "main"
 	}
+	/* C PrintHeader uses f->sizecode / sizeupvalues / sizelocvars / sizek / sizep */
 	fmt.Fprintf(c.out, "\n%s <%s:%d,%d> (%d instruction%s at %p)\n",
-		what, s, f.linedefined, f.lastlinedefined, len(f.code), ss(len(f.code)), f)
+		what, s, f.linedefined, f.lastlinedefined, f.sizecode, ss(f.sizecode), f)
 	fmt.Fprintf(c.out, "%d%s param%s, %d slot%s, %d upvalue%s, ",
 		int(f.numparams), varargMark(f), ss(int(f.numparams)),
 		int(f.maxstacksize), ss(int(f.maxstacksize)),
-		len(f.upvalues), ss(len(f.upvalues)))
+		f.sizeupvalues, ss(f.sizeupvalues))
 	fmt.Fprintf(c.out, "%d local%s, %d constant%s, %d function%s\n",
-		len(f.locvars), ss(len(f.locvars)),
-		len(f.k), ss(len(f.k)),
-		len(f.p), ss(len(f.p)))
+		f.sizelocvars, ss(f.sizelocvars),
+		f.sizek, ss(f.sizek),
+		f.sizep, ss(f.sizep))
 }
 
 // printCode is PrintCode.
 func (c *luac) printCode(f *Proto) {
 	code := f.code
-	for pc := 0; pc < len(code); pc++ {
+	n := f.sizecode /* C: n=f->sizecode */
+	for pc := 0; pc < n; pc++ {
 		i := code[pc]
 		op := i.Op
 		a := i.A
@@ -631,20 +654,23 @@ func (c *luac) printCode(f *Proto) {
 
 // printDebug is PrintDebug.
 func (c *luac) printDebug(f *Proto) {
-	fmt.Fprintf(c.out, "constants (%d) for %p:\n", len(f.k), f)
-	for i := range f.k {
+	n := f.sizek /* C: n=f->sizek */
+	fmt.Fprintf(c.out, "constants (%d) for %p:\n", n, f)
+	for i := 0; i < n; i++ {
 		fmt.Fprintf(c.out, "\t%d\t", i)
 		c.printType(f, i)
 		c.printConstant(f, i)
 		fmt.Fprint(c.out, "\n")
 	}
-	fmt.Fprintf(c.out, "locals (%d) for %p:\n", len(f.locvars), f)
-	for i := range f.locvars {
+	n = f.sizelocvars /* C: n=f->sizelocvars */
+	fmt.Fprintf(c.out, "locals (%d) for %p:\n", n, f)
+	for i := 0; i < n; i++ {
 		fmt.Fprintf(c.out, "\t%d\t%s\t%d\t%d\n", i,
 			f.locvars[i].varname.val, f.locvars[i].startpc+1, f.locvars[i].endpc+1)
 	}
-	fmt.Fprintf(c.out, "upvalues (%d) for %p:\n", len(f.upvalues), f)
-	for i := range f.upvalues {
+	n = f.sizeupvalues /* C: n=f->sizeupvalues */
+	fmt.Fprintf(c.out, "upvalues (%d) for %p:\n", n, f)
+	for i := 0; i < n; i++ {
 		fmt.Fprintf(c.out, "\t%d\t%s\t%d\t%d\n", i,
 			c.upvalName(f, i), f.upvalues[i].instack, f.upvalues[i].idx)
 	}
@@ -653,12 +679,13 @@ func (c *luac) printDebug(f *Proto) {
 // printFunction is PrintFunction, which luac.c calls through its
 // 'luaU_print'.
 func (c *luac) printFunction(f *Proto, full bool) {
+	n := f.sizep /* C: n=f->sizep */
 	c.printHeader(f)
 	c.printCode(f)
 	if full {
 		c.printDebug(f)
 	}
-	for i := range f.p {
+	for i := 0; i < n; i++ {
 		c.printFunction(f.p[i], full)
 	}
 }

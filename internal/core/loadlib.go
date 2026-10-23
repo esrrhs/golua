@@ -1,16 +1,15 @@
 // Translation of loadlib.c (PUC-Lua 5.4.9): the package library and the
 // 'require' mechanism.
 //
-// Platform / cgo (see NOTES.md; companions kept, not rewritten here):
+// Platform / cgo (see NOTES in reports/loadlib.md; companions kept):
 //   - Without cgo: lsys_load / lsys_sym stub via pkDynLoadSym==nil
 //     (≡ C #else fallback; LIB_FAIL "absent"). Intentional FLAG OK.
 //   - With cgo && unix: cdlopen.go sets pkDynLoadSym = cgoLoadSym
 //     (dlopen/dlsym). Handle reuse also tracked in cdlHandles there.
-//   - CLIBS __gc unload ignored (Go GC policy; see FLAG in NOTES).
+//   - CLIBS __gc unload ignored (Go GC policy; FLAG).
 package core
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -116,39 +115,35 @@ func pkNoEnv(L *State) bool {
 }
 
 // pkSetPath sets package[fieldname] from the environment (setpath).
-//
-// Adaptation: C pushes the versioned env name on the stack and uses
-// setfield(-3); Go never pushes that name, so SetField(-2) — same package
-// fields. 5.4.9 inserts the default at the first ";;" only (no AUXMARK).
+// Stack matches C: versioned env name under the path value, SetField(-3)
+// into package (CLIBS may sit under package from createclibstable), then
+// pop the name. 5.4.9 inserts the default at the first ";;" only (no AUXMARK).
 func pkSetPath(L *State, fieldname, envname, dft string) {
-	path, ok := os.LookupEnv(envname + pkVerSuffix) /* try versioned name */
-	if !ok {
+	nver := L.PushFString("%s%s", envname, pkVerSuffix)
+	path, ok := os.LookupEnv(nver) /* try versioned name */
+	if !ok {                       /* no versioned environment variable? */
 		path, ok = os.LookupEnv(envname) /* try unversioned name */
 	}
-	switch {
-	case !ok || pkNoEnv(L): /* no environment variable? */
+	if !ok || pkNoEnv(L) { /* no environment variable? */
 		L.PushString(dft) /* use default */
-	default:
-		if !strings.Contains(path, pkPathSep+pkPathSep) {
-			L.PushString(path) /* nothing to change */
-			break
-		}
-		/* path contains a ";;": insert default path in its place */
-		var sb strings.Builder
-		dftmark := strings.Index(path, pkPathSep+pkPathSep)
+	} else if dftmark := strings.Index(path, pkPathSep+pkPathSep); dftmark < 0 {
+		L.PushString(path) /* nothing to change */
+	} else { /* path contains a ";;": insert default path in its place */
+		b := L.NewBuffer()
 		if dftmark > 0 { /* is there a prefix before ';;'? */
-			sb.WriteString(path[:dftmark]) /* add it */
-			sb.WriteString(pkPathSep)
+			b.AddString(path[:dftmark]) /* add it */
+			b.AddChar(pkPathSep[0])
 		}
-		sb.WriteString(dft)        /* add default */
+		b.AddString(dft)           /* add default */
 		if dftmark < len(path)-2 { /* is there a suffix after ';;'? */
-			sb.WriteString(pkPathSep)
-			sb.WriteString(path[dftmark+2:])
+			b.AddChar(pkPathSep[0])
+			b.AddString(path[dftmark+2:])
 		}
-		L.PushString(sb.String())
+		b.PushResult()
 	}
 	pkSetProgDir(L)
-	L.SetField(-2, fieldname) /* package[fieldname] = path value */
+	L.SetField(-3, fieldname) /* package[fieldname] = path value */
+	L.Pop(1)                  /* pop versioned variable name ('nver') */
 }
 
 // pkSetProgDir is setprogdir: on Windows replace LUA_EXEC_DIR ("!") with
@@ -166,8 +161,8 @@ func pkSetProgDir(L *State) {
 		L.Error2("unable to get ModuleFileName")
 	}
 	s := L.ToStringX(-1)
-	L.Pop(1)
-	L.PushString(strings.ReplaceAll(s, pkExecDir, dir))
+	L.GSub(s, pkExecDir, dir)
+	L.Remove(-2) /* remove original string */
 }
 
 // ---------------------------------------------------------------------
@@ -239,19 +234,28 @@ func pkIsStarSym(sym string) bool {
 // Go's pkDynLoadSym is load+sym in one step (a Go func cannot travel as
 // void*). CLIBS still records a non-nil sentinel after a successful open
 // so a later loadlib(path,"*") short-circuits like C. Symbol re-resolve
-// still goes through the backend (cdlHandles may re-dlopen — NOTES).
+// still goes through the backend (cdlHandles may re-dlopen).
+// First-char '*' is normalized to "*" for the backend (C seeglb; exact
+// "*" makes cgoLoadSym push true like C's post-load pushboolean).
 func pkLookForFunc(L *State, path, sym string) int {
 	reg := pkCheckCLib(L, path) /* check loaded C libraries */
 	if reg == nil {             /* must load library? */
-		stat := pkLoadSym(L, path, sym)
+		loadsym := sym
+		if pkIsStarSym(sym) {
+			loadsym = "*" /* C: seeglb when *sym=='*'; backend wants exact "*" */
+		}
+		stat := pkLoadSym(L, path, loadsym)
 		if stat == pkErrLib {
 			return pkErrLib /* unable to load library */
 		}
-		/* library opened (symbol may still be missing). Mark in CLIBS. */
 		pkAddToCLib(L, path, unsafe.Pointer(&pkCLIBSSentinel))
+		if pkIsStarSym(sym) { /* loading only library (no function)? */
+			/* backend already left true for "*"; C pushes boolean here */
+			return 0 /* no errors */
+		}
 		return stat /* 0 or ERRFUNC; value/msg already on stack */
 	}
-	if pkIsStarSym(sym) { /* loading only library (no function)? */
+	if pkIsStarSym(sym) { /* already loaded; only library? */
 		L.PushBoolean(true) /* return 'true' */
 		return 0            /* no errors */
 	}
@@ -260,16 +264,18 @@ func pkLookForFunc(L *State, path, sym string) int {
 
 // pkLoadFunc is loadfunc: it builds the "luaopen_X" name of a C module.
 func pkLoadFunc(L *State, filename, modname string) int {
-	modname = strings.ReplaceAll(modname, ".", pkOFSEP)
+	/* C: luaL_gsub uses strlen — truncate embedded NUL like checkstring. */
+	modname = L.GSub(luaCStr(modname), ".", pkOFSEP)
 	mark := strings.Index(modname, pkIgMark)
 	if mark >= 0 { /* is there an ignore mark? */
-		openfunc := fmt.Sprintf("%s%s", pkPOF, modname[:mark])
+		openfunc := L.PushLString(modname[:mark])
+		openfunc = L.PushFString("%s%s", pkPOF, openfunc)
 		if stat := pkLookForFunc(L, filename, openfunc); stat != pkErrFunc {
 			return stat
 		}
 		modname = modname[mark+1:] /* else go ahead and try old-style name */
 	}
-	openfunc := fmt.Sprintf("%s%s", pkPOF, modname)
+	openfunc := L.PushFString("%s%s", pkPOF, modname)
 	return pkLookForFunc(L, filename, openfunc)
 }
 
@@ -284,19 +290,15 @@ func pkLoadLib(L *State) int {
 	/* error; error message is on stack top */
 	L.PushNil() /* luaL_pushfail — fail is nil in 5.4 */
 	L.Insert(-2)
-	switch stat {
-	case pkErrLib:
-		/* LIB_FAIL is "open" when the build can dlopen and "absent"
-		   when it cannot */
+	/* LIB_FAIL is "open" when the build can dlopen and "absent" when not */
+	if stat == pkErrLib {
 		if pkHasDynLoad() {
-			L.PushString("open") /* could not open the library */
+			L.PushString("open")
 		} else {
 			L.PushString(pkLibFail)
 		}
-	case pkErrFunc:
+	} else {
 		L.PushString("init") /* library opened, no such function */
-	default:
-		L.PushString(pkLibFail)
 	}
 	return 3 /* return fail, error message, and where */
 }
@@ -322,8 +324,11 @@ func pkReadable(filename string) bool {
 //
 // for each name in path (pusherrornotfound).
 func pkPushErrorNotFound(L *State, path string) {
-	L.PushString("no file '" +
-		strings.ReplaceAll(path, pkPathSep, "'\n\tno file '") + "'")
+	b := L.NewBuffer()
+	b.AddString("no file '")
+	b.AddGSub(path, pkPathSep, "'\n\tno file '")
+	b.AddString("'")
+	b.PushResult()
 }
 
 // pkSearchPath searches for 'name' in 'path' (searchpath). It pushes the
@@ -338,21 +343,28 @@ func pkSearchPath(L *State, name, path, sep, dirsep string) bool {
 	   is not inserted: 'package.searchpath("a\0b", "?.lua")' looks for
 	   "a.lua" and says so. */
 	name = luaCStr(name)
-	/* separator is non-empty and appears in 'name'? */
-	if sep != "" && strings.Contains(name, sep) {
-		name = strings.ReplaceAll(name, sep, dirsep) /* replace it by 'dirsep' */
+	/* separator is non-empty and appears in 'name'?
+	   C: *sep != '\0' && strchr(name, *sep) — test first byte of sep. */
+	if sep != "" && strings.IndexByte(name, sep[0]) >= 0 {
+		name = L.GSub(name, sep, dirsep) /* replace it by 'dirsep' */
 	}
 	/* add path to the buffer, replacing marks ('?') with the file name */
-	pathname := strings.ReplaceAll(path, pkPathMark, name)
-	for _, filename := range strings.Split(pathname, pkPathSep) {
-		if pkReadable(filename) { /* does file exist and is readable? */
-			L.PushString(filename) /* save and return name */
-			return true
+	b := L.NewBuffer()
+	b.AddGSub(path, pkPathMark, name)
+	pathname := b.String()
+	/* Empty pathname: C getnextfilename returns NULL immediately (no
+	   readable("") attempt). strings.Split("", ";") yields [""]. */
+	if pathname != "" {
+		for _, filename := range strings.Split(pathname, pkPathSep) {
+			if pkReadable(filename) { /* does file exist and is readable? */
+				L.PushString(filename) /* save and return name */
+				return true
+			}
 		}
 	}
-	L.PushString(pathname)
-	pkPushErrorNotFound(L, pathname) /* create error message */
-	return false                     /* not found */
+	b.PushResult()                          /* push path to create error message */
+	pkPushErrorNotFound(L, L.ToStringX(-1)) /* create error message */
+	return false                            /* not found */
 }
 
 // pkSearchPathFunc is ll_searchpath: package.searchpath.
@@ -369,14 +381,11 @@ func pkSearchPathFunc(L *State) int {
 
 // pkFindFile searches for 'name' in package[pname] (findfile). It
 // returns the file name; pkSearchPath leaves it (or the error message)
-// on the top of the stack.
-//
-// Adaptation: C leaves the path string from getfield on the stack; Go
-// pops it early. Return values / error messages match.
+// on the top of the stack. The path from getfield stays on the stack
+// under that result, matching C (caller return-N discards it).
 func pkFindFile(L *State, name, pname, dirsep string) (string, bool) {
 	L.GetField(UpvalueIndex(1), pname)
 	path, ok := L.ToString(-1)
-	L.Pop(1) /* remove the path from the stack */
 	if !ok {
 		L.Error2("'package.%s' must be a string", pname)
 	}
@@ -384,34 +393,10 @@ func pkFindFile(L *State, name, pname, dirsep string) (string, bool) {
 	return L.ToStringX(-1), found
 }
 
-// pkCheckLoad checks whether a module could be loaded (checkload).
-//
-// Adaptation: the C version reads the error message from the stack (put
-// there by luaL_loadfile); here the Go error carries it.
-func pkCheckLoad(L *State, err error, filename string) int {
-	if err == nil { /* module loaded successfully? */
-		L.PushString(filename) /* will be 2nd argument to module */
-		return 2               /* return open function and file name */
-	}
-	return L.Error2("error loading module '%s' from file '%s':\n\t%s",
-		L.ToStringX(1), filename, err.Error())
-}
-
-// pkSearcherLua is searcher_Lua: it loads a module from a Lua file.
-func pkSearcherLua(L *State) int {
-	name := L.CheckString(1)
-	filename, ok := pkFindFile(L, name, "path", pkLSUBSEP)
-	if !ok {
-		return 1 /* module not found in this path */
-	}
-	err := L.LoadFile(filename)
-	return pkCheckLoad(L, err, filename)
-}
-
-// pkCheckLoadStat is checkload: 'stat' tells whether the module was
-// loaded, and when it was not, the loader's message is on the stack top
-// (where C reads it with lua_tostring(L, -1)).
-func pkCheckLoadStat(L *State, stat bool, filename string) int {
+// pkCheckLoad is checkload: 'stat' tells whether the module was loaded,
+// and when it was not, the loader's message is on the stack top (where C
+// reads it with lua_tostring(L, -1)).
+func pkCheckLoad(L *State, stat bool, filename string) int {
 	if stat { /* module loaded successfully? */
 		L.PushString(filename) /* will be 2nd argument to module */
 		return 2               /* return open function and file name */
@@ -420,37 +405,51 @@ func pkCheckLoadStat(L *State, stat bool, filename string) int {
 		L.ToStringX(1), filename, L.ToStringX(-1))
 }
 
+// pkSearcherLua is searcher_Lua: it loads a module from a Lua file.
+func pkSearcherLua(L *State) int {
+	name := luaCStr(L.CheckString(1))
+	filename, ok := pkFindFile(L, name, "path", pkLSUBSEP)
+	if !ok {
+		return 1 /* module not found in this path */
+	}
+	err := L.LoadFile(filename)
+	if err != nil {
+		L.PushString(err.Error()) /* C: luaL_loadfile leaves msg on stack */
+	}
+	return pkCheckLoad(L, err == nil, filename)
+}
+
 // pkSearcherC is searcher_C: a file found in package.cpath is loaded as
 // a C module, and a failure to load it is a real error (C stops there,
 // it does not go on to the next searcher).
 func pkSearcherC(L *State) int {
-	name := L.CheckString(1)
+	name := luaCStr(L.CheckString(1))
 	filename, ok := pkFindFile(L, name, "cpath", pkCSUBSEP)
 	if !ok {
 		return 1 /* module not found in this path */
 	}
-	return pkCheckLoadStat(L, pkLoadFunc(L, filename, name) == 0, filename)
+	return pkCheckLoad(L, pkLoadFunc(L, filename, name) == 0, filename)
 }
 
 // pkSearcherCRoot is searcher_Croot: a C submodule may live inside the
 // library named by the part of the module name before the first dot.
 func pkSearcherCRoot(L *State) int {
-	name := L.CheckString(1)
+	name := luaCStr(L.CheckString(1))
 	dot := strings.IndexByte(name, '.')
 	if dot < 0 {
 		return 0 /* is root */
 	}
-	root := name[:dot]
-	filename, ok := pkFindFile(L, root, "cpath", pkCSUBSEP)
+	L.PushLString(name[:dot]) /* root name, as C pushlstring */
+	filename, ok := pkFindFile(L, L.ToStringX(-1), "cpath", pkCSUBSEP)
 	if !ok {
 		return 1 /* root not found */
 	}
 	if stat := pkLoadFunc(L, filename, name); stat != 0 {
 		if stat != pkErrFunc {
-			return pkCheckLoadStat(L, false, filename) /* real error */
+			return pkCheckLoad(L, false, filename) /* real error */
 		}
 		/* else: open function not found */
-		L.PushString(fmt.Sprintf("no module '%s' in file '%s'", name, filename))
+		L.PushFString("no module '%s' in file '%s'", name, filename)
 		return 1
 	}
 	L.PushString(filename) /* will be 2nd argument to module */
@@ -460,41 +459,31 @@ func pkSearcherCRoot(L *State) int {
 // pkSearcherPreload is searcher_preload: it looks the module up in
 // package.preload. 5.4.9 returns loader + ":preload:" (not 5.3's single).
 func pkSearcherPreload(L *State) int {
-	name := L.CheckString(1)
+	name := luaCStr(L.CheckString(1))
 	L.GetField(LUA_REGISTRYINDEX, pkPreloadTable)
 	if L.GetField(-1, name) == LUA_TNIL { /* not found? */
-		L.PushString(fmt.Sprintf("no field package.preload['%s']", name))
+		L.PushFString("no field package.preload['%s']", name)
 		return 1
 	}
 	L.PushString(":preload:")
 	return 2
 }
 
-// pkBuffSub removes the last n characters of a message buffer
-// (luaL_buffsub).
-func pkBuffSub(sb *strings.Builder, n int) {
-	s := sb.String()
-	sb.Reset()
-	if len(s) >= n {
-		sb.WriteString(s[:len(s)-n])
-	}
-}
-
 // pkFindLoader iterates over package.searchers looking for a loader for
 // 'name' (findloader); it leaves the loader and its data on the stack.
 func pkFindLoader(L *State, name string) {
-	var msg strings.Builder /* to build error message */
 	/* push 'package.searchers' to index 3 in the stack */
 	if L.GetField(UpvalueIndex(1), "searchers") != LUA_TTABLE {
 		L.Error2("'package.searchers' must be a table")
 	}
+	msg := L.NewBuffer() /* to build error message */
 	/*  iterate over available searchers to find a loader */
 	for i := 1; ; i++ {
-		msg.WriteString("\n\t")                 /* error-message prefix */
+		msg.AddString("\n\t")                   /* error-message prefix */
 		if L.RawGetI(3, int64(i)) == LUA_TNIL { /* no more searchers? */
-			L.Pop(1)           /* remove nil */
-			pkBuffSub(&msg, 2) /* remove prefix */
-			L.PushString(msg.String())
+			L.Pop(1)         /* remove nil */
+			msg.BuffSub(2)   /* remove prefix */
+			msg.PushResult() /* create error message */
 			L.Error2("module '%s' not found:%s", name, L.ToStringX(-1))
 		}
 		L.PushString(name)
@@ -502,12 +491,11 @@ func pkFindLoader(L *State, name string) {
 		if L.IsFunction(-2) { /* did it find a loader? */
 			return /* module loader found */
 		} else if L.IsString(-2) { /* searcher returned error message? */
-			L.Pop(1) /* remove extra return */
-			msg.WriteString(L.ToStringX(-1))
-			L.Pop(1) /* remove the message */
+			L.Pop(1)       /* remove extra return */
+			msg.AddValue() /* concatenate error message */
 		} else { /* no error message */
-			L.Pop(2)           /* remove both returns */
-			pkBuffSub(&msg, 2) /* remove prefix */
+			L.Pop(2)       /* remove both returns */
+			msg.BuffSub(2) /* remove prefix */
 		}
 	}
 }
@@ -559,10 +547,16 @@ func pkRequire(L *State) int {
 
 // pkFuncs are the functions of the 'package' table (pk_funcs). The
 // fields 'preload', 'cpath', 'path', 'searchers' and 'loaded' are
-// placeholders in C and are set by OpenPackage instead.
+// placeholders (NULL funcs → false) and are set by OpenPackage.
 var pkFuncs = []Reg{
 	{Name: "loadlib", Func: pkLoadLib},
 	{Name: "searchpath", Func: pkSearchPathFunc},
+	/* placeholders */
+	{Name: "preload", Func: nil},
+	{Name: "cpath", Func: nil},
+	{Name: "path", Func: nil},
+	{Name: "searchers", Func: nil},
+	{Name: "loaded", Func: nil},
 }
 
 // pkLLFuncs are the functions opened into the global table (ll_funcs).
@@ -571,7 +565,7 @@ var pkLLFuncs = []Reg{
 }
 
 // pkGctm is the __gc metamethod of the CLIBS table (gctm).
-// FLAG: does not call lsys_unloadlib — Go GC / finalizer policy (NOTES).
+// FLAG: does not call lsys_unloadlib — Go GC / finalizer policy.
 func pkGctm(L *State) int {
 	n := L.Len2(1)
 	for ; n >= 1; n-- { /* for each handle, in reverse order */
@@ -583,16 +577,14 @@ func pkGctm(L *State) int {
 }
 
 // pkCreateCLibsTable creates the CLIBS table (createclibstable).
-// Registry key is the string "_CLIBS" (5.4.9); table is popped after the
-// metatable is set (C leaves it on the stack under 'package' — same
-// registry contents).
+// Registry key is the string "_CLIBS" (5.4.9). Leaves CLIBS on the stack
+// under 'package' like C (caller return-1 discards it).
 func pkCreateCLibsTable(L *State) {
 	L.GetSubTable(LUA_REGISTRYINDEX, pkCLibs) /* create CLIBS table */
 	L.CreateTable(0, 1)                       /* create metatable for CLIBS */
 	L.PushGoFunc(pkGctm)
 	L.SetField(-2, "__gc") /* set finalizer for CLIBS table */
 	L.SetMetaTable(-2)
-	L.Pop(1) /* pop CLIBS table */
 }
 
 // pkCreateSearchersTable fills package.searchers (createsearcherstable).
@@ -634,10 +626,9 @@ func OpenPackage(L *State) int {
 	/* set field 'preload' */
 	L.GetSubTable(LUA_REGISTRYINDEX, pkPreloadTable)
 	L.SetField(-2, "preload")
-	/* add 'require' to the global table, with 'package' as upvalue */
 	L.PushGlobalTable()
-	L.PushValue(-2) /* set 'package' as upvalue for next lib */
-	L.SetFuncs(pkLLFuncs, 1)
-	L.Pop(1) /* pop global table */
-	return 1 /* return 'package' table */
+	L.PushValue(-2)          /* set 'package' as upvalue for next lib */
+	L.SetFuncs(pkLLFuncs, 1) /* open lib into global table */
+	L.Pop(1)                 /* pop global table */
+	return 1                 /* return 'package' table */
 }

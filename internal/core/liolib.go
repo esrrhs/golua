@@ -660,9 +660,23 @@ func ioSetDirection(s *ioStream, flag int) {
 	s.canW = flag&(os.O_RDWR|os.O_WRONLY) != 0
 }
 
-// ioCheckModeP checks a mode for 'popen': only "r" or "w" are valid.
+// ioCheckModeP is l_checkmodep. Default (POSIX / ISO) accepts only "r"
+// or "w". Under LUA_USE_WINDOWS, C also accepts "[rw][bt]?".
 func ioCheckModeP(mode string) bool {
-	return (mode == "r" || mode == "w")
+	if len(mode) == 0 {
+		return false
+	}
+	if mode[0] != 'r' && mode[0] != 'w' {
+		return false
+	}
+	if ioIsWindows() {
+		/* Windows: (m[0]=='r'||m[0]=='w') && (m[1]=='\0' || ((m[1]=='b'||m[1]=='t') && m[2]=='\0')) */
+		if len(mode) == 1 {
+			return true
+		}
+		return len(mode) == 2 && (mode[1] == 'b' || mode[1] == 't')
+	}
+	return len(mode) == 1
 }
 
 // ioFlags translates a Lua open mode into os.OpenFile flags.
@@ -1069,10 +1083,12 @@ func ioFWrite(L *State) int {
 // ioGetIOFile pushes the default file registered under findex and
 // returns its stream (getiofile). The pushed value is left on the stack,
 // which is what the callers expect (see ioWrite/ioRead).
+// C uses lua_touserdata (no metatable check); registry entries are ours.
 func ioGetIOFile(L *State, findex string) *ioStream {
 	L.GetField(LUA_REGISTRYINDEX, findex)
-	s := ioToLStreamAt(L, L.AbsIndex(-1))
+	s := L.ToUserData(-1).(*ioStream) /* C: (LStream *)lua_touserdata(L, -1) */
 	if s.isClosed() {
+		/* findex + IOPREF_LEN → "input" / "output" */
 		L.Error2("default %s file is closed", findex[len(ioPrefix):])
 	}
 	return s
@@ -1118,7 +1134,17 @@ func ioFToString(L *State) int {
 	if s.isClosed() {
 		L.PushString("file (closed)")
 	} else {
-		L.PushString(fmt.Sprintf("file (%p)", s))
+		/* C: lua_pushfstring(L, "file (%p)", p->f) */
+		var p any
+		switch {
+		case s.f != nil:
+			p = s.f
+		case s.cfp != nil:
+			p = s.cfp
+		default:
+			p = s /* popen / incomplete: no FILE* */
+		}
+		L.PushString(fmt.Sprintf("file (%p)", p))
 	}
 	return 1
 }
@@ -1126,12 +1152,13 @@ func ioFToString(L *State) int {
 // ioAuxClose calls the close function of a file handle (aux_close).
 func ioAuxClose(L *State) int {
 	s := ioToLStream(L)
-	cf := s.closef
+	cf := s.closef /* C: volatile lua_CFunction cf = p->closef */
 	s.closef = nil /* mark stream as closed */
 	if cf == nil {
+		/* C would call NULL; callers (f_close/f_gc) reject closed handles */
 		return 0
 	}
-	return cf(L)
+	return cf(L) /* close it */
 }
 
 func ioFClose2(L *State) int {
@@ -1149,8 +1176,10 @@ func ioClose(L *State) int {
 func ioFGc(L *State) int {
 	s := ioToLStream(L)
 	/* C: !isclosed(p) && p->f != NULL — ignore closed and incompletely
-	   open files. Popen uses cmd/rd/wr instead of f. */
-	if !s.isClosed() && (s.f != nil || s.cmd != nil || s.rd != nil || s.wr != nil) {
+	   open files (closef set, f still NULL). Go popen has no FILE* f;
+	   rd/wr are the open-stream stand-in (not cmd alone: a failed
+	   Start before pipes would otherwise GC-close unlike C). */
+	if !s.isClosed() && (s.f != nil || s.rd != nil || s.wr != nil) {
 		ioAuxClose(L)
 	}
 	return 0
@@ -1185,8 +1214,9 @@ func ioNoClose(L *State) int {
 func ioOpen(L *State) int {
 	filename := ioCStr(L.CheckString(1))
 	mode := ioCStr(L.OptString(2, "r"))
-	L.ArgCheck(ioCheckMode(mode), 2, "invalid mode")
 	s := ioNewFile(L)
+	md := mode /* to traverse/check mode */
+	L.ArgCheck(ioCheckMode(md), 2, "invalid mode")
 	f, err := ioOpenFile(filename, mode)
 	if err != nil {
 		return ioFileResult(L, false, &filename, err)
@@ -1201,18 +1231,17 @@ func ioPOpen(L *State) int {
 	   zero that are handed to the shell. */
 	filename := luaCStr(L.CheckString(1))
 	mode := ioCStr(L.OptString(2, "r"))
-	/* 5.4.9: luaL_argcheck(L, l_checkmodep(mode), 2, "invalid mode")
-	   Default l_checkmodep accepts only "r" or "w". Windows C also
-	   accepts "[rw][bt]?" — FLAG in NOTES (Go keeps the POSIX default). */
-	L.ArgCheck(ioCheckModeP(mode), 2, "invalid mode")
+	/* C: newprefile then l_checkmodep then l_popen then closef=io_pclose */
 	s := ioNewPreFile(L)
+	L.ArgCheck(ioCheckModeP(mode), 2, "invalid mode")
 	cmd := ioShellCommand(filename)
 	var err error
-	if mode == "r" {
+	/* Direction from mode[0]: Windows may pass "rb"/"rt"/"wb"/"wt". */
+	if mode[0] == 'r' {
 		s.rd, err = cmd.StdoutPipe()
 		cmd.Stderr = os.Stderr
 		s.canW = false /* a pipe to the child's output: read only */
-	} else { /* "w" — ArgCheck already rejected other modes */
+	} else { /* 'w' — ArgCheck already rejected other modes */
 		s.wr, err = cmd.StdinPipe()
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -1220,15 +1249,17 @@ func ioPOpen(L *State) int {
 	}
 	if err == nil {
 		/* POSIX l_popen: (fflush(NULL), popen(...)) — flush every open
-		   stdio write buffer before the child inherits descriptors. */
+		   stdio write buffer before the child inherits descriptors.
+		   Windows _popen has no fflush(NULL); harmless extra flush. */
 		ioFlushAll()
 		err = cmd.Start()
 	}
+	/* C sets closef even when l_popen returns NULL; f_gc skips f==NULL. */
+	s.cmd = cmd
+	s.closef = ioPClose
 	if err != nil {
 		return ioFileResult(L, false, &filename, err)
 	}
-	s.cmd = cmd
-	s.closef = ioPClose
 	return 1
 }
 
@@ -1349,7 +1380,9 @@ func ioFSeek(L *State) int {
 	modenames := []string{"set", "cur", "end"}
 	s := ioToFile(L)
 	op := L.CheckOption(2, "cur", modenames)
-	offset := L.OptInteger(3, 0)
+	p3 := L.OptInteger(3, 0)
+	offset := p3 /* l_seeknum: int64 here (POSIX off_t / MSVC __int64) */
+	L.ArgCheck(offset == p3, 3, "not an integer in proper range")
 	if s.f == nil {
 		/* A pipe: 'fseek' asks the descriptor, which answers ESPIPE
 		   ("Illegal seek", 29) -- the same on every platform. */
@@ -1466,9 +1499,10 @@ var ioMeth = []Reg{
 	{"setvbuf", ioFSetVBuf},
 }
 
-// ioMetaMeth is metameth[] in liolib.c (5.4.9): __index filled below;
-// __gc and __close both call f_gc.
+// ioMetaMeth is metameth[] in liolib.c (5.4.9): __index placeholder
+// overwritten below; __gc and __close both call f_gc.
 var ioMetaMeth = []Reg{
+	{"__index", nil}, /* placeholder */
 	{"__gc", ioFGc},
 	{"__close", ioFGc},
 	{"__tostring", ioFToString},

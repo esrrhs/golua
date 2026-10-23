@@ -1,13 +1,14 @@
-// Translation of lparser.h / lparser.c (PUC-Lua 5.4.9).
+// Translation of lparser.h / lparser.c (PUC-Lua 5.4.9) — line-faithful C→Go.
 //
-// Adaptations (FLAG — intentional; see NOTES.md):
+// Intentional adaptations (FLAG — port-wide; see lcode.go / lobject.go):
 //   - BlockCnt / FuncState are addressable locals (escape to heap under Go);
 //   - luaC_objbarrier / luaC_checkGC omitted (Go GC);
 //   - luaM_growvector → append + checklimit for C hard limits;
 //   - enterlevel/leavelevel = luaE_incCstack / nCcalls-- (5.4.9; no
 //     "too many syntax levels" message);
 //   - FuncState omits nabslineinfo/iwthabs (lineinfo is absolute; see lcode);
-//   - expdesc union flattened; eqstr may fall back to content after intern flush.
+//   - expdesc union flattened; eqstr may fall back to content after intern flush;
+//   - luaF_initupvals runs at end of luaY_parser (C: f_parser in ldo.c).
 package core
 
 import "fmt"
@@ -223,14 +224,14 @@ func check_condition(ls *LexState, c bool, msg string) {
 }
 
 func check_match(ls *LexState, what, who, where int) {
-	if testnext(ls, what) {
-		return
+	if !testnext(ls, what) {
+		if where == ls.linenumber { /* all in the same line? */
+			error_expected(ls, what) /* do not need a complex message */
+		} else {
+			luaX_syntaxerror(ls, fmt.Sprintf("%s expected (to close %s at line %d)",
+				luaX_token2str(ls, what), luaX_token2str(ls, who), where))
+		}
 	}
-	if where == ls.linenumber { /* all in the same line? */
-		error_expected(ls, what)
-	}
-	luaX_syntaxerror(ls, fmt.Sprintf("%s expected (to close %s at line %d)",
-		luaX_token2str(ls, what), luaX_token2str(ls, who), where))
 }
 
 func str_checkname(ls *LexState) *TString {
@@ -266,6 +267,7 @@ func codename(ls *LexState, e *expdesc) {
 func registerlocalvar(ls *LexState, fs *FuncState, varname *TString) int {
 	checklimit(fs, fs.ndebugvars+1, SHRT_MAX, "local variables")
 	fs.f.locvars = append(fs.f.locvars, LocVar{varname: varname, startpc: fs.pc})
+	/* C: luaC_objbarrier(ls->L, f, varname); omitted (Go GC) */
 	idx := fs.ndebugvars
 	fs.ndebugvars++
 	return idx
@@ -414,6 +416,7 @@ func newupvalue(fs *FuncState, name *TString, v *expdesc) int {
 		up.kind = prev.f.upvalues[v.info].kind
 	}
 	up.name = name
+	/* C: luaC_objbarrier(fs->ls->L, fs->f, name); omitted (Go GC) */
 	return fs.nups - 1
 }
 
@@ -577,10 +580,8 @@ func solvegotos(ls *LexState, lb *Labeldesc) bool {
 	needsclose := false
 	for i < gl.n {
 		if eqstr(gl.arr[i].name, lb.name) {
-			if gl.arr[i].close {
-				needsclose = true
-			}
-			solvegoto(ls, i, lb) /* will remove 'i' from the list */
+			needsclose = needsclose || gl.arr[i].close /* C: needsclose |= gl->arr[i].close */
+			solvegoto(ls, i, lb)                       /* will remove 'i' from the list */
 		} else {
 			i++
 		}
@@ -611,9 +612,7 @@ func movegotosout(fs *FuncState, bl *BlockCnt) {
 		gt := &gl.arr[i]
 		/* leaving a variable scope? */
 		if reglevel(fs, gt.nactvar) > reglevel(fs, bl.nactvar) {
-			if bl.upval {
-				gt.close = true /* jump may need a close */
-			}
+			gt.close = gt.close || bl.upval /* C: gt->close |= bl->upval */
 		}
 		gt.nactvar = bl.nactvar /* update goto level */
 	}
@@ -678,6 +677,7 @@ func addprototype(ls *LexState) *Proto {
 	}
 	f.p[fs.np] = clp
 	fs.np++
+	/* C: luaC_objbarrier(L, f, clp); omitted (Go GC) */
 	return clp
 }
 
@@ -695,9 +695,11 @@ func open_func(ls *LexState, fs *FuncState, bl *BlockCnt) {
 	ls.fs = fs
 	fs.pc = 0
 	fs.previousline = f.linedefined
+	/* C: fs->iwthabs = 0; omitted — absolute lineinfo (see lcode FLAG) */
 	fs.lasttarget = 0
 	fs.freereg = 0
 	fs.nk = 0
+	/* C: fs->nabslineinfo = 0; omitted — same FLAG */
 	fs.np = 0
 	fs.nups = 0
 	fs.ndebugvars = 0
@@ -706,9 +708,10 @@ func open_func(ls *LexState, fs *FuncState, bl *BlockCnt) {
 	fs.firstlocal = ls.dyd.actvar.n
 	fs.firstlabel = ls.dyd.label.n
 	fs.bl = nil
-	/* C's 'open_func' creates no table here: constants are looked up in
-	   the scanner's table, which is shared by the whole chunk. */
+	/* C's open_func creates no constant table here: constants are looked
+	   up in the scanner's table (ls.h), shared by the whole chunk. */
 	f.source = ls.source
+	/* C: luaC_objbarrier(ls->L, f, f->source); omitted (Go GC) */
 	f.maxstacksize = 2 /* registers 0/1 are always valid */
 	enterblock(fs, bl, false)
 }
@@ -719,14 +722,14 @@ func close_func(ls *LexState) {
 	luaK_ret(fs, luaY_nvarstack(fs), 0) /* final return */
 	leaveblock(fs)
 	luaK_finish(fs)
+	/* C: luaM_shrinkvector for code/lineinfo/abslineinfo/k/p/locvars/upvalues.
+	   Absolute lineinfo port has no abslineinfo to shrink here (ldump rebuilds). */
 	f.code = f.code[:fs.pc]
 	f.lineinfo = f.lineinfo[:fs.pc]
 	f.k = f.k[:fs.nk]
 	f.p = f.p[:fs.np]
 	f.locvars = f.locvars[:fs.ndebugvars]
 	f.upvalues = f.upvalues[:fs.nups]
-	// (lparser.c keeps these sizes in the Proto via luaM_growvector; we
-	// keep the Go slices and mirror the effective sizes here.)
 	f.sizecode = len(f.code)
 	f.sizek = len(f.k)
 	f.sizeupvalues = len(f.upvalues)
@@ -734,6 +737,7 @@ func close_func(ls *LexState) {
 	f.sizelocvars = len(f.locvars)
 	f.sizelineinfo = len(f.lineinfo)
 	ls.fs = fs.prev
+	/* C: luaC_checkGC(L); omitted (Go GC) */
 }
 
 // ---------------------------------------------------------------------
@@ -804,7 +808,7 @@ func recfield(ls *LexState, cc *ConsControl) {
 	} else { /* ls->t.token == '[' */
 		yindex(ls, &key)
 	}
-	checklimit(fs, cc.nh, maxInt, "items in a constructor")
+	checklimit(fs, cc.nh, maxInt, "items in a constructor") /* C: MAX_INT */
 	cc.nh++
 	checknext(ls, '=')
 	tab = *cc.t
@@ -1155,7 +1159,8 @@ func getbinopr(op int) BinOpr {
 }
 
 // priority is the priority table for binary operators (ORDER OPR).
-var priority = [OPR_NOBINOPR][2]int{
+// C: static const struct { lu_byte left; lu_byte right; } priority[].
+var priority = [OPR_NOBINOPR]struct{ left, right int }{
 	{10, 10}, {10, 10}, /* '+' '-' */
 	{11, 11}, {11, 11}, /* '*' '%' */
 	{14, 13},           /* '^' (right associative) */
@@ -1181,13 +1186,13 @@ func subexpr(ls *LexState, v *expdesc, limit int) BinOpr {
 	}
 	/* expand while operators have priorities higher than 'limit' */
 	op := getbinopr(ls.t.token)
-	for op != OPR_NOBINOPR && priority[op][0] > limit {
+	for op != OPR_NOBINOPR && priority[op].left > limit {
 		var v2 expdesc
 		line := ls.linenumber
 		luaX_next(ls) /* skip operator */
 		luaK_infix(ls.fs, op, v)
 		/* read sub-expression with higher priority */
-		nextop := subexpr(ls, &v2, priority[op][1])
+		nextop := subexpr(ls, &v2, priority[op].right)
 		luaK_posfix(ls.fs, op, v, &v2, line)
 		op = nextop
 	}
@@ -1378,11 +1383,13 @@ func repeatstat(ls *LexState, line int) {
 	leaveblock(fs)                            /* finish loop */
 }
 
-// exp1 reads an expression, putting its results in the next stack slot.
+// exp1 reads an expression and generates code to put its results in the
+// next stack slot. C asserts e.k == VNONRELOC after exp2nextreg (omitted).
 func exp1(ls *LexState) {
 	var e expdesc
 	expr(ls, &e)
 	luaK_exp2nextreg(ls.fs, &e)
+	/* C: lua_assert(e.k == VNONRELOC); */
 }
 
 // fixforjump fixes the instruction at 'pc' to jump to 'dest'.
@@ -1394,7 +1401,7 @@ func fixforjump(fs *FuncState, pc, dest int, back bool) {
 	if offset > MAXARG_Bx {
 		luaX_syntaxerror(fs.ls, "control structure too long")
 	}
-	fs.f.code[pc].B = offset
+	fs.f.code[pc].B = offset /* C: SETARG_Bx(*jmp, offset); Bx lives in .B */
 }
 
 func forbody(ls *LexState, base, line, nvars, isgen int) {
@@ -1547,9 +1554,7 @@ func localfunc(ls *LexState) {
 	adjustlocalvars(ls, 1)             /* enter its scope */
 	body(ls, &b, false, ls.linenumber) /* function created in next register */
 	/* debug information will only see the variable after this point! */
-	if v := localdebuginfo(fs, fvar); v != nil {
-		v.startpc = fs.pc
-	}
+	localdebuginfo(fs, fvar).startpc = fs.pc
 }
 
 // getlocalattribute parses an optional attribute ('<const>' or '<close>').
@@ -1671,7 +1676,7 @@ func retstat(ls *LexState) {
 		if hasmultret(e.k) {
 			luaK_setmultret(fs, &e)
 			if e.k == VCALL && nret == 1 && !fs.bl.insidetbc { /* tail call? */
-				fs.f.code[e.info].Op = OP_TAILCALL
+				fs.f.code[e.info].Op = OP_TAILCALL /* C: SET_OPCODE(..., OP_TAILCALL) */
 			}
 			nret = LUA_MULTRET /* return all values */
 		} else {
@@ -1746,6 +1751,7 @@ func mainfunc(ls *LexState, fs *FuncState) {
 	env.idx = 0
 	env.kind = VDKREG
 	env.name = ls.envn
+	/* C: luaC_objbarrier(ls->L, fs->f, env->name); omitted (Go GC) */
 	luaX_next(ls) /* read first token */
 	statlist(ls)  /* parse main body */
 	check(ls, TK_EOS)
@@ -1753,8 +1759,9 @@ func mainfunc(ls *LexState, fs *FuncState) {
 }
 
 // luaY_parser compiles a chunk, returning the closure for its main
-// function.  'fill' pulls further input when 'src' runs out; it is nil
-// when the whole chunk is already in 'src'.
+// function. 'src'/'fill' replace C's ZIO + firstchar; 'fill' is nil when
+// the whole chunk is already in 'src'. Stack anchors for cl/h and
+// luaC_objbarrier calls are omitted (Go GC).
 func luaY_parser(L *State, src []byte, dyd *Dyndata, name string, fill func() []byte) *LClosure {
 	var lexstate LexState
 	var funcstate FuncState
@@ -1762,7 +1769,7 @@ func luaY_parser(L *State, src []byte, dyd *Dyndata, name string, fill func() []
 	lexstate.h = luaH_new(L)     /* create table for scanner */
 	funcstate.f = luaF_newproto(L)
 	cl.p = funcstate.f
-	funcstate.f.source = luaS_newCStr(L, name) /* C measures the name with strlen */
+	funcstate.f.source = luaS_newCStr(L, name) /* C: luaS_new(L, name) */
 	lexstate.dyd = dyd
 	dyd.actvar.n = 0
 	dyd.gt.n = 0
@@ -1774,6 +1781,8 @@ func luaY_parser(L *State, src []byte, dyd *Dyndata, name string, fill func() []
 	}
 	luaX_setinput(L, &lexstate, src, funcstate.f.source, firstchar, fill)
 	mainfunc(&lexstate, &funcstate)
+	/* C: luaF_initupvals is called from f_parser (ldo.c) after luaY_parser;
+	   LoadStream does not call it, so it lives here. */
 	luaF_initupvals(L, cl)
 	return cl
 }
