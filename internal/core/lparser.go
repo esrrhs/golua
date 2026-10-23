@@ -371,10 +371,10 @@ func undefgoto(ls *LexState, gt *Labeldesc) {
 	} else {
 		msg = fmt.Sprintf("no visible label '%s' for <goto> at line %d", gt.name.val, gt.line)
 	}
-	luaK_semerror(ls, msg)
+	semerror(ls, msg)
 }
 
-func luaK_semerror(ls *LexState, msg string) {
+func semerror(ls *LexState, msg string) {
 	ls.t.token = 0
 	luaX_syntaxerror(ls, msg)
 }
@@ -425,7 +425,7 @@ func closegoto(ls *LexState, g int, label *Labeldesc) {
 	check_condition(ls, gt.name.val == label.name.val, "should be same name")
 	if gt.nactvar < label.nactvar {
 		vname := getlocvar(fs, gt.nactvar).varname
-		luaK_semerror(ls, fmt.Sprintf("<goto %s> at line %d jumps into the scope of local '%s'",
+		semerror(ls, fmt.Sprintf("<goto %s> at line %d jumps into the scope of local '%s'",
 			gt.name.val, gt.line, vname.val))
 	}
 	luaK_patchlist(fs, gt.pc, label.pc)
@@ -488,7 +488,7 @@ func createlabel(ls *LexState, name *TString, line int, last bool) bool {
 func checkrepeated(fs *FuncState, ll *Labellist, label *TString) {
 	for i := fs.bl.firstlabel; i < ll.n; i++ {
 		if label.val == ll.arr[i].name.val {
-			luaK_semerror(fs.ls, fmt.Sprintf("label '%s' already defined on line %d",
+			semerror(fs.ls, fmt.Sprintf("label '%s' already defined on line %d",
 				label.val, ll.arr[i].line))
 		}
 	}
@@ -766,18 +766,24 @@ func primaryexp(ls *LexState, v *expdesc) {
 	}
 }
 
+func fieldsel(ls *LexState, v *expdesc) {
+	/* fieldsel -> ['.' | ':'] NAME */
+	fs := ls.fs
+	var key expdesc
+	luaK_exp2anyregup(fs, v)
+	luaX_next(ls) /* skip the dot or colon */
+	checkname(ls, &key)
+	luaK_indexed(fs, v, &key)
+}
+
 func suffixedexp(ls *LexState, v *expdesc) {
 	fs := ls.fs
 	line := ls.linenumber
 	primaryexp(ls, v)
 	for {
 		switch ls.t.token {
-		case '.':
-			var key expdesc
-			luaK_exp2anyregup(fs, v)
-			luaX_next(ls)
-			checkname(ls, &key)
-			luaK_indexed(fs, v, &key)
+		case '.': /* fieldsel */
+			fieldsel(ls, v)
 		case '[':
 			var key expdesc
 			luaK_exp2anyregup(fs, v)
@@ -1238,23 +1244,15 @@ func localstat(ls *LexState) {
 }
 
 func funcname(ls *LexState, v *expdesc) bool {
-	/* funcname -> NAME {fieldsel} [':' NAME] — fieldsel does exp2anyregup */
+	/* funcname -> NAME {fieldsel} [':' NAME] */
 	ismethod := false
 	singlevar(ls, v)
 	for ls.t.token == '.' {
-		var key expdesc
-		luaK_exp2anyregup(ls.fs, v)
-		luaX_next(ls)
-		checkname(ls, &key)
-		luaK_indexed(ls.fs, v, &key)
+		fieldsel(ls, v)
 	}
 	if ls.t.token == ':' {
-		var key expdesc
 		ismethod = true
-		luaK_exp2anyregup(ls.fs, v)
-		luaX_next(ls)
-		checkname(ls, &key)
-		luaK_indexed(ls.fs, v, &key)
+		fieldsel(ls, v)
 	}
 	return ismethod
 }

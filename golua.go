@@ -254,7 +254,6 @@ const (
 	CIST_HOOKYIELD = core.CIST_HOOKYIELD
 	CIST_FIN       = core.CIST_FIN
 	CIST_TRAN      = core.CIST_TRAN
-	CIST_CLSRET    = core.CIST_CLSRET
 )
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,11 @@
-// Translation of lstate.h / lstate.c (PUC-Lua 5.4).
+// Translation of lstate.h / lstate.c (PUC-Lua 5.3.4).
 //
-// GC-related fields are gone (there is no collector); object lifetime is
-// the Go runtime's job. Error handling uses panic/recover instead of
-// setjmp/longjmp, and each coroutine runs on its own goroutine so that a
-// Go function can yield from the middle of a call.
+// Intentional deviations from the C file:
+//   - Go GC replaces lgc (finalizers approximated; warnf path for __gc errors).
+//   - Error handling uses panic/recover instead of setjmp/longjmp.
+//   - Each coroutine runs on its own goroutine so a Go function can yield.
+//   - CallInfo status bits follow the 5.4 layout (CIST_C vs 5.3 CIST_LUA) but
+//     isLua() preserves the same predicate; bit values are not ABI-exposed.
 package core
 
 import (
@@ -29,21 +31,28 @@ const (
 // returns the number of results left on the stack.
 type GoFunc func(L *State) int
 
-// WarnFunc is the Go equivalent of lua_WarnFunction.
+// WarnFunc is Go-only (lua_WarnFunction is 5.4). Kept so Go-GC __gc
+// errors can call Warning the way 5.4 luaE_warnerror does; 5.3.4 C
+// instead raises LUA_ERRGCMM.
 type WarnFunc func(L *State, msg string, tocont bool)
 
-// CallInfo status bits (lstate.h).
+// CallInfo status bits.
+//
+// 5.3.4 lstate.h uses CIST_LUA (1<<1) for "running a Lua function" and
+// CIST_LEQ (1<<7) for __lt-as-__le. This port keeps the inverted CIST_C
+// form (and CIST_TRAN for transfer info) used elsewhere in the Go VM;
+// isLua() is still "not a C frame". CIST_LEQ is unused: lessequal goes
+// through luaV_lessequal without needing the bit (see ltm.go).
 const (
 	CIST_OAH       = 1 << 0
-	CIST_C         = 1 << 1
+	CIST_C         = 1 << 1 /* opposite sense of 5.3 CIST_LUA */
 	CIST_FRESH     = 1 << 2
 	CIST_HOOKED    = 1 << 3
 	CIST_YPCALL    = 1 << 4
 	CIST_TAIL      = 1 << 5
 	CIST_HOOKYIELD = 1 << 6
 	CIST_FIN       = 1 << 7
-	CIST_TRAN      = 1 << 8
-	CIST_CLSRET    = 1 << 9
+	CIST_TRAN      = 1 << 8 /* transferinfo present (hook); not in 5.3 getinfo 'r' */
 )
 
 // incnny/decnny manipulate the "non-yieldable" part of nCcalls, which
@@ -1488,7 +1497,8 @@ func (L *State) AtPanic(f GoFunc) GoFunc {
 	return old
 }
 
-// SetWarnFunction sets the warning function (lua_setwarnf).
+// SetWarnFunction sets the warning function. Go-only: 5.3.4 lua.h has no
+// lua_setwarnf; kept for tests and for routing Go-GC __gc failures.
 func (L *State) SetWarnFunction(f WarnFunc, ud any) {
 	L.g.warnf = f
 	L.g.udWarn = ud
