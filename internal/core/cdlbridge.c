@@ -24,6 +24,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <locale.h>
+#include <time.h>
 #include <string.h>
 
 #ifdef _WIN32
@@ -388,6 +389,22 @@ int cdl_isspace (int c) { return isspace((unsigned char)c); }
 int cdl_isupper (int c) { return isupper((unsigned char)c); }
 int cdl_isalnum (int c) { return isalnum((unsigned char)c); }
 int cdl_isxdigit (int c) { return isxdigit((unsigned char)c); }
+
+/* os.date's per-specifier strftime.  Broken-down time comes from the C
+   library so %z/%Z see tm_gmtoff/tm_zone the way PUC-Lua does. */
+size_t cdl_strftime (char *buf, size_t maxsize, const char *fmt,
+                     long long epoch, int utc) {
+  time_t t = (time_t)epoch;
+  struct tm tmr, *stm;
+  if (utc)
+    stm = gmtime_r(&t, &tmr);
+  else
+    stm = localtime_r(&t, &tmr);
+  if (stm == NULL)
+    return (size_t)-1;
+  return strftime(buf, maxsize, fmt, stm);
+}
+
 
 /* ---- a file handle as C sees it: see cdlbridge.h ---- */
 

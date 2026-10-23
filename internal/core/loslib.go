@@ -1,9 +1,12 @@
 // Translation of loslib.c (PUC-Lua 5.3.4): the standard Operating System
 // library.
 //
-// The strftime-style conversion specifiers of os.date are implemented on
-// top of the Go time package; every specifier is formatted on its own so
-// that literal text is never mistaken for a layout element.
+// os.date's strftime-style conversion specifiers call libc strftime when
+// cgo is available (see cdlopen_locale.go), so LC_TIME from os.setlocale
+// is visible the way it is in PUC-Lua.  Without cgo, or when the calendar
+// year would make libc's tm_year+1900 overflow an int, each specifier is
+// formatted on its own through the Go time package so literal text is
+// never mistaken for a layout element.
 package core
 
 import (
@@ -30,6 +33,20 @@ const osStrftimeOptions = "aAbBcCdDeFgGhHIjmMnprRStTuUVwWxXyYzZ%"
 var osModifierOptions = map[byte]string{
 	'E': "cCxXyY",
 	'O': "deHImMSuUVwWy",
+}
+
+// osStrftimeC is libc strftime when the build has cgo on unix; nil
+// otherwise.  Spec is a full conversion including '%', e.g. "%c" or "%Ec".
+// epoch is Unix seconds; utc selects gmtime vs localtime.
+var osStrftimeC func(epoch int64, utc bool, spec string) (string, bool)
+
+// osStrftimeYearSafe reports whether t's calendar year fits in a C int.
+// glibc's strftime computes tm_year+1900 in int for %Y/%C; at the top of
+// the struct-tm range that overflows (see datefuzz_test.go §6).  The
+// hand-rolled formatter is used there instead.
+func osStrftimeYearSafe(t time.Time) bool {
+	y := t.Year()
+	return y >= math.MinInt32 && y <= math.MaxInt32
 }
 
 // osSetField sets a numeric field in the table below the top (setfield).
@@ -250,7 +267,15 @@ func osFormatSpec(t time.Time, spec string) string {
 		   about, is written up in §6. */
 		return t.Format("-0700")
 	case 'Z':
-		return t.Format("MST")
+		/* Zone abbreviation.  Under '!' Go's UTC location names it
+		   "UTC"; glibc's gmtime leaves tm_zone as "GMT".  With cgo,
+		   osStrftime uses libc and matches the host; this hand-roll
+		   path (no cgo / unsafe year) keeps Go's name — SPEC. */
+		name, _ := t.Zone()
+		if name == "" {
+			return t.Format("MST")
+		}
+		return name
 	case '%':
 		return "%"
 	/* specifiers with no direct counterpart in a Go layout */
@@ -293,7 +318,10 @@ func osFormatSpec(t time.Time, spec string) string {
 }
 
 // osStrftime formats a time according to a strftime-style format string.
-func osStrftime(L *State, t time.Time, s string) string {
+// utc matches the leading '!' of os.date so libc gmtime/localtime agree
+// with the time.Time already chosen by the caller.
+func osStrftime(L *State, t time.Time, s string, utc bool) string {
+	useC := osStrftimeC != nil && osStrftimeYearSafe(t)
 	var out strings.Builder
 	for len(s) > 0 {
 		i := strings.IndexByte(s, '%')
@@ -305,6 +333,12 @@ func osStrftime(L *State, t time.Time, s string) string {
 		s = s[i+1:] /* skip '%' */
 		spec, n := osCheckOption(L, s)
 		s = s[n:]
+		if useC {
+			if got, ok := osStrftimeC(t.Unix(), utc, "%"+spec); ok {
+				out.WriteString(got)
+				continue
+			}
+		}
 		out.WriteString(osFormatSpec(t, spec))
 	}
 	return out.String()
@@ -390,7 +424,9 @@ func luaTmpNam() (string, error) {
 const tmpNamChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 func osGetEnv(L *State) int {
-	v, ok := os.LookupEnv(L.CheckString(1))
+	/* getenv takes a C string, so the name ends at the first zero:
+	   os.getenv("FOO\0BAR") looks up "FOO", matching PUC-Lua. */
+	v, ok := os.LookupEnv(luaCStr(L.CheckString(1)))
 	if !ok {
 		L.PushNil() /* if not found push nil */
 		return 1
@@ -399,17 +435,29 @@ func osGetEnv(L *State) int {
 	return 1
 }
 
-// osStartTime is when the program started; os.clock measures from there
-// (there is no portable CPU-time clock in Go).
+// osStartTime is when the program started.  Used only when process CPU
+// time is unavailable (see osProcessCPUTime): os.clock then falls back
+// to wall time since start — a documented SPEC vs C clock().
 var osStartTime = time.Now()
 
 func osClock(L *State) int {
+	/* C: ((lua_Number)clock())/(lua_Number)CLOCKS_PER_SEC — CPU time.
+	   On Unix, Getrusage(RUSAGE_SELF) user+system matches that without
+	   cgo.  Elsewhere there is no portable CPU timer; wall-since-start
+	   is the best effort (SPEC). */
+	if sec, ok := osProcessCPUTime(); ok {
+		L.PushNumber(sec)
+		return 1
+	}
 	L.PushNumber(time.Since(osStartTime).Seconds())
 	return 1
 }
 
-/* osCheckTime is l_checktime (loslib.c): (time_t)t == t.
-   Target is Linux LP64 (time_t == int64), so every lua_Integer fits. */
+/*
+osCheckTime is l_checktime (loslib.c): (time_t)t == t.
+
+	Target is Linux LP64 (time_t == int64), so every lua_Integer fits.
+*/
 func osCheckTime(L *State, arg int) int64 {
 	t := L.CheckInteger(arg)
 	L.ArgCheck(int64(t) == t, arg, "time out-of-bounds")
@@ -458,7 +506,7 @@ func osDate(L *State) int {
 		L.CreateTable(0, 9) /* 9 = number of fields */
 		osSetAllFields(L, tm)
 	} else {
-		L.PushString(osStrftime(L, tm, s))
+		L.PushString(osStrftime(L, tm, s, utc))
 	}
 	return 1
 }
