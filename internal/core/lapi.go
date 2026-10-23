@@ -246,7 +246,7 @@ func (L *State) XMove(from *State, n int) {
 // Type returns the type of the value at idx (lua_type).
 func (L *State) Type(idx int) int {
 	v := index2value(L, idx)
-	if v == &L.g.nilValue || v == &absentKey {
+	if v == &L.g.nilValue || v == &luaO_nilobject {
 		return LUA_TNONE
 	}
 	return ttype(v)

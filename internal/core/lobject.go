@@ -185,8 +185,12 @@ func ttypetag(v *Value) int { return int(v.tt) & 0x3F }
 
 func ttisnil(v *Value) bool       { return ttype(v) == LUA_TNIL }
 func ttisstrictnil(v *Value) bool { return v.tt == LUA_VNIL }
-func isabstkey(v *Value) bool     { return v.tt == LUA_VABSTKEY }
-func isempty(v *Value) bool       { return ttisnil(v) }
+// isabstkey reports whether 'v' is the not-found sentinel (ltable.c:
+// slot == luaO_nilobject). 5.3.4 uses pointer identity, not a tag.
+func isabstkey(v *Value) bool { return v == &luaO_nilobject }
+
+// isempty reports a nil value (5.3.4 empty slots are nil).
+func isempty(v *Value) bool { return ttisnil(v) }
 
 func ttisboolean(v *Value) bool { return ttype(v) == LUA_TBOOLEAN }
 func ttisfalse(v *Value) bool   { return v.tt == LUA_VFALSE }
@@ -248,9 +252,9 @@ func iscollectable(v *Value) bool { return v.tt&BIT_ISCOLLECTABLE != 0 }
 // that no stale reference keeps an object alive.
 // ---------------------------------------------------------------------
 
-func setnilvalue(v *Value) { *v = Value{tt: LUA_VNIL} }
-func setempty(v *Value)    { *v = Value{tt: LUA_VEMPTY} }
-func setabstkey(v *Value)  { *v = Value{tt: LUA_VABSTKEY} }
+func setnilvalue(v *Value) { *v = Value{tt: LUA_TNIL} }
+func setempty(v *Value)    { setnilvalue(v) } /* 5.3.4: empty == nil */
+func setabstkey(v *Value)  { *v = luaO_nilobject } /* rarely used; prefer &luaO_nilobject */
 func setbfvalue(v *Value)  { *v = Value{tt: LUA_VFALSE} }
 func setbtvalue(v *Value)  { *v = Value{tt: LUA_VTRUE, i: 1} }
 func setbvalue(v *Value, b bool) {

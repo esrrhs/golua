@@ -16,9 +16,8 @@ const (
 	MAXHBITS = MAXABITS - 1
 )
 
-// absentKey is the value returned for a key not found in a table
-// (ltable.c's 'absentkey').
-var absentKey = Value{tt: LUA_VABSTKEY}
+// absentKey is kept as a name alias for call sites; the 5.3.4 sentinel
+// is luaO_nilobject (pointer identity). Do not take &luaO_nilobject.
 
 func lmod(s uint32, size int) uint32 { return s & uint32(size-1) }
 
@@ -159,7 +158,7 @@ func getgeneric(L *State, t *Table, key *Value, deadok bool) *Value {
 	if i := getGenericNode(L, t, key, deadok); i >= 0 {
 		return &t.nodes[i].val
 	}
-	return &absentKey
+	return &luaO_nilobject
 }
 
 // arrayindex returns the index for 'k' if it may live in the array part.
@@ -214,7 +213,7 @@ func findIndex(L *State, t *Table, key *Value, asize uint32) uint32 {
 // dummyNode is the counterpart of PUC-Lua's static 'dummynode': a one-slot
 // hash part shared by every table that has no hash entries, so that the
 // search loops can always touch at least one node.
-var dummyNode = []node{{keytt: LUA_VNIL, val: Value{tt: LUA_VEMPTY}, next: 0}}
+var dummyNode = []node{{keytt: LUA_TNIL, val: Value{tt: LUA_TNIL}, next: 0}}
 
 // isdummy reports whether the table is using the shared dummy node. PUC-Lua
 // signals this with 'lastfree == NULL'.
@@ -237,7 +236,7 @@ func setnodevector(L *State, t *Table, size uint32) {
 		for i := range t.nodes {
 			t.nodes[i].next = 0
 			setnilkey(&t.nodes[i])
-			setempty(&t.nodes[i].val)
+			setnilvalue(&t.nodes[i].val)
 		}
 		t.lsizenode = byte(lsize)
 		t.lastfree = int(size) /* all positions are free */
@@ -481,7 +480,7 @@ func luaH_newkey(L *State, t *Table, key, value *Value) {
 				t.nodes[f].next += int32(mp - f) /* correct 'next' */
 				t.nodes[mp].next = 0             /* now 'mp' is free */
 			}
-			setempty(&t.nodes[mp].val)
+			setnilvalue(&t.nodes[mp].val)
 		} else { /* colliding node is in its own main position */
 			if t.nodes[mp].next != 0 {
 				t.nodes[f].next = int32((mp + int(t.nodes[mp].next)) - f) /* chain new position */
@@ -509,7 +508,7 @@ func luaH_getint(t *Table, key int64) *Value {
 		}
 		nx := t.nodes[n].next
 		if nx == 0 {
-			return &absentKey
+			return &luaO_nilobject
 		}
 		n += int(nx)
 	}
@@ -518,7 +517,7 @@ func luaH_getint(t *Table, key int64) *Value {
 // luaH_getshortstr searches a short-string key (ltable.c).
 func luaH_getshortstr(t *Table, key *TString) *Value {
 	if sizenode(t) == 0 {
-		return &absentKey
+		return &luaO_nilobject
 	}
 	n := hashstr(t, key)
 	for {
@@ -527,7 +526,7 @@ func luaH_getshortstr(t *Table, key *TString) *Value {
 		}
 		nx := t.nodes[n].next
 		if nx == 0 {
-			return &absentKey
+			return &luaO_nilobject
 		}
 		n += int(nx)
 	}
@@ -589,7 +588,7 @@ func luaH_get(L *State, t *Table, key *Value) *Value {
 	case LUA_VNUMINT:
 		return luaH_getint(t, ivalue(key))
 	case LUA_VNIL:
-		return &absentKey
+		return &luaO_nilobject
 	case LUA_VNUMFLT:
 		if k, ok := floatToIntEq(fltvalue(key)); ok {
 			return luaH_getint(t, k) /* use specialized version */
