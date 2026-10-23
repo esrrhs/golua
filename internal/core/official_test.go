@@ -65,6 +65,7 @@ const officialDir = "testdata/official"
 var officialKnownDiff = map[string]string{
 	"all": "the environment, in four lines: the second PRNG seed, 'total memory' (PUC-Lua's allocator against the Go heap), the elapsed time, and the interpreter's own path",
 	"gc":  "the file is a test of the collector itself, and there is none here",
+	"main": "stand-alone Ctrl-C / signal harness hangs the file (child ignores timeout)",
 }
 
 // officialKnownDiffBuild are differences that depend on what the binary
