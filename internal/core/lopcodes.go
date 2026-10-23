@@ -1,61 +1,52 @@
-// Translation of lopcodes.h / lopcodes.c / lopnames.h (PUC-Lua 5.4).
+// Translation of lopcodes.h / lopcodes.c (PUC-Lua 5.3.4).
 //
 // PUC-Lua packs an instruction into a 32-bit word. Here an instruction is
-// a plain struct: the fields are the same (Op, A, B, C; B doubles as
-// Bx/sBx/sJ), only the bit packing is gone.
+// a plain struct: the fields are the same (Op, A, B, C). B doubles as
+// Bx/sBx/Ax depending on the opcode. For RK operands, B/C carry the
+// BITRK bit the way PUC-Lua encodes them (ISK / INDEXK / RKASK).
+// The K field is unused in 5.3 (kept so Instruction stays one type).
 package core
 
 // Instruction is the Go counterpart of Lua's Instruction word.
-// PUC-Lua packs Op/A/B/C/k into a 32-bit word; here they are plain
-// fields (K is the 'k' bit).
 type Instruction struct {
 	Op int
 	A  int
-	B  int // also Bx, sBx or sJ depending on the opcode
+	B  int // also Bx or sBx (biased) depending on the opcode
 	C  int
-	K  int // the 'k' bit (0 or 1)
+	K  int // unused in 5.3; kept for struct compatibility
 }
 
-func newABC(op, a, b, c, k int) Instruction {
-	return Instruction{Op: op, A: a, B: b, C: c, K: k}
+func newABC(op, a, b, c int) Instruction {
+	return Instruction{Op: op, A: a, B: b, C: c}
 }
 
-// Opcodes (lopcodes.h), in the same order as PUC-Lua.
+func newABx(op, a, bx int) Instruction {
+	return Instruction{Op: op, A: a, B: bx}
+}
+
+func newAsBx(op, a, sbx int) Instruction {
+	return Instruction{Op: op, A: a, B: sbx + OFFSET_sBx}
+}
+
+func newAx(op, ax int) Instruction {
+	return Instruction{Op: op, A: ax}
+}
+
+// Opcodes (lopcodes.h), ORDER OP — same order as PUC-Lua 5.3.4.
 const (
 	OP_MOVE = iota
-	OP_LOADI
-	OP_LOADF
 	OP_LOADK
 	OP_LOADKX
-	OP_LOADFALSE
-	OP_LFALSESKIP
-	OP_LOADTRUE
+	OP_LOADBOOL
 	OP_LOADNIL
 	OP_GETUPVAL
-	OP_SETUPVAL
 	OP_GETTABUP
 	OP_GETTABLE
-	OP_GETI
-	OP_GETFIELD
 	OP_SETTABUP
+	OP_SETUPVAL
 	OP_SETTABLE
-	OP_SETI
-	OP_SETFIELD
 	OP_NEWTABLE
 	OP_SELF
-	OP_ADDI
-	OP_ADDK
-	OP_SUBK
-	OP_MULK
-	OP_MODK
-	OP_POWK
-	OP_DIVK
-	OP_IDIVK
-	OP_BANDK
-	OP_BORK
-	OP_BXORK
-	OP_SHRI
-	OP_SHLI
 	OP_ADD
 	OP_SUB
 	OP_MUL
@@ -68,60 +59,40 @@ const (
 	OP_BXOR
 	OP_SHL
 	OP_SHR
-	OP_MMBIN
-	OP_MMBINI
-	OP_MMBINK
 	OP_UNM
 	OP_BNOT
 	OP_NOT
 	OP_LEN
 	OP_CONCAT
-	OP_CLOSE
-	OP_TBC
 	OP_JMP
 	OP_EQ
 	OP_LT
 	OP_LE
-	OP_EQK
-	OP_EQI
-	OP_LTI
-	OP_LEI
-	OP_GTI
-	OP_GEI
 	OP_TEST
 	OP_TESTSET
 	OP_CALL
 	OP_TAILCALL
 	OP_RETURN
-	OP_RETURN0
-	OP_RETURN1
 	OP_FORLOOP
 	OP_FORPREP
-	OP_TFORPREP
 	OP_TFORCALL
 	OP_TFORLOOP
 	OP_SETLIST
 	OP_CLOSURE
 	OP_VARARG
-	OP_VARARGPREP
 	OP_EXTRAARG
 	NUM_OPCODES
 )
 
-// opNames is the translation of lopnames.h.
+// opNames is luaP_opnames.
 var opNames = [NUM_OPCODES]string{
-	"MOVE", "LOADI", "LOADF", "LOADK", "LOADKX", "LOADFALSE", "LFALSESKIP",
-	"LOADTRUE", "LOADNIL", "GETUPVAL", "SETUPVAL", "GETTABUP", "GETTABLE",
-	"GETI", "GETFIELD", "SETTABUP", "SETTABLE", "SETI", "SETFIELD",
-	"NEWTABLE", "SELF", "ADDI", "ADDK", "SUBK", "MULK", "MODK", "POWK",
-	"DIVK", "IDIVK", "BANDK", "BORK", "BXORK", "SHRI", "SHLI", "ADD",
-	"SUB", "MUL", "MOD", "POW", "DIV", "IDIV", "BAND", "BOR", "BXOR",
-	"SHL", "SHR", "MMBIN", "MMBINI", "MMBINK", "UNM", "BNOT", "NOT",
-	"LEN", "CONCAT", "CLOSE", "TBC", "JMP", "EQ", "LT", "LE", "EQK",
-	"EQI", "LTI", "LEI", "GTI", "GEI", "TEST", "TESTSET", "CALL",
-	"TAILCALL", "RETURN", "RETURN0", "RETURN1", "FORLOOP", "FORPREP",
-	"TFORPREP", "TFORCALL", "TFORLOOP", "SETLIST", "CLOSURE", "VARARG",
-	"VARARGPREP", "EXTRAARG",
+	"MOVE", "LOADK", "LOADKX", "LOADBOOL", "LOADNIL", "GETUPVAL",
+	"GETTABUP", "GETTABLE", "SETTABUP", "SETUPVAL", "SETTABLE",
+	"NEWTABLE", "SELF", "ADD", "SUB", "MUL", "MOD", "POW", "DIV", "IDIV",
+	"BAND", "BOR", "BXOR", "SHL", "SHR", "UNM", "BNOT", "NOT", "LEN",
+	"CONCAT", "JMP", "EQ", "LT", "LE", "TEST", "TESTSET", "CALL",
+	"TAILCALL", "RETURN", "FORLOOP", "FORPREP", "TFORCALL", "TFORLOOP",
+	"SETLIST", "CLOSURE", "VARARG", "EXTRAARG",
 }
 
 func opName(op int) string {
@@ -131,63 +102,133 @@ func opName(op int) string {
 	return "???"
 }
 
-// Field sizes and offsets used by the code generator (lopcodes.h).
+// Field sizes from lopcodes.h (5.3: B and C are 9 bits).
 const (
-	MAXARG_C  = (1 << 8) - 1  // 255
-	MAXARG_sC = MAXARG_C >> 1 // 127
-	// SIZE_B is 8 bits in 5.4, so MAXARG_B == MAXARG_C and the signed
-	// interpretation of B uses OFFSET_sC (lopcodes.h: GETARG_sB is
-	// defined as sC2int(GETARG_B(i))).
-	MAXARG_B   = (1 << 8) - 1  // 255
-	MAXARG_sB  = MAXARG_B >> 1 // 127
-	MAXARG_Bx  = (1 << 17) - 1 // 131071
-	MAXARG_sBx = MAXARG_Bx >> 1
-	MAXARG_Ax  = (1 << 25) - 1
-	MAXARG_sJ  = (1 << 25) - 1
-	OFFSET_sC  = MAXARG_sC
-	OFFSET_sB  = MAXARG_sB
+	SIZE_C  = 9
+	SIZE_B  = 9
+	SIZE_Bx = SIZE_C + SIZE_B // 18
+	SIZE_A  = 8
+	SIZE_Ax = SIZE_C + SIZE_B + SIZE_A // 26
+	SIZE_OP = 6
+
+	MAXARG_Bx  = (1 << SIZE_Bx) - 1 // 262143
+	MAXARG_sBx = MAXARG_Bx >> 1     // 131071
+	MAXARG_Ax  = (1 << SIZE_Ax) - 1
+	MAXARG_A   = (1 << SIZE_A) - 1 // 255
+	MAXARG_B   = (1 << SIZE_B) - 1 // 511
+	MAXARG_C   = (1 << SIZE_C) - 1 // 511
+
 	OFFSET_sBx = MAXARG_sBx
-	OFFSET_sJ  = MAXARG_sJ >> 1
-	MAXARG_A   = (1 << 8) - 1 // 255
-	SIZE_A     = 8
-	MAXINDEXRK = MAXARG_B
+
+	// BITRK: high bit of B/C means "constant".
+	BITRK      = 1 << (SIZE_B - 1) // 256
+	MAXINDEXRK = BITRK - 1         // 255
 )
 
-// NO_REG is an invalid register that fits in 8 bits (lopcodes.h).
+// NO_REG is an invalid register that fits in 8 bits.
 const NO_REG = MAXARG_A
 
-// LFIELDS_PER_FLUSH is the number of list items to accumulate before a
-// SETLIST instruction (lopcodes.h).
+// LFIELDS_PER_FLUSH is items to accumulate before SETLIST.
 const LFIELDS_PER_FLUSH = 50
 
-// MAXUPVAL is the maximum number of upvalues in a closure (lfunc.h).
+// MAXUPVAL is the maximum number of upvalues in a closure.
 const MAXUPVAL = 255
 
 func sBx(b int) int { return b - OFFSET_sBx }
 
-// int2sC converts an integer into an 'sC' operand (lopcodes.h).
-func int2sC(i int) int { return i + OFFSET_sC }
+func ISK(x int) bool  { return x&BITRK != 0 }
+func INDEXK(r int) int { return r & ^BITRK }
+func RKASK(x int) int { return x | BITRK }
 
-// testTMode reports whether the opcode is a test/comparison (the 'T' column
-// of luaP_opmodes in lopcodes.c).
-func testTMode(op int) bool {
-	switch op {
-	case OP_EQ, OP_LT, OP_LE, OP_EQK, OP_EQI, OP_LTI, OP_LEI, OP_GTI, OP_GEI,
-		OP_TEST, OP_TESTSET:
-		return true
-	}
-	return false
+// Op modes (from lopcodes.c).
+const (
+	iABC = iota
+	iABx
+	iAsBx
+	iAx
+)
+
+const (
+	OpArgN = iota // not used
+	OpArgU        // used
+	OpArgR        // register or jump offset
+	OpArgK        // constant or register/constant
+)
+
+// opModes packs (t<<7)|(a<<6)|(b<<4)|(c<<2)|m per opcode.
+var opModes = [NUM_OPCODES]byte{
+	/* MOVE */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgN << 2) | iABC,
+	/* LOADK */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgN << 2) | iABx,
+	/* LOADKX */ (0 << 7) | (1 << 6) | (OpArgN << 4) | (OpArgN << 2) | iABx,
+	/* LOADBOOL */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgU << 2) | iABC,
+	/* LOADNIL */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgN << 2) | iABC,
+	/* GETUPVAL */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgN << 2) | iABC,
+	/* GETTABUP */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgK << 2) | iABC,
+	/* GETTABLE */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgK << 2) | iABC,
+	/* SETTABUP */ (0 << 7) | (0 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* SETUPVAL */ (0 << 7) | (0 << 6) | (OpArgU << 4) | (OpArgN << 2) | iABC,
+	/* SETTABLE */ (0 << 7) | (0 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* NEWTABLE */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgU << 2) | iABC,
+	/* SELF */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgK << 2) | iABC,
+	/* ADD */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* SUB */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* MUL */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* MOD */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* POW */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* DIV */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* IDIV */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* BAND */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* BOR */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* BXOR */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* SHL */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* SHR */ (0 << 7) | (1 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* UNM */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgN << 2) | iABC,
+	/* BNOT */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgN << 2) | iABC,
+	/* NOT */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgN << 2) | iABC,
+	/* LEN */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgN << 2) | iABC,
+	/* CONCAT */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgR << 2) | iABC,
+	/* JMP */ (0 << 7) | (0 << 6) | (OpArgR << 4) | (OpArgN << 2) | iAsBx,
+	/* EQ */ (1 << 7) | (0 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* LT */ (1 << 7) | (0 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* LE */ (1 << 7) | (0 << 6) | (OpArgK << 4) | (OpArgK << 2) | iABC,
+	/* TEST */ (1 << 7) | (0 << 6) | (OpArgN << 4) | (OpArgU << 2) | iABC,
+	/* TESTSET */ (1 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgU << 2) | iABC,
+	/* CALL */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgU << 2) | iABC,
+	/* TAILCALL */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgU << 2) | iABC,
+	/* RETURN */ (0 << 7) | (0 << 6) | (OpArgU << 4) | (OpArgN << 2) | iABC,
+	/* FORLOOP */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgN << 2) | iAsBx,
+	/* FORPREP */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgN << 2) | iAsBx,
+	/* TFORCALL */ (0 << 7) | (0 << 6) | (OpArgN << 4) | (OpArgU << 2) | iABC,
+	/* TFORLOOP */ (0 << 7) | (1 << 6) | (OpArgR << 4) | (OpArgN << 2) | iAsBx,
+	/* SETLIST */ (0 << 7) | (0 << 6) | (OpArgU << 4) | (OpArgU << 2) | iABC,
+	/* CLOSURE */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgN << 2) | iABx,
+	/* VARARG */ (0 << 7) | (1 << 6) | (OpArgU << 4) | (OpArgN << 2) | iABC,
+	/* EXTRAARG */ (0 << 7) | (0 << 6) | (OpArgU << 4) | (OpArgU << 2) | iAx,
 }
 
-// testITMode reports whether the opcode uses L.top as an implicit operand
-// (the 'it' column of luaP_opmodes in lopcodes.c).
+func getOpMode(m int) int     { return int(opModes[m] & 3) }
+func getBMode(m int) int      { return int((opModes[m] >> 4) & 3) }
+func getCMode(m int) int      { return int((opModes[m] >> 2) & 3) }
+func testAMode(m int) bool    { return opModes[m]&(1<<6) != 0 }
+func testTMode(op int) bool   { return opModes[op]&(1<<7) != 0 }
+
+// testITMode: 5.3 has no separate 'it' column; open ops use B/C==0.
 func testITMode(op int) bool {
 	switch op {
-	case OP_CALL, OP_TAILCALL, OP_RETURN, OP_SETLIST, OP_VARARG, OP_VARARGPREP:
+	case OP_CALL, OP_TAILCALL, OP_RETURN, OP_SETLIST, OP_VARARG:
 		return true
 	}
 	return false
 }
 
-// isIT reports whether the instruction uses L.top (lopcodes.h).
-func isIT(i Instruction) bool { return testITMode(i.Op) && i.B == 0 }
+func isIT(i Instruction) bool {
+	switch i.Op {
+	case OP_CALL, OP_TAILCALL:
+		return i.B == 0
+	case OP_RETURN, OP_VARARG:
+		return i.B == 0
+	case OP_SETLIST:
+		return i.B == 0
+	}
+	return false
+}

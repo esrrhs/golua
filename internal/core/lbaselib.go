@@ -20,7 +20,7 @@ import (
 // local to the base library.
 const (
 	baseGName   = "_G"
-	baseVersion = "Lua 5.4"
+	baseVersion = "Lua 5.3"
 )
 
 // ---------------------------------------------------------------------

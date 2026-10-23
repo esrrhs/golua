@@ -35,15 +35,15 @@ const (
 	pkCPathVar = "LUA_CPATH" // LUA_CPATH_VAR
 
 	// pkPathDefault is LUA_PATH_DEFAULT from luaconf.h (Unix flavour).
-	pkPathDefault = "/usr/local/share/lua/5.4/?.lua;" +
-		"/usr/local/share/lua/5.4/?/init.lua;" +
-		"/usr/local/lib/lua/5.4/?.lua;" +
-		"/usr/local/lib/lua/5.4/?/init.lua;" +
+	pkPathDefault = "/usr/local/share/lua/5.3/?.lua;" +
+		"/usr/local/share/lua/5.3/?/init.lua;" +
+		"/usr/local/lib/lua/5.3/?.lua;" +
+		"/usr/local/lib/lua/5.3/?/init.lua;" +
 		"./?.lua;./?/init.lua"
 
 	// pkCPathDefault is LUA_CPATH_DEFAULT from luaconf.h (Unix flavour).
-	pkCPathDefault = "/usr/local/lib/lua/5.4/?.so;" +
-		"/usr/local/lib/lua/5.4/loadall.so;" +
+	pkCPathDefault = "/usr/local/lib/lua/5.3/?.so;" +
+		"/usr/local/lib/lua/5.3/loadall.so;" +
 		"./?.so"
 
 	// pkLibFail is LIB_FAIL for a build without dynamic loading.

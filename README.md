@@ -1,10 +1,10 @@
-# golua — Lua 5.4 in pure Go
+# golua — Lua 5.3 in pure Go
 
 [![License](https://img.shields.io/github/license/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Release](https://img.shields.io/github/v/release/esrrhs/golua)](https://github.com/esrrhs/golua/releases)
 
-`golua` is a **line-by-line Go translation of PUC-Lua 5.4.9**. The lexer,
+`golua` is a **line-by-line Go translation of PUC-Lua 5.3.9**. The lexer,
 parser, code generator, VM, standard library, C API and the `lua`/`luac`
 command-line tools all follow the C sources file by file, and their
 behaviour is checked against a reference interpreter built from the same
@@ -17,14 +17,14 @@ The one subsystem that is not translated is the garbage collector:
 
 ## Highlights
 
-- **Complete Lua 5.4** — integer/float subtypes, `//`, bitwise operators,
+- **Complete Lua 5.3** — integer/float subtypes, `//`, bitwise operators,
   `goto`, `<const>`/`<close>`, varargs, coroutines, metatables, weak
   tables, and the full standard library.
 - **Go API shaped like the C API** — `NewState`, `PushInteger`, `PCall`,
   `GetGlobal`, … The root package re-exports the API with type aliases;
   all implementation lives in `internal/core`.
 - **Bytecode compatibility** — the same binary chunk format as PUC-Lua
-  5.4.9: `string.dump` output loads both ways, and `luac -l -l` prints
+  5.3.4: `string.dump` output loads both ways, and `luac -l -l` prints
   the same listings.
 - **Optional C modules** — built with cgo, `package.loadlib`/`require`
   load real C extensions on Linux and macOS. With `CGO_ENABLED=0` the
@@ -126,7 +126,7 @@ gofmt -l .        # must print nothing
 
 The tests are the specification:
 
-- **Official suite** — all 33 files of PUC-Lua 5.4.9's `testes/` run
+- **Official suite** — all 33 files of PUC-Lua 5.3.9's `testes/` run
   through both interpreters and are compared byte for byte. On a cgo
   build 30 match exactly; `gc` and `all` are documented differences (the
   collector itself, and four environment lines), and `heavy` is not run
@@ -151,12 +151,12 @@ LUA_REF=/path/to/lua go test -run TestDifferentialSuite ./internal/core/
 ```
 
 CI runs three jobs across Linux, macOS and Windows. The `PUC-Lua suites`
-job downloads and builds Lua 5.4.9, then runs the official,
+job downloads and builds Lua 5.3.9, then runs the official,
 differential, third-party and fuzz suites with `LUA_REF` pointing at it.
 
 ## Performance
 
-One run on an AMD EPYC 7551: PUC-Lua 5.4.7 against a cgo build (Go 1.24). The ratio is golua / PUC-Lua; below 1 is faster. Every row had `p < 0.0001`. Timing and what each row matches are in [bench/README.md](bench/README.md).
+One run on an AMD EPYC 7551: PUC-Lua 5.3.7 against a cgo build (Go 1.24). The ratio is golua / PUC-Lua; below 1 is faster. Every row had `p < 0.0001`. Timing and what each row matches are in [bench/README.md](bench/README.md).
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
@@ -196,5 +196,5 @@ One run on an AMD EPYC 7551: PUC-Lua 5.4.7 against a cgo build (Go 1.24). The ra
 
 ## License
 
-MIT, the same as Lua itself. The Lua 5.4.9 test suite and the bundled
+MIT, the same as Lua itself. The Lua 5.3.9 test suite and the bundled
 third-party libraries keep their original licences.

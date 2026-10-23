@@ -1,4 +1,4 @@
-// Translation of lundump.c / lundump.h (PUC-Lua 5.4.9): load precompiled
+// Translation of lundump.c / lundump.h (PUC-Lua 5.3.4): load precompiled
 // chunks.
 //
 // The file format is *the official one*, byte for byte, so chunks dumped
@@ -37,8 +37,8 @@ const (
 	dmpData      = "\x19\x93\r\n\x1a\n" // LUAC_DATA
 	dmpInt       = 0x5678               // LUAC_INT
 	dmpNum       = 370.5                // LUAC_NUM
-	// LUAC_VERSION for Lua 5.4: ((504 / 100) * 16) + 504 % 100
-	dmpVersion = 0x54
+	// LUAC_VERSION for Lua 5.3: major*16+minor = 0x53
+	dmpVersion = 0x53
 	dmpFormat  = 0 // LUAC_FORMAT: the official format
 )
 
@@ -397,133 +397,86 @@ func luaU_loadBinary(L *State, data []byte, chunkname, mode string) error {
 
 // Instruction modes (lopcodes.c luaP_opmodes, only the mode field).
 const (
+
+// Instruction formats used by pack/unpack (5.3: dmpIABC, dmpIABx, dmpIAsBx, dmpIAx — no isJ).
+const (
 	dmpIABC = iota
 	dmpIABx
 	dmpIAsBx
 	dmpIAx
-	dmpIsJ
 )
 
-// dmpOpModes is the 'mode' column of luaP_opmodes, in opcode order.
-// (lopcodes.go does not export it, so it is repeated here.)
+// dmpOpModes is getOpMode for each opcode (5.3.4 order).
 var dmpOpModes = [NUM_OPCODES]int{
-	dmpIABC,  /* OP_MOVE */
-	dmpIAsBx, /* OP_LOADI */
-	dmpIAsBx, /* OP_LOADF */
-	dmpIABx,  /* OP_LOADK */
-	dmpIABx,  /* OP_LOADKX */
-	dmpIABC,  /* OP_LOADFALSE */
-	dmpIABC,  /* OP_LFALSESKIP */
-	dmpIABC,  /* OP_LOADTRUE */
-	dmpIABC,  /* OP_LOADNIL */
-	dmpIABC,  /* OP_GETUPVAL */
-	dmpIABC,  /* OP_SETUPVAL */
-	dmpIABC,  /* OP_GETTABUP */
-	dmpIABC,  /* OP_GETTABLE */
-	dmpIABC,  /* OP_GETI */
-	dmpIABC,  /* OP_GETFIELD */
-	dmpIABC,  /* OP_SETTABUP */
-	dmpIABC,  /* OP_SETTABLE */
-	dmpIABC,  /* OP_SETI */
-	dmpIABC,  /* OP_SETFIELD */
-	dmpIABC,  /* OP_NEWTABLE */
-	dmpIABC,  /* OP_SELF */
-	dmpIABC,  /* OP_ADDI */
-	dmpIABC,  /* OP_ADDK */
-	dmpIABC,  /* OP_SUBK */
-	dmpIABC,  /* OP_MULK */
-	dmpIABC,  /* OP_MODK */
-	dmpIABC,  /* OP_POWK */
-	dmpIABC,  /* OP_DIVK */
-	dmpIABC,  /* OP_IDIVK */
-	dmpIABC,  /* OP_BANDK */
-	dmpIABC,  /* OP_BORK */
-	dmpIABC,  /* OP_BXORK */
-	dmpIABC,  /* OP_SHRI */
-	dmpIABC,  /* OP_SHLI */
-	dmpIABC,  /* OP_ADD */
-	dmpIABC,  /* OP_SUB */
-	dmpIABC,  /* OP_MUL */
-	dmpIABC,  /* OP_MOD */
-	dmpIABC,  /* OP_POW */
-	dmpIABC,  /* OP_DIV */
-	dmpIABC,  /* OP_IDIV */
-	dmpIABC,  /* OP_BAND */
-	dmpIABC,  /* OP_BOR */
-	dmpIABC,  /* OP_BXOR */
-	dmpIABC,  /* OP_SHL */
-	dmpIABC,  /* OP_SHR */
-	dmpIABC,  /* OP_MMBIN */
-	dmpIABC,  /* OP_MMBINI */
-	dmpIABC,  /* OP_MMBINK */
-	dmpIABC,  /* OP_UNM */
-	dmpIABC,  /* OP_BNOT */
-	dmpIABC,  /* OP_NOT */
-	dmpIABC,  /* OP_LEN */
-	dmpIABC,  /* OP_CONCAT */
-	dmpIABC,  /* OP_CLOSE */
-	dmpIABC,  /* OP_TBC */
-	dmpIsJ,   /* OP_JMP */
-	dmpIABC,  /* OP_EQ */
-	dmpIABC,  /* OP_LT */
-	dmpIABC,  /* OP_LE */
-	dmpIABC,  /* OP_EQK */
-	dmpIABC,  /* OP_EQI */
-	dmpIABC,  /* OP_LTI */
-	dmpIABC,  /* OP_LEI */
-	dmpIABC,  /* OP_GTI */
-	dmpIABC,  /* OP_GEI */
-	dmpIABC,  /* OP_TEST */
-	dmpIABC,  /* OP_TESTSET */
-	dmpIABC,  /* OP_CALL */
-	dmpIABC,  /* OP_TAILCALL */
-	dmpIABC,  /* OP_RETURN */
-	dmpIABC,  /* OP_RETURN0 */
-	dmpIABC,  /* OP_RETURN1 */
-	dmpIABx,  /* OP_FORLOOP */
-	dmpIABx,  /* OP_FORPREP */
-	dmpIABx,  /* OP_TFORPREP */
-	dmpIABC,  /* OP_TFORCALL */
-	dmpIABx,  /* OP_TFORLOOP */
-	dmpIABC,  /* OP_SETLIST */
-	dmpIABx,  /* OP_CLOSURE */
-	dmpIABC,  /* OP_VARARG */
-	dmpIABC,  /* OP_VARARGPREP */
-	dmpIAx,   /* OP_EXTRAARG */
+	dmpIABC,  /* MOVE */
+	dmpIABx,  /* LOADK */
+	dmpIABx,  /* LOADKX */
+	dmpIABC,  /* LOADBOOL */
+	dmpIABC,  /* LOADNIL */
+	dmpIABC,  /* GETUPVAL */
+	dmpIABC,  /* GETTABUP */
+	dmpIABC,  /* GETTABLE */
+	dmpIABC,  /* SETTABUP */
+	dmpIABC,  /* SETUPVAL */
+	dmpIABC,  /* SETTABLE */
+	dmpIABC,  /* NEWTABLE */
+	dmpIABC,  /* SELF */
+	dmpIABC,  /* ADD */
+	dmpIABC,  /* SUB */
+	dmpIABC,  /* MUL */
+	dmpIABC,  /* MOD */
+	dmpIABC,  /* POW */
+	dmpIABC,  /* DIV */
+	dmpIABC,  /* IDIV */
+	dmpIABC,  /* BAND */
+	dmpIABC,  /* BOR */
+	dmpIABC,  /* BXOR */
+	dmpIABC,  /* SHL */
+	dmpIABC,  /* SHR */
+	dmpIABC,  /* UNM */
+	dmpIABC,  /* BNOT */
+	dmpIABC,  /* NOT */
+	dmpIABC,  /* LEN */
+	dmpIABC,  /* CONCAT */
+	dmpIAsBx, /* JMP */
+	dmpIABC,  /* EQ */
+	dmpIABC,  /* LT */
+	dmpIABC,  /* LE */
+	dmpIABC,  /* TEST */
+	dmpIABC,  /* TESTSET */
+	dmpIABC,  /* CALL */
+	dmpIABC,  /* TAILCALL */
+	dmpIABC,  /* RETURN */
+	dmpIAsBx, /* FORLOOP */
+	dmpIAsBx, /* FORPREP */
+	dmpIABC,  /* TFORCALL */
+	dmpIAsBx, /* TFORLOOP */
+	dmpIABC,  /* SETLIST */
+	dmpIABx,  /* CLOSURE */
+	dmpIABC,  /* VARARG */
+	dmpIAx,   /* EXTRAARG */
 }
 
-// Bit positions and sizes of the packed instruction (lopcodes.h):
-//
-//	Op: bits 0-6    A: bits 7-14    k: bit 15    B: bits 16-23    C: bits 24-31
-//	Bx: bits 15-31 (17 bits)        Ax: bits 7-31 (25 bits)        sJ: bits 7-31
+// 5.3 bit layout (lopcodes.h): OP:6 A:8 C:9 B:9
 const (
 	instrPosOp  = 0
-	instrPosA   = 7
-	instrPosK   = 15
-	instrPosB   = 16
-	instrPosC   = 24
-	instrPosBx  = instrPosK // 15
-	instrPosAx  = instrPosA // 7
-	instrPosSJ  = instrPosA // 7
-	instrSizeOp = 7
+	instrPosA   = 6
+	instrPosC   = 14
+	instrPosB   = 23
+	instrPosBx  = 14
+	instrPosAx  = 6
+	instrSizeOp = 6
 	instrSizeA  = 8
-	instrSizeB  = 8
-	instrSizeC  = 8
-	instrSizeK  = 1
-	instrSizeBx = 17
-	instrSizeAx = 25
-	instrSizeSJ = 25
+	instrSizeB  = 9
+	instrSizeC  = 9
+	instrSizeBx = 18
+	instrSizeAx = 26
 )
 
-// instrMask returns a mask with 'size' one bits (MASK1 in lopcodes.h).
 func instrMask(size int) uint32 { return uint32(1)<<uint(size) - 1 }
 
-// packInstruction encodes an instruction as a 32-bit word, the way
-// PUC-Lua stores it (CREATE_ABCk / CREATE_ABx / CREATE_Ax / CREATE_sJ).
-//
-// The Go fields already hold the *encoded* operands: 'B' is the Bx
-// value for iABx/iAsBx (already biased by OFFSET_sBx for sBx) and the
-// raw sJ for isJ; 'A' is the Ax value for iAx.
+// packInstruction encodes an instruction as a 32-bit word (5.3 CREATE_*).
+// For dmpIAsBx, B already holds the biased Bx (sbx + OFFSET_sBx).
 func packInstruction(i Instruction) uint32 {
 	if i.Op < 0 || i.Op >= NUM_OPCODES {
 		return uint32(i.Op) << instrPosOp
@@ -534,8 +487,7 @@ func packInstruction(i Instruction) uint32 {
 		w = uint32(i.Op)<<instrPosOp |
 			uint32(i.A)<<instrPosA |
 			uint32(i.B)<<instrPosB |
-			uint32(i.C)<<instrPosC |
-			uint32(i.K)<<instrPosK
+			uint32(i.C)<<instrPosC
 	case dmpIABx, dmpIAsBx:
 		w = uint32(i.Op)<<instrPosOp |
 			uint32(i.A)<<instrPosA |
@@ -543,17 +495,16 @@ func packInstruction(i Instruction) uint32 {
 	case dmpIAx:
 		w = uint32(i.Op)<<instrPosOp |
 			uint32(i.A)<<instrPosAx
-	case dmpIsJ:
-		w = uint32(i.Op)<<instrPosOp |
-			uint32(i.B)<<instrPosSJ |
-			uint32(i.K)<<instrPosK
 	}
 	return w
 }
 
-// unpackInstruction decodes a 32-bit word (GET_OPCODE / GETARG_A ...).
+// unpackInstruction decodes a 32-bit word (5.3 GET_OPCODE / GETARG_*).
 func unpackInstruction(w uint32) Instruction {
 	op := int(w>>instrPosOp) & int(instrMask(instrSizeOp))
+	if op < 0 || op >= NUM_OPCODES {
+		return Instruction{Op: op}
+	}
 	switch dmpOpModes[op] {
 	case dmpIABC:
 		return Instruction{
@@ -561,7 +512,6 @@ func unpackInstruction(w uint32) Instruction {
 			A:  int(w>>instrPosA) & int(instrMask(instrSizeA)),
 			B:  int(w>>instrPosB) & int(instrMask(instrSizeB)),
 			C:  int(w>>instrPosC) & int(instrMask(instrSizeC)),
-			K:  int(w>>instrPosK) & int(instrMask(instrSizeK)),
 		}
 	case dmpIABx, dmpIAsBx:
 		return Instruction{
@@ -569,16 +519,11 @@ func unpackInstruction(w uint32) Instruction {
 			A:  int(w>>instrPosA) & int(instrMask(instrSizeA)),
 			B:  int(w>>instrPosBx) & int(instrMask(instrSizeBx)),
 		}
-	case dmpIAx:
+	default: /* dmpIAx */
 		return Instruction{
 			Op: op,
 			A:  int(w>>instrPosAx) & int(instrMask(instrSizeAx)),
 		}
 	}
-	/* isJ */
-	return Instruction{
-		Op: op,
-		B:  int(w>>instrPosSJ) & int(instrMask(instrSizeSJ)),
-		K:  int(w>>instrPosK) & int(instrMask(instrSizeK)),
-	}
 }
+

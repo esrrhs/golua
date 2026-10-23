@@ -1,4 +1,4 @@
-// Package lua is a pure-Go implementation of PUC-Lua 5.4.
+// Package lua is a pure-Go implementation of PUC-Lua 5.3.4.
 //
 // This is the public API surface. All implementation lives in
 // internal/core; this file re-exports the types, constants, and

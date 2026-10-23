@@ -34,7 +34,7 @@ const (
 )
 
 // version is LUA_COPYRIGHT, which is what lua.c's 'print_version' writes
-// for '-v'.  This port is a translation of PUC-Lua 5.4.9, whose licence
+// for '-v'.  This port is a translation of PUC-Lua 5.3.4, whose licence
 // (MIT) requires the notice to be kept, and the standalone interpreter
 // has to be indistinguishable from the reference one anyway: scripts
 // spawn 'lua -v' and look for "PUC-Rio" in its output.

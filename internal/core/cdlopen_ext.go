@@ -45,7 +45,7 @@ const (
 	luaGCGen        = 10
 	luaGCInc        = 11
 
-	luaVersionNum = 504
+	luaVersionNum = 503
 )
 
 // ---------------------------------------------------------------------

@@ -1,6 +1,6 @@
 /*
 ** lua.h -- the C API of this port, so that an extension written against
-** Lua 5.4 can be compiled against it.
+** Lua 5.3 can be compiled against it.
 **
 ** This is a header for *extensions*, not for the port itself: the port
 ** is pure Go and never includes it.  Every function declared here is
@@ -8,7 +8,7 @@
 ** the usual way -- without linking liblua -- resolves these names at
 ** load time, which is what dlopen does when the host exports them.
 **
-** Types and constants follow PUC-Lua 5.4 so that source written for it
+** Types and constants follow PUC-Lua 5.3 so that source written for it
 ** compiles unchanged.
 */
 #ifndef lua_h
@@ -18,15 +18,15 @@
 #include <stddef.h>
 
 #define LUA_VERSION_MAJOR   "5"
-#define LUA_VERSION_MINOR   "4"
-#define LUA_VERSION_RELEASE "9"
-#define LUA_VERSION         "Lua 5.4"
-#define LUA_VERSION_NUM     504
-#define LUA_RELEASE         "Lua 5.4.9"
+#define LUA_VERSION_MINOR   "3"
+#define LUA_VERSION_RELEASE "4"
+#define LUA_VERSION         "Lua 5.3"
+#define LUA_VERSION_NUM     503
+#define LUA_RELEASE         "Lua 5.3.4"
 
 /* The rest of the version block, which PUC-Lua spells in lua.h. */
-#define LUA_VERSION_RELEASE_NUM		(LUA_VERSION_NUM * 100 + 9)
-#define LUA_COPYRIGHT	LUA_RELEASE "  Copyright (C) 1994-2026 Lua.org, PUC-Rio"
+#define LUA_VERSION_RELEASE_NUM		(LUA_VERSION_NUM * 100 + 4)
+#define LUA_COPYRIGHT	LUA_RELEASE "  Copyright (C) 1994-2017 Lua.org, PUC-Rio"
 #define LUA_AUTHORS	"R. Ierusalimschy, L. H. de Figueiredo, W. Celes"
 
 /* The four bytes at the start of a precompiled chunk (lundump.h). An

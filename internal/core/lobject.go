@@ -422,6 +422,32 @@ var log2Table = [256]byte{
 	8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
 }
 
+// luaO_int2fb converts an integer to a "floating point byte" (lobject.c, 5.3).
+func luaO_int2fb(x uint32) int {
+	e := 0 /* exponent */
+	if x < 8 {
+		return int(x)
+	}
+	for x >= (8 << 4) { /* coarse steps */
+		x = (x + 0xf) >> 4 /* x = ceil(x / 16) */
+		e += 4
+	}
+	for x >= (8 << 1) { /* fine steps */
+		x = (x + 1) >> 1 /* x = ceil(x / 2) */
+		e++
+	}
+	return int(((x) - 8) | uint32(e+1)<<3)
+}
+
+// luaO_fb2int converts a "floating point byte" back to an integer (lobject.c, 5.3).
+func luaO_fb2int(x int) int {
+	e := (x >> 3) & 0x1f
+	if e == 0 {
+		return x
+	}
+	return ((x & 7) + 8) << uint(e-1)
+}
+
 // luaO_ceillog2 computes ceil(log2(x)).
 func luaO_ceillog2(x uint32) int {
 	l := 0

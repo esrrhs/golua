@@ -70,9 +70,9 @@ func (L *State) Error2(format string, args ...any) int {
 // include/lua.h.
 const luaLNumSizes = unsafe.Sizeof(int64(0))*16 + unsafe.Sizeof(float64(0))
 
-// luaVersionNumGo is LUA_VERSION_NUM (5.4 → 504). Kept here so non-cgo builds
+// luaVersionNumGo is LUA_VERSION_NUM (5.3 → 503). Kept here so non-cgo builds
 // can check versions the same way as the C export in cdlopen.go.
-const luaVersionNumGo = 504
+const luaVersionNumGo = 503
 
 // CheckVersion_ checks that the running core matches the version and
 // numeric type sizes the caller was compiled against (luaL_checkversion_,

@@ -1,6 +1,6 @@
-// Translation of ldump.c (PUC-Lua 5.4.9): save precompiled chunks.
+// Translation of ldump.c (PUC-Lua 5.3.4): save precompiled chunks.
 //
-// The bytes produced here are a standard Lua 5.4 binary chunk: the
+// The bytes produced here are a standard Lua 5.3 binary chunk: the
 // header (signature, version, LUAC_DATA, the sizes of Instruction /
 // lua_Integer / lua_Number, LUAC_INT and LUAC_NUM), then the main
 // prototype. Multi-byte values are written in little-endian order,
