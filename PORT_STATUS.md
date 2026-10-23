@@ -29,7 +29,7 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 2. **main/all.lua** not automated (SIGINT harness).
 3. Darwin `*.darwin.expected` may be stale.
 4. Warnf plumbing for Go-GC `__gc` errors; `ResetThread` Go helper (not in 5.3 C API).
-5. Differential suite still has residual diffs (os/date/io locale & DST, debug name quirks, inventory).
+5. Differential suite Linux: **56/83 identical** (timeouts fixed); residual ~26 (os/io/date/debug/utf8/inventory/hooks).
 6. Further per-file polish (`lparser`, `lstate`, stdlibs) vs C.
 
 ## Paths
