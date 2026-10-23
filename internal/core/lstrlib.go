@@ -1255,9 +1255,13 @@ func strGetFormat(L *State, strfrmt string, i int) (string, int) {
 	return form, p
 }
 
-// strNumber2StrX is the C99 hexadecimal floating-point formatter
-// (lua_number2strx).  Unlike the C89 fallback it honours flags, width
-// and precision.
+// strNumber2StrX implements lua_number2strx for this port.
+//
+// 5.3.4 luaconf.h (non-LUA_USE_C89) defines lua_number2strx as sprintf
+// with the full form, so flags/width/precision are honoured — same as
+// a typical Linux PUC build.  The C89 fallback in lstrlib.c rejects
+// non-bare "%a"/"%A"; we match the C99 path used by differential tests
+// and formatfuzz, not that fallback.
 func strNumber2StrX(L *State, form string, x float64) string {
 	/* parse the conversion specification: '%[flags][width][.prec]a|A' */
 	var flags string
@@ -1490,16 +1494,10 @@ func strHexFloat(x float64, prec int, alt bool) string {
 	return sb.String()
 }
 
-// strQuoteFloat serializes a float in a way that Lua can read back
-// (quotefloat).
+// strQuoteFloat formats a float for %q the 5.3.4 addliteral way:
+// lua_number2strx(..., "%a", n) — Inf/NaN via LUA_NUMBER_FMT / %a,
+// not 5.4 quotefloat's "1e9999" / "(0/0)".
 func strQuoteFloat(L *State, n float64) string {
-	if math.IsInf(n, 1) {
-		return "1e9999"
-	} else if math.IsInf(n, -1) {
-		return "-1e9999"
-	} else if math.IsNaN(n) {
-		return "(0/0)"
-	}
 	return strNumber2StrX(L, "%a", n)
 }
 
@@ -1735,9 +1733,8 @@ func strFormat(L *State) int {
 			/* 5.3.4: 'p' (and 'nLlh') is an invalid format option. */
 			return L.Error2("invalid option '%%%c' to 'format'", form[len(form)-1])
 		case 'q':
-			if len(form) > 2 { /* modifiers? */
-				return L.Error2("specifier '%%q' cannot have modifiers")
-			}
+			/* 5.3.4: addliteral(L, &b, arg) — form width/flags ignored,
+			   not 5.4's "specifier '%q' cannot have modifiers". */
 			strAddLiteral(L, b, arg)
 		case 's':
 			s := strToLString(L, arg)
