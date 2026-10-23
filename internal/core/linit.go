@@ -1,4 +1,4 @@
-// Translation of linit.c (PUC-Lua 5.4): opening the standard libraries.
+// Translation of linit.c (PUC-Lua 5.3.4): opening the standard libraries.
 //
 // The only adaptation is that 'luaL_requiref' is spelled out here as
 // (*State).RequireF, because lauxlib.c is translated without it.
@@ -18,8 +18,8 @@ var loadedLibs = []struct {
 	{"string", OpenString},
 	{"math", OpenMath},
 	{"utf8", OpenUTF8},
-	{"bit32", OpenBit32},
 	{"debug", OpenDebug},
+	{"bit32", OpenBit32},
 }
 
 // RequireF adds the module 'modname' to package.loaded, calling 'openf'

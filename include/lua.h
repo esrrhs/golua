@@ -325,9 +325,7 @@ int  lua_error(lua_State *L);
 int  lua_next(lua_State *L, int idx);
 void lua_concat(lua_State *L, int n);
 void lua_len(lua_State *L, int idx);
-/* 5.3 is lua_resume(L,from,narg); this port keeps the 5.4 out-param form
- * so callers can learn the result count (same as PUC 5.4). */
-int  lua_resume(lua_State *L, lua_State *from, int nargs, int *nresults);
+int  lua_resume(lua_State *L, lua_State *from, int nargs);
 int  lua_status(lua_State *L);
 int  lua_isyieldable(lua_State *L);
 int  lua_yieldk(lua_State *L, int nresults, lua_KContext ctx, lua_KFunction k);

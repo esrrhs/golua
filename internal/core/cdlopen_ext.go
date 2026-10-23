@@ -58,29 +58,6 @@ func lua_close(p *C.lua_State) { stateOf(p).Close() }
 //export lua_newthread
 func lua_newthread(p *C.lua_State) *C.lua_State { return stateOf(p).NewThread().statePtr() }
 
-//export lua_resetthread
-func lua_resetthread(p *C.lua_State) C.int { return C.int(stateOf(p).ResetThread()) }
-
-//export lua_closethread
-func lua_closethread(p *C.lua_State, from *C.lua_State) C.int {
-	L := stateOf(p)
-	var f *State
-	if from != nil {
-		f = stateOf(from)
-	}
-	/* PUC-Lua's lua_closethread always resets the thread. A suspended
-	   one used to be left alone here, which leaked its goroutine and —
-	   after a C yield — left an entry in cgoParked that permanently
-	   suppressed cgoOnQuiet. */
-	ok, errVal := coCloseThread(L, f)
-	if !ok {
-		L.checkStack(1)
-		L.stack[L.top] = errVal
-		L.top++
-		return C.int(LUA_ERRRUN)
-	}
-	return C.int(LUA_OK)
-}
 
 //export lua_atpanic
 func lua_atpanic(p *C.lua_State, f C.lua_CFunction) C.lua_CFunction {
@@ -170,24 +147,14 @@ func lua_rawsetp(p *C.lua_State, idx C.int, k unsafe.Pointer) {
 	stateOf(p).RawSetP(idxInt(idx), k)
 }
 
-//export lua_getiuservalue
-func lua_getiuservalue(p *C.lua_State, idx, n C.int) C.int {
-	return C.int(stateOf(p).GetUserValue(idxInt(idx), int(n)))
-}
-
-//export lua_setiuservalue
-func lua_setiuservalue(p *C.lua_State, idx, n C.int) C.int {
-	return C.int(stateOf(p).SetUserValue(idxInt(idx), int(n)))
-}
-
 //export lua_getuservalue
 func lua_getuservalue(p *C.lua_State, idx C.int) C.int {
-	return lua_getiuservalue(p, idx, 1)
+	return C.int(stateOf(p).GetUserValue(idxInt(idx), 1))
 }
 
 //export lua_setuservalue
 func lua_setuservalue(p *C.lua_State, idx C.int) C.int {
-	return lua_setiuservalue(p, idx, 1)
+	return C.int(stateOf(p).SetUserValue(idxInt(idx), 1))
 }
 
 //export lua_pushthread
@@ -340,26 +307,14 @@ func init() {
 }
 
 //export lua_resume
-func lua_resume(p *C.lua_State, from *C.lua_State, nargs C.int, nres *C.int) C.int {
+func lua_resume(p *C.lua_State, from *C.lua_State, nargs C.int) C.int {
 	L := stateOf(p)
 	var f *State
 	if from != nil {
 		f = stateOf(from)
 	}
-	stat := L.Resume(f, int(nargs))
-	/* Results (and the error object) are already on L: Resume matches
-	   C's lua_resume, including the from == nil case. The main thread
-	   has no coRuntime, so fall back to GetTop for nresults. */
-	n := 0
-	if L.co != nil {
-		n = len(L.co.vals)
-	} else {
-		n = L.GetTop()
-	}
-	if nres != nil {
-		*nres = C.int(n)
-	}
-	return C.int(stat)
+	/* Lua 5.3.4: results stay on L; callers use lua_gettop. No nresults out-param. */
+	return C.int(L.Resume(f, int(nargs)))
 }
 
 //export lua_status
@@ -404,32 +359,7 @@ func lua_dump(p *C.lua_State, writer C.lua_Writer, data unsafe.Pointer, strip C.
 	return C.int(status)
 }
 
-// ---------------------------------------------------------------------
-// warnings
-// ---------------------------------------------------------------------
-
-//export lua_warning
-func lua_warning(p *C.lua_State, msg *C.char, tocont C.int) {
-	stateOf(p).Warning(C.GoString(msg), tocont != 0)
-}
-
-//export lua_setwarnf
-func lua_setwarnf(p *C.lua_State, f C.lua_WarnFunction, ud unsafe.Pointer) {
-	L := stateOf(p)
-	if f == nil {
-		L.SetWarnFunction(nil, nil)
-		return
-	}
-	L.SetWarnFunction(func(L *State, msg string, tocont bool) {
-		cs := C.CString(msg)
-		defer C.free(unsafe.Pointer(cs))
-		cgoEnter()
-		defer cgoLeave()
-		C.cdl_call_warnf(f, cs, cBool(tocont), ud)
-	}, nil)
-}
-
-// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // hooks and the debug API
 // ---------------------------------------------------------------------
 
@@ -885,8 +815,6 @@ func lua_setcstacklimit(p *C.lua_State, limit C.uint) C.int {
 	return C.int(LUAI_MAXCCALLS)
 }
 
-//export lua_toclose
-func lua_toclose(p *C.lua_State, idx C.int) { stateOf(p).CloseSlotAt(idxInt(idx)) }
 
 //export lua_getupvalue
 func lua_getupvalue(p *C.lua_State, funcindex, n C.int) *C.char {

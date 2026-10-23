@@ -29,7 +29,6 @@ const (
 	TM_LE
 	TM_CONCAT
 	TM_CALL
-	TM_CLOSE
 	TM_N
 )
 
@@ -42,7 +41,7 @@ var luaT_eventname = [TM_N]string{
 	"__div", "__idiv",
 	"__band", "__bor", "__bxor", "__shl", "__shr",
 	"__unm", "__bnot", "__lt", "__le",
-	"__concat", "__call", "__close",
+	"__concat", "__call",
 }
 
 var luaT_typenames = [LUA_NUMTYPES + 3]string{

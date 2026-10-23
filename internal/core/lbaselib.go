@@ -64,20 +64,6 @@ func basePrint(L *State) int {
 	return 0
 }
 
-func baseWarn(L *State) int {
-	n := L.GetTop()  /* number of arguments */
-	L.CheckString(1) /* at least one argument */
-	for i := 2; i <= n; i++ {
-		L.CheckString(i) /* make sure all arguments are strings */
-	}
-	for i := 1; i < n; i++ { /* compose warning */
-		s, _ := L.ToString(i)
-		luaE_warning(L, s, true)
-	}
-	s, _ := L.ToString(n)
-	luaE_warning(L, s, false) /* close warning */
-	return 0
-}
 
 // ---------------------------------------------------------------------
 // tonumber
@@ -766,7 +752,6 @@ var baseFuncs = []Reg{
 	{Name: "pairs", Func: basePairs},
 	{Name: "pcall", Func: basePCall},
 	{Name: "print", Func: basePrint},
-	{Name: "warn", Func: baseWarn},
 	{Name: "rawequal", Func: baseRawEqual},
 	{Name: "rawlen", Func: baseRawLen},
 	{Name: "rawget", Func: baseRawGet},

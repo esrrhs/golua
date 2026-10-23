@@ -1,9 +1,7 @@
-// Translation of lfunc.h / lfunc.c (PUC-Lua 5.4).
+// Translation of lfunc.h / lfunc.c (PUC-Lua 5.3.4).
 //
 // Upvalues keep a stack index instead of a pointer, because the Go stack
-// slice may be reallocated. To-be-closed variables are kept in a plain
-// list of stack indices on the state (in C they ride on the upvalue
-// list; the semantics are the same).
+// slice may be reallocated.
 package core
 
 // UpVal is an upvalue: either open (pointing to a stack slot) or closed.
@@ -78,39 +76,6 @@ func luaF_findupval(L *State, level int) *UpVal {
 	return uv
 }
 
-// checkclosemth raises an error if the value at 'level' has no __close
-// metamethod (lfunc.c).
-func checkclosemth(L *State, level int) {
-	tm := luaT_gettmbyobj(L, &L.stack[level], TM_CLOSE)
-	if ttisnil(tm) { /* no metamethod? */
-		idx := level - L.ci.funcIdx /* variable index */
-		vname := luaG_findlocal(L, L.ci, idx)
-		if vname == "" {
-			vname = "?"
-		}
-		luaG_runerror(L, "variable '%s' got a non-closable value", vname)
-	}
-}
-
-// luaF_newtbcupval marks a stack slot as to-be-closed (lfunc.c).
-func luaF_newtbcupval(L *State, level int) {
-	if isFalse(&L.stack[level]) {
-		return /* false doesn't need to be closed */
-	}
-	checkclosemth(L, level) /* value must have a close method */
-	// keep the list sorted by increasing index
-	i := 0
-	for i < len(L.tbclist) && L.tbclist[i] < level {
-		i++
-	}
-	if i < len(L.tbclist) && L.tbclist[i] == level {
-		return
-	}
-	L.tbclist = append(L.tbclist, 0)
-	copy(L.tbclist[i+1:], L.tbclist[i:])
-	L.tbclist[i] = level
-}
-
 // luaF_unlinkupval removes an upvalue from the open list (lfunc.c).
 func luaF_unlinkupval(L *State, uv *UpVal) {
 	for i, u := range L.openupval {
@@ -137,55 +102,9 @@ func luaF_closeupval(L *State, level int) {
 	}
 }
 
-// callclosemethod calls the __close metamethod of a variable (lfunc.c).
-func callclosemethod(L *State, obj *Value, err *Value, yy bool) {
-	top := L.top
-	tm := luaT_gettmbyobj(L, obj, TM_CLOSE)
-	L.checkStack(3)
-	L.stack[top] = *tm
-	L.stack[top+1] = *obj
-	L.stack[top+2] = *err
-	L.top = top + 3
-	if yy {
-		luaD_call(L, top, 0)
-	} else {
-		luaD_callnoyield(L, top, 0)
-	}
-}
-
-// prepcallclosemth prepares the error object and calls __close (lfunc.c).
-func prepcallclosemth(L *State, level int, status int, yy bool) {
-	uv := &L.stack[level]
-	var errObj *Value
-	if status == closeKTOP {
-		errObj = &L.g.nilValue /* error object is nil */
-	} else {
-		luaD_seterrorobj(L, status, level+1)
-		errObj = &L.stack[level+1]
-	}
-	callclosemethod(L, uv, errObj, yy)
-}
-
-// luaF_close closes tbc variables and upvalues up from 'level' (lfunc.c).
-func luaF_close(L *State, level int, status int, yy bool) {
-	// Closing can call a metamethod that yields. On a synchronous
-	// coroutine that has to happen on the coroutine's goroutine, and
-	// it has to happen before the to-be-closed list is consumed:
-	// the opcode is re-executed there from the start.
-	if len(L.tbclist) > 0 {
-		L.migrateNested()
-	}
-	luaF_closeupval(L, level) /* first, close the upvalues */
-	for len(L.tbclist) > 0 {
-		idx := L.tbclist[len(L.tbclist)-1]
-		if idx < level {
-			break
-		}
-		L.tbclist = L.tbclist[:len(L.tbclist)-1]
-		/* C does *not* clear the status here: every pending variable
-		   is closed with the original error as its 2nd argument. */
-		prepcallclosemth(L, idx, status, yy)
-	}
+// luaF_close closes every open upvalue at or above 'level' (lfunc.c, Lua 5.3.4).
+func luaF_close(L *State, level int) {
+	luaF_closeupval(L, level)
 }
 
 // luaF_getlocalname returns the name of a local variable (lfunc.c).

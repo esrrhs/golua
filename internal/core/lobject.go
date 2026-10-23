@@ -362,7 +362,6 @@ type Upvaldesc struct {
 	name    *TString
 	instack byte
 	idx     byte
-	kind    byte // RDKTOCLOSE etc.
 }
 
 // LocVar describes a local variable (debug information).

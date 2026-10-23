@@ -227,7 +227,7 @@ static int l_types(lua_State *L) {
   lua_pushliteral(L, "s");                   /* +5: string */
   lua_createtable(L, 0, 0);                  /* +6: table */
   lua_pushcfunction(L, l_types);             /* +7: function */
-  lua_newuserdatauv(L, 4, 0);                /* +8: userdata */
+  lua_newuserdata(L, 4);                /* +8: userdata */
   lua_newthread(L);                          /* +9: thread */
   for (i = 1; i <= 9; i++) {
     luaL_addstring(&b, lua_typename(L, lua_type(L, base + i)));
@@ -413,69 +413,17 @@ static int l_where(lua_State *L) {
 /* G. userdata with several user values                                */
 /* ------------------------------------------------------------------ */
 
-static int l_muv(lua_State *L) {
-  int n = (int)luaL_checkinteger(L, 1);
-  int ud, i, base;
-  luaL_Buffer b;
-  void *p = lua_newuserdatauv(L, 8, n);   /* n user values */
-  memset(p, 0, 8);
-  ud = lua_gettop(L);
-  for (i = 1; i <= n; i++) {
-    lua_pushvalue(L, 1 + i);              /* the i-th value argument */
-    lua_setiuservalue(L, ud, i);
-  }
-  luaL_buffinit(L, &b);
-  base = lua_gettop(L);
-  for (i = n; i >= 1; i--) {
-    if (lua_getiuservalue(L, ud, i) == LUA_TNONE) {
-      luaL_addstring(&b, "none");
-    } else {
-      luaL_addstring(&b, luaL_tolstring(L, -1, NULL));
-      lua_pop(L, 2);            /* the tostring and the user value */
-    }
-    luaL_addchar(&b, ' ');
-  }
-  /* one past the end must be LUA_TNONE */
-  luaL_addstring(&b, lua_getiuservalue(L, ud, n + 1) == LUA_TNONE ? "TNONE" : "?");
-  lua_pop(L, 1);
-  lua_settop(L, base);
-  luaL_pushresult(&b);
-  return 1;
-}
 
 /* ------------------------------------------------------------------ */
 /* H. to-be-closed from C: lua_toclose and lua_closeslot               */
 /* ------------------------------------------------------------------ */
 
-static int l_toclose(lua_State *L) {
-  lua_settop(L, 1);
-  luaL_checktype(L, 1, LUA_TTABLE);
-  lua_toclose(L, 1);        /* closed when this C function returns */
-  lua_pushliteral(L, "returned");
-  return 2;                 /* the value itself, then "returned" */
-}
 
-static int l_closeslot(lua_State *L) {
-  lua_settop(L, 1);
-  luaL_checktype(L, 1, LUA_TTABLE);
-  lua_toclose(L, 1);        /* lua_closeslot needs a marked slot */
-  lua_pushliteral(L, "mid");
-  lua_closeslot(L, 1);      /* closes it now; the slot becomes nil */
-  lua_pushliteral(L, "after");
-  return 2;                 /* "mid" and "after" */
-}
 
 /* ------------------------------------------------------------------ */
 /* I. warnings                                                         */
 /* ------------------------------------------------------------------ */
 
-static int l_warn(lua_State *L) {
-  lua_warning(L, "from C", 0);
-  lua_warning(L, "continued", 1);
-  lua_warning(L, "done", 0);
-  lua_pushliteral(L, "warned");
-  return 1;
-}
 
 /* ------------------------------------------------------------------ */
 /* J. hooks installed from C, and the debug API                        */
@@ -602,19 +550,19 @@ static int l_join(lua_State *L) {
 
 static int l_coro(lua_State *L) {
   lua_State *co;
-  int nres = 0, st;
+  int st;
   luaL_Buffer b;
   lua_settop(L, 0);
   co = lua_newthread(L);                 /* 1: the thread */
   lua_getglobal(co, "capi_cobody");
   luaL_buffinit(L, &b);
-  st = lua_resume(co, L, 0, &nres);
+  st = lua_resume(co, L, 0);
   luaL_addstring(&b, luaL_tolstring(co, -1, NULL));
   lua_pop(co, 2);
   luaL_addchar(&b, ' ');
   luaL_addstring(&b, st == LUA_YIELD ? "yield" : (st == LUA_OK ? "ok" : "err"));
   luaL_addchar(&b, ' ');
-  st = lua_resume(co, L, 0, &nres);
+  st = lua_resume(co, L, 0);
   luaL_addstring(&b, luaL_tolstring(co, -1, NULL));
   lua_pop(co, 2);
   luaL_addchar(&b, ' ');
@@ -643,19 +591,6 @@ static int l_xmove(lua_State *L) {
 }
 
 /* lua_resetthread: a thread that has run can be given a new body */
-static int l_reset(lua_State *L) {
-  lua_State *co;
-  int st1, st2;
-  lua_settop(L, 0);
-  co = lua_newthread(L);
-  lua_getglobal(co, "capi_cobody2");
-  lua_call(co, 0, 0);                 /* runs it to the end */
-  st1 = lua_status(co);
-  st2 = lua_resetthread(co);
-  lua_settop(L, 0);
-  lua_pushfstring(L, "%d %d %d", st1, st2, lua_status(co));
-  return 1;
-}
 
 /* ------------------------------------------------------------------ */
 /* L. the buffer API, in full                                          */
@@ -767,12 +702,9 @@ static const luaL_Reg funcs[] = {
   /* E */ {"refs", l_refs},
   /* F */ {"auxlib", l_auxlib}, {"checks", l_checks},
           {"argerr", l_argerr}, {"typeerr", l_typeerr}, {"where", l_where},
-  /* G */ {"muv", l_muv},
-  /* H */ {"toclose", l_toclose}, {"closeslot", l_closeslot},
-  /* I */ {"warn", l_warn},
   /* J */ {"hook", l_hook}, {"info", l_info}, {"locals", l_locals},
           {"upvalues", l_upvalues}, {"join", l_join},
-  /* K */ {"coro", l_coro}, {"xmove", l_xmove}, {"reset", l_reset},
+  /* K */ {"coro", l_coro}, {"xmove", l_xmove},
   /* L */ {"buf", l_buf}, {"bufsize", l_bufsize},
   /* M */ {"stream", l_stream},
   /* N */ {"limits", l_limits},

@@ -225,10 +225,6 @@ func lua_rotate(p *C.lua_State, idx, n C.int) { stateOf(p).Rotate(int(idx), int(
 //export lua_copy
 func lua_copy(p *C.lua_State, from, to C.int) { stateOf(p).Copy(int(from), int(to)) }
 
-//export lua_closeslot
-func lua_closeslot(p *C.lua_State, idx C.int) {
-	stateOf(p).CloseSlot(idxInt(idx))
-}
 
 //export lua_pop
 func lua_pop(p *C.lua_State, n C.int) { stateOf(p).SetTop(-int(n) - 1) }
@@ -626,13 +622,11 @@ func lua_compare(p *C.lua_State, a, b, op C.int) C.int {
 //export lua_arith
 func lua_arith(p *C.lua_State, op C.int) { stateOf(p).Arith(int(op)) }
 
-//export lua_newuserdatauv
-func lua_newuserdatauv(p *C.lua_State, sz C.size_t, uv C.int) unsafe.Pointer {
-	return cgoNewUserBlock(stateOf(p), int(sz), int(uv))
-}
-
 //export lua_newuserdata
-func lua_newuserdata(p *C.lua_State, sz C.size_t) unsafe.Pointer { return lua_newuserdatauv(p, sz, 1) }
+func lua_newuserdata(p *C.lua_State, sz C.size_t) unsafe.Pointer {
+	/* Lua 5.3.4: one user value (like C lua_newuserdata). */
+	return cgoNewUserBlock(stateOf(p), int(sz), 1)
+}
 
 // ---------------------------------------------------------------------
 // load, call, error

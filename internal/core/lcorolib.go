@@ -16,7 +16,6 @@
 //     of lvm.go.  It is also what makes a C continuation possible: the
 //     C frame that asked for one is still there when the resume comes.
 //
-//  2. There is no lua_closethread; coClose asks the coroutine goroutine
 //     to unwind itself through the same request channel.
 package core
 
@@ -257,110 +256,6 @@ func coPushValue(L *State, v Value) {
 	L.top++
 }
 
-// coCloseThread is the port's lua_closethread(co, from): it asks the
-// coroutine goroutine to unwind itself. A coroutine that has already
-// finished has no goroutine left to talk to, and is simply reported as
-// closed (which is what C does too).
-//
-// Like C, the thread being closed inherits the C-call depth of the
-// closer (getCcalls(from)), so that a chain of 'coroutine.close' calls
-// is reported as a C stack overflow instead of recursing forever.
-func coCloseThread(co, from *State) (bool, Value) {
-	if co.isMain {
-		return false, strValue(co, "cannot close a running coroutine")
-	}
-	if from != nil {
-		co.nCcalls = from.nCcalls & 0xffff
-	}
-	if co.co != nil && co.co.sync && !co.co.live && !co.dead {
-		st := co.unwindForClose()
-		co.dead = true
-		if st == LUA_OK {
-			return true, Value{}
-		}
-		if len(co.co.vals) > 0 {
-			return false, co.co.vals[0]
-		}
-		if co.top > 1 && !ttisnil(&co.stack[1]) {
-			return false, co.stack[1]
-		}
-		return false, strValue(co, "error closing coroutine")
-	}
-	if co.dead || co.co == nil {
-		/* The coroutine already terminated, so there is no goroutine
-		   left to unwind. C runs luaE_resetthread(co, co->status), which
-		   closes any pending variable and reports the thread's status:
-		   a coroutine that ended with an error reports that error once
-		   again (false + message), and the report is then consumed --
-		   the second close returns true.
-
-		   Put lastErr back on the stack first so seterrorobj / __close
-		   see the body error (with its source:line). A raising __close
-		   still replaces it. */
-		if co.hasErr && !ttisnil(&co.lastErr) {
-			co.checkStack(1)
-			if co.top < 1 {
-				setnilvalue(&co.stack[0])
-				co.top = 1
-			}
-			co.stack[co.top] = co.lastErr
-			co.top++
-		}
-		st := co.resetThreadStatus(int(co.status))
-		if st != LUA_OK {
-			co.hasErr = false
-			if co.top > 1 && !ttisnil(&co.stack[1]) {
-				return false, co.stack[1]
-			}
-			if !ttisnil(&co.lastErr) {
-				return false, co.lastErr
-			}
-			return false, strValue(co, "error closing coroutine")
-		}
-		co.hasErr = false
-		return true, Value{} /* already closed */
-	}
-	var resp resumeResp
-	select {
-	case <-co.co.done:
-		co.dead = true
-		return true, Value{}
-	case co.co.req <- resumeReq{kind: reqClose}:
-		select {
-		case resp = <-co.co.resp:
-		case <-co.co.done:
-			co.dead = true
-			return true, Value{}
-		}
-	}
-	co.dead = true
-	if resp.status == LUA_OK {
-		return true, Value{}
-	}
-	if len(resp.vals) > 0 {
-		return false, resp.vals[0]
-	}
-	return false, strValue(co, "error closing coroutine")
-}
-
-func coClose(L *State) int {
-	co := coGetCo(L)
-	status := coAuxStatus(L, co)
-	switch status {
-	case cosDead, cosYield:
-		ok, errval := coCloseThread(co, L)
-		if ok {
-			L.PushBoolean(true)
-			return 1
-		}
-		L.PushBoolean(false)
-		coPushValue(L, errval) /* move error message */
-		return 2
-	default: /* normal or running coroutine */
-		return L.Error2("cannot close a %s coroutine", coStatNames[status])
-	}
-}
-
 var coFuncs = []Reg{
 	{Name: "create", Func: coCreate},
 	{Name: "resume", Func: coResume},
@@ -369,7 +264,6 @@ var coFuncs = []Reg{
 	{Name: "wrap", Func: coWrap},
 	{Name: "yield", Func: coYield},
 	{Name: "isyieldable", Func: coYieldable},
-	{Name: "close", Func: coClose},
 }
 
 // OpenCoroutine opens the coroutine library (luaopen_coroutine).

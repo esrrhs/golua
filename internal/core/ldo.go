@@ -62,33 +62,12 @@ func moveresults(L *State, res, nres, wanted int) {
 // luaD_poscall finishes a function call (ldo.c).
 func luaD_poscall(L *State, ci *CallInfo, nres int) {
 	wanted := ci.nresults
-	if hastocloseCfunc(wanted) { /* to-be-closed variables pending? */
-		/* C does this inside 'moveresults', before the results are moved
-		   and with the return hook saved until after the '__close's --
-		   a hook cannot run with a close still pending. */
-		wanted = decodeNresults(wanted)
-		ci.nresults = wanted
-		luaF_close(L, ci.funcIdx+1, closeKTOP, true)
-		if L.hookmask != 0 {
-			rethook(L, ci, nres)
-		}
-		moveresults(L, ci.funcIdx, nres, wanted)
-		L.ci = ci.prev
-		return
-	}
 	if L.hookmask != 0 {
 		rethook(L, ci, nres)
 	}
 	moveresults(L, ci.funcIdx, nres, wanted)
 	L.ci = ci.prev
 }
-
-// hastocloseCfunc, codeNresults and decodeNresults are lapi.h's: whether
-// a C frame has to-be-closed variables pending, which PUC-Lua encodes in
-// the sign of the frame's 'nresults'.
-func hastocloseCfunc(n int) bool { return n < LUA_MULTRET }
-func codeNresults(n int) int     { return -n - 3 }
-func decodeNresults(n int) int   { return -n - 3 }
 
 // prepCallInfo prepares the CallInfo for a new call (ldo.c).
 func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
@@ -417,50 +396,11 @@ func luaE_checkcstack(L *State) {
 	}
 }
 
-// closeP carries the arguments of 'closepaux' (ldo.c).
-type closeP struct {
-	level  int
-	status int
-}
-
-// luaD_closeprotected closes to-be-closed variables, running the close
-// methods under a protected call (ldo.c).
-//
-// A '__close' that raises must not escape: C keeps closing the remaining
-// variables, remembering the newest error, and only then hands that error
-// to the enclosing protected call. Closing unprotected instead makes an
-// 'error' inside '__close' bypass the 'pcall' around the function that
-// declared the variable.
-//
-// 'yy' is the one C's own 'closepaux' does not take: it passes 0, and
-// that is the half this function is named for -- a '__close' run from
-// here may not suspend.  It is what 'luaE_resetthread' asks, and so what
-// 'coroutine.close' asks: with a pending to-be-closed variable whose
-// '__close' yields, 'coroutine.close' answers
-// false, "attempt to yield across a C-call boundary", and not the value
-// the metamethod yielded.
-//
-// The other half is C's 'finishpcallk', which runs '__close' with 'yy' 1,
-// and it is the half an ordinary 'pcall' in a yieldable thread takes:
-// 'locals.lua' suspends three times inside the '__close' of a function
-// that raised, and that is meant to work.  C tells the two apart by
-// which function does the closing -- 'closepaux' or 'finishpcallk' --
-// and this port, whose 'pcall' is one function either way, takes it as an
-// argument instead.
+// luaD_closeprotected closes open upvalues from 'level' (5.3.4 has no
+// to-be-closed variables). Status/yy are ignored; kept for call-site churn.
 func luaD_closeprotected(L *State, level, status int, yy bool) int {
-	oldCI := L.ci
-	oldAllowHooks := L.allowhook
-	for { /* keep closing upvalues until no more errors */
-		pcl := &closeP{level: level, status: status}
-		st := L.rawRunProtected(func() { luaF_close(L, pcl.level, pcl.status, yy) })
-		if st == LUA_OK { /* no more errors? */
-			return pcl.status
-		}
-		/* an error occurred; restore saved state and repeat */
-		L.ci = oldCI
-		L.allowhook = oldAllowHooks
-		status = st
-	}
+	luaF_close(L, level)
+	return status
 }
 
 // luaD_seterrorobj puts the error object at 'oldtop' (ldo.c).

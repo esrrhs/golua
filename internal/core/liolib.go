@@ -1411,31 +1411,26 @@ var ioLib = []Reg{
 	{"write", ioWrite},
 }
 
-var ioMeth = []Reg{
-	{"read", ioFRead},
-	{"write", ioFWrite},
-	{"lines", ioFLines},
-	{"flush", ioFFlush},
-	{"seek", ioFSeek},
+// ioFlib is flib in liolib.c: file methods + __gc / __tostring on the metatable.
+var ioFlib = []Reg{
 	{"close", ioFClose2},
+	{"flush", ioFFlush},
+	{"lines", ioFLines},
+	{"read", ioFRead},
+	{"seek", ioFSeek},
 	{"setvbuf", ioFSetVBuf},
-}
-
-// ioMetaMeth are the metamethods of file handles; "__index" is filled
-// below with the method table (createmeta).
-var ioMetaMeth = []Reg{
+	{"write", ioFWrite},
 	{"__gc", ioFGc},
-	{"__close", ioFGc},
 	{"__tostring", ioFToString},
 }
 
-// ioCreateMeta creates the metatable of file handles (createmeta).
+// ioCreateMeta creates the metatable of file handles (createmeta, Lua 5.3.4).
+// Methods live on the metatable itself; __index = metatable. No __close.
 func ioCreateMeta(L *State) {
-	ioNewMetaTable(L, ioFileHandle) /* metatable for file handles */
-	L.SetFuncs(ioMetaMeth, 0)       /* add metamethods to new metatable */
-	L.CreateTable(0, len(ioMeth))   /* create method table */
-	L.SetFuncs(ioMeth, 0)           /* add file methods to method table */
-	L.SetField(-2, "__index")       /* metatable.__index = method table */
+	ioNewMetaTable(L, ioFileHandle) /* create metatable for file handles */
+	L.PushValue(-1)                 /* push metatable */
+	L.SetField(-2, "__index")       /* metatable.__index = metatable */
+	L.SetFuncs(ioFlib, 0)           /* add file methods to new metatable */
 	L.Pop(1)                        /* pop metatable */
 }
 

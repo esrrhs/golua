@@ -13,6 +13,3 @@ func math2Fmod(x, y float64) float64      { return libmFmod(x, y) }
 func math2Pow(x, y float64) float64       { return libmPow(x, y) }
 func math2Sqrt(x float64) float64         { return libmSqrt(x) }
 
-// CLOSEKTOP: close to-be-closed variables up to the top of the stack
-// (lfunc.h).
-const closeKTOP = -1

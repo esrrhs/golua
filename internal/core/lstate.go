@@ -203,7 +203,6 @@ type State struct {
 	baseCI    CallInfo
 
 	openupval []*UpVal // open upvalues of this stack
-	tbclist   []int    // to-be-closed variables (stack indices)
 
 	// Last two-string concatenation. Tight loops commonly join the same
 	// pair on every iteration; short-string interning finds the same
@@ -583,13 +582,9 @@ func (L *State) Close() {
 	   running Close — so it is skipped below and marked dead at the end. */
 	caller := L
 	L = L.g.mainthread /* only the main thread can be closed */
-	/* C's close_state: luaF_close on the main stack, then
-	   luaC_freeallobjects. Child coroutine __close is not run — a
-	   suspended wrap whose __close is os.exit must be collectable
-	   without being force-closed. Finalizers first; then stop any
-	   remaining child goroutines (with closing set, they exit without
-	   running __close). */
-	_ = luaD_closeprotected(L, 0, closeKTOP, false)
+	/* C's close_state (5.3.4): luaF_close on the main stack, then
+	   free. Stop child goroutines; no to-be-closed / __close. */
+	luaF_close(L, 0)
 	L.closeFinalizers()
 	L.status = LUA_OK
 	L.dead = true
@@ -785,47 +780,15 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 			case *yieldAbort, *migrateAbort:
 				panic(x)
 			case *closeSignal:
-				/* C's lua_closethread -> luaE_resetthread: unwind the
-				   CallInfo list and close every to-be-closed variable
-				   still pending on the coroutine's stack.  A '__close'
-				   that raises must not stop the others: C keeps going
-				   and reports the *newest* error.
-
-				   When the whole state is closing, C does not run child
-				   __close at all — skip luaD_closeprotected so a
-				   suspended wrap whose __close is os.exit is not run. */
+				/* Go-only: unwind a child goroutine on state Close.
+				   Lua 5.3.4 has no lua_closethread / to-be-closed. */
 				closed = true
-				if L.g.closing {
-					status = LUA_OK
-					L.top = 1
-					L.co.vals = L.co.vals[:0]
-					return
-				}
+				status = LUA_OK
 				L.ci = &L.baseCI
 				L.baseCI.next = nil
-				L.baseCI.funcIdx = 0
-				L.baseCI.top = 1
-				L.baseCI.callstatus = CIST_C
-				setnilvalue(&L.stack[0])
-				L.errfunc = 0
-				st := int(L.status)
-				if st == LUA_YIELD {
-					st = LUA_OK
-				}
-				L.status = LUA_OK /* so that it can run the metamethods */
-				st = luaD_closeprotected(L, 1, st, false)
-				if st != LUA_OK {
-					status = st
-					luaD_seterrorobj(L, st, 1)
-					L.co.vals = append(L.co.vals[:0], L.stack[1])
-				} else {
-					status = LUA_OK
-					L.top = 1
-					/* no results at all: 'L.co.vals' is a scratch slice
-					   that the last yield filled, and a stale value
-					   handed to the resumer would be a real one. */
-					L.co.vals = L.co.vals[:0]
-				}
+				luaF_close(L, 0)
+				L.top = 1
+				L.co.vals = L.co.vals[:0]
 				return
 			case *luaError:
 				status = x.status
@@ -919,7 +882,6 @@ func (L *State) ResetThread() int {
 	L.top = 1
 	L.ci = &L.baseCI
 	L.baseCI.next = nil
-	L.tbclist = nil
 	L.openupval = nil
 	L.errfunc = 0
 	L.nCcalls = 0
