@@ -171,6 +171,7 @@ func ttisboolean(v *Value) bool { return ttype(v) == LUA_TBOOLEAN }
 func ttisfalse(v *Value) bool   { return v.tt == LUA_VFALSE }
 func ttistrue(v *Value) bool    { return v.tt == LUA_VTRUE }
 func isFalse(v *Value) bool     { return ttisfalse(v) || ttisnil(v) }
+func l_isfalse(v *Value) bool    { return isFalse(v) }
 func bvalue(v *Value) bool      { return v.tt == LUA_VTRUE }
 
 func ttisnumber(v *Value) bool  { return ttype(v) == LUA_TNUMBER }

@@ -427,6 +427,74 @@ func savestate(L *State, ci *CallInfo, pc int) {
 }
 
 // luaV_execute is the main interpreter loop (lvm.c).
+func rk(base int, k []Value, x int) *Value {
+	if ISK(x) {
+		return &k[INDEXK(x)]
+	}
+	return nil // signal register — caller uses base+x
+}
+
+func rkVal(L *State, base int, k []Value, x int) *Value {
+	if ISK(x) {
+		return &k[INDEXK(x)]
+	}
+	return &L.stack[base+x]
+}
+
+// forprep53 is the 5.3 FORPREP semantics (lvm.c).
+func forprep53(L *State, ra int) {
+	init := &L.stack[ra]
+	plimit := &L.stack[ra+1]
+	pstep := &L.stack[ra+2]
+	var ilimit int64
+	var stopnow bool
+	if ttisinteger(init) && ttisinteger(pstep) && forlimit53(plimit, &ilimit, ivalue(pstep), &stopnow) {
+		initv := int64(0)
+		if !stopnow {
+			initv = ivalue(init)
+		}
+		setivalue(plimit, ilimit)
+		setivalue(init, initv-ivalue(pstep))
+	} else {
+		var ninit, nlimit, nstep float64
+		if !tonumberns(plimit, &nlimit) {
+			luaG_runerror(L, "'for' limit must be a number")
+		}
+		setfltvalue(plimit, nlimit)
+		if !tonumberns(pstep, &nstep) {
+			luaG_runerror(L, "'for' step must be a number")
+		}
+		setfltvalue(pstep, nstep)
+		if !tonumberns(init, &ninit) {
+			luaG_runerror(L, "'for' initial value must be a number")
+		}
+		setfltvalue(init, ninit-nstep)
+	}
+}
+
+// forlimit53 converts the limit for a 5.3 numerical for (lvm.c forlimit).
+func forlimit53(obj *Value, p *int64, step int64, stopnow *bool) bool {
+	*stopnow = false
+	if !tointegerns(obj, p) {
+		var n float64
+		if !tonumberns(obj, &n) {
+			return false
+		}
+		if n > 0 {
+			*p = LUA_MAXINTEGER
+			if step < 0 {
+				*stopnow = true
+			}
+		} else {
+			*p = LUA_MININTEGER
+			if step >= 0 {
+				*stopnow = true
+			}
+		}
+	}
+	return true
+}
+
 func luaV_execute(L *State, ci *CallInfo) {
 	prevVM := L.inVM
 	L.inVM = true
@@ -437,42 +505,22 @@ func luaV_execute(L *State, ci *CallInfo) {
 	}()
 	var (
 		cl   *LClosure
-		p    *Proto
 		code []Instruction
 		k    []Value
 		pc   int
 	)
-
-	// 'trap' is the local copy of ci.trap (lvm.c). It tells whether the
-	// loop must stop at the next instruction to run the hooks.
 	var trap bool
-
 	restart := true
 	for restart {
 		restart = false
 		cl = clLvalue(&L.stack[ci.funcIdx])
-		p = cl.p
-		code = p.code
-		k = p.k
+		code = cl.p.code
+		k = cl.p.k
 		pc = ci.savedpc
 		trap = L.hookmask != 0
 		if trap {
 			trap = luaG_tracecall(L, ci)
 		}
-		/* A tail-recursive countdown ('return f(n - 1, acc + 1)')
-		   otherwise restarts this loop once per call. Fold it into one
-		   straight iteration and land on its RETURN. */
-		if pc == 0 && !trap && L.hookmask == 0 && len(code) >= 9 && code[0].Op == OP_EQI {
-			if npc, ok := fastCountTail(L, ci, cl, code); ok {
-				pc = npc
-			}
-		}
-		if pc == 0 && !trap && L.hookmask == 0 && len(code) == 15 && code[0].Op == OP_LTI {
-			if npc, ok := fastFibCall(L, ci, cl, code); ok {
-				pc = npc
-			}
-		}
-
 	loop:
 		for {
 			if trap {
@@ -486,352 +534,103 @@ func luaV_execute(L *State, ci *CallInfo) {
 			switch i.Op {
 			case OP_MOVE:
 				L.stack[ra] = L.stack[base+i.B]
-			case OP_LOADI:
-				setivalue(&L.stack[ra], int64(i.B-OFFSET_sBx))
-			case OP_LOADF:
-				setfltvalue(&L.stack[ra], float64(i.B-OFFSET_sBx))
 			case OP_LOADK:
 				L.stack[ra] = k[i.B]
 			case OP_LOADKX:
 				L.stack[ra] = k[code[pc].A]
 				pc++
-			case OP_LOADFALSE:
-				setbfvalue(&L.stack[ra])
-			case OP_LFALSESKIP:
-				setbfvalue(&L.stack[ra])
-				pc++
-			case OP_LOADTRUE:
-				setbtvalue(&L.stack[ra])
+			case OP_LOADBOOL:
+				if i.B != 0 {
+					setbtvalue(&L.stack[ra])
+				} else {
+					setbfvalue(&L.stack[ra])
+				}
+				if i.C != 0 {
+					pc++
+				}
 			case OP_LOADNIL:
-				for j := 0; j <= i.B; j++ {
-					setnilvalue(&L.stack[ra+j])
+				for b := i.B; b >= 0; b-- {
+					setnilvalue(&L.stack[ra])
+					ra++
 				}
 			case OP_GETUPVAL:
 				L.stack[ra] = *upvalValue(cl.upvals[i.B])
-			case OP_SETUPVAL:
-				*upvalValue(cl.upvals[i.B]) = L.stack[ra]
 			case OP_GETTABUP:
 				upval := upvalValue(cl.upvals[i.B])
-				key := &k[i.C]
-				slot := vmFastGet(L, upval, key)
+				rc := rkVal(L, base, k, i.C)
+				slot := vmFastGet(L, upval, rc)
 				if slot != nil && !isempty(slot) {
 					L.stack[ra] = *slot
 				} else {
 					savestate(L, ci, pc)
-					luaV_finishget(L, upval, key, ra, slot)
+					luaV_finishget(L, upval, rc, ra, slot)
+					base = ci.funcIdx + 1
 				}
 			case OP_GETTABLE:
 				rb := &L.stack[base+i.B]
-				rc := &L.stack[base+i.C]
+				rc := rkVal(L, base, k, i.C)
 				slot := vmFastGet(L, rb, rc)
 				if slot != nil && !isempty(slot) {
 					L.stack[ra] = *slot
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, rc, ra, slot)
-				}
-			case OP_GETI:
-				rb := &L.stack[base+i.B]
-				slot := vmFastGeti(rb, int64(i.C))
-				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
-				} else {
-					var key Value
-					setivalue(&key, int64(i.C))
-					savestate(L, ci, pc)
-					luaV_finishget(L, rb, &key, ra, slot)
-				}
-			case OP_GETFIELD:
-				rb := &L.stack[base+i.B]
-				key := &k[i.C]
-				slot := vmFastGet(L, rb, key)
-				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
-				} else {
-					savestate(L, ci, pc)
-					luaV_finishget(L, rb, key, ra, slot)
+					base = ci.funcIdx + 1
 				}
 			case OP_SETTABUP:
 				upval := upvalValue(cl.upvals[i.A])
-				key := &k[i.B]
-				var rc *Value
-				if i.K != 0 {
-					rc = &k[i.C]
-				} else {
-					rc = &L.stack[base+i.C]
-				}
-				slot := vmFastGet(L, upval, key)
+				rb := rkVal(L, base, k, i.B)
+				rc := rkVal(L, base, k, i.C)
+				slot := vmFastGet(L, upval, rb)
 				if slot != nil && !isempty(slot) {
 					*slot = *rc
 				} else {
 					savestate(L, ci, pc)
-					luaV_finishset(L, upval, key, rc, slot)
+					luaV_finishset(L, upval, rb, rc, slot)
+					base = ci.funcIdx + 1
 				}
+			case OP_SETUPVAL:
+				*upvalValue(cl.upvals[i.B]) = L.stack[ra]
 			case OP_SETTABLE:
-				rt := &L.stack[ra]
-				rb := &L.stack[base+i.B]
-				var rc *Value
-				if i.K != 0 {
-					rc = &k[i.C]
-				} else {
-					rc = &L.stack[base+i.C]
-				}
-				slot := vmFastGet(L, rt, rb)
+				rb := rkVal(L, base, k, i.B)
+				rc := rkVal(L, base, k, i.C)
+				slot := vmFastGet(L, &L.stack[ra], rb)
 				if slot != nil && !isempty(slot) {
 					*slot = *rc
 				} else {
 					savestate(L, ci, pc)
-					luaV_finishset(L, rt, rb, rc, slot)
-				}
-			case OP_SETI:
-				rt := &L.stack[ra]
-				var rc *Value
-				if i.K != 0 {
-					rc = &k[i.C]
-				} else {
-					rc = &L.stack[base+i.C]
-				}
-				slot := vmFastGeti(rt, int64(i.B))
-				if slot != nil && !isempty(slot) {
-					*slot = *rc
-				} else {
-					var key Value
-					setivalue(&key, int64(i.B))
-					savestate(L, ci, pc)
-					luaV_finishset(L, rt, &key, rc, slot)
-				}
-			case OP_SETFIELD:
-				rt := &L.stack[ra]
-				key := &k[i.B]
-				var rc *Value
-				if i.K != 0 {
-					rc = &k[i.C]
-				} else {
-					rc = &L.stack[base+i.C]
-				}
-				slot := vmFastGet(L, rt, key)
-				if slot != nil && !isempty(slot) {
-					*slot = *rc
-				} else {
-					savestate(L, ci, pc)
-					luaV_finishset(L, rt, key, rc, slot)
+					luaV_finishset(L, &L.stack[ra], rb, rc, slot)
+					base = ci.funcIdx + 1
 				}
 			case OP_NEWTABLE:
-				b := i.B
-				c := i.C
-				if b > 0 {
-					b = 1 << (b - 1)
-				}
-				if i.K != 0 {
-					c += code[pc].A * (MAXARG_C + 1)
-				}
-				pc++ /* skip extra argument */
-				L.top = ra + 1
-				var t *Table
-				if b == 0 && c == 4 {
-					t = luaH_newarray4(L)
-				} else {
-					t = luaH_new(L)
-				}
+				b, c := i.B, i.C
+				t := luaH_new(L)
 				sethvalue(&L.stack[ra], t)
-				if (b != 0 || c != 0) && !(b == 0 && c == 4) {
-					luaH_resize(L, t, uint32(c), uint32(b))
-				}
-				/* PUC-Lua runs a collector step -- and with it any
-				   '__gc' metamethod -- right after an allocation; see
-				   gcAfterAlloc.  A metamethod can run arbitrary Lua
-				   code, so the frame, the stack and the instruction
-				   pointer are re-read: 'continue' does that, as
-				   'Protect' does in C. */
-				if L.gcAfterAlloc() {
-					continue
+				if b != 0 || c != 0 {
+					luaH_resize(L, t, uint32(luaO_fb2int(b)), uint32(luaO_fb2int(c)))
 				}
 			case OP_SELF:
 				rb := &L.stack[base+i.B]
-				var rc *Value
-				if i.K != 0 {
-					rc = &k[i.C]
-				} else {
-					rc = &L.stack[base+i.C]
-				}
 				L.stack[ra+1] = *rb
+				rc := rkVal(L, base, k, i.C)
 				slot := vmFastGet(L, rb, rc)
 				if slot != nil && !isempty(slot) {
 					L.stack[ra] = *slot
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, rc, ra, slot)
+					base = ci.funcIdx + 1
 				}
-			case OP_ADDI, OP_ADDK, OP_SUBK, OP_MULK, OP_MODK, OP_POWK,
-				OP_DIVK, OP_IDIVK, OP_BANDK, OP_BORK, OP_BXORK:
-				/* Fast path, not in lvm.c: an integer register with
-				   an integer immediate or constant can never reach a
-				   metamethod and always produces an integer, so the
-				   arithmetic is done here instead of walking
-				   opCodeToArith -> luaO_rawarith -> intarith. It is
-				   spelled out inside the loop rather than moved to a
-				   helper because the compiler will not inline such a
-				   helper (it is over the cost budget as soon as it
-				   can raise), and the call would cost about as much
-				   as the operation itself. */
-				rb := &L.stack[base+i.B]
-				if rb.tt == LUA_VNUMINT && i.Op != OP_POWK && i.Op != OP_DIVK {
-					v2 := int64(i.C - OFFSET_sC) /* the OP_ADDI immediate */
-					if i.Op != OP_ADDI {
-						kc := &k[i.C]
-						if kc.tt != LUA_VNUMINT {
-							vmArithK(L, ci, i, ra, base, k, &pc)
-							break
-						}
-						v2 = kc.i
-					}
-					/* '%' and '//' can raise (division by zero), so the
-					   current instruction must be saved first: that is
-					   what puts the right line in the error message. */
-					if i.Op == OP_MODK || i.Op == OP_IDIVK {
-						savestate(L, ci, pc)
-					}
-					pc++
-					switch i.Op {
-					case OP_ADDI, OP_ADDK:
-						setivalue(&L.stack[ra], rb.i+v2)
-					case OP_SUBK:
-						setivalue(&L.stack[ra], rb.i-v2)
-					case OP_MULK:
-						setivalue(&L.stack[ra], rb.i*v2)
-					case OP_MODK:
-						if uint64(v2)+1 <= 1 {
-							setivalue(&L.stack[ra], luaV_mod(L, rb.i, v2))
-						} else {
-							setivalue(&L.stack[ra], luaV_modcore(rb.i, v2))
-						}
-					case OP_IDIVK:
-						if uint64(v2)+1 <= 1 {
-							setivalue(&L.stack[ra], luaV_idiv(L, rb.i, v2))
-						} else {
-							setivalue(&L.stack[ra], luaV_idivcore(rb.i, v2))
-						}
-					case OP_BANDK:
-						setivalue(&L.stack[ra], rb.i&v2)
-					case OP_BORK:
-						setivalue(&L.stack[ra], rb.i|v2)
-					case OP_BXORK:
-						setivalue(&L.stack[ra], rb.i^v2)
-					}
-					break
+			case OP_ADD, OP_SUB, OP_MUL, OP_MOD, OP_POW, OP_DIV, OP_IDIV,
+				OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR:
+				rb := rkVal(L, base, k, i.B)
+				rc := rkVal(L, base, k, i.C)
+				if !vmBinOp(L, i.Op, &L.stack[ra], rb, rc) {
+					savestate(L, ci, pc)
+					tm := binOpTM(i.Op)
+					luaT_trybinTM(L, rb, rc, ra, tm)
+					base = ci.funcIdx + 1
 				}
-				vmArithK(L, ci, i, ra, base, k, &pc)
-			case OP_SHRI, OP_SHLI:
-				rb := &L.stack[base+i.B]
-				ic := int64(i.C - OFFSET_sC)
-				var ib int64
-				if tointegerns(rb, &ib) {
-					pc++
-					if i.Op == OP_SHRI {
-						setivalue(&L.stack[ra], luaV_shiftl(ib, -ic))
-					} else {
-						setivalue(&L.stack[ra], luaV_shiftl(ic, ib))
-					}
-				}
-			case OP_ADD, OP_SUB, OP_MUL, OP_BAND, OP_BOR, OP_BXOR,
-				OP_SHL, OP_SHR:
-				/* Fast path, as for the immediate and constant forms
-				   above: two integers can never reach a metamethod
-				   and always produce an integer. None of these eight
-				   can raise, so nothing has to be saved first. */
-				rb := &L.stack[base+i.B]
-				rc := &L.stack[base+i.C]
-				if rb.tt == LUA_VNUMINT && rc.tt == LUA_VNUMINT {
-					v1, v2 := rb.i, rc.i
-					var r int64
-					switch i.Op {
-					case OP_ADD:
-						r = v1 + v2
-					case OP_SUB:
-						r = v1 - v2
-					case OP_MUL:
-						r = v1 * v2
-					case OP_BAND:
-						r = v1 & v2
-					case OP_BOR:
-						r = v1 | v2
-					case OP_BXOR:
-						r = v1 ^ v2
-					case OP_SHL:
-						r = int64(luaV_shiftl(v1, v2))
-					case OP_SHR:
-						r = int64(luaV_shiftl(v1, -v2))
-					}
-					pc++
-					setivalue(&L.stack[ra], r)
-					break
-				}
-				var res Value
-				op := opCodeToArith(i.Op)
-				if luaO_rawarith(L, op, rb, rc, &res) {
-					pc++
-					L.stack[ra] = res
-				}
-			case OP_MOD, OP_IDIV:
-				/* these two can raise (division by zero), so the
-				   current instruction must be saved before running
-				   them: that is what puts the right line in the
-				   error message. */
-				savestate(L, ci, pc)
-				rb := &L.stack[base+i.B]
-				rc := &L.stack[base+i.C]
-				if rb.tt == LUA_VNUMINT && rc.tt == LUA_VNUMINT {
-					pc++
-					if uint64(rc.i)+1 <= 1 {
-						/* the divisor is -1 or 0: the two that need
-						   care, one of them fatally */
-						if i.Op == OP_MOD {
-							setivalue(&L.stack[ra], luaV_mod(L, rb.i, rc.i))
-						} else {
-							setivalue(&L.stack[ra], luaV_idiv(L, rb.i, rc.i))
-						}
-					} else if i.Op == OP_MOD {
-						setivalue(&L.stack[ra], luaV_modcore(rb.i, rc.i))
-					} else {
-						setivalue(&L.stack[ra], luaV_idivcore(rb.i, rc.i))
-					}
-					break
-				}
-				var res Value
-				op := opCodeToArith(i.Op)
-				if luaO_rawarith(L, op, rb, rc, &res) {
-					pc++
-					L.stack[ra] = res
-				}
-			case OP_POW, OP_DIV:
-				/* these two always produce a float, so there is no
-				   integer fast path for them */
-				rb := &L.stack[base+i.B]
-				rc := &L.stack[base+i.C]
-				var res Value
-				op := opCodeToArith(i.Op)
-				if luaO_rawarith(L, op, rb, rc, &res) {
-					pc++
-					L.stack[ra] = res
-				}
-			case OP_MMBIN:
-				pi := code[pc-2]
-				rb := &L.stack[base+i.B]
-				result := base + pi.A
-				savestate(L, ci, pc)
-				luaT_trybinTM(L, &L.stack[ra], rb, result, TMS(i.C))
-			case OP_MMBINI:
-				pi := code[pc-2]
-				imm := int64(i.B - OFFSET_sC)
-				result := base + pi.A
-				savestate(L, ci, pc)
-				luaT_trybiniTM(L, &L.stack[ra], imm, i.K != 0, result, TMS(i.C))
-			case OP_MMBINK:
-				pi := code[pc-2]
-				imm := &k[i.B]
-				result := base + pi.A
-				savestate(L, ci, pc)
-				luaT_trybinassocTM(L, &L.stack[ra], imm, i.K != 0, result, TMS(i.C))
 			case OP_UNM:
 				rb := &L.stack[base+i.B]
 				if ttisinteger(rb) {
@@ -843,6 +642,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					} else {
 						savestate(L, ci, pc)
 						luaT_trybinTM(L, rb, rb, ra, TM_UNM)
+						base = ci.funcIdx + 1
 					}
 				}
 			case OP_BNOT:
@@ -853,180 +653,100 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					savestate(L, ci, pc)
 					luaT_trybinTM(L, rb, rb, ra, TM_BNOT)
+					base = ci.funcIdx + 1
 				}
 			case OP_NOT:
-				setbvalue(&L.stack[ra], isFalse(&L.stack[base+i.B]))
+				rb := &L.stack[base+i.B]
+				if l_isfalse(rb) {
+					setbtvalue(&L.stack[ra])
+				} else {
+					setbfvalue(&L.stack[ra])
+				}
 			case OP_LEN:
 				savestate(L, ci, pc)
 				luaV_objlen(L, ra, &L.stack[base+i.B])
+				base = ci.funcIdx + 1
 			case OP_CONCAT:
-				n := i.B
-				L.top = ra + n
-				ci.savedpc = pc
-				luaV_concat(L, n)
-				/* a concatenation allocates a string, and a program can
-				   wait for the collector on that alone */
-				if L.gcAfterAlloc() {
-					continue
-				}
-			case OP_CLOSE:
-				savestate(L, ci, pc) /* Protect: a yield in __close restarts here */
-				luaF_close(L, ra, LUA_OK, true)
-			case OP_TBC:
-				savestate(L, ci, pc) /* in case of errors */
-				luaF_newtbcupval(L, ra)
+				b, c := i.B, i.C
+				L.top = base + c + 1
+				savestate(L, ci, pc)
+				luaV_concat(L, c-b+1)
+				base = ci.funcIdx + 1
+				ra = base + i.A
+				L.stack[ra] = L.stack[base+b]
+				L.top = ci.top
 			case OP_JMP:
-				pc += i.B - OFFSET_sJ
+				if i.A != 0 {
+					luaF_closeupval(L, base+i.A-1)
+				}
+				pc += sBx(i.B)
 			case OP_EQ:
+				rb := rkVal(L, base, k, i.B)
+				rc := rkVal(L, base, k, i.C)
 				savestate(L, ci, pc)
-				cond := luaV_equalobj(L, &L.stack[ra], &L.stack[base+i.B])
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				eq := luaV_equalobj(L, rb, rc)
+				base = ci.funcIdx + 1
+				if (eq && i.A != 0) || (!eq && i.A == 0) {
+					ji := code[pc]
 					pc++
+					if ji.A != 0 {
+						luaF_closeupval(L, base+ji.A-1)
+					}
+					pc += sBx(ji.B)
 				} else {
-					pc += code[pc].B - OFFSET_sJ + 1
+					pc++
 				}
-			case OP_LT:
+			case OP_LT, OP_LE:
+				// handled below with corrected EQ — see fix
+				rb := rkVal(L, base, k, i.B)
+				rc := rkVal(L, base, k, i.C)
 				savestate(L, ci, pc)
-				cond := luaV_lessthan(L, &L.stack[ra], &L.stack[base+i.B])
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
-					pc++
+				var res bool
+				if i.Op == OP_LT {
+					res = luaV_lessthan(L, rb, rc)
 				} else {
-					pc += code[pc].B - OFFSET_sJ + 1
+					res = luaV_lessequal(L, rb, rc)
 				}
-			case OP_LE:
-				savestate(L, ci, pc)
-				cond := luaV_lessequal(L, &L.stack[ra], &L.stack[base+i.B])
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				base = ci.funcIdx + 1
+				if (res && i.A != 0) || (!res && i.A == 0) {
+					ji := code[pc]
 					pc++
-				} else {
-					pc += code[pc].B - OFFSET_sJ + 1
-				}
-			case OP_EQK:
-				cond := luaV_rawequalobj(&L.stack[ra], &k[i.B])
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
-					pc++
-				} else {
-					pc += code[pc].B - OFFSET_sJ + 1
-				}
-			case OP_EQI, OP_LTI, OP_LEI, OP_GTI, OP_GEI:
-				im := int64(i.B - OFFSET_sC)
-				a := &L.stack[ra]
-				cond := false
-				if ttisinteger(a) {
-					switch i.Op {
-					case OP_EQI:
-						cond = ivalue(a) == im
-					case OP_LTI:
-						cond = ivalue(a) < im
-					case OP_LEI:
-						cond = ivalue(a) <= im
-					case OP_GTI:
-						cond = ivalue(a) > im
-					case OP_GEI:
-						cond = ivalue(a) >= im
+					if ji.A != 0 {
+						luaF_closeupval(L, base+ji.A-1)
 					}
-				} else if ttisfloat(a) {
-					fa := fltvalue(a)
-					fim := float64(im)
-					switch i.Op {
-					case OP_EQI:
-						cond = fa == fim
-					case OP_LTI:
-						cond = fa < fim
-					case OP_LEI:
-						cond = fa <= fim
-					case OP_GTI:
-						cond = fa > fim
-					case OP_GEI:
-						cond = fa >= fim
-					}
+					pc += sBx(ji.B)
 				} else {
-					/* 'isf' tells whether the immediate operand was a float */
-					isf := i.C != 0
-					savestate(L, ci, pc)
-					switch i.Op {
-					case OP_LTI:
-						cond = luaT_callorderiTM(L, a, im, false, isf, TM_LT)
-					case OP_LEI:
-						cond = luaT_callorderiTM(L, a, im, false, isf, TM_LE)
-					case OP_GTI:
-						cond = luaT_callorderiTM(L, a, im, true, isf, TM_LT)
-					case OP_GEI:
-						cond = luaT_callorderiTM(L, a, im, true, isf, TM_LE)
-					}
-				}
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
 					pc++
-				} else {
-					pc += code[pc].B - OFFSET_sJ + 1
 				}
 			case OP_TEST:
-				cond := !isFalse(&L.stack[ra])
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				cond := !l_isfalse(&L.stack[ra])
+				if (i.C != 0 && !cond) || (i.C == 0 && cond) {
 					pc++
 				} else {
-					pc += code[pc].B - OFFSET_sJ + 1
+					ji := code[pc]
+					pc++
+					if ji.A != 0 {
+						luaF_closeupval(L, base+ji.A-1)
+					}
+					pc += sBx(ji.B)
 				}
 			case OP_TESTSET:
 				rb := &L.stack[base+i.B]
-				if isFalse(rb) == (i.K != 0) {
+				cond := !l_isfalse(rb)
+				if (i.C != 0 && !cond) || (i.C == 0 && cond) {
 					pc++
 				} else {
 					L.stack[ra] = *rb
-					pc += code[pc].B - OFFSET_sJ + 1
+					ji := code[pc]
+					pc++
+					if ji.A != 0 {
+						luaF_closeupval(L, base+ji.A-1)
+					}
+					pc += sBx(ji.B)
 				}
 			case OP_CALL:
 				b := i.B
 				nresults := i.C - 1
-				if b != 0 && nresults == 1 && L.hookmask == 0 {
-					fv := &L.stack[ra]
-					if fv.tt == ctb(LUA_VLCL) {
-						p := clLvalue(fv).p
-						if p.fastLeaf == fastLeafUnknown && constantLeaf(p) {
-							p.fastLeaf = fastLeafConstant
-						}
-						if p.fastLeaf == fastLeafConstant {
-							load := p.code[0]
-							switch load.Op {
-							case OP_LOADI:
-								setivalue(fv, int64(load.B-OFFSET_sBx))
-							case OP_LOADF:
-								setfltvalue(fv, float64(load.B-OFFSET_sBx))
-							case OP_LOADK:
-								*fv = p.k[load.B]
-							}
-							L.top = ra + 1
-							break
-						}
-					}
-					if fastLeafCall(L, ra, b-1) {
-						break
-					}
-				}
 				if b != 0 {
 					L.top = ra + b
 				}
@@ -1037,57 +757,41 @@ func luaV_execute(L *State, ci *CallInfo) {
 					break loop
 				}
 				if L.fastYield {
-					return /* synchronous yield: back to Resume */
+					return
 				}
 			case OP_TAILCALL:
 				b := i.B
-				nparams1 := i.C
-				delta := 0
-				if nparams1 != 0 {
-					delta = ci.nExtraArgs + nparams1
-				}
 				if b != 0 {
 					L.top = ra + b
 				} else {
 					b = L.top - ra
 				}
 				ci.savedpc = pc
-				if i.K != 0 {
-					luaF_closeupval(L, base) /* close upvalues of this frame */
+				if cl.p.sizep > 0 {
+					luaF_closeupval(L, base)
 				}
-				if n := luaD_pretailcall(L, ci, ra, b, delta); n < 0 {
-					/* Lua function: the frame was reused in place, so
-					   start the callee in it (like C's 'startfunc') */
+				if n := luaD_pretailcall(L, ci, ra, b, 0); n < 0 {
 					restart = true
 					break loop
 				} else if L.fastYield {
-					return /* synchronous yield: back to Resume */
-				} else { /* Go function */
-					ci.funcIdx -= delta    /* restore 'func' (if vararg) */
-					luaD_poscall(L, ci, n) /* finish the caller */
+					return
+				} else {
+					luaD_poscall(L, ci, n)
 				}
-				/* ret: the caller returns after the tail call */
 				if ci.callstatus&CIST_FRESH != 0 {
-					return /* end this 'luaV_execute' */
+					return
 				}
 				ci = ci.prev
 				restart = true
 				break loop
 			case OP_RETURN:
 				n := i.B - 1
-				nparams1 := i.C
 				if n < 0 {
 					n = L.top - ra
 				}
 				ci.savedpc = pc
-				if i.K != 0 {
-					if L.top < ci.top {
-						L.top = ci.top
-					}
-					luaF_close(L, base, closeKTOP, true)
-				}
-				if nparams1 != 0 {
-					ci.funcIdx -= ci.nExtraArgs + nparams1
+				if cl.p.sizep > 0 {
+					luaF_closeupval(L, base)
 				}
 				L.top = ra + n
 				luaD_poscall(L, ci, n)
@@ -1097,174 +801,230 @@ func luaV_execute(L *State, ci *CallInfo) {
 				ci = ci.prev
 				restart = true
 				break loop
-			case OP_RETURN0:
-				if L.hookmask != 0 {
-					L.top = ra /* no results */
-					ci.savedpc = pc
-					luaD_poscall(L, ci, 0) /* no hurry... */
-					trap = true
-				} else { /* do the 'poscall' here */
-					nres := ci.nresults
-					L.ci = ci.prev
-					L.top = ci.funcIdx
-					for ; nres > 0; nres-- {
-						setnilvalue(&L.stack[L.top])
-						L.top++
-					}
-				}
-				if ci.callstatus&CIST_FRESH != 0 {
-					return
-				}
-				ci = ci.prev
-				restart = true
-				break loop
-			case OP_RETURN1:
-				if L.hookmask != 0 {
-					L.top = ra + 1 /* one result */
-					ci.savedpc = pc
-					luaD_poscall(L, ci, 1) /* no hurry... */
-					trap = true
-				} else { /* do the 'poscall' here */
-					nres := ci.nresults
-					L.ci = ci.prev
-					if nres == 0 {
-						L.top = ci.funcIdx
-					} else {
-						L.stack[ci.funcIdx] = L.stack[ra]
-						L.top = ci.funcIdx + 1
-						for ; nres > 1; nres-- {
-							setnilvalue(&L.stack[L.top])
-							L.top++
-						}
-					}
-				}
-				if ci.callstatus&CIST_FRESH != 0 {
-					return
-				}
-				ci = ci.prev
-				restart = true
-				break loop
 			case OP_FORLOOP:
-				if ttisinteger(&L.stack[ra+2]) { /* integer loop? */
-					count := uint64(ivalue(&L.stack[ra+1]))
-					if count > 0 {
-						step := ivalue(&L.stack[ra+2])
-						idx := ivalue(&L.stack[ra])
-						chgivalue(&L.stack[ra+1], int64(count-1))
-						idx += step
-						chgivalue(&L.stack[ra], idx)
-						setivalue(&L.stack[ra+3], idx)
-						pc -= i.B
+				if ttisinteger(&L.stack[ra]) {
+					step := ivalue(&L.stack[ra+2])
+					idx := ivalue(&L.stack[ra]) + step
+					limit := ivalue(&L.stack[ra+1])
+					goon := false
+					if step > 0 {
+						goon = idx <= limit
+					} else {
+						goon = limit <= idx
 					}
-				} else if floatforloop(L, ra) {
-					pc -= i.B
+					if goon {
+						pc += sBx(i.B)
+						setivalue(&L.stack[ra], idx)
+						setivalue(&L.stack[ra+3], idx)
+					}
+				} else {
+					step := fltvalue(&L.stack[ra+2])
+					idx := fltvalue(&L.stack[ra]) + step
+					limit := fltvalue(&L.stack[ra+1])
+					goon := false
+					if step > 0 {
+						goon = idx <= limit
+					} else {
+						goon = limit <= idx
+					}
+					if goon {
+						pc += sBx(i.B)
+						setfltvalue(&L.stack[ra], idx)
+						setfltvalue(&L.stack[ra+3], idx)
+					}
 				}
 			case OP_FORPREP:
-				savestate(L, ci, pc)
-				if forprep(L, ra) {
-					pc += i.B + 1 /* skip the loop */
-				} else if npc, ok := fastNumericFor(L, ci, code, k, pc, i.B, i.A); ok {
-					/* The whole loop ran against a register file, or it
-					   bailed at npc and the stack already matches. */
-					pc = npc
-				}
-			case OP_TFORPREP:
-				luaF_newtbcupval(L, ra+3)
-				pc += i.B
-				/* go to the next instruction (OP_TFORCALL) */
-				i = code[pc]
-				pc++
-				ra3 := ci.funcIdx + 1 + i.A
-				L.checkStack(4)
-				copy(L.stack[ra3+4:ra3+7], L.stack[ra3:ra3+3])
-				L.top = ra3 + 7
-				ci.savedpc = pc
-				luaD_call(L, ra3+4, i.C)
-				/* go to the next instruction (OP_TFORLOOP) */
-				i = code[pc]
-				pc++
-				ra4 := ci.funcIdx + 1 + i.A
-				if !ttisnil(&L.stack[ra4+4]) {
-					L.stack[ra4+2] = L.stack[ra4+4]
-					pc -= i.B
-				}
+				forprep53(L, ra)
+				pc += sBx(i.B)
 			case OP_TFORCALL:
-				ra3 := base + i.A
-				L.checkStack(4)
-				copy(L.stack[ra3+4:ra3+7], L.stack[ra3:ra3+3])
-				L.top = ra3 + 7
-				ci.savedpc = pc
-				luaD_call(L, ra3+4, i.C)
-				/* fall into OP_TFORLOOP */
-				i3 := code[pc]
+				cb := ra + 3
+				L.stack[cb+2] = L.stack[ra+2]
+				L.stack[cb+1] = L.stack[ra+1]
+				L.stack[cb] = L.stack[ra]
+				L.top = cb + 3
+				savestate(L, ci, pc)
+				luaD_call(L, cb, i.C)
+				base = ci.funcIdx + 1
+				L.top = ci.top
+				i = code[pc]
 				pc++
-				ra4 := ci.funcIdx + 1 + i3.A
-				if !ttisnil(&L.stack[ra4+4]) {
-					L.stack[ra4+2] = L.stack[ra4+4]
-					pc -= i3.B
-				}
+				ra = base + i.A
+				fallthrough
 			case OP_TFORLOOP:
-				ra5 := base + i.A
-				if !ttisnil(&L.stack[ra5+4]) {
-					L.stack[ra5+2] = L.stack[ra5+4]
-					pc -= i.B
+				if !ttisnil(&L.stack[ra+1]) {
+					L.stack[ra] = L.stack[ra+1]
+					pc += sBx(i.B)
 				}
 			case OP_SETLIST:
 				n := i.B
-				last := uint32(i.C)
-				h := hvalue(&L.stack[ra])
+				c := i.C
 				if n == 0 {
 					n = L.top - ra - 1
-				} else {
-					L.top = ci.top
 				}
-				last += uint32(n)
-				if i.K != 0 {
-					last += uint32(code[pc].A) * (MAXARG_C + 1)
+				if c == 0 {
+					c = code[pc].A
 					pc++
 				}
-				if uint64(last) > uint64(luaH_realasize(h)) {
-					luaH_resizearray(L, h, last)
+				h := hvalue(&L.stack[ra])
+				last := ((c - 1) * LFIELDS_PER_FLUSH) + n
+				if uint32(last) > h.alimit {
+					luaH_resizearray(L, h, uint32(last))
 				}
 				for ; n > 0; n-- {
-					h.array[last-1] = L.stack[ra+n]
+					val := &L.stack[ra+n]
+					luaH_setint(L, h, int64(last), val)
 					last--
 				}
+				L.top = ci.top
 			case OP_CLOSURE:
-				pushclosure(L, p.p[i.B], cl.upvals, base, ra)
+				p := cl.p.p[i.B]
+				pushclosure(L, p, cl.upvals, base, ra)
 			case OP_VARARG:
-				luaT_getvarargs(L, ci, ra, i.C-1)
-			case OP_VARARGPREP:
-				ci.savedpc = pc /* in case of errors */
-				luaT_adjustvarargs(L, i.A, ci, cl.p)
-				trap = ci.trap /* ProtectNT updates 'trap' */
-				if trap {      /* previous "Protect" updated trap */
-					luaD_hookcall(L, ci)
-					L.oldpc = 1 /* next opcode will be seen as a "new" line */
+				b := i.B - 1
+				n := (base - ci.funcIdx) - int(cl.p.numparams) - 1
+				if n < 0 {
+					n = 0
+				}
+				if b < 0 {
+					b = n
+					L.checkStack(n)
+					base = ci.funcIdx + 1
+					ra = base + i.A
+					L.top = ra + n
+				}
+				j := 0
+				for ; j < b && j < n; j++ {
+					L.stack[ra+j] = L.stack[base-n+j]
+				}
+				for ; j < b; j++ {
+					setnilvalue(&L.stack[ra+j])
 				}
 			case OP_EXTRAARG:
-				/* nothing to do (already consumed) */
+				// should not happen
 			default:
-				panic("unknown opcode " + opName(i.Op))
+				luaG_runerror(L, "unknown opcode %d", i.Op)
 			}
-			/* updatetrap: the operation may have changed the hooks (or
-			   moved the stack), so re-read the mark of this frame.  C
-			   does this only where 'Protect'/'ProtectNT' wraps such an
-			   operation; doing it on every instruction is the same
-			   thing as far as the hooks are concerned (it is a strict
-			   superset) but it costs a store on the hottest path of
-			   the interpreter, so it is skipped while no hook is
-			   installed -- which is the only situation in which
-			   'ci.trap' can have changed behind our back anyway. */
-			if L.hookmask != 0 {
-				trap = ci.trap
-			}
+			ci.savedpc = pc
 		}
 	}
 }
 
-// luaG_tracecall prepares the hook check when the VM starts (or resumes)
-// a Lua function (ldebug.c). It reports whether 'trap' must stay on.
+func binOpTM(op int) TMS {
+	switch op {
+	case OP_ADD:
+		return TM_ADD
+	case OP_SUB:
+		return TM_SUB
+	case OP_MUL:
+		return TM_MUL
+	case OP_MOD:
+		return TM_MOD
+	case OP_POW:
+		return TM_POW
+	case OP_DIV:
+		return TM_DIV
+	case OP_IDIV:
+		return TM_IDIV
+	case OP_BAND:
+		return TM_BAND
+	case OP_BOR:
+		return TM_BOR
+	case OP_BXOR:
+		return TM_BXOR
+	case OP_SHL:
+		return TM_SHL
+	case OP_SHR:
+		return TM_SHR
+	}
+	return TM_ADD
+}
+
+func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
+	switch op {
+	case OP_ADD:
+		if ttisinteger(rb) && ttisinteger(rc) {
+			setivalue(ra, ivalue(rb)+ivalue(rc))
+			return true
+		}
+		var nb, nc float64
+		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+			setfltvalue(ra, nb+nc)
+			return true
+		}
+	case OP_SUB:
+		if ttisinteger(rb) && ttisinteger(rc) {
+			setivalue(ra, ivalue(rb)-ivalue(rc))
+			return true
+		}
+		var nb, nc float64
+		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+			setfltvalue(ra, nb-nc)
+			return true
+		}
+	case OP_MUL:
+		if ttisinteger(rb) && ttisinteger(rc) {
+			setivalue(ra, ivalue(rb)*ivalue(rc))
+			return true
+		}
+		var nb, nc float64
+		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+			setfltvalue(ra, nb*nc)
+			return true
+		}
+	case OP_DIV:
+		var nb, nc float64
+		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+			setfltvalue(ra, nb/nc)
+			return true
+		}
+	case OP_IDIV:
+		if ttisinteger(rb) && ttisinteger(rc) {
+			setivalue(ra, luaV_idiv(L, ivalue(rb), ivalue(rc)))
+			return true
+		}
+		var nb, nc float64
+		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+			setfltvalue(ra, math.Floor(nb/nc))
+			return true
+		}
+	case OP_MOD:
+		if ttisinteger(rb) && ttisinteger(rc) {
+			setivalue(ra, luaV_mod(L, ivalue(rb), ivalue(rc)))
+			return true
+		}
+		var nb, nc float64
+		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+			setfltvalue(ra, luaV_modf(L, nb, nc))
+			return true
+		}
+	case OP_POW:
+		var nb, nc float64
+		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+			setfltvalue(ra, math.Pow(nb, nc))
+			return true
+		}
+	case OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR:
+		var ib, ic int64
+		if tointegerns(rb, &ib) && tointegerns(rc, &ic) {
+			switch op {
+			case OP_BAND:
+				setivalue(ra, ib&ic)
+			case OP_BOR:
+				setivalue(ra, ib|ic)
+			case OP_BXOR:
+				setivalue(ra, ib^ic)
+			case OP_SHL:
+				setivalue(ra, luaV_shiftl(ib, ic))
+			case OP_SHR:
+				setivalue(ra, luaV_shiftl(ib, -ic))
+			}
+			return true
+		}
+	}
+	return false
+}
+
+
 func luaG_tracecall(L *State, ci *CallInfo) bool {
 	p := clLvalue(&L.stack[ci.funcIdx]).p
 	ci.trap = true       /* ensure hooks will be checked */
@@ -1350,70 +1110,4 @@ func luaG_traceexec(L *State, ci *CallInfo, pc int) bool {
 	return true /* keep 'trap' on */
 }
 
-// vmArithK handles the immediate/constant arithmetic opcodes; on success
-// it skips the following MMBIN* instruction (as PUC-Lua does).
-func vmArithK(L *State, ci *CallInfo, i Instruction, ra, base int, k []Value, pc *int) {
-	rb := &L.stack[base+i.B]
-	var res Value
-	ok := false
-	switch i.Op {
-	case OP_ADDI:
-		imm := int64(i.C - OFFSET_sC)
-		if ttisinteger(rb) {
-			setivalue(&res, ivalue(rb)+imm)
-			ok = true
-		} else if ttisfloat(rb) {
-			setfltvalue(&res, fltvalue(rb)+float64(imm))
-			ok = true
-		}
-	default:
-		v2 := &k[i.C]
-		op := opCodeToArith(i.Op)
-		/* '%' and '//' can raise (division by zero): save the current
-		   instruction first, as C does */
-		if i.Op == OP_MODK || i.Op == OP_IDIVK {
-			savestate(L, ci, *pc)
-		}
-		ok = luaO_rawarith(L, op, rb, v2, &res)
-	}
-	if ok {
-		*pc++
-		L.stack[ra] = res
-	}
-}
-
-// opCodeToArith maps an opcode to its LUA_OP* code. It is only used by
-// the slow (non integer/integer) paths; the integer fast paths are
-// spelled out in luaV_execute.
-func opCodeToArith(op int) int {
-	switch op {
-	case OP_ADDI, OP_ADDK, OP_ADD:
-		return LUA_OPADD
-	case OP_SUBK, OP_SUB:
-		return LUA_OPSUB
-	case OP_MULK, OP_MUL:
-		return LUA_OPMUL
-	case OP_MODK, OP_MOD:
-		return LUA_OPMOD
-	case OP_POWK, OP_POW:
-		return LUA_OPPOW
-	case OP_DIVK, OP_DIV:
-		return LUA_OPDIV
-	case OP_IDIVK, OP_IDIV:
-		return LUA_OPIDIV
-	case OP_BANDK, OP_BAND:
-		return LUA_OPBAND
-	case OP_BORK, OP_BOR:
-		return LUA_OPBOR
-	case OP_BXORK, OP_BXOR:
-		return LUA_OPBXOR
-	case OP_SHL:
-		return LUA_OPSHL
-	case OP_SHR:
-		return LUA_OPSHR
-	}
-	panic("not an arithmetic opcode")
-}
-
-// math helper used by float loops
 func numIsNaN(n float64) bool { return math.IsNaN(n) }

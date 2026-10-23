@@ -96,30 +96,14 @@ func luaG_runerror(L *State, format string, args ...any) {
 // testAMode reports whether the opcode sets register A (the 'A' column of
 // luaP_opmodes, lopcodes.h: testAMode).
 func testAMode(op int) bool {
-	switch op {
-	case OP_MOVE, OP_LOADI, OP_LOADF, OP_LOADK, OP_LOADKX, OP_LOADFALSE,
-		OP_LFALSESKIP, OP_LOADTRUE, OP_LOADNIL, OP_GETUPVAL, OP_GETTABUP,
-		OP_GETTABLE, OP_GETI, OP_GETFIELD, OP_NEWTABLE, OP_SELF, OP_ADDI,
-		OP_ADDK, OP_SUBK, OP_MULK, OP_MODK, OP_POWK, OP_DIVK, OP_IDIVK,
-		OP_BANDK, OP_BORK, OP_BXORK, OP_SHRI, OP_SHLI, OP_ADD, OP_SUB,
-		OP_MUL, OP_MOD, OP_POW, OP_DIV, OP_IDIV, OP_BAND, OP_BOR, OP_BXOR,
-		OP_SHL, OP_SHR, OP_UNM, OP_BNOT, OP_NOT, OP_LEN, OP_CONCAT,
-		OP_TESTSET, OP_CALL, OP_TAILCALL, OP_FORLOOP, OP_FORPREP,
-		OP_TFORLOOP, OP_CLOSURE, OP_VARARG, OP_VARARGPREP:
-		return true
+	if op < 0 || op >= NUM_OPCODES {
+		return false
 	}
-	return false
+	return opModes[op]&(1<<6) != 0
 }
 
-// testMMMode reports whether the opcode is one of the metamethod helpers
-// (lopcodes.h: testMMMode).
-func testMMMode(op int) bool {
-	switch op {
-	case OP_MMBIN, OP_MMBINI, OP_MMBINK:
-		return true
-	}
-	return false
-}
+// testMMMode: 5.3 has no MMBIN family.
+func testMMMode(op int) bool { return false }
 
 // filterpc is 'filterpc' (ldebug.c).
 func filterpc(pc, jmptarget int) int {
@@ -152,7 +136,7 @@ func findsetreg(p *Proto, lastpc, reg int) int {
 		case OP_CALL, OP_TAILCALL: /* affect all registers above base */
 			change = reg >= a
 		case OP_JMP: /* doesn't change registers, but changes 'jmptarget' */
-			dest := pc + 1 + (i.B - OFFSET_sJ)
+			dest := pc + 1 + sBx(i.B)
 			if dest <= lastpc && dest > jmptarget {
 				jmptarget = dest /* update 'jmptarget' */
 			}

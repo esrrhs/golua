@@ -395,9 +395,6 @@ func luaU_loadBinary(L *State, data []byte, chunkname, mode string) error {
 // instruction (un)packing (lopcodes.h)
 // ---------------------------------------------------------------------
 
-// Instruction modes (lopcodes.c luaP_opmodes, only the mode field).
-const (
-
 // Instruction formats used by pack/unpack (5.3: dmpIABC, dmpIABx, dmpIAsBx, dmpIAx — no isJ).
 const (
 	dmpIABC = iota

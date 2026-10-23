@@ -18,6 +18,7 @@ var loadedLibs = []struct {
 	{"string", OpenString},
 	{"math", OpenMath},
 	{"utf8", OpenUTF8},
+	{"bit32", OpenBit32},
 	{"debug", OpenDebug},
 }
 

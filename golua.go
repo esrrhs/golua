@@ -70,6 +70,7 @@ func OpenOS(L *State) int                        { return core.OpenOS(L) }
 func OpenString(L *State) int                    { return core.OpenString(L) }
 func OpenMath(L *State) int                      { return core.OpenMath(L) }
 func OpenUTF8(L *State) int                      { return core.OpenUTF8(L) }
+func OpenBit32(L *State) int                      { return core.OpenBit32(L) }
 func OpenDebug(L *State) int                     { return core.OpenDebug(L) }
 func OpenTable(L *State) int                     { return core.OpenTable(L) }
 func Luac(argv []string, out, err io.Writer) int { return core.Luac(argv, out, err) }
