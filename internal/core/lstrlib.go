@@ -979,10 +979,9 @@ func strGsub(L *State) int {
 	p := L.CheckString(2)   /* pattern */
 	tr := L.Type(3)         /* replacement type */
 	maxS := L.OptInteger(4, int64(len(src))+1)
-	/* lstrlib.c uses 'luaL_argexpected' here, so the message names the
-	   type that came: "string/function/table expected, got boolean". */
-	L.ArgExpected(tr == LUA_TNUMBER || tr == LUA_TSTRING ||
-		tr == LUA_TFUNCTION || tr == LUA_TTABLE, 3, "string/function/table")
+	/* lstrlib.c 5.3.4: luaL_argcheck, fixed message (no ", got TYPE"). */
+	L.ArgCheck(tr == LUA_TNUMBER || tr == LUA_TSTRING ||
+		tr == LUA_TFUNCTION || tr == LUA_TTABLE, 3, "string/function/table expected")
 	pat := p
 	anchor := false
 	if len(pat) > 0 && pat[0] == '^' {

@@ -244,7 +244,7 @@ type State struct {
 	// lastErr is the error object of a coroutine that ended with an
 	// error. C keeps it on the coroutine's own stack (lua_resume leaves
 	// it there and luaE_resetthread feeds L->status back through
-	// luaD_closeprotected).
+	// luaF_close).
 	lastErr Value
 	hasErr  bool
 
@@ -551,7 +551,7 @@ func NewState() *State {
 	   with the value they replaced, so the two are remembered even
 	   though Go's collector pays no attention to them. */
 	g.gcPause = 200
-	g.gcStepMul = 100
+	g.gcStepMul = 200 /* LUAI_GCMUL */
 	g.gcMode = gcModeGen
 	g.nilValue = Value{tt: LUA_VNIL}
 	g.strt = newStringTable()
@@ -827,10 +827,8 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 	return status, false
 }
 
-// resetThreadStatus is luaE_resetthread: it unwinds the CallInfo list and
-// closes every to-be-closed variable still pending on the stack, returning
-// the (possibly new) status. C uses it both to reset a thread for reuse and
-// to close a coroutine that has just died.
+// resetThreadStatus unwinds CallInfo and closes open upvalues (5.3.4 has no
+// luaE_resetthread / to-be-closed). Used when resetting a coroutine helper.
 func (L *State) resetThreadStatus(status int) int {
 	ci := &L.baseCI
 	L.ci = ci
@@ -840,9 +838,10 @@ func (L *State) resetThreadStatus(status int) int {
 	if status == LUA_YIELD {
 		status = LUA_OK
 	}
-	L.status = LUA_OK /* so it can run __close metamethods */
+	L.status = LUA_OK
 	L.errfunc = 0     /* stack unwind can "throw away" the error function */
-	status = luaD_closeprotected(L, 1, status, false)
+	luaF_close(L, 1)
+	/* status unchanged: 5.3.4 has no TBC errors from close */
 	if status != LUA_OK { /* errors? */
 		luaD_seterrorobj(L, status, 1)
 	} else {
@@ -1287,7 +1286,8 @@ func (L *State) unwindForClose() int {
 		st = LUA_OK
 	}
 	L.status = LUA_OK
-	st = luaD_closeprotected(L, 1, st, false)
+	luaF_close(L, 1)
+	/* st unchanged */
 	if st != LUA_OK {
 		luaD_seterrorobj(L, st, 1)
 		L.co.vals = append(L.co.vals[:0], L.stack[1])

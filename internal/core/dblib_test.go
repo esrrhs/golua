@@ -29,7 +29,7 @@ func dbGlobalString(t *testing.T, L *State, name string) string {
 }
 
 func TestDebugTraceback(t *testing.T) {
-	L := newDebugState(t)
+		L := newDebugState(t)
 	if err := L.DoString("tb = debug.traceback()"); err != nil {
 		t.Fatalf("DoString: %v", err)
 	}
@@ -377,15 +377,7 @@ func TestDebugMisc(t *testing.T) {
 	}
 	L.Pop(1)
 
-	/* setcstacklimit accepts a limit and answers with the current one */
-	if err := L.DoString("lim = debug.setcstacklimit(100)"); err != nil {
-		t.Fatalf("DoString: %v", err)
-	}
-	L.GetGlobal("lim")
-	if _, ok := L.ToInteger(-1); !ok {
-		t.Fatal("debug.setcstacklimit did not return a number")
-	}
-	L.Pop(1)
+	/* Lua 5.3.4: no debug.setcstacklimit */
 
 	/* debug.debug is not interactive here: it returns nothing */
 	if err := L.DoString("cnt = select('#', debug.debug())"); err != nil {

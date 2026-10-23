@@ -1,4 +1,4 @@
-// Translation of ltm.h / ltm.c (PUC-Lua 5.4).
+// Translation of ltm.h / ltm.c (PUC-Lua 5.3.4).
 package core
 
 // TMS: tag-method names, in the same order as PUC-Lua.
@@ -201,22 +201,6 @@ func luaT_tryconcatTM(L *State) {
 	}
 }
 
-// luaT_trybinassocTM tries p1's metamethod, then p2's (comparisons).
-func luaT_trybinassocTM(L *State, p1, p2 *Value, flip bool, res int, event TMS) {
-	if flip {
-		luaT_trybinTM(L, p2, p1, res, event)
-	} else {
-		luaT_trybinTM(L, p1, p2, res, event)
-	}
-}
-
-// luaT_trybiniTM tries a metamethod with an integer second operand.
-func luaT_trybiniTM(L *State, p1 *Value, i2 int64, flip bool, res int, event TMS) {
-	var aux Value
-	setivalue(&aux, i2)
-	luaT_trybinassocTM(L, p1, &aux, flip, res, event)
-}
-
 // luaT_callorderTM calls an order metamethod; raises an error if none.
 //
 // 'LUA_COMPAT_LT_LE' is on, as it is in the reference build: a value with
@@ -243,60 +227,3 @@ func luaT_callorderTM(L *State, p1, p2 *Value, event TMS) bool {
 	return false
 }
 
-// luaT_callorderiTM is luaT_callorderTM with an integer/float operand.
-func luaT_callorderiTM(L *State, p1 *Value, v2 int64, flip, isfloat bool, event TMS) bool {
-	var aux, p2 *Value
-	if isfloat {
-		var f Value
-		setfltvalue(&f, float64(v2))
-		aux = &f
-	} else {
-		var i Value
-		setivalue(&i, v2)
-		aux = &i
-	}
-	if flip { /* arguments were exchanged? */
-		p2 = p1
-		p1 = aux
-	} else {
-		p2 = aux
-	}
-	return luaT_callorderTM(L, p1, p2, event)
-}
-
-// luaT_adjustvarargs moves the function and its fixed parameters above
-// the extra arguments of a vararg function (ltm.c).
-func luaT_adjustvarargs(L *State, nfixparams int, ci *CallInfo, p *Proto) {
-	actual := L.top - ci.funcIdx - 1 // number of arguments
-	nextra := actual - nfixparams
-	ci.nExtraArgs = nextra
-	L.checkStack(int(p.maxstacksize) + 1)
-	/* copy function to the top of the stack */
-	L.stack[L.top] = L.stack[ci.funcIdx]
-	L.top++
-	/* move fixed parameters to the top of the stack */
-	for i := 1; i <= nfixparams; i++ {
-		L.stack[L.top] = L.stack[ci.funcIdx+i]
-		L.top++
-		setnilvalue(&L.stack[ci.funcIdx+i])
-	}
-	ci.funcIdx += actual + 1
-	ci.top += actual + 1
-}
-
-// luaT_getvarargs moves 'wanted' extra arguments to 'where' (ltm.c).
-func luaT_getvarargs(L *State, ci *CallInfo, where int, wanted int) {
-	nextra := ci.nExtraArgs
-	if wanted < 0 {
-		wanted = nextra
-		L.checkStack(nextra)
-		L.top = where + nextra
-	}
-	i := 0
-	for ; i < wanted && i < nextra; i++ {
-		L.stack[where+i] = L.stack[ci.funcIdx-nextra+i]
-	}
-	for ; i < wanted; i++ { /* complete with nil */
-		setnilvalue(&L.stack[where+i])
-	}
-}

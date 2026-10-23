@@ -139,8 +139,8 @@ func TestCLIBadOptions(t *testing.T) {
 	}
 }
 
-// TestCLIEAndL pins '-e' and '-l', including the '-l g=mod' form and the
-// fact that they run before the script.
+// TestCLIEAndL pins '-e' and '-l' (5.3.4: no '-l g=mod'), and that they
+// run before the script.
 func TestCLIEAndL(t *testing.T) {
 	out, errb, code := cliRun(t, "-eprint(1)", "-e", "a=3", "-e", "print(a)")
 	if code != 0 || out != "1\n3\n" {
@@ -150,9 +150,9 @@ func TestCLIEAndL(t *testing.T) {
 	if code != 0 || out != "function\n" {
 		t.Errorf("-l string: (%q, %d) stderr %q", out, code, errb)
 	}
-	out, errb, code = cliRun(t, "-lm=math", "-e", "print(m.sin(0))")
+	out, errb, code = cliRun(t, "-l", "math", "-e", "print(math.sin(0))")
 	if code != 0 || out != "0.0\n" {
-		t.Errorf("-l m=math: (%q, %d) stderr %q", out, code, errb)
+		t.Errorf("-l math: (%q, %d) stderr %q", out, code, errb)
 	}
 	/* a failing -e stops the interpreter before the script runs */
 	path := cliScript(t, "print('script')")

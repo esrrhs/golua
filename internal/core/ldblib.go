@@ -9,7 +9,7 @@
 // Deviations are marked with "deviation" in the comments; the short
 // list: no hook machinery (sethook records the hook but nothing ever
 // calls it), no name/namewhat (the port does not track how a function
-// was called), no transfer info (ftransfer/ntransfer are always 0), and
+// was called). Lua 5.3.4 has no getinfo option 'r' / transfer info, and
 // no interactive 'debug.debug'.
 package core
 
@@ -264,16 +264,6 @@ func dbAuxGetInfo(L *State, what string, ar *dbAr, fv *Value, ci *CallInfo) bool
 			} else {
 				ar.name = name
 			}
-		case 'r':
-			/* io->u2.transferinfo: set by luaD_hook while a call or
-			   return hook is running (ldebug.c). */
-			if ci == nil || ci.callstatus&CIST_TRAN == 0 {
-				ar.ftransfer = 0
-				ar.ntransfer = 0
-			} else {
-				ar.ftransfer = ci.ftransfer
-				ar.ntransfer = ci.ntransfer
-			}
 		case 'L', 'f': /* handled by dbGetInfo */
 		default:
 			status = false /* invalid option */
@@ -406,7 +396,7 @@ func dbGetMetaTable(L *State) int {
 
 func dbSetMetaTable(L *State) int {
 	t := L.Type(2)
-	L.ArgExpected(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table")
+	L.ArgCheck(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table expected")
 	L.SetTop(2)
 	L.SetMetaTable(1)
 	return 1 /* return 1st argument */
@@ -519,10 +509,6 @@ func dbGetInfoFunc(L *State) int {
 		   (empty) string and must not be turned into nil */
 		L.PushString(ar.namewhat)
 		L.SetField(-2, "namewhat")
-	}
-	if strings.ContainsRune(options, 'r') {
-		dbSetTabSI(L, "ftransfer", ar.ftransfer)
-		dbSetTabSI(L, "ntransfer", ar.ntransfer)
 	}
 	if strings.ContainsRune(options, 't') {
 		dbSetTabSB(L, "istailcall", ar.istailcall)
@@ -876,16 +862,8 @@ func dbTraceback(L *State) int {
 	return 1
 }
 
-// deviation: there is no C stack limit to change; the current limit is
-// reported back, as C does for a limit it cannot honour.
-func dbSetCStackLimit(L *State) int {
-	L.CheckInteger(1)
-	L.PushInteger(LUAI_MAXCCALLS)
-	return 1
-}
-
 // ---------------------------------------------------------------------
-// registration
+// registration (ldblib.c dblib[] — Lua 5.3.4 has no setcstacklimit)
 // ---------------------------------------------------------------------
 
 var dbFuncs = []Reg{
@@ -905,7 +883,6 @@ var dbFuncs = []Reg{
 	{Name: "setmetatable", Func: dbSetMetaTable},
 	{Name: "setupvalue", Func: dbSetUpValueFunc},
 	{Name: "traceback", Func: dbTraceback},
-	{Name: "setcstacklimit", Func: dbSetCStackLimit},
 }
 
 // OpenDebug opens the debug library (luaopen_debug).

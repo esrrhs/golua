@@ -167,15 +167,13 @@ const (
 func usage() string {
 	return "usage: " + progName + " [options] [script [args]]\n" +
 		"Available options are:\n" +
-		"  -e stat   execute string 'stat'\n" +
-		"  -i        enter interactive mode after executing 'script'\n" +
-		"  -l mod    require library 'mod' into global 'mod'\n" +
-		"  -l g=mod  require library 'mod' into global 'g'\n" +
-		"  -v        show version information\n" +
-		"  -E        ignore environment variables\n" +
-		"  -W        turn warnings on\n" +
-		"  --        stop handling options\n" +
-		"  -         stop handling options and execute stdin\n"
+		"  -e stat  execute string 'stat'\n" +
+		"  -i       enter interactive mode after executing 'script'\n" +
+		"  -l name  require library 'name'\n" +
+		"  -v       show version information\n" +
+		"  -E       ignore environment variables\n" +
+		"  --       stop handling options\n" +
+		"  -        stop handling options and execute stdin\n"
 }
 
 // printUsage is print_usage: it names the offending option and then the
@@ -239,10 +237,6 @@ func collectArgs(argv []string) (args, script int) {
 				return hasError, i
 			}
 			args |= hasEnv
-		case 'W': /* turn warnings on */
-			if len(a) > 2 {
-				return hasError, i
-			}
 		case 'i':
 			args |= hasI /* (-i implies -v) */
 			if len(a) > 2 {
@@ -296,8 +290,6 @@ func runArgs(argv []string, optlim int) bool {
 				report(err)
 				return false
 			}
-		case 'W':
-			L.Warning("@on", false) /* warnings on */
 		}
 	}
 	return true
@@ -342,27 +334,14 @@ func handleLuaInit() bool {
 	return true
 }
 
-// doLibrary is 'dolibrary': it requires 'mod' and stores the result in
-// the global 'globname'.  A '-l g=mod' argument names the global
-// explicitly; without a suffix mark the global is the module name.
-func doLibrary(globname string) error {
-	modname := globname
-	suffix := -1
-	if i := strings.IndexByte(globname, '='); i >= 0 {
-		modname = globname[i+1:] /* module name starts after the '=' */
-		globname = globname[:i]  /* global name ends here */
-	} else if i := strings.IndexByte(modname, '-'); i >= 0 {
-		suffix = i /* the ignore mark starts a suffix */
-	}
+// doLibrary is 'dolibrary' of lua.c 5.3.4: require(name) then setglobal(name).
+func doLibrary(name string) error {
 	L.GetGlobal("require")
-	L.PushString(modname)
-	if err := docall(1, 1); err != nil { /* call 'require(modname)' */
+	L.PushString(name)
+	if err := docall(1, 1); err != nil { /* call 'require(name)' */
 		return err
 	}
-	if suffix >= 0 { /* is there a suffix mark? */
-		globname = globname[:suffix] /* remove suffix from global name */
-	}
-	L.SetGlobal(globname) /* globname = require(modname) */
+	L.SetGlobal(name) /* global[name] = require return */
 	return nil
 }
 

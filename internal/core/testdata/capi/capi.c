@@ -656,16 +656,12 @@ static int mypanic(lua_State *L) {
 }
 
 static int l_limits(lua_State *L) {
-  unsigned int old, now;
+  /* Lua 5.3.4: no lua_setcstacklimit. Probe atpanic round-trip only. */
   lua_CFunction prev, back;
-  old = (unsigned int)lua_setcstacklimit(L, 1000);
-  now = (unsigned int)lua_setcstacklimit(L, old);
-  /* Whether a host installed a panic handler is its business; that
-     lua_atpanic hands the previous one back is Lua's. */
   prev = lua_atpanic(L, mypanic);
   back = lua_atpanic(L, prev);
   lua_settop(L, 0);
-  lua_pushfstring(L, "%d %d %d", (int)old, (int)now, back == mypanic);
+  lua_pushfstring(L, "%d", back == mypanic);
   return 1;
 }
 

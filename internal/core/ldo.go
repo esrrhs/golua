@@ -396,13 +396,6 @@ func luaE_checkcstack(L *State) {
 	}
 }
 
-// luaD_closeprotected closes open upvalues from 'level' (5.3.4 has no
-// to-be-closed variables). Status/yy are ignored; kept for call-site churn.
-func luaD_closeprotected(L *State, level, status int, yy bool) int {
-	luaF_close(L, level)
-	return status
-}
-
 // luaD_seterrorobj puts the error object at 'oldtop' (ldo.c).
 func luaD_seterrorobj(L *State, errcode, oldtop int) {
 	switch errcode {
@@ -422,14 +415,11 @@ func luaD_seterrorobj(L *State, errcode, oldtop int) {
 	L.top = oldtop + 1
 }
 
-// luaD_pcall runs f in protected mode (ldo.c).
-//
-// 'yy' is the 'yy' of the 'luaF_close' it may have to do -- see
-// luaD_closeprotected.  C's 'lua_pcallk' with a continuation in a
-// yieldable thread does not come through here at all: it is recovered by
-// 'finishpcallk', whose 'yy' is 1.  This port's yieldable 'pcall' does
-// come through here, so it has to say which of the two it is being.
+// luaD_pcall runs f in protected mode (ldo.c 5.3.4).
+// yy is retained for call-site compatibility with yieldable pcall paths
+// but is unused: 5.3.4 luaF_close only closes upvalues (no TBC/yy).
 func luaD_pcall(L *State, f func(), oldTop, ef int, yy bool) int {
+	_ = yy
 	oldCI := L.ci
 	oldAllowHooks := L.allowhook
 	oldErrFunc := L.errfunc
@@ -438,7 +428,7 @@ func luaD_pcall(L *State, f func(), oldTop, ef int, yy bool) int {
 	if status != LUA_OK { /* an error occurred? */
 		L.ci = oldCI
 		L.allowhook = oldAllowHooks
-		status = luaD_closeprotected(L, oldTop, status, yy)
+		luaF_close(L, oldTop) /* close possible pending closures */
 		luaD_seterrorobj(L, status, oldTop)
 		L.shrinkStack()
 	}

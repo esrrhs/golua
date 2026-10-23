@@ -234,12 +234,10 @@ func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 			status = LUA_YIELD
 		}
 		if status != LUA_OK && status != LUA_YIELD {
-			/* ldo.c's finishpcallk: unwind to this frame, close the
-			   to-be-closed variables the call opened, and leave the
-			   error object where the callee's results would have been,
-			   so that the continuation sees it. */
+			/* ldo.c finishpcall: unwind to this frame, close upvalues,
+			   leave the error object where results would have been. */
 			L.ci = ci
-			status = luaD_closeprotected(L, funcIdx, status, true)
+			luaF_close(L, funcIdx)
 			luaD_seterrorobj(L, status, funcIdx)
 			L.shrinkStack()
 		} else {
@@ -764,7 +762,11 @@ func cdl_gc_cb(p *C.lua_State, what, a1, a2, a3 C.int) C.int {
 		return C.int(prev)
 	case luaGCSetStepMul:
 		prev := L.g.gcStepMul
-		L.g.gcStepMul = int(a1)
+		v := int(a1)
+		if v < 40 {
+			v = 40
+		}
+		L.g.gcStepMul = v
 		return C.int(prev)
 	case luaGCIsRunning:
 		return cBool(!L.g.gcStopped)
@@ -807,14 +809,6 @@ func lua_setallocf(p *C.lua_State, f C.lua_Alloc, ud unsafe.Pointer) {
 	L.callocF = unsafe.Pointer(f)
 	L.callocUD = ud
 }
-
-//export lua_setcstacklimit
-func lua_setcstacklimit(p *C.lua_State, limit C.uint) C.int {
-	/* the C stack is the Go stack here, and its limit is not ours to
-	   set; PUC-Lua answers the previous limit */
-	return C.int(LUAI_MAXCCALLS)
-}
-
 
 //export lua_getupvalue
 func lua_getupvalue(p *C.lua_State, funcindex, n C.int) *C.char {

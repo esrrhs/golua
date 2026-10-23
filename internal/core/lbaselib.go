@@ -172,7 +172,7 @@ func baseGetMetatable(L *State) int {
 func baseSetMetatable(L *State) int {
 	t := L.Type(2)
 	L.CheckType(1, LUA_TTABLE)
-	L.ArgExpected(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table")
+	L.ArgCheck(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table expected")
 	if L.GetMetaField(1, "__metatable") != LUA_TNIL {
 		return L.Error2("cannot change a protected metatable")
 	}
@@ -194,9 +194,8 @@ func baseRawEqual(L *State) int {
 
 func baseRawLen(L *State) int {
 	t := L.Type(1)
-	/* lbaselib.c uses 'luaL_argexpected', so the message names the type
-	   that came: "table or string expected, got boolean". */
-	L.ArgExpected(t == LUA_TTABLE || t == LUA_TSTRING, 1, "table or string")
+	/* lbaselib.c 5.3.4: luaL_argcheck with fixed message (no ", got TYPE"). */
+	L.ArgCheck(t == LUA_TTABLE || t == LUA_TSTRING, 1, "table or string expected")
 	L.PushInteger(int64(L.RawLen(1)))
 	return 1
 }
@@ -226,7 +225,7 @@ func baseRawSet(L *State) int {
 // into one of these and then into a 'lua_gc' call, so the index here is
 // what decides which branch of baseCollectGarbage runs.
 var baseGCOpts = []string{"stop", "restart", "collect", "count", "step",
-	"setpause", "setstepmul", "isrunning", "generational", "incremental"}
+	"setpause", "setstepmul", "isrunning"}
 
 // indices into baseGCOpts
 const (
@@ -238,8 +237,6 @@ const (
 	baseGCSetPause
 	baseGCSetStepMul
 	baseGCIsRunning
-	baseGCGenerational
-	baseGCIncremental
 )
 
 // gcModeInc / gcModeGen are the two collector modes PUC-Lua knows.  A C
@@ -327,21 +324,15 @@ func baseCollectGarbage(L *State) int {
 		L.PushInteger(int64(gcSetParam(&L.g.gcPause, L.OptInteger(2, 0))))
 		return 1
 	case baseGCSetStepMul:
-		L.PushInteger(int64(gcSetParam(&L.g.gcStepMul, L.OptInteger(2, 0))))
+		/* lapi.c LUA_GCSETSTEPMUL: if (data < 40) data = 40; */
+		v := L.OptInteger(2, 0)
+		if v < 40 {
+			v = 40
+		}
+		L.PushInteger(int64(gcSetParam(&L.g.gcStepMul, v)))
 		return 1
 	case baseGCIsRunning:
 		L.PushBoolean(!L.g.gcStopped)
-		return 1
-	case baseGCGenerational:
-		_ = L.OptInteger(2, 0) /* minormul */
-		_ = L.OptInteger(3, 0) /* majormul */
-		L.PushString(gcSetMode(L, gcModeGen))
-		return 1
-	case baseGCIncremental:
-		_ = L.OptInteger(2, 0) /* pause */
-		_ = L.OptInteger(3, 0) /* stepmul */
-		_ = L.OptInteger(4, 0) /* stepsize */
-		L.PushString(gcSetMode(L, gcModeInc))
 		return 1
 	}
 	L.PushInteger(0)
