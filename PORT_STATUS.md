@@ -28,9 +28,10 @@
 - `luaG_callerror` uses varinfo (5.3), not 5.4 frame-entry naming
 - `math.random`/`randomseed`: POSIX `random()`/`srandom()` (5.3), not xoshiro; sort comparison counts match
 - officialNormalise: short-circuit GLOB1 digit (`os.time()%2`)
+- package: `LUA_*_5_3` versioned env; `;;` → `;`+default+`;` (setpath); preload searcher returns 1 value (not `:preload:`)
 
 ## Remaining / known gaps
-1. **Official suite**: aiming **23+/28** after random+hooks (was 15 at a9ac67d). Remaining hard walls: **attrib** (C loadlib ~299), **main** (stand-alone/Ctrl-C harness). Known-diff: all, gc, literals.
+1. **Official suite**: aiming **24+/28** (attrib fixed). Remaining hard wall: **main** Ctrl-C / signal harness (hangs). Known-diff: all, gc, literals.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).

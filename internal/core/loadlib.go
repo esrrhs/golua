@@ -23,7 +23,7 @@ const (
 	pkPathMark  = "?"        // LUA_PATH_MARK
 	pkExecDir   = "!"        // LUA_EXEC_DIR
 	pkIgMark    = "-"        // LUA_IGMARK
-	pkVerSuffix = "_5_4"     // LUA_VERSUFFIX
+	pkVerSuffix = "_5_3"     // LUA_VERSUFFIX
 	pkPOF       = "luaopen_" // LUA_POF
 	pkOFSEP     = "_"        // LUA_OFSEP
 
@@ -105,23 +105,13 @@ func pkSetPath(L *State, fieldname, envname, dft string) {
 	case !ok || pkNoEnv(L): /* no environment variable? */
 		L.PushString(dft) /* use default */
 	default:
-		if !strings.Contains(path, pkPathSep+pkPathSep) {
-			L.PushString(path) /* nothing to change */
-			break
-		}
-		/* path contains a ";;": insert default path in its place */
-		var sb strings.Builder
-		dftmark := strings.Index(path, pkPathSep+pkPathSep)
-		if dftmark > 0 { /* is there a prefix before ';;'? */
-			sb.WriteString(path[:dftmark]) /* add it */
-			sb.WriteString(pkPathSep)
-		}
-		sb.WriteString(dft)        /* add default */
-		if dftmark < len(path)-2 { /* is there a suffix after ';;'? */
-			sb.WriteString(pkPathSep)
-			sb.WriteString(path[dftmark+2:])
-		}
-		L.PushString(sb.String())
+		/* 5.3.4 setpath: replace ";;" by ";AUXMARK;" then AUXMARK by
+		   the default — so ";;" becomes ";"+default+";" (not bare
+		   default). luaL_gsub replaces every occurrence. */
+		auxmark := "" /* unlikely in a path */
+		path = strings.ReplaceAll(path, pkPathSep+pkPathSep, pkPathSep+auxmark+pkPathSep)
+		path = strings.ReplaceAll(path, auxmark, dft)
+		L.PushString(path)
 	}
 	/* deviation: 'setprogdir' is a no-op outside Windows */
 	L.SetField(-2, fieldname) /* package[fieldname] = path value */
@@ -387,11 +377,12 @@ func pkSearcherPreload(L *State) int {
 	name := L.CheckString(1)
 	L.GetField(LUA_REGISTRYINDEX, pkPreloadTable)
 	if L.GetField(-1, name) == LUA_TNIL { /* not found? */
-		L.PushString(fmt.Sprintf("no field package.preload['%s']", name))
+		L.PushString(fmt.Sprintf("\n\tno field package.preload['%s']", name))
 		return 1
 	}
-	L.PushString(":preload:")
-	return 2
+	/* 5.3.4: return only the loader; findloader's lua_call(..., 2)
+	   supplies nil as the second require argument (not ":preload:"). */
+	return 1
 }
 
 // pkBuffSub removes the last n characters of a message buffer

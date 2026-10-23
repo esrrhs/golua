@@ -317,11 +317,11 @@ func createArgTable(L *lua.State, argv []string, script int) {
 	L.SetGlobal("arg")
 }
 
-// handleLuaInit is 'handle_luainit': it runs LUA_INIT_5_4 (or LUA_INIT),
+// handleLuaInit is 'handle_luainit': it runs LUA_INIT_5_3 (or LUA_INIT),
 // as a file when the value starts with '@' and as a chunk otherwise.
 func handleLuaInit() bool {
-	name := "=LUA_INIT_5_4"
-	init, ok := os.LookupEnv("LUA_INIT_5_4")
+	name := "=LUA_INIT_5_3"
+	init, ok := os.LookupEnv("LUA_INIT_5_3")
 	if !ok {
 		name = "=LUA_INIT"
 		init, ok = os.LookupEnv("LUA_INIT")
