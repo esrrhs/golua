@@ -305,6 +305,24 @@ func freeexp(fs *FuncState, e *expdesc) {
 	}
 }
 
+/* freeexps frees registers of two expressions in descending order (lcode.c). */
+func freeexps(fs *FuncState, e1, e2 *expdesc) {
+	r1, r2 := -1, -1
+	if e1.k == VNONRELOC {
+		r1 = e1.info
+	}
+	if e2.k == VNONRELOC {
+		r2 = e2.info
+	}
+	if r1 > r2 {
+		freereg(fs, r1)
+		freereg(fs, r2)
+	} else {
+		freereg(fs, r2)
+		freereg(fs, r1)
+	}
+}
+
 func addk(fs *FuncState, key, v *Value) int {
 	L := fs.ls.L
 	f := fs.f
@@ -610,6 +628,7 @@ func luaK_self(fs *FuncState, e, key *expdesc) {
 	freeexp(fs, key)
 }
 
+/* invertjump is negatecondition (lcode.c): flip A of a comparison jump. */
 func invertjump(fs *FuncState, e *expdesc) {
 	pc := getjumpcontrol(fs, e.info)
 	pc.A = bool2int(!(pc.A != 0))
@@ -741,10 +760,9 @@ func codeunexpval(fs *FuncState, op int, e *expdesc, line int) {
 }
 
 func codebinexpval(fs *FuncState, op int, e1, e2 *expdesc, line int) {
-	rk2 := luaK_exp2RK(fs, e2)
+	rk2 := luaK_exp2RK(fs, e2) /* both operands are "RK"; e2 first (stack order) */
 	rk1 := luaK_exp2RK(fs, e1)
-	freeexp(fs, e2)
-	freeexp(fs, e1)
+	freeexps(fs, e1, e2)
 	e1.info = luaK_codeABC(fs, op, 0, rk1, rk2)
 	e1.k = VRELOCABLE
 	luaK_fixline(fs, line)
@@ -761,16 +779,27 @@ func codearith(fs *FuncState, op int, e1, e2 *expdesc, line int) {
 	}
 }
 
-func codecomp(fs *FuncState, op int, cond int, e1, e2 *expdesc) {
-	rk1 := luaK_exp2RK(fs, e1)
-	rk2 := luaK_exp2RK(fs, e2)
-	freeexp(fs, e2)
-	freeexp(fs, e1)
-	if cond == 0 && op != OP_EQ {
-		rk1, rk2 = rk2, rk1
-		cond = 1
+/* codecomp emits comparison jumps (lcode.c). e1 is already R/K from luaK_infix. */
+func codecomp(fs *FuncState, opr BinOpr, e1, e2 *expdesc) {
+	var rk1 int
+	if e1.k == VK {
+		rk1 = RKASK(e1.info)
+	} else {
+		rk1 = e1.info /* VNONRELOC */
 	}
-	e1.info = condjump(fs, op, cond, rk1, rk2)
+	rk2 := luaK_exp2RK(fs, e2)
+	freeexps(fs, e1, e2)
+	switch opr {
+	case OPR_NE: /* '(a ~= b)' ==> 'not (a == b)' */
+		e1.info = condjump(fs, OP_EQ, 0, rk1, rk2)
+	case OPR_GT, OPR_GE:
+		/* '(a > b)' ==> '(b < a)'; '(a >= b)' ==> '(b <= a)' */
+		op := int(opr-OPR_NE) + OP_EQ
+		e1.info = condjump(fs, op, 1, rk2, rk1)
+	default: /* '==', '<', '<=' */
+		op := int(opr-OPR_EQ) + OP_EQ
+		e1.info = condjump(fs, op, 1, rk1, rk2)
+	}
 	e1.k = VJMP
 }
 
@@ -782,27 +811,14 @@ func luaK_prefix(fs *FuncState, op UnOpr, e *expdesc, line int) {
 	ef.f = NO_JUMP
 	switch op {
 	case OPR_MINUS, OPR_BNOT:
-		if tonumeral(e, nil) {
-			var eop int
-			if op == OPR_MINUS {
-				eop = OP_UNM
-			} else {
-				eop = OP_BNOT
-			}
-			codearith(fs, eop, e, &ef, line)
-		} else {
-			var eop int
-			if op == OPR_MINUS {
-				eop = OP_UNM
-			} else {
-				eop = OP_BNOT
-			}
-			luaK_exp2anyreg(fs, e)
-			codearith(fs, eop, e, &ef, line)
+		/* op + LUA_OPUNM: OPR_MINUS→LUA_OPUNM, OPR_BNOT→LUA_OPBNOT */
+		if constfolding(fs, int(op)+LUA_OPUNM, e, &ef) {
+			break
 		}
+		fallthrough
 	case OPR_LEN:
-		luaK_exp2anyreg(fs, e)
-		codeunexpval(fs, OP_LEN, e, line)
+		/* op + OP_UNM: OPR_MINUS→OP_UNM, OPR_BNOT→OP_BNOT, OPR_LEN→OP_LEN */
+		codeunexpval(fs, int(op)+OP_UNM, e, line)
 	case OPR_NOT:
 		codenot(fs, e)
 	}
@@ -871,18 +887,8 @@ func luaK_posfix(fs *FuncState, op BinOpr, e1, e2 *expdesc, line int) {
 		codearith(fs, OP_SHL, e1, e2, line)
 	case OPR_SHR:
 		codearith(fs, OP_SHR, e1, e2, line)
-	case OPR_EQ:
-		codecomp(fs, OP_EQ, 1, e1, e2)
-	case OPR_NE:
-		codecomp(fs, OP_EQ, 0, e1, e2)
-	case OPR_LT:
-		codecomp(fs, OP_LT, 1, e1, e2)
-	case OPR_LE:
-		codecomp(fs, OP_LE, 1, e1, e2)
-	case OPR_GT:
-		codecomp(fs, OP_LT, 0, e1, e2)
-	case OPR_GE:
-		codecomp(fs, OP_LE, 0, e1, e2)
+	case OPR_EQ, OPR_LT, OPR_LE, OPR_NE, OPR_GT, OPR_GE:
+		codecomp(fs, op, e1, e2)
 	}
 }
 

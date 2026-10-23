@@ -1,4 +1,5 @@
-// Translation of llex.h / llex.c (PUC-Lua 5.3.4).
+// Translation of llex.h / llex.c (PUC-Lua 5.3.4; systematic pass: tokens,
+// read_numeral, escapes, long strings aligned with src/llex.c).
 //
 // Adaptations (same rules as the rest of the package):
 //   - no GC: luaC_fix is gone; reserved words are anchored by a package-level

@@ -672,10 +672,24 @@ func parlist(ls *LexState) {
 	luaK_reserveregs(fs, fs.nactvar)
 }
 
+/* addprototype adds a new prototype into the parent's list (lparser.c). */
+func addprototype(ls *LexState) *Proto {
+	fs := ls.fs
+	f := fs.f
+	if fs.np >= len(f.p) {
+		f.p = append(f.p, nil)
+	}
+	clp := luaF_newproto(ls.L)
+	f.p[fs.np] = clp
+	fs.np++
+	f.sizep = fs.np
+	return clp
+}
+
 func body(ls *LexState, e *expdesc, ismethod bool, line int) {
 	var new_fs FuncState
 	var bl BlockCnt
-	new_fs.f = luaF_newproto(ls.L)
+	new_fs.f = addprototype(ls)
 	new_fs.f.linedefined = line
 	open_func(ls, &new_fs, &bl)
 	checknext(ls, '(')
@@ -692,16 +706,11 @@ func body(ls *LexState, e *expdesc, ismethod bool, line int) {
 	close_func(ls)
 }
 
+/* codeclosure emits OP_CLOSURE in the parent (lparser.c). */
 func codeclosure(ls *LexState, v *expdesc) {
 	fs := ls.fs.prev
-	init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE, 0, fs.np))
-	luaK_exp2nextreg(fs, v)
-	if len(fs.f.p) <= fs.np {
-		fs.f.p = append(fs.f.p, nil)
-	}
-	fs.f.p[fs.np] = ls.fs.f
-	fs.np++
-	fs.f.sizep = fs.np
+	init_exp(v, VRELOCABLE, luaK_codeABx(fs, OP_CLOSURE, 0, fs.np-1))
+	luaK_exp2nextreg(fs, v) /* fix it at the last register */
 }
 
 func explist(ls *LexState, v *expdesc) int {
