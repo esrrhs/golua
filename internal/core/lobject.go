@@ -128,10 +128,13 @@ const (
 
 // Extra types for collectable non-values (lobject.h).
 const (
-	LUA_TUPVAL   = LUA_NUMTYPES
-	LUA_TPROTO   = LUA_NUMTYPES + 1
-	LUA_TDEADKEY = LUA_NUMTYPES + 2
+	LUA_TPROTO   = LUA_NUMTAGS     /* lobject.h 5.3.4 */
+	LUA_TDEADKEY = LUA_NUMTAGS + 1 /* lobject.h 5.3.4 */
+	LUA_TUPVAL   = LUA_NUMTAGS + 2 /* Go-GC only; not in 5.3.4 typenames */
 )
+
+// LUA_TOTALTAGS (lobject.h): LUA_TNONE slot through LUA_TPROTO.
+const LUA_TOTALTAGS = LUA_TPROTO + 2
 
 // Arithmetic op codes (lua.h LUA_OP*).
 const (

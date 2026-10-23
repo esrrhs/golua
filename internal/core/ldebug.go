@@ -787,7 +787,7 @@ func leNum(l, r *Value) bool {
 	return leFloatInt(lf, ivalue(r))
 }
 
-// luaV_lessthan is the main operation 'l < r' (lvm.c).
+// luaV_lessthan is the main operation 'l < r' (lvm.c 5.3.4).
 func luaV_lessthan(L *State, l, r *Value) bool {
 	if ttisnumber(l) && ttisnumber(r) {
 		return ltNum(l, r)
@@ -795,10 +795,14 @@ func luaV_lessthan(L *State, l, r *Value) bool {
 	if ttisstring(l) && ttisstring(r) {
 		return luaV_strcmp(tsvalue(l).val, tsvalue(r).val) < 0
 	}
-	return luaT_callorderTM(L, l, r, TM_LT)
+	res := luaT_callorderTM(L, l, r, TM_LT)
+	if res < 0 {
+		luaG_ordererror(L, l, r)
+	}
+	return res > 0
 }
 
-// luaV_lessequal is the main operation 'l <= r' (lvm.c).
+// luaV_lessequal is the main operation 'l <= r' (lvm.c 5.3.4, LUA_COMPAT_LT_LE).
 func luaV_lessequal(L *State, l, r *Value) bool {
 	if ttisnumber(l) && ttisnumber(r) {
 		return leNum(l, r)
@@ -806,7 +810,18 @@ func luaV_lessequal(L *State, l, r *Value) bool {
 	if ttisstring(l) && ttisstring(r) {
 		return luaV_strcmp(tsvalue(l).val, tsvalue(r).val) <= 0
 	}
-	return luaT_callorderTM(L, l, r, TM_LE)
+	res := luaT_callorderTM(L, l, r, TM_LE) /* try 'le' */
+	if res >= 0 {
+		return res > 0
+	}
+	/* try 'lt': !(r < l) for (l <= r) */
+	L.ci.callstatus |= CIST_LEQ /* mark it is doing 'lt' for 'le' */
+	res = luaT_callorderTM(L, r, l, TM_LT)
+	L.ci.callstatus ^= CIST_LEQ /* clear mark */
+	if res < 0 {
+		luaG_ordererror(L, l, r)
+	}
+	return res == 0 /* result is negated */
 }
 
 // luaV_objlen is the main operation 'ra = #rb' (lvm.c).

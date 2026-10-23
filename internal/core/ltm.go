@@ -32,7 +32,11 @@ const (
 	TM_N
 )
 
-var nilObject = Value{tt: LUA_VNIL}
+// luaO_nilobject is the singleton nil TValue (lobject.c luaO_nilobject_).
+var luaO_nilobject = Value{tt: LUA_TNIL}
+
+// nilObject keeps older call sites compiling.
+var nilObject = luaO_nilobject
 
 var luaT_eventname = [TM_N]string{
 	"__index", "__newindex",
@@ -44,11 +48,12 @@ var luaT_eventname = [TM_N]string{
 	"__concat", "__call",
 }
 
-var luaT_typenames = [LUA_NUMTYPES + 3]string{
+// luaT_typenames_ (ltm.c 5.3.4): indices are ttnov+1; last is proto for tests.
+var luaT_typenames = [LUA_TOTALTAGS]string{
 	"no value",
 	"nil", "boolean", "userdata", "number",
 	"string", "table", "function", "userdata", "thread",
-	"upvalue", "proto",
+	"proto",
 }
 
 // luaT_init initialises the tag-method names (ltm.c).
@@ -97,7 +102,7 @@ func luaT_gettmbyobj(L *State, o *Value, event TMS) *Value {
 		mt = L.g.mt[ttype(o)]
 	}
 	if mt == nil {
-		return &nilObject
+		return &luaO_nilobject
 	}
 	return luaH_getshortstr(mt, L.g.tmNames[event])
 }
@@ -135,7 +140,7 @@ func luaT_callTM(L *State, f, p1, p2, p3 *Value) {
 	L.stack[funcIdx+2] = *p2
 	L.stack[funcIdx+3] = *p3
 	L.top = funcIdx + 4
-	if isLuacode(L.ci) {
+	if isLua(L.ci) {
 		luaD_call(L, funcIdx, 0)
 	} else {
 		luaD_callnoyield(L, funcIdx, 0)
@@ -152,7 +157,7 @@ func luaT_callTMres(L *State, f, p1, p2 *Value, res int) {
 	L.stack[funcIdx+1] = *p1
 	L.stack[funcIdx+2] = *p2
 	L.top = funcIdx + 3
-	if isLuacode(L.ci) {
+	if isLua(L.ci) {
 		luaD_call(L, funcIdx, 1)
 	} else {
 		luaD_callnoyield(L, funcIdx, 1)
@@ -177,9 +182,10 @@ func callbinTM(L *State, p1, p2 *Value, res int, event TMS) bool {
 func luaT_trybinTM(L *State, p1, p2 *Value, res int, event TMS) {
 	if !callbinTM(L, p1, p2, res, event) {
 		switch event {
+		case TM_CONCAT:
+			luaG_concaterror(L, p1, p2)
 		case TM_BAND, TM_BOR, TM_BXOR, TM_SHL, TM_SHR, TM_BNOT:
-			/* 5.3: tonumber (with string coerce), not ttisnumber — so
-			   2.3 ~ '0.0' is "no integer representation", not "bitwise on a string". */
+			/* 5.3: tonumber (with string coerce), not ttisnumber */
 			var dummy float64
 			if luaV_tonumber_(L, p1, &dummy) && luaV_tonumber_(L, p2, &dummy) {
 				luaG_tointerror(L, p1, p2)
@@ -201,26 +207,16 @@ func luaT_tryconcatTM(L *State) {
 	}
 }
 
-// luaT_callorderTM calls an order metamethod; raises an error if none.
-//
-// LUA_COMPAT_LT_LE (on in the reference 5.3.4 build): no '__le' still
-// answers '<=' via '!(p2 < p1)'. C marks that path with CIST_LEQ so a
-// yield across the comparison can negate on resume (lvm.c); we set the
-// same bit while calling '__lt' even though Go runs the TM to completion.
-func luaT_callorderTM(L *State, p1, p2 *Value, event TMS) bool {
-	if callbinTM(L, p1, p2, L.top, event) { /* try original event */
-		return !isFalse(&L.stack[L.top])
+// luaT_callorderTM is luaT_callorderTM (ltm.c 5.3.4).
+// Returns -1 if no metamethod, else 0/1 for the boolean result.
+// LT_LE fallback lives in luaV_lessequal (lvm.c), not here.
+func luaT_callorderTM(L *State, p1, p2 *Value, event TMS) int {
+	if !callbinTM(L, p1, p2, L.top, event) {
+		return -1 /* no metamethod */
 	}
-	if event == TM_LE {
-		/* try '!(p2 < p1)' for '(p1 <= p2)' — luaV_lessequal in lvm.c */
-		L.ci.callstatus |= CIST_LEQ /* mark it is doing 'lt' for 'le' */
-		ok := callbinTM(L, p2, p1, L.top, TM_LT)
-		L.ci.callstatus ^= CIST_LEQ /* clear mark */
-		if ok {
-			return isFalse(&L.stack[L.top]) /* result is negated */
-		}
+	if isFalse(&L.stack[L.top]) {
+		return 0
 	}
-	luaG_ordererror(L, p1, p2) /* no metamethod found */
-	return false
+	return 1
 }
 
