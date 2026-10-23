@@ -466,7 +466,6 @@ func dbGetInfoFunc(L *State) int {
 	L1 := dbGetThread(L, &arg)
 	options := L.OptString(arg+2, "flnStu") /* 5.3.4: no option r */
 	dbCheckStack(L, L1, 3)
-	L.ArgCheck(len(options) == 0 || options[0] != '>', arg+2, "invalid option '>'")
 	if L.IsFunction(arg + 1) { /* info about a function? */
 		options = ">" + options /* add '>' to 'options' */
 		L.PushValue(arg + 1)    /* move function to 'L1' stack */
