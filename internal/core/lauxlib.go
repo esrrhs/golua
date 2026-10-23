@@ -23,9 +23,6 @@ type Reg struct {
 // searches 'package.loaded' for a name. Both paths matter: the standard
 // library is only reachable through the second one.
 func (L *State) ArgError(arg int, extramsg string) int {
-	if extramsg == "" {
-		return L.Error2("bad argument #%d", arg)
-	}
 	var ar dbAr
 	if !dbGetStack(L, 0, &ar) { /* no stack frame? */
 		return L.Error2("bad argument #%d (%s)", arg, extramsg)
@@ -88,8 +85,13 @@ func (L *State) CheckVersion_(ver float64, sz uintptr) {
 
 // CheckAny raises an error when the argument is absent (luaL_checkany).
 // C only asks whether there *is* a value -- not what it is -- so the
-// message is "bad argument #n to 'f' (value expected)".
-func (L *State) CheckAny(arg int) { L.checkNElems(arg) }
+// message is "bad argument #n to 'f' (value expected)". Matches C:
+// if (lua_type(L, arg) == LUA_TNONE) luaL_argerror(...).
+func (L *State) CheckAny(arg int) {
+	if L.Type(arg) == LUA_TNONE {
+		L.ArgError(arg, "value expected")
+	}
+}
 
 // CheckType checks the type of an argument (luaL_checktype).
 func (L *State) CheckType(arg, t int) {
@@ -252,12 +254,6 @@ func (L *State) CallMeta(obj int, name string) bool {
 // the stack.
 func (L *State) ToLString(idx int) string { return strToLString(L, idx) }
 
-func (L *State) checkNElems(n int) {
-	if L.GetTop() < n {
-		L.ArgError(n, "value expected")
-	}
-}
-
 // ArgCheck raises an error when cond is false (luaL_argcheck).
 func (L *State) ArgCheck(cond bool, arg int, extramsg string) {
 	if !cond {
@@ -370,9 +366,15 @@ func (L *State) GetSubTable(idx int, fname string) bool {
 	return false           /* false, because did not find table there */
 }
 
+// CheckVersion is luaL_checkversion: verify core version and numeric sizes.
+func (L *State) CheckVersion() {
+	L.CheckVersion_(float64(luaVersionNumGo), luaLNumSizes)
+}
+
 // NewLib creates a new table and registers the functions of l into it
-// (luaL_newlib).
+// (luaL_newlib). C's macro always runs luaL_checkversion first.
 func (L *State) NewLib(l []Reg) {
+	L.CheckVersion()
 	L.CreateTable(0, len(l))
 	L.SetFuncs(l, 0)
 }
