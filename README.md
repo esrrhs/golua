@@ -160,19 +160,19 @@ One run on an Intel Xeon (8 cores), PUC-Lua **5.3.4** against a cgo build of thi
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 2.59× | global | 2.26× |
-| nop | 1.51× | array | 2.36× |
-| intloop | 2.00× | hash | 2.10× |
-| floatloop | 2.36× | metaindex | 1.90× |
-| bitwise | 2.48× | ipairs | 2.27× |
-| fib | 1.65× | concat | 3.08× |
-| tailcall | 2.01× | strings | 6.70× |
-| call3 | 1.67× | sort | 1.61× |
-| upvalue | 1.75× | yield | 1.40× |
-| method | 1.79× | alloc | 2.08× |
-| pcall | 1.83× |  |  |
+| startup | 3.04× | global | 2.27× |
+| nop | 1.85× | array | 2.32× |
+| intloop | 2.20× | hash | 1.91× |
+| floatloop | 2.48× | metaindex | 2.08× |
+| bitwise | 2.89× | ipairs | 2.36× |
+| fib | 1.60× | concat | 2.65× |
+| tailcall | 2.03× | strings | 1.83× |
+| call3 | 1.80× | sort | 1.64× |
+| upvalue | 1.72× | yield | 1.30× |
+| method | 1.95× | alloc | 2.27× |
+| pcall | 1.79× |  |  |
 
-Most bytecode-heavy rows sit around 1.5–2.5×. `yield` is closest to C; `concat` and `strings` are the outliers. `strings` stays ~6.7× even with a C-shaped stack-local `luaL_Buffer` (`initb`): each `string.format("%d-…")` still goes through Go `fmt`/`strconv` and short-string interning, unlike C's `sprintf` into the stack buffer. `startup` pays for the Go runtime.
+Most bytecode-heavy rows sit around 1.5–2.5×. `yield` is closest to C; `concat` (~2.7×) may still stand out. `strings` is now ~1.8× after pooling `initb` slabs and avoiding an escaped 8 KiB `Buffer` on the hot path; `string.format` still uses Go helpers for some conversions. `startup` pays for the Go runtime.
 
 ## Known differences
 

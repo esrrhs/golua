@@ -149,19 +149,19 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 2.59× | global | 2.26× |
-| nop | 1.51× | array | 2.36× |
-| intloop | 2.00× | hash | 2.10× |
-| floatloop | 2.36× | metaindex | 1.90× |
-| bitwise | 2.48× | ipairs | 2.27× |
-| fib | 1.65× | concat | 3.08× |
-| tailcall | 2.01× | strings | 6.70× |
-| call3 | 1.67× | sort | 1.61× |
-| upvalue | 1.75× | yield | 1.40× |
-| method | 1.79× | alloc | 2.08× |
-| pcall | 1.83× |  |  |
+| startup | 3.04× | global | 2.27× |
+| nop | 1.85× | array | 2.32× |
+| intloop | 2.20× | hash | 1.91× |
+| floatloop | 2.48× | metaindex | 2.08× |
+| bitwise | 2.89× | ipairs | 2.36× |
+| fib | 1.60× | concat | 2.65× |
+| tailcall | 2.03× | strings | 1.83× |
+| call3 | 1.80× | sort | 1.64× |
+| upvalue | 1.72× | yield | 1.30× |
+| method | 1.95× | alloc | 2.27× |
+| pcall | 1.79× |  |  |
 
-多数字节码密集行大约 1.5–2.5×。`yield` 最接近 C；`concat` 与 `strings` 是离群值。`strings` 在栈上 `luaL_Buffer`（`initb`）对齐后仍约 6.7×：每次 `string.format("%d-…")` 仍走 Go 的 `fmt`/`strconv` 与短串 intern，而 C 是 `sprintf` 写进栈缓冲。`startup` 付的是 Go 运行时的成本。
+多数字节码密集行大约 1.5–2.5×。`yield` 最接近 C；`concat`（约 2.7×）仍可能偏高。`strings` 在对 `initb` 板做池化、避免热路径上逃逸的 8 KiB `Buffer` 之后约为 1.8×；`string.format` 的部分转换仍走 Go 辅助函数。`startup` 付的是 Go 运行时的成本。
 
 ## 已知差异
 
