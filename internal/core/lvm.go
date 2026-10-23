@@ -448,7 +448,7 @@ func forprep53(L *State, ra int) {
 	pstep := &L.stack[ra+2]
 	var ilimit int64
 	var stopnow bool
-	if ttisinteger(init) && ttisinteger(pstep) && forlimit53(plimit, &ilimit, ivalue(pstep), &stopnow) {
+	if ttisinteger(init) && ttisinteger(pstep) && forlimit53(L, plimit, &ilimit, ivalue(pstep), &stopnow) {
 		initv := int64(0)
 		if !stopnow {
 			initv = ivalue(init)
@@ -473,11 +473,15 @@ func forprep53(L *State, ra int) {
 }
 
 // forlimit53 converts the limit for a 5.3 numerical for (lvm.c forlimit).
-func forlimit53(obj *Value, p *int64, step int64, stopnow *bool) bool {
+func forlimit53(L *State, obj *Value, p *int64, step int64, stopnow *bool) bool {
 	*stopnow = false
-	if !tointegerns(obj, p) {
+	mode := F2Ifloor
+	if step < 0 {
+		mode = F2Iceil
+	}
+	if !luaV_tointeger(L, obj, p, mode) {
 		var n float64
-		if !tonumberns(obj, &n) {
+		if !luaV_tonumber_(L, obj, &n) {
 			return false
 		}
 		if n > 0 {
@@ -637,7 +641,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					setivalue(&L.stack[ra], -ivalue(rb))
 				} else {
 					var nb float64
-					if tonumberns(rb, &nb) {
+					if luaV_tonumber_(L, rb, &nb) {
 						setfltvalue(&L.stack[ra], -nb)
 					} else {
 						savestate(L, ci, pc)
@@ -648,7 +652,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_BNOT:
 				rb := &L.stack[base+i.B]
 				var ib int64
-				if tointegerns(rb, &ib) {
+				if tointeger(L, rb, &ib) {
 					setivalue(&L.stack[ra], ^ib)
 				} else {
 					savestate(L, ci, pc)
@@ -943,6 +947,7 @@ func binOpTM(op int) TMS {
 }
 
 func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
+	/* Lua 5.3: tonumber/tointeger coerce strings (unlike 5.4's *ns helpers). */
 	switch op {
 	case OP_ADD:
 		if ttisinteger(rb) && ttisinteger(rc) {
@@ -950,7 +955,7 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 			return true
 		}
 		var nb, nc float64
-		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+		if luaV_tonumber_(L, rb, &nb) && luaV_tonumber_(L, rc, &nc) {
 			setfltvalue(ra, nb+nc)
 			return true
 		}
@@ -960,7 +965,7 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 			return true
 		}
 		var nb, nc float64
-		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+		if luaV_tonumber_(L, rb, &nb) && luaV_tonumber_(L, rc, &nc) {
 			setfltvalue(ra, nb-nc)
 			return true
 		}
@@ -970,13 +975,13 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 			return true
 		}
 		var nb, nc float64
-		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+		if luaV_tonumber_(L, rb, &nb) && luaV_tonumber_(L, rc, &nc) {
 			setfltvalue(ra, nb*nc)
 			return true
 		}
 	case OP_DIV:
 		var nb, nc float64
-		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+		if luaV_tonumber_(L, rb, &nb) && luaV_tonumber_(L, rc, &nc) {
 			setfltvalue(ra, nb/nc)
 			return true
 		}
@@ -986,7 +991,7 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 			return true
 		}
 		var nb, nc float64
-		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+		if luaV_tonumber_(L, rb, &nb) && luaV_tonumber_(L, rc, &nc) {
 			setfltvalue(ra, math.Floor(nb/nc))
 			return true
 		}
@@ -996,19 +1001,19 @@ func vmBinOp(L *State, op int, ra, rb, rc *Value) bool {
 			return true
 		}
 		var nb, nc float64
-		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+		if luaV_tonumber_(L, rb, &nb) && luaV_tonumber_(L, rc, &nc) {
 			setfltvalue(ra, luaV_modf(L, nb, nc))
 			return true
 		}
 	case OP_POW:
 		var nb, nc float64
-		if tonumberns(rb, &nb) && tonumberns(rc, &nc) {
+		if luaV_tonumber_(L, rb, &nb) && luaV_tonumber_(L, rc, &nc) {
 			setfltvalue(ra, math.Pow(nb, nc))
 			return true
 		}
 	case OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR:
 		var ib, ic int64
-		if tointegerns(rb, &ib) && tointegerns(rc, &ic) {
+		if tointeger(L, rb, &ib) && tointeger(L, rc, &ic) {
 			switch op {
 			case OP_BAND:
 				setivalue(ra, ib&ic)

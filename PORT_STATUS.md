@@ -9,9 +9,11 @@
 - Conformance / corolib / close tests for `<close>` / `<const>` / `coroutine.close` skipped or adapted
 - Official `testes/` = 5.3.4 suite; CI + `LUA_REF` → lua-5.3.4; **Linux goldens captured** (`*.linux.expected`)
 - Regression: float literal `3.0` stays float (`TestFloatLiteralTag`)
+- Arith/bitwise coerce strings via `luaV_tonumber_` / `tointeger` (5.3), not 5.4 `*ns`
+- `test_then_block` goto/break path matches PUC 5.3.4 (`jf` skip + no corrupt patch of `v.t`); goto.lua compiles (`TestGotoIfThenElseifLabels`)
 
 ## Remaining / known gaps
-1. **Official suite** under captured goldens: only ~7 files identical; many still diverge (bitwise-on-string messages, goto/labels, math edge cases, utf8, tpack, sort comparison counts, etc.). Not silent — `TestOfficialSuite` fails until parity improves.
+1. **Official suite** under captured goldens: still many diverge (math/utf8/tpack edge cases, sort comparison counts, error-message wording, etc.). Re-measure after goto + coerce. Not silent — `TestOfficialSuite` fails until parity improves.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).

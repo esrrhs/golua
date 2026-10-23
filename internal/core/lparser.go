@@ -1156,36 +1156,36 @@ func forstat(ls *LexState, line int) {
 }
 
 func test_then_block(ls *LexState, escapelist *int) {
+	/* test_then_block -> [IF | ELSEIF] cond THEN block (PUC-Lua 5.3.4) */
 	var bl BlockCnt
 	fs := ls.fs
 	var v expdesc
-	luaX_next(ls)
-	expr(ls, &v)
+	var jf int /* instruction to skip 'then' code (if condition is false) */
+	luaX_next(ls) /* skip IF or ELSEIF */
+	expr(ls, &v)  /* read condition */
 	checknext(ls, TK_THEN)
 	if ls.t.token == TK_GOTO || ls.t.token == TK_BREAK {
-		luaK_goiffalse(ls.fs, &v)
-		enterblock(fs, &bl, false)
-		gotostat(ls, v.t)
-		skipnoopstat(ls)
-		if block_follow(ls, false) {
+		luaK_goiffalse(ls.fs, &v) /* will jump to label if condition is true */
+		enterblock(fs, &bl, false) /* must enter block before 'goto' */
+		gotostat(ls, v.t)          /* handle goto/break */
+		skipnoopstat(ls)           /* skip other no-op statements */
+		if block_follow(ls, false) { /* 'goto' is the entire block? */
 			leaveblock(fs)
-			return
+			return /* and that is it */
 		}
-		jf := luaK_jump(fs)
-		luaK_patchtohere(fs, v.t)
-		leaveblock(fs)
-		luaK_patchtohere(fs, jf)
+		/* must skip over 'then' part if condition is false */
+		jf = luaK_jump(fs)
+	} else { /* regular case (not goto/break) */
+		luaK_goiftrue(ls.fs, &v) /* skip over block if condition is false */
 		enterblock(fs, &bl, false)
-	} else {
-		luaK_goiftrue(ls.fs, &v)
-		enterblock(fs, &bl, false)
+		jf = v.f
 	}
-	statlist(ls)
+	statlist(ls) /* 'then' part */
 	leaveblock(fs)
-	if ls.t.token == TK_ELSE || ls.t.token == TK_ELSEIF {
-		luaK_concat(fs, escapelist, luaK_jump(fs))
+	if ls.t.token == TK_ELSE || ls.t.token == TK_ELSEIF { /* followed by 'else'/'elseif'? */
+		luaK_concat(fs, escapelist, luaK_jump(fs)) /* must jump over it */
 	}
-	luaK_patchtohere(fs, v.f)
+	luaK_patchtohere(fs, jf)
 }
 
 func ifstat(ls *LexState, line int) {
