@@ -217,6 +217,8 @@ func isxdigit(c int) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
 }
 
+// lisprint reports whether c is a printable ASCII character (lctype.h).
+// Used by pushfString '%c' (5.3.4 luaO_pushvfstring), not by luaX_token2str.
 func lisprint(c int) bool {
 	return c >= ' ' && c <= '~'
 }
@@ -248,16 +250,15 @@ func isreservedToken(ts *TString) (int, bool) {
 }
 
 // luaX_token2str returns a printable representation of a token (llex.c).
+// 5.3.4: always "'%c'" for single-byte tokens. Non-printable escaping is in
+// pushfString's '%c' (luaO_pushvfstring), not the 5.4 lisprint branch here.
 func luaX_token2str(ls *LexState, token int) string {
 	if token < FIRST_RESERVED { /* single-byte symbols? */
-		if lisprint(token) {
-			return fmt.Sprintf("'%c'", rune(token))
-		}
-		return fmt.Sprintf("'<\\%d>'", token)
+		return pushfString(ls.L, "'%c'", token).val
 	}
 	s := luaX_tokens[token-FIRST_RESERVED]
 	if token < TK_EOS { /* fixed format (symbols and reserved words)? */
-		return "'" + s + "'"
+		return pushfString(ls.L, "'%s'", s).val
 	}
 	return s /* names, strings, and numerals */
 }
@@ -382,10 +383,16 @@ func read_numeral(ls *LexState, seminfo *SemInfo) int {
 	if first == '0' && ls.checkNext2("xX") { /* hexadecimal? */
 		expo = "Pp"
 	}
+	/* 5.3.4 loop shape (not 5.4 else-if): after optional expo/sign, a separate
+	   digit/'.' check runs in the same iteration so a second expo char that is
+	   not a digit breaks without consuming it (e.g. 0x1Pp; 1ee still consumes 2nd e via lisxdigit). */
 	for {
-		if ls.checkNext2(expo) { /* exponent mark? */
+		if ls.checkNext2(expo) { /* exponent part? */
 			ls.checkNext2("-+") /* optional exponent sign */
-		} else if isxdigit(ls.current) || ls.current == '.' { /* '%x|%.' */
+		}
+		if isxdigit(ls.current) {
+			ls.saveAndNext()
+		} else if ls.current == '.' {
 			ls.saveAndNext()
 		} else {
 			break

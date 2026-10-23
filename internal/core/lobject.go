@@ -1002,9 +1002,14 @@ func pushfString(L *State, format string, args ...any) *TString {
 			} else {
 				b.WriteString(toStringAny(a))
 			}
-		case 'c':
+		case 'c': /* an 'int' as a character (5.3.4: lisprint or '<\\d>') */
 			a := next()
-			b.WriteByte(byte(toIntAny(a)))
+			c := byte(toIntAny(a))
+			if lisprint(int(c)) {
+				b.WriteByte(c)
+			} else { /* non-printable character; print its code */
+				b.WriteString(fmt.Sprintf("<\\%d>", c))
+			}
 		case 'd':
 			a := next()
 			b.WriteString(strconv.FormatInt(toIntAny(a), 10))
