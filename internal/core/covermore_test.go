@@ -399,21 +399,22 @@ func TestNamesUpvaluesAndWeakClosures(t *testing.T) {
 		},
 	}
 	var name string
-	rname(proto, 1, 1, &name)
+	/* Cover 5.3.4 knameRK (RK constant / register → constant name). */
+	knameRK(proto, 1, 1, &name)
 	if name != "field" {
-		t.Fatalf("rname constant %q", name)
+		t.Fatalf("knameRK register constant %q", name)
 	}
-	rname(proto, 0, 3, &name)
+	knameRK(proto, 0, 3, &name)
 	if name != "?" {
-		t.Fatalf("rname unknown %q", name)
+		t.Fatalf("knameRK unknown %q", name)
 	}
-	rkname(proto, 0, newABC(OP_SELF, 0, 0, RKASK(0)), &name)
+	knameRK(proto, 0, RKASK(0), &name)
 	if name != "field" {
-		t.Fatalf("rkname k %q", name)
+		t.Fatalf("knameRK k %q", name)
 	}
-	rkname(proto, 1, newABC(OP_SELF, 0, 0, 1, 0), &name)
+	knameRK(proto, 1, 1, &name)
 	if name != "field" {
-		t.Fatalf("rkname r %q", name)
+		t.Fatalf("knameRK r %q", name)
 	}
 
 	checkWeak := func(v Value) {

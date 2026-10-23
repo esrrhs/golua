@@ -103,9 +103,6 @@ func testAMode(op int) bool {
 	return opModes[op]&(1<<6) != 0
 }
 
-// testMMMode: 5.3 has no MMBIN family.
-func testMMMode(op int) bool { return false }
-
 // filterpc is 'filterpc' (ldebug.c).
 func filterpc(pc, jmptarget int) int {
 	if pc < jmptarget { /* is code conditional (inside a jump)? */
@@ -118,12 +115,9 @@ func filterpc(pc, jmptarget int) int {
 // modified register 'reg' (ldebug.c).
 func findsetreg(p *Proto, lastpc, reg int) int {
 	setreg := -1 /* keep last instruction that changed 'reg' */
-	jmptarget := 0
+	jmptarget := 0 /* any code before this address is conditional */
 	if lastpc < 0 || lastpc >= len(p.code) {
 		return -1
-	}
-	if testMMMode(p.code[lastpc].Op) {
-		lastpc-- /* previous instruction was not actually executed */
 	}
 	for pc := 0; pc < lastpc; pc++ {
 		i := p.code[pc]
@@ -138,8 +132,11 @@ func findsetreg(p *Proto, lastpc, reg int) int {
 			change = reg >= a
 		case OP_JMP: /* doesn't change registers, but changes 'jmptarget' */
 			dest := pc + 1 + sBx(i.B)
-			if dest <= lastpc && dest > jmptarget {
-				jmptarget = dest /* update 'jmptarget' */
+			/* jump is forward and do not skip 'lastpc'? (5.3.4) */
+			if pc < dest && dest <= lastpc {
+				if dest > jmptarget {
+					jmptarget = dest /* update 'jmptarget' */
+				}
 			}
 			change = false
 		default: /* any instruction that sets A */
@@ -183,71 +180,6 @@ func knameRK(p *Proto, pc, c int, name *string) {
 		}
 	}
 	*name = "?" /* no reasonable name found */
-}
-
-// basicgetobjname is 'basicgetobjname' (ldebug.c). 'ppc' is both the pc to
-// start from and, on return, the pc of the instruction that set 'reg'.
-func basicgetobjname(p *Proto, ppc *int, reg int, name *string) string {
-	pc := *ppc
-	*name = luaF_getlocalname(p, reg+1, pc)
-	if *name != "" { /* is a local? */
-		return "local"
-	}
-	/* else try symbolic execution */
-	pc = findsetreg(p, pc, reg)
-	*ppc = pc
-	if pc != -1 { /* could find instruction? */
-		i := p.code[pc]
-		switch i.Op {
-		case OP_MOVE:
-			b := i.B /* move from 'b' to 'a' */
-			if b < i.A {
-				return basicgetobjname(p, ppc, b, name) /* get name for 'b' */
-			}
-		case OP_GETUPVAL:
-			*name = upvalName(p, i.B)
-			return "upvalue"
-		case OP_LOADK:
-			return kname(p, i.B, name)
-		case OP_LOADKX:
-			if pc+1 < len(p.code) {
-				return kname(p, p.code[pc+1].A, name)
-			}
-		}
-	}
-	return "" /* could not find reasonable name */
-}
-
-// rname finds a "name" for the register 'c' (ldebug.c).
-func rname(p *Proto, pc, c int, name *string) {
-	what := basicgetobjname(p, &pc, c, name) /* search for 'c' */
-	if len(what) == 0 || what[0] != 'c' {    /* did not find a constant name? */
-		*name = "?"
-	}
-}
-
-// rkname finds a "name" for a 'C' value in an RK instruction (ldebug.c).
-func rkname(p *Proto, pc int, i Instruction, name *string) {
-	knameRK(p, pc, i.C, name)
-}
-
-// isEnv checks whether the table indexed by instruction 'i' is the
-// environment '_ENV' (ldebug.c).
-func isEnv(p *Proto, pc int, i Instruction, isup bool) string {
-	t := i.B /* table index */
-	var name string
-	if isup { /* is 't' an upvalue? */
-		name = upvalName(p, t)
-	} else { /* 't' is a register */
-		what := basicgetobjname(p, &pc, t, &name)
-		if what != "local" && what != "upvalue" {
-			name = "" /* cannot be the variable _ENV */
-		}
-	}
-	if name != "" && name == LUA_ENV {
-		return "global"
-	}
-	return "field"
 }
 
 // getobjname is 'getobjname' (ldebug.c, Lua 5.3.4).
@@ -379,9 +311,12 @@ func getUpvalName(L *State, ci *CallInfo, o *Value, name *string) string {
 }
 
 // instack returns the register index of 'o' in the frame 'ci', or -1
-// (ldebug.c).
+// (ldebug.c isinstack + cast_int(o - ci->u.l.base)).
+// Use Lua frame base (ci.base), not funcIdx+1: with varargs ci.base >
+// funcIdx+1, so register indices for getobjname / varinfo must be relative
+// to ci.base (PUC 5.3.4).
 func instack(L *State, ci *CallInfo, o *Value) int {
-	base := ci.funcIdx + 1
+	base := ci.base
 	for pos := 0; base+pos < ci.top && base+pos < len(L.stack); pos++ {
 		if &L.stack[base+pos] == o {
 			return pos
@@ -469,18 +404,6 @@ func luaG_ordererror(L *State, p1, p2 *Value) {
 		luaG_runerror(L, "attempt to compare two %s values", t1)
 	}
 	luaG_runerror(L, "attempt to compare %s with %s", t1, t2)
-}
-
-// luaG_callerror raises "attempt to call a <type> value" (ldebug.c 5.3.4).
-func luaG_callerror(L *State, o *Value) {
-	t := luaT_objtypename(L, o)
-	luaG_runerror(L, "attempt to call a %s value%s", t, varinfo(L, o))
-}
-
-func luaG_forerror(L *State, o *Value, what string) {
-	/* 5.3.4 lvm.c inlines "'for' %s must be a number" (no type in message). */
-	_ = o
-	luaG_runerror(L, "'for' %s must be a number", what)
 }
 
 // luaG_findlocal returns the name of the local variable at a given
