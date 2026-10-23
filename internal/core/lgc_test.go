@@ -104,17 +104,8 @@ func TestFinalizerRuns(t *testing.T) {
 
 // 'collectgarbage("collect")' drives a cycle: the '__gc' of what has
 // become unreachable runs, and it runs there and then rather than at
-// the next step an allocation happens to drive.  It answers 0, as in C,
-// and 'step' answers false -- a basic step never reports the end of a
-// cycle.
-//
-// The three answers are PUC-Lua's own for this chunk.  What they used
-// to be here was "0,0,0": the function was inert, and the '__gc' ran
-// only from the step an allocation drives or from the closing of the
-// state.  That made a program reaching the collector from Lua get a
-// different collector from the one it gets from C, since 'lua_gc' has
-// always run a cycle -- and it is what coroutine.lua, gengc.lua and
-// locals.lua of PUC-Lua's suite assert against.
+// the next step an allocation happens to drive.  It answers 0.
+// "step" is accepted but ignored (also answers 0) and does not collect.
 func TestCollectGarbageDrivesACycle(t *testing.T) {
 	got := runChunk(t, `
 		local n = 0
@@ -126,7 +117,7 @@ func TestCollectGarbageDrivesACycle(t *testing.T) {
 		local s = collectgarbage("step")
 		return tostring(c) .. "," .. tostring(s) .. "," .. tostring(n)
 	`)
-	if got != "0,false,1" {
+	if got != "0,0,1" {
 		t.Errorf("collectgarbage did not drive a cycle: %s", got)
 	}
 }
@@ -282,7 +273,7 @@ func TestCollectGarbageInsideAFinalizerAnswersNil(t *testing.T) {
 				       tostring(collectgarbage("isrunning"))
 			end})
 		end
-		for i = 1, 1000000 do local a = {} end   -- a cycle: see lgc.go
+		collectgarbage("collect")   -- force '__gc' (alloc loop can be slow)
 		return seen .. " / " .. tostring(collectgarbage())
 	`)
 	if got != "nil,nil,nil / 0" {

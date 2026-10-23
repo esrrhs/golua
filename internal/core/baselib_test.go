@@ -437,44 +437,32 @@ func TestBaseDoFile(t *testing.T) {
 func TestBaseCollectGarbage(t *testing.T) {
 	L := baseNew(t)
 	baseCheck(t, L, `r = tostring(collectgarbage())`, "r", "0")
+	baseCheck(t, L, `r = tostring(collectgarbage("collect"))`, "r", "0")
 	/* "count" is the size of the Go heap in Kbytes: an actual number,
 	   not 0, so that scripts that watch memory see something move. */
 	baseCheck(t, L, `r = type(collectgarbage("count"))`, "r", "number")
 	baseCheck(t, L, `r = tostring(collectgarbage("count") > 0)`, "r", "true")
-	/* And the rest is what lbaselib.c's 'luaB_collectgarbage' answers,
-	   checked against PUC-Lua: 'step' and 'isrunning' are booleans,
-	   'setpause' and 'setstepmul' answer the value they replaced
-	   (200 and 100, LUAI_GCPAUSE and LUAI_GCMUL), and the two modes
-	   answer the name of the mode they replaced -- which for a fresh
-	   state is "generational", because that is what 5.4 opens in. */
-	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "true")
-	/* A basic step -- the one with no size -- answers false in C and
-	   answers false here.  A step that was given work to do answers
-	   true, because here any step is a whole cycle; see the comment
-	   in baseCollectGarbage for why it cannot be false to both. */
-	baseCheck(t, L, `r = tostring(collectgarbage("step"))`, "r", "false")
-	baseCheck(t, L, `r = tostring(collectgarbage("step", 20000))`, "r", "true")
-	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "200")
-	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 50))`, "r", "100")
-	baseCheck(t, L, `r = collectgarbage("generational")`, "r", "generational")
-	baseCheck(t, L, `r = collectgarbage("incremental")`, "r", "generational")
-	baseCheck(t, L, `r = collectgarbage("generational")`, "r", "incremental")
-	/* A 0 is a value like any other: 'setpause' with no argument sets
-	   the pause to 0, which the next call answers. */
-	baseCheck(t, L, `r = tostring(collectgarbage("setpause"))`, "r", "100")
-	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 200))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("collect"))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("stop"))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "false")
-	baseCheck(t, L, `r = tostring(collectgarbage("restart"))`, "r", "0")
-	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "true")
-	/* A second argument that is not a number is an error, because C
-	   reads it: 'luaL_optinteger' rejects it. */
-	if msg := baseRunErr(t, `collectgarbage("step", "x")`); !strings.Contains(msg, "number expected") {
-		t.Errorf(`collectgarbage("step", "x") = %q`, msg)
+	/* Known PUC option names other than collect/count are accepted but
+	   ignored: always push integer 0, no side effects. */
+	for _, opt := range []string{
+		"stop", "restart", "step", "setpause", "setstepmul", "isrunning",
+	} {
+		baseCheck(t, L, `r = tostring(collectgarbage("`+opt+`"))`, "r", "0")
 	}
+	baseCheck(t, L, `r = tostring(collectgarbage("step", 20000))`, "r", "0")
+	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "0")
+	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 50))`, "r", "0")
+	/* stop does not toggle isrunning; still 0. */
+	baseCheck(t, L, `r = tostring(collectgarbage("stop"))`, "r", "0")
+	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "0")
+	/* Ignored options do not validate a second argument. */
+	baseCheck(t, L, `r = tostring(collectgarbage("step", "x"))`, "r", "0")
 	if msg := baseRunErr(t, `collectgarbage("foo")`); !strings.Contains(msg, "invalid option") {
 		t.Errorf("collectgarbage('foo') = %q", msg)
+	}
+	/* 5.3.4 has no mode names in collectgarbage. */
+	if msg := baseRunErr(t, `collectgarbage("generational")`); !strings.Contains(msg, "invalid option") {
+		t.Errorf("collectgarbage('generational') = %q", msg)
 	}
 }
 

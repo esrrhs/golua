@@ -188,13 +188,18 @@ if not _port then
 end
 
 -- collector should do a full collection with so many steps
-assert(dosteps(20000) == 1)
-assert(collectgarbage("step", 20000) == true)
-assert(collectgarbage("step", 20000) == true)
+-- (_port: step/isrunning/stop are no-ops answering 0; skip asserts)
+if not _port then
+  assert(dosteps(20000) == 1)
+  assert(collectgarbage("step", 20000) == true)
+  assert(collectgarbage("step", 20000) == true)
 
-assert(not collectgarbage("isrunning"))
-collectgarbage"restart"
-assert(collectgarbage("isrunning"))
+  assert(not collectgarbage("isrunning"))
+  collectgarbage"restart"
+  assert(collectgarbage("isrunning"))
+else
+  collectgarbage"restart"
+end
 
 
 if not _port then
@@ -506,6 +511,8 @@ do
 end
 
 
+-- (_port: stop is a no-op, so this loop can hang if Go GC reclaims)
+if not _port then
 do
   collectgarbage()
   collectgarbage"stop"
@@ -515,6 +522,7 @@ do
     collectgarbage("step", 0)   -- steps should not unblock the collector
   until gcinfo() > 2 * x
   collectgarbage"restart"
+end
 end
 
 

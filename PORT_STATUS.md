@@ -18,7 +18,7 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 | Stand-alone SIGINT | Yes | `cmd/lua` `laction`/`lstop` equivalent; process-group kill in harness |
 | `lparser` / `lcode` / `llex` | Yes (behavior) | Structure ~1:1 |
 | File headers / docs | Yes | Point at 5.3.4; bench tables vs PUC **5.3.4** |
-| **Go GC / `lgc`** | **No (intentional)** | Go runtime + finalizer bridge |
+| **Go GC / `lgc`** | **No (intentional)** | Go runtime + finalizer bridge; `collectgarbage` only `collect`+`count` (other known opts no-op→0; C `lua_gc` may still drive GC) |
 | CallInfo **extra fields** | Go adaptation | `trap`, `ftransfer`/`ntransfer`, `goCont`, … |
 | `Proto.fastLeaf` | Go adaptation | VM leaf fastpath cache |
 | `Table.alimit` name | Go adaptation | ≡ C `sizearray` (always real; no 5.4 shrink) |
@@ -35,10 +35,11 @@ Line-by-line Go translation of PUC-Lua **5.3.4** C (`/workspace/lua-sources/lua-
 - Dead `setnorealasize` / `CIST_C`/`TRAN`/`CLSRET` / Proto `abslineinfo` removed
 - LPeg `expected.txt` verified under PUC 5.3.4; `TestLPeg` enabled
 - Stand-alone SIGINT: first INT → `SetInterruptHook` ("interrupted!"); second INT → process exit (Go cannot restore kernel SIG_DFL usefully). Official harness uses Setpgid + group kill on timeout.
+- `collectgarbage`: only `"collect"` / `"count"`; other known option names accepted but ignored (push 0); unknown still `invalid option`; inside `__gc` still nil
 - Bench tables refreshed vs PUC **5.3.4** (Intel Xeon, Go 1.27 cgo, `MIN_MS=600 REPS=7`)
 
 ## Still open (do not thrash)
-1. Go GC (pace/debt/ephemerons/`gc.lua` known-diff; `all.lua` needs `_port` for the same `dosteps(0)` reason)
+1. Go GC (`collectgarbage` only collect+count; pace/debt/ephemerons/`gc.lua` known-diff; `all.lua`/`gc.lua` need `_port`)
 2. Darwin golden refresh — optional; Linux host cannot rewrite `*.darwin.expected`; macos CI owns them
 3. Further comment/order polish where behavior already matches
 4. Optional: longer `MIN_MS`/`REPS` bench pass on beefier hardware

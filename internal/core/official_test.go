@@ -64,7 +64,7 @@ const officialDir = "testdata/official"
 // order it ran the finalizers of a long list.
 var officialKnownDiff = map[string]string{
 	"all": "run with _port=true (else gc.lua dosteps(0) hangs); plus env lines (PRNG seed, total memory, elapsed time, interpreter path) that cannot match PUC",
-	"gc":  "Go GC: no collector pace/debt, no ephemeron chains (weak-key values keep keys alive across stock GC); suite runs it with _port=true so the infinite dosteps(0) / pace loops are skipped",
+	"gc":  "Go GC: collectgarbage only implements collect+count (other opts no-op→0); no pace/debt/ephemerons; suite runs with _port=true so step/stop/isrunning asserts and hang-prone loops are skipped",
 }
 
 // officialKnownDiffBuild are differences that depend on what the binary
@@ -327,11 +327,11 @@ print(when == "open", os.setlocale("pt_BR") ~= nil, os.setlocale("zz_ZZ.NOPE") =
 func officialRun(bin, dir, file string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), officialTimeout)
 	defer cancel()
-	/* gc.lua / all.lua without _port hit dosteps(0): collectgarbage("step",0)
-	   never ends a cycle here, so the repeat loop never terminates. Ports
-	   set _port; doing it for these two keeps the rest of the suite matching
-	   PUC goldens. all.lua still dofiles main.lua, but main returns at once
-	   when _port is set — Ctrl-C coverage lives in the main.lua case alone. */
+	/* gc.lua / all.lua need _port: collectgarbage("step") is a no-op that
+	   answers 0 (truthy), and stop/isrunning do nothing — without _port the
+	   suite asserts boolean step/isrunning and can hang on stop+alloc loops.
+	   all.lua still dofiles main.lua, but main returns at once when _port
+	   is set — Ctrl-C coverage lives in the main.lua case alone. */
 	preamble := "math.randomseed(1, 1)"
 	if file == "gc.lua" || file == "all.lua" {
 		preamble = "_port=true; " + preamble

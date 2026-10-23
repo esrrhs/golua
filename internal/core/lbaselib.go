@@ -3,10 +3,10 @@
 // Every luaB_* function keeps its C name prefixed with 'base', and the
 // control flow follows the C source.  Three things are necessarily
 // different from C: there is no collector of our own (so
-// 'collectgarbage' drives Go's, and 'count' answers the Go heap rather
-// than an allocator of ours -- see baseCollectGarbage), the error
-// mechanism is panic/recover instead of setjmp/longjmp (which is
-// already handled by luaD_pcall), and every C function is a GoFunc.
+// 'collectgarbage' only implements collect+count over Go's GC -- see
+// baseCollectGarbage), the error mechanism is panic/recover instead of
+// setjmp/longjmp (which is already handled by luaD_pcall), and every C
+// function is a GoFunc.
 package core
 
 import (
@@ -221,9 +221,9 @@ func baseRawSet(L *State) int {
 // collectgarbage
 // ---------------------------------------------------------------------
 
-// The ten options, in C's order: 'luaB_collectgarbage' turns the name
-// into one of these and then into a 'lua_gc' call, so the index here is
-// what decides which branch of baseCollectGarbage runs.
+// The PUC 5.3.4 option names, in C's order.  Kept so scripts that pass
+// known names do not get 'invalid option'; only "collect" and "count"
+// do real work (see baseCollectGarbage).
 var baseGCOpts = []string{"stop", "restart", "collect", "count", "step",
 	"setpause", "setstepmul", "isrunning"}
 
@@ -239,10 +239,9 @@ const (
 	baseGCIsRunning
 )
 
-// gcModeInc / gcModeGen are the two collector modes PUC-Lua knows.  A C
-// library can ask for either through 'lua_gc' (see cdl_gc_cb), and the
-// answer it gets is the one it replaced; 'collectgarbage' longer offers
-// them, but the names stay because the C API still needs them.
+// gcModeInc / gcModeGen are the two collector modes the C API's lua_gc
+// still understands (see cdl_gc_cb).  collectgarbage no longer switches
+// them; the names stay for the C side.
 const (
 	gcModeInc = "incremental"
 	gcModeGen = "generational"
@@ -258,26 +257,17 @@ func gcCount() float64 {
 
 // baseCollectGarbage is 'collectgarbage'.
 //
-// It is lbaselib.c's 'luaB_collectgarbage' over 'lua_gc', and it answers
-// what that answers: 'count' a number, 'step' and 'isrunning' a boolean,
-// 'setpause' and 'setstepmul' the value they replaced, 'generational'
-// and 'incremental' the name of the mode they replaced, and the rest 0.
+// Intentional Go-GC simplification: only "collect" and "count" are
+// implemented.  Every other known PUC option name is accepted (so
+// CheckOption does not raise 'invalid option') but is a no-op that
+// pushes integer 0 — no gcCycle on "step", no gcStopped toggle on
+// stop/restart, no pause/stepmul mutation.  Unknown names still error.
 //
-// It used to answer 0 to everything but 'count', on the grounds that
-// there is no collector here to drive.  That was a translation left
-// half finished rather than a decision: the C API's 'lua_gc' --
-// cdl_gc_cb -- has always driven one, and the knobs it reads are the
-// right ones already (pause 200, stepmul 100, generational, which is
-// what a fresh state answers).  Only this function was throwing them
-// away, so a program that reaches the collector from Lua and one that
-// reaches it from C got two different collectors.
+// Note: the C API lua_gc (cdl_gc_cb) may still drive a real cycle and
+// mutate knobs; Lua collectgarbage and C lua_gc can therefore diverge.
 //
-// Two answers cannot be the ones C computes, and both are said so where
-// they are given: 'collect' sweeps the weak tables and runs the '__gc'
-// of what has become unreachable, but the number it reports is not the
-// memory C freed, because nothing was freed by an allocator of ours --
-// and 'count' is the Kbytes of the whole Go heap, not of this state,
-// because the heap is not accounted per state.
+// "collect" sweeps weak tables and runs '__gc' of unreachable objects,
+// then pushes 0.  "count" is Kbytes of the whole Go heap (not per-state).
 func baseCollectGarbage(L *State) int {
 	/* From inside a '__gc' PUC-Lua answers nil for every option, and not
 	   0: it has stopped the collector for the duration of the finalizer,
@@ -290,53 +280,18 @@ func baseCollectGarbage(L *State) int {
 		return 1
 	}
 	switch L.CheckOption(1, "collect", baseGCOpts) {
-	case baseGCStop:
-		L.g.gcStopped = true
-	case baseGCRestart:
-		L.g.gcStopped = false
 	case baseGCCollect:
 		L.fullCollect()
+		L.PushInteger(0)
+		return 1
 	case baseGCCount:
 		L.PushNumber(gcCount())
 		return 1
-	case baseGCStep:
-		/* C reads the second argument even though a step here ignores
-		   what it says, so does this: 'collectgarbage("step", "x")'
-		   is an error in C and has to be one here. */
-		n := L.OptInteger(2, 0)
-		L.gcCycle()
-		/* C answers whether the step ended a cycle, and it splits on
-		   the argument to decide: with no data it does a *basic*
-		   step, which never ends one -- 'luaC_step' leaves the
-		   collector in GCSpropagate, so 'g->gcstate == GCSpause' is
-		   false and 'res' stays 0 -- while a step given 'data'
-		   Kbytes of debt does enough work to finish.
-		   Here a step is always a whole cycle, so the answer is the
-		   one for work that was asked for, and 'false' for the basic
-		   step whose answer PUC-Lua publishes.
-		   It cannot answer false to both.  'repeat until
-		   collectgarbage("step", siz)' -- the shape gc.lua uses to
-		   force a collection -- would never end, and a script that
-		   hangs is a worse answer than one that differs by a bit. */
-		L.PushBoolean(n != 0)
-		return 1
-	case baseGCSetPause:
-		L.PushInteger(int64(gcSetParam(&L.g.gcPause, L.OptInteger(2, 0))))
-		return 1
-	case baseGCSetStepMul:
-		/* lapi.c LUA_GCSETSTEPMUL: if (data < 40) data = 40; */
-		v := L.OptInteger(2, 0)
-		if v < 40 {
-			v = 40
-		}
-		L.PushInteger(int64(gcSetParam(&L.g.gcStepMul, v)))
-		return 1
-	case baseGCIsRunning:
-		L.PushBoolean(!L.g.gcStopped)
+	default:
+		/* stop, restart, step, setpause, setstepmul, isrunning: ignore. */
+		L.PushInteger(0)
 		return 1
 	}
-	L.PushInteger(0)
-	return 1
 }
 
 // gcSetParam is 'setgcparam' inside 'lua_gc': the value it is handed
