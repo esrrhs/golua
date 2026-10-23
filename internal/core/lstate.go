@@ -521,11 +521,11 @@ func NewState() *State {
 	atomic.AddUint64(&stateIDSeed, 1)
 
 	L.nCcalls = 0
+	L.nny = 1 /* main thread is always non-yieldable (preinit_thread) */
 	L.isMain = true
 	L.status = LUA_OK
 	L.allowhook = 1
 	L.errfunc = 0
-	incnny(L) /* main thread is always non yieldable */
 
 	L.reallocStack(BASIC_STACK_SIZE)
 	L.top = 1
@@ -681,6 +681,7 @@ func (L *State) NewThread() *State {
 	L1.status = LUA_YIELD
 	L1.started = false
 	L1.nCcalls = 0
+	L1.nny = 1 /* preinit_thread: non-yieldable until lua_resume clears it */
 	L1.errfunc = 0
 	L1.reallocStack(BASIC_STACK_SIZE)
 	L1.top = 1
@@ -885,6 +886,7 @@ func (L *State) Resume(from *State, nargs int) int {
 	}
 	co.parent = from
 	co.status = LUA_OK
+	oldnny := co.nny /* save "number of non-yieldable" calls (lua_resume) */
 	ccalls := 0
 	if from != nil {
 		ccalls = int(from.nCcalls) /* getCcalls(from) */
@@ -893,6 +895,7 @@ func (L *State) Resume(from *State, nargs int) int {
 		/* C's resume_error: message goes on the resumed thread */
 		return resumeError(co, "C stack overflow")
 	}
+	co.nny = 0 /* allow yields */
 	var resp resumeResp
 	if co.co.sync {
 		resp = co.resumeSync(ccalls)
@@ -900,6 +903,7 @@ func (L *State) Resume(from *State, nargs int) int {
 		co.co.req <- resumeReq{kind: reqResume, args: co.co.args, ccalls: ccalls}
 		resp = <-co.co.resp
 	}
+	co.nny = oldnny /* restore 'nny' */
 	co.status = byte(resp.status)
 	if resp.status == LUA_OK || resp.status == LUA_YIELD {
 		/* C's lua_resume leaves results on the coroutine. The caller

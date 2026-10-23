@@ -79,35 +79,51 @@ func makevariant(t, v int) int { return t | (v << 4) }
 func ctb(t int) uint8          { return uint8(t) | BIT_ISCOLLECTABLE }
 func novariant(t int) int      { return t & 0x0F }
 
-// Variant tags (lobject.h). The values are 'makevariant(t, v)', written
-// out literally because Go constants cannot call functions.
+// Variant tags from lobject.h (PUC-Lua 5.3.4 primary names + Go aliases).
+//
+// 5.3.4 number variants: FLT is variant 0, INT is variant 1 (ldump/lundump).
+// Historical port names LUA_VNUM* are aliases with those same values.
+//
+// Still 5.4-shaped (not in 5.3.4 TValue tags): LUA_VEMPTY, LUA_VABSTKEY,
+// LUA_VFALSE/LUA_VTRUE (5.3.4 uses LUA_TBOOLEAN + b in the value union).
+// LUA_TUPVAL as a distinct tag is also 5.4-ish bookkeeping under Go GC.
 const (
-	LUA_VNIL     = LUA_TNIL + 0<<4 // 0
-	LUA_VEMPTY   = LUA_TNIL + 1<<4 // 16
-	LUA_VABSTKEY = LUA_TNIL + 2<<4 // 32
+	/* 5.3.4 primary */
+	LUA_TNUMFLT = LUA_TNUMBER | (0 << 4) // 3  float
+	LUA_TNUMINT = LUA_TNUMBER | (1 << 4) // 19 integer
+	LUA_TSHRSTR = LUA_TSTRING | (0 << 4) // 4
+	LUA_TLNGSTR = LUA_TSTRING | (1 << 4) // 20
+	LUA_TLCL    = LUA_TFUNCTION | (0 << 4) // 6
+	LUA_TLCF    = LUA_TFUNCTION | (1 << 4) // 22
+	LUA_TCCL    = LUA_TFUNCTION | (2 << 4) // 38
 
-	LUA_VFALSE = LUA_TBOOLEAN + 0<<4 // 1
+	/* aliases used across the port */
+	LUA_VNIL     = LUA_TNIL + 0<<4 // 0
+	LUA_VEMPTY   = LUA_TNIL + 1<<4 // 16 — 5.4 empty slot; debt for ltable
+	LUA_VABSTKEY = LUA_TNIL + 2<<4 // 32 — 5.4 absent key; debt for ltable
+
+	LUA_VFALSE = LUA_TBOOLEAN + 0<<4 // 1 — 5.4-style; debt vs bvalue union
 	LUA_VTRUE  = LUA_TBOOLEAN + 1<<4 // 17
 
 	LUA_VLIGHTUSERDATA = LUA_TLIGHTUSERDATA + 0<<4 // 2
 
-	LUA_VNUMINT = LUA_TNUMBER + 0<<4 // 3
-	LUA_VNUMFLT = LUA_TNUMBER + 1<<4 // 19
+	LUA_VNUMFLT = LUA_TNUMFLT // was wrongly swapped vs 5.3.4; fixed
+	LUA_VNUMINT = LUA_TNUMINT
 
-	LUA_VSHRSTR = LUA_TSTRING + 0<<4 // 4
-	LUA_VLNGSTR = LUA_TSTRING + 1<<4 // 20
+	LUA_VSHRSTR = LUA_TSHRSTR
+	LUA_VLNGSTR = LUA_TLNGSTR
 
 	LUA_VTABLE = LUA_TTABLE + 0<<4 // 5
 
-	LUA_VLCL = LUA_TFUNCTION + 0<<4 // 6  Lua closure
-	LUA_VLCF = LUA_TFUNCTION + 1<<4 // 22 light C function
-	LUA_VCCL = LUA_TFUNCTION + 2<<4 // 38 C closure
+	LUA_VLCL = LUA_TLCL
+	LUA_VLCF = LUA_TLCF
+	LUA_VCCL = LUA_TCCL
 
 	LUA_VUSERDATA = LUA_TUSERDATA + 0<<4 // 7
 	LUA_VTHREAD   = LUA_TTHREAD + 0<<4   // 8
 
-	LUA_VUPVAL = LUA_TUPVAL + 0<<4 // 144
-	LUA_VPROTO = LUA_TPROTO + 0<<4 // 160
+	LUA_VUPVAL = LUA_TUPVAL + 0<<4 // Go-GC bookkeeping
+	LUA_VPROTO = LUA_TPROTO + 0<<4
 )
 
 // Extra types for collectable non-values (lobject.h).

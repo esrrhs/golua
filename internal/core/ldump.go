@@ -80,15 +80,14 @@ func (D *DumpState) dumpCode(f *Proto) {
 	D.dumpBlock(b)
 }
 
-// 5.3 on-disk constant tags (lobject.h) — float/int variants are
-// swapped relative to our internal 5.4-style LUA_VNUM* tags.
+// 5.3.4 on-disk constant tags (lobject.h) — same as internal LUA_T* variants.
 const (
-	dumpTagNil     = LUA_TNIL               // 0
-	dumpTagBoolean = LUA_TBOOLEAN           // 1
-	dumpTagNumFlt  = LUA_TNUMBER | (0 << 4) // 3  LUA_TNUMFLT
-	dumpTagNumInt  = LUA_TNUMBER | (1 << 4) // 19 LUA_TNUMINT
-	dumpTagShrStr  = LUA_TSTRING | (0 << 4) // 4  LUA_TSHRSTR
-	dumpTagLngStr  = LUA_TSTRING | (1 << 4) // 20 LUA_TLNGSTR
+	dumpTagNil     = LUA_TNIL
+	dumpTagBoolean = LUA_TBOOLEAN
+	dumpTagNumFlt  = LUA_TNUMFLT
+	dumpTagNumInt  = LUA_TNUMINT
+	dumpTagShrStr  = LUA_TSHRSTR
+	dumpTagLngStr  = LUA_TLNGSTR
 )
 
 func (D *DumpState) dumpConstants(f *Proto) {

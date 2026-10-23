@@ -146,22 +146,32 @@ func luaD_inctop(L *State) {
 	L.top++
 }
 
-// luaE_freeCI frees the CallInfo list down to base (lstate.c); used by shrinkstack.
+// luaE_freeCI frees all CallInfo structures not in use (lstate.c).
 func luaE_freeCI(L *State) {
-	L.shrinkCI()
+	ci := L.ci
+	if ci == nil {
+		return
+	}
+	next := ci.next
+	ci.next = nil
+	for ci = next; ci != nil; ci = next {
+		next = ci.next
+		L.freeCI(ci)
+	}
 }
 
-// luaE_shrinkCI is a lighter CI shrink (lstate.c); same pool reclaim for now.
+// luaE_shrinkCI frees half of the unused CallInfo structures (lstate.c).
 func luaE_shrinkCI(L *State) {
-	/* 5.3.4 frees unused CI nodes still linked via ci->next; keep next chain trim. */
-	if L.ci != nil {
-		ci := L.ci.next
-		L.ci.next = nil
-		for ci != nil {
-			n := ci.next
-			L.freeCI(ci)
-			ci = n
-		}
+	ci := L.ci
+	if ci == nil {
+		return
+	}
+	for ci.next != nil && ci.next.next != nil {
+		next2 := ci.next.next
+		L.freeCI(ci.next) /* free next */
+		ci.next = next2   /* remove 'next' from the list */
+		next2.prev = ci
+		ci = next2 /* keep next's next */
 	}
 }
 
