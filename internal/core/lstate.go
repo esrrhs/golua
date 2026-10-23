@@ -529,7 +529,7 @@ func NewState() *State {
 	L.top = 1
 	L.ci = &L.baseCI
 	L.baseCI.funcIdx = 0
-	L.baseCI.top = 1
+	L.baseCI.top = L.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
 	L.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
 	L.baseCI.nresults = 0
 	gcTrackThread(L) /* so that the collector can clear its stale slots */
@@ -685,7 +685,7 @@ func (L *State) NewThread() *State {
 	L1.top = 1
 	L1.ci = &L1.baseCI
 	L1.baseCI.funcIdx = 0
-	L1.baseCI.top = 1
+	L1.baseCI.top = L1.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
 	L1.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
 	L1.baseCI.nresults = 0
 	gcTrackThread(L1) /* so that the collector can clear its stale slots */
@@ -1241,7 +1241,6 @@ func (L *State) unwindForClose() int {
 	L.ci = &L.baseCI
 	L.baseCI.next = nil
 	L.baseCI.funcIdx = 0
-	L.baseCI.top = 1
 	L.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
 	setnilvalue(&L.stack[0])
 	L.errfunc = 0
@@ -1254,10 +1253,12 @@ func (L *State) unwindForClose() int {
 	/* st unchanged */
 	if st != LUA_OK {
 		luaD_seterrorobj(L, st, 1)
+		L.baseCI.top = L.top + LUA_MINSTACK
 		L.co.vals = append(L.co.vals[:0], L.stack[1])
 		return st
 	}
 	L.top = 1
+	L.baseCI.top = L.top + LUA_MINSTACK
 	L.co.vals = L.co.vals[:0]
 	return LUA_OK
 }
