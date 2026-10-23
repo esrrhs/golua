@@ -307,16 +307,20 @@ func baseNext(L *State) int {
 	return 1
 }
 
-func basePairs(L *State) int {
+/* basePairsMeta is pairsmeta (lbaselib.c): metamethod or default iterator. */
+func basePairsMeta(L *State, method string, iszero bool, iter func(*State) int) int {
 	L.CheckAny(1)
-	if L.GetMetaField(1, "__pairs") == LUA_TNIL { /* no metamethod? */
-		L.PushGoFunc(baseNext) /* will return generator, */
-		L.PushValue(1)         /* state, */
-		L.PushNil()            /* and initial value */
+	if L.GetMetaField(1, method) == LUA_TNIL { /* no metamethod? */
+		L.PushGoFunc(iter) /* will return generator, */
+		L.PushValue(1)     /* state, */
+		if iszero {
+			L.PushInteger(0) /* and initial value */
+		} else {
+			L.PushNil()
+		}
 	} else {
 		L.PushValue(1) /* argument 'self' to metamethod */
-		/* C passes 'pairscont' as the continuation of lua_callk, which
-		   makes the call yieldable: '__pairs' may yield. */
+		/* C passes a continuation so the call is yieldable. */
 		if L.co != nil && L.co.sync {
 			L.ci.goCont = func(L *State, status int) int { return 3 }
 		}
@@ -326,6 +330,10 @@ func basePairs(L *State) int {
 		}
 	}
 	return 3
+}
+
+func basePairs(L *State) int {
+	return basePairsMeta(L, "__pairs", false, baseNext)
 }
 
 // baseIPairsAux is the traversal function for 'ipairs' (ipairsaux).
@@ -339,16 +347,9 @@ func baseIPairsAux(L *State) int {
 	return 2
 }
 
-/*
-** 'ipairs' function. Returns 'ipairsaux', given "table", 0.
-** (The given "table" may not be a table.)
- */
+/* baseIPairs: LUA_COMPAT_IPAIRS (default via LUA_COMPAT_5_2) uses __ipairs. */
 func baseIPairs(L *State) int {
-	L.CheckAny(1)
-	L.PushGoFunc(baseIPairsAux) /* iteration function */
-	L.PushValue(1)              /* state */
-	L.PushInteger(0)            /* initial value */
-	return 3
+	return basePairsMeta(L, "__ipairs", true, baseIPairsAux)
 }
 
 // ---------------------------------------------------------------------
