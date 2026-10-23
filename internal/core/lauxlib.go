@@ -238,6 +238,7 @@ func (L *State) GetMetaField(obj int, name string) int {
 
 // CallMeta calls a metamethod of the value at obj (luaL_callmeta).
 func (L *State) CallMeta(obj int, name string) bool {
+	obj = L.AbsIndex(obj)                      /* getmetafield may grow the stack */
 	if L.GetMetaField(obj, name) == LUA_TNIL { /* no metafield? */
 		return false
 	}
@@ -295,12 +296,9 @@ func (L *State) Len2(idx int) int64 {
 // references
 // ---------------------------------------------------------------------
 
-// luaLFreeList is the slot luaL_ref keeps its free list in: 'freelist'
-// in lauxlib.c, which is LUA_RIDX_LAST + 1 -- not 0, which is where 5.3
-// kept it. It is a plain key of the table the caller handed in, so an
-// extension that looks at that table sees the difference, and so does
-// one that unrefs a reference and then reads the slot.
-const luaLFreeList = 3 /* LUA_RIDX_LAST + 1 */
+// luaLFreeList is the freelist header slot for luaL_ref (lauxlib.c 5.3.4:
+// #define freelist 0). Slot 0 of the caller's table holds the free list.
+const luaLFreeList = 0
 
 // LUA_REFNIL and LUA_NOREF are the two predefined references (lauxlib.h).
 const (
@@ -316,17 +314,11 @@ func (L *State) Ref(t int) int {
 		return LUA_REFNIL /* 'nil' has a unique fixed reference */
 	}
 	t = L.AbsIndex(t)
-	var ref int64
-	if L.RawGetI(t, luaLFreeList) == LUA_TNIL { /* first access? */
-		ref = 0 /* list is empty */
-		L.PushInteger(0)
-		L.RawSetI(t, luaLFreeList) /* t[freelist] = 0 */
-	} else { /* already initialized */
-		ref, _ = L.ToInteger(-1) /* ref = t[freelist] */
-	}
-	L.Pop(1)      /* remove the element lua_rawgeti pushed */
-	if ref != 0 { /* any free element? */
-		L.RawGetI(t, ref)          /* remove it from the list */
+	L.RawGetI(t, luaLFreeList) /* get first free element */
+	ref, _ := L.ToInteger(-1)  /* ref = t[freelist] */
+	L.Pop(1)                   /* remove it from stack */
+	if ref != 0 {              /* any free element? */
+		L.RawGetI(t, ref)          /* remove it from list */
 		L.RawSetI(t, luaLFreeList) /* (t[freelist] = t[ref]) */
 	} else { /* no free elements */
 		ref = int64(L.RawLen(t)) + 1 /* get a new reference */

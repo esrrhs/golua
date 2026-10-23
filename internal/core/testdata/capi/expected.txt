@@ -7,7 +7,7 @@ tab	v 9 rv ri 4
 glob	g 42
 conv	42 1 42.0 1 0 0 0 0.0 | 0 1 1
 types	nil boolean userdata number string table function userdata thread | nil bool lud num int str strnum table func cfunc ud thread none noneornil
-refs	one two 0 | 0 0
+refs	one two nil | 0 0
 auxlib	0 T T len=4 gsub=hell0 w0rld - - loaded 2 true verOK tb
 checks	5 2.5 dflt -1
 checks4	5 2.5 hey 9
