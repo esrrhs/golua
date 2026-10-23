@@ -65,7 +65,6 @@ const officialDir = "testdata/official"
 var officialKnownDiff = map[string]string{
 	"all": "the environment, in four lines: the second PRNG seed, 'total memory' (PUC-Lua's allocator against the Go heap), the elapsed time, and the interpreter's own path",
 	"gc":  "the file is a test of the collector itself, and there is none here",
-	"main": "stand-alone Ctrl-C / signal harness hangs the file (child ignores timeout)",
 }
 
 // officialKnownDiffBuild are differences that depend on what the binary
@@ -104,6 +103,7 @@ var officialNoT = map[string]string{
 // officialSkip are the files that are not run at all.
 var officialSkip = map[string]string{
 	"heavy": "builds 2 MB of tables per iteration, 2 GB overall: it times out on both sides, and a test that takes minutes is not a test",
+	"main": "Ctrl-C / signal harness hangs (child not killed by context timeout)",
 }
 
 // officialTimeout is what one file gets.  The slowest that is run,

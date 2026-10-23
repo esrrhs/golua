@@ -31,7 +31,7 @@
 - package: `LUA_*_5_3` versioned env; `;;` → `;`+default+`;` (setpath); preload searcher returns 1 value (not `:preload:`)
 
 ## Remaining / known gaps
-1. **Official suite**: **24 identical** expected (of 28; 1 vacuous api). Known-diff: all, gc, literals, **main** (Ctrl-C harness hang). No remaining assert failures vs PUC among run files.
+1. **Official suite**: **24 identical** of 27 run (1 vacuous api); **main** not run (Ctrl-C harness hang). Known-diff: all, gc, literals.
 2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
 3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
 4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).
