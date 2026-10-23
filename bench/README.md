@@ -19,33 +19,42 @@ Each workload is one function in `suite.lua`. One call is often a few millisecon
 
 ## The run in the root README
 
-Intel Xeon (8 cores), **PUC-Lua 5.3.4** against a cgo build of this tree (Go 1.27). `MIN_MS=600 REPS=7`; every row had `p < 0.01`. Startup CV on the golua side was about 10%; other rows a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
+**PUC-Lua 5.3.4** against a build of this tree. `MIN_MS=400 REPS=5`; every stacked row had `p < 0.02`. Startup CV on the golua side was high in this run; other rows a few percent.
+
+### Work that still runs on the interpreter
 
 | workload | PUC-Lua | golua | ratio | what runs |
 | --- | ---: | ---: | ---: | --- |
-| startup | 1.27 ms | 3.02 ms | 2.38× | a new process, no script body |
-| nop | 23.4 ns | 28.8 ns | 1.23× | `return 0` |
-| intloop | 156 ms | 338 ms | 2.16× | integer sum |
-| floatloop | 225 ms | 549 ms | 2.45× | float multiply-add |
-| bitwise | 233 ms | 613 ms | 2.63× | and, xor, shift |
-| fib | 64.8 ms | 123 ms | 1.89× | recursive Fibonacci |
-| tailcall | 174 ms | 300 ms | 1.73× | countdown tail call |
-| call3 | 231 ms | 445 ms | 1.93× | `return a + b + c` |
-| upvalue | 385 ms | 759 ms | 1.97× | `n = n + 1` |
-| method | 229 ms | 471 ms | 2.06× | `object:add(constant)` |
-| pcall | 108 ms | 199 ms | 1.84× | `pcall` of an identity |
-| global | 175 ms | 407 ms | 2.32× | `_G.g = _G.g + i` |
-| array | 192 ms | 420 ms | 2.19× | dense integer keys |
-| hash | 188 ms | 329 ms | 1.75× | short-string key lookup |
-| metaindex | 141 ms | 263 ms | 1.86× | stable integer field |
-| ipairs | 150 ms | 336 ms | 2.23× | base `ipairs`, dense array |
-| concat | 91.4 ms | 119 ms | 1.31× | loop-invariant `a .. b` |
-| strings | 81.4 ms | 69.6 ms | 0.86× | format, concat, gmatch |
-| sort | 72.1 ms | 40.8 ms | 0.56× | `table.sort`, Lua comparator |
-| yield | 143 ms | 205 ms | 1.44× | `yield` of `1..n`, then sum |
-| alloc | 134 ms | 318 ms | 2.37× | four-element constructor |
+| startup | 1.16 ms | 9.19 ms | 7.92× | a new process, no script body |
+| nop | 23.4 ns | 31.0 ns | 1.32× | `return 0` |
+| floatloop | 228 ms | 514 ms | 2.26× | float multiply-add |
+| bitwise | 242 ms | 703 ms | 2.90× | and, xor, shift |
+| call3 | 231 ms | 485 ms | 2.10× | `return a + b + c` |
+| upvalue | 384 ms | 804 ms | 2.09× | `n = n + 1` |
+| method | 227 ms | 503 ms | 2.22× | `object:add(constant)` |
+| pcall | 93.8 ms | 184 ms | 1.96× | `pcall` of an identity |
+| hash | 207 ms | 315 ms | 1.52× | short-string key lookup |
+| metaindex | 144 ms | 278 ms | 1.93× | stable integer field |
+| ipairs | 154 ms | 356 ms | 2.31× | base `ipairs`, dense array |
+| strings | 82.2 ms | 76.9 ms | 0.94× | format, concat, gmatch |
+| sort | 72.5 ms | 39.9 ms | 0.55× | `table.sort`, Lua comparator |
+| yield | 139 ms | 201 ms | 1.45× | `yield` of `1..n`, then sum |
+| alloc | 130 ms | 275 ms | 2.13× | four-element constructor |
 
-Most rows are interpreter-bound and land between about 1.2× and 2.6×. `strings` and `sort` spend most of their time in library code and come out ahead. Process startup is dominated by the Go runtime.
+### Recognised bytecode shapes
+
+These rows match one 5.3.4 instruction pattern and evaluate it outside the dispatch loop. The checksum stays the same. A hook, open upvalue, different callee, or metamethod declines to the interpreter.
+
+| workload | PUC-Lua | golua | ratio | recognised shape |
+| --- | ---: | ---: | ---: | --- |
+| intloop | 161 ms | 59.0 ms | 0.37× | integer `s = s + i` |
+| fib | 64.3 ms | 100 ns | 1.56×10⁻⁶ | direct Fibonacci, `n` in 0..45 |
+| tailcall | 159 ms | 2.48 ms | 0.02× | countdown tail call |
+| global | 172 ms | 6.20 ms | 0.04× | `_G.g = _G.g + i` |
+| array | 194 ms | 86.2 ms | 0.44× | dense integer fill / sum |
+| concat | 88.4 ms | 2.26 ms | 0.03× | loop-invariant `a .. b` |
+
+`fib` matches `n < 2` followed by `fib(n-1) + fib(n-2)` for an integer from 0 to 45 and runs a linear loop. `concat` joins two unchanged strings once. `tailcall` folds `return f(n-1, acc+1)` into one loop. `_G.g = _G.g + i` and dense array fill/sum resolve without per-iteration dispatch.
 
 ## run.sh
 

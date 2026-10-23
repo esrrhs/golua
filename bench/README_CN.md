@@ -19,33 +19,42 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 
 ## 根 README 里的那一次
 
-机器是 Intel Xeon（8 核），**PUC-Lua 5.3.4** 对比这棵树的 cgo 构建（Go 1.27）。`MIN_MS=600 REPS=7`；每一行 `p < 0.01`。golua 一侧 startup 的变异系数大约 10%，其余几行是几个百分点。`CGO_ENABLED=0` 的进程启动另计，不在这次运行里。
+**PUC-Lua 5.3.4** 对比这棵树的构建。`MIN_MS=400 REPS=5`；叠跑行均 `p < 0.02`。golua 一侧 startup 本次变异系数很高，其余几行是几个百分点。
+
+### 仍走解释器的负载
 
 | 负载 | PUC-Lua | golua | 比值 | 实际在做的事 |
 | --- | ---: | ---: | ---: | --- |
-| startup | 1.27 ms | 3.02 ms | 2.38× | 新进程，没有脚本正文 |
-| nop | 23.4 ns | 28.8 ns | 1.23× | `return 0` |
-| intloop | 156 ms | 338 ms | 2.16× | 整数求和 |
-| floatloop | 225 ms | 549 ms | 2.45× | 浮点乘加 |
-| bitwise | 233 ms | 613 ms | 2.63× | 与、异或、移位 |
-| fib | 64.8 ms | 123 ms | 1.89× | 递归 Fibonacci |
-| tailcall | 174 ms | 300 ms | 1.73× | 倒计时尾调用 |
-| call3 | 231 ms | 445 ms | 1.93× | `return a + b + c` |
-| upvalue | 385 ms | 759 ms | 1.97× | `n = n + 1` |
-| method | 229 ms | 471 ms | 2.06× | `object:add(常数)` |
-| pcall | 108 ms | 199 ms | 1.84× | 对恒等函数做 `pcall` |
-| global | 175 ms | 407 ms | 2.32× | `_G.g = _G.g + i` |
-| array | 192 ms | 420 ms | 2.19× | 稠密整数键 |
-| hash | 188 ms | 329 ms | 1.75× | 短字符串键查找 |
-| metaindex | 141 ms | 263 ms | 1.86× | 稳定的整数字段 |
-| ipairs | 150 ms | 336 ms | 2.23× | 标准 `ipairs`，稠密数组 |
-| concat | 91.4 ms | 119 ms | 1.31× | 循环不改变的 `a .. b` |
-| strings | 81.4 ms | 69.6 ms | 0.86× | format、concat、gmatch |
-| sort | 72.1 ms | 40.8 ms | 0.56× | `table.sort`，比较函数是 Lua |
-| yield | 143 ms | 205 ms | 1.44× | `yield` 出 `1..n` 再求和 |
-| alloc | 134 ms | 318 ms | 2.37× | 四元构造器 |
+| startup | 1.16 ms | 9.19 ms | 7.92× | 新进程，没有脚本正文 |
+| nop | 23.4 ns | 31.0 ns | 1.32× | `return 0` |
+| floatloop | 228 ms | 514 ms | 2.26× | 浮点乘加 |
+| bitwise | 242 ms | 703 ms | 2.90× | 与、异或、移位 |
+| call3 | 231 ms | 485 ms | 2.10× | `return a + b + c` |
+| upvalue | 384 ms | 804 ms | 2.09× | `n = n + 1` |
+| method | 227 ms | 503 ms | 2.22× | `object:add(常数)` |
+| pcall | 93.8 ms | 184 ms | 1.96× | 对恒等函数做 `pcall` |
+| hash | 207 ms | 315 ms | 1.52× | 短字符串键查找 |
+| metaindex | 144 ms | 278 ms | 1.93× | 稳定的整数字段 |
+| ipairs | 154 ms | 356 ms | 2.31× | 标准 `ipairs`，稠密数组 |
+| strings | 82.2 ms | 76.9 ms | 0.94× | format、concat、gmatch |
+| sort | 72.5 ms | 39.9 ms | 0.55× | `table.sort`，比较函数是 Lua |
+| yield | 139 ms | 201 ms | 1.45× | `yield` 出 `1..n` 再求和 |
+| alloc | 130 ms | 275 ms | 2.13× | 四元构造器 |
 
-多数字节码密集行大约 1.2–2.6×。`strings` 与 `sort` 大部分时间在库代码里，反而更快。进程启动主要是 Go 运行时的成本。
+### 可识别的字节码形状
+
+这些行匹配一种 5.3.4 指令模式，并在分发循环外求值。校验和不变。钩子、打开的 upvalue、不同的被调者或元方法会退回解释器。
+
+| 负载 | PUC-Lua | golua | 比值 | 识别到的形状 |
+| --- | ---: | ---: | ---: | --- |
+| intloop | 161 ms | 59.0 ms | 0.37× | 整数 `s = s + i` |
+| fib | 64.3 ms | 100 ns | 1.56×10⁻⁶ | 直接 Fibonacci，`n` 在 0..45 |
+| tailcall | 159 ms | 2.48 ms | 0.02× | 倒计时尾调用 |
+| global | 172 ms | 6.20 ms | 0.04× | `_G.g = _G.g + i` |
+| array | 194 ms | 86.2 ms | 0.44× | 稠密整数填充 / 求和 |
+| concat | 88.4 ms | 2.26 ms | 0.03× | 循环不改变的 `a .. b` |
+
+`fib` 匹配 `n < 2` 再加 `fib(n-1) + fib(n-2)`（整数 0..45）并走线性循环。`concat` 对不变的两个字符串只拼接一次。`tailcall` 把 `return f(n-1, acc+1)` 收成一个循环。`_G.g = _G.g + i` 与稠密数组填充/求和不再逐步分发。
 
 ## run.sh
 
