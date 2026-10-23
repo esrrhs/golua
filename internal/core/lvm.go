@@ -810,6 +810,12 @@ func luaV_execute(L *State, ci *CallInfo) {
 					return
 				}
 			case OP_TAILCALL:
+				/* 5.3.4: a C callee is not actually tailed — precall runs it
+				   like OP_CALL and execution falls through to the RETURN
+				   that the code generator emitted after TAILCALL. A Lua
+				   callee is moved onto this frame (pretailcall) and the
+				   VM restarts. Counting hooks see that extra RETURN for
+				   C callees; matching it matters for debug.sethook. */
 				b := i.B
 				if b != 0 {
 					L.top = ra + b
@@ -820,20 +826,35 @@ func luaV_execute(L *State, ci *CallInfo) {
 				if cl.p.sizep > 0 {
 					luaF_closeupval(L, base)
 				}
-				if n := luaD_pretailcall(L, ci, ra, b, 0); n < 0 {
+				fv := &L.stack[ra]
+				switch ttypetag(fv) {
+				case LUA_VCCL, LUA_VLCF:
+					if newci := luaD_precall(L, ra, LUA_MULTRET); newci != nil {
+						ci = newci
+						restart = true
+						break loop
+					}
+					trap = ci.trap || L.hookmask != 0
+					if L.fastYield {
+						return
+					}
+					/* fall through to the next opcode (RETURN) */
+				default:
+					if n := luaD_pretailcall(L, ci, ra, b, 0); n < 0 {
+						restart = true
+						break loop
+					} else if L.fastYield {
+						return
+					} else {
+						luaD_poscall(L, ci, n)
+					}
+					if ci.callstatus&CIST_FRESH != 0 {
+						return
+					}
+					ci = ci.prev
 					restart = true
 					break loop
-				} else if L.fastYield {
-					return
-				} else {
-					luaD_poscall(L, ci, n)
 				}
-				if ci.callstatus&CIST_FRESH != 0 {
-					return
-				}
-				ci = ci.prev
-				restart = true
-				break loop
 			case OP_RETURN:
 				n := i.B - 1
 				if n < 0 {

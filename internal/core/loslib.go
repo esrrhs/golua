@@ -126,14 +126,9 @@ func osGetField(L *State, key string, d, delta int) int {
 		}
 		return d
 	}
-	/* The field has to survive both the subtraction of 'delta' and a
-	   trip through 'struct tm', whose members are 'int' (loslib.c):
-	      if (!(res >= 0 ? res - delta <= INT_MAX : INT_MIN + delta <= res))
-	        return luaL_error(L, "field '%s' is out-of-bound", key);
-	   'os.time{year = -2147483648}' is out of bound for that reason --
-	   'tm_year' would be -2147485548 -- while '2147483647' is not. */
-	if !(v >= 0 && v-int64(delta) <= math.MaxInt32 ||
-		v < 0 && math.MinInt32+int64(delta) <= v) {
+	/* 5.3.4: L_MAXDATEFIELD = INT_MAX/2 */
+	const maxDateField = int64(math.MaxInt32 / 2)
+	if !(-maxDateField <= v && v <= maxDateField) {
 		return L.Error2("field '%s' is out-of-bound", key)
 	}
 	return int(v) - delta
@@ -431,7 +426,7 @@ func osDate(L *State) int {
 	   answer NULL when it does not fit (loslib.c):
 	      if (stm == NULL)
 	        return luaL_error(L,
-	          "date result cannot be represented in this installation");
+	          "time result cannot be represented in this installation");
 	   Go has no such limit -- time.Unix answers with the year
 	   146138514283 for 2^62 -- so the cut-off has to be asked for
 	   here.  On this host the top of the range is exactly the int
@@ -440,7 +435,7 @@ func osDate(L *State) int {
 	   The bottom of the range stops a little short of INT_MIN, so
 	   the two ends are not quite symmetric. */
 	if y := tm.Year(); y-1900 > math.MaxInt32 || y-1900 < math.MinInt32 {
-		return L.Error2("date result cannot be represented in this installation")
+		return L.Error2("time result cannot be represented in this installation")
 	}
 	/* 'strcmp(s, "*t")', which is a C string comparison and not a
 	   comparison of the whole format: 'os.date("*t\0junk", t)' is the
@@ -466,12 +461,13 @@ func osTime(L *State) int {
 	L.SetTop(1) /* make sure table is at the top */
 	/* getfield subtracts 'delta' (as in C, where the fields of 'struct
 	   tm' are relative); add it back for time.Date */
-	year := osGetField(L, "year", -1, 1900) + 1900
-	month := osGetField(L, "month", -1, 1) + 1
-	day := osGetField(L, "day", -1, 0)
-	hour := osGetField(L, "hour", 12, 0)
-	min := osGetField(L, "min", 0, 0)
+	/* loslib.c 5.3.4 order: sec, min, hour, day, month, year */
 	sec := osGetField(L, "sec", 0, 0)
+	min := osGetField(L, "min", 0, 0)
+	hour := osGetField(L, "hour", 12, 0)
+	day := osGetField(L, "day", -1, 0)
+	month := osGetField(L, "month", -1, 1) + 1
+	year := osGetField(L, "year", -1, 1900) + 1900
 	isdst := osGetBoolField(L, "isdst") /* -1: work it out, 0: no, 1: yes */
 	t := time.Date(year, time.Month(month), day, hour, min, sec, 0, time.Local)
 	/* mktime reads 'tm_isdst' as an instruction rather than as a

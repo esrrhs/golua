@@ -1,4 +1,4 @@
-// Translation of liolib.c (PUC-Lua 5.4): the standard I/O (and popen)
+// Translation of liolib.c (PUC-Lua 5.3.4): the standard I/O (and popen)
 // library.
 //
 // A file handle is a full userdata wrapping a *ioStream (the Go
@@ -284,6 +284,8 @@ func (e ioCErrno) Error() string { return e.msg }
 // both leave EBADF behind.  The number is 9 on every platform we build
 // for, and 'strerror' spells it the same way too.
 var ioErrBadFd = ioCErrno{en: 9, msg: "bad file descriptor"}
+/* EINVAL: glibc popen rejects modes other than r/w(/e). */
+var errPopenMode = ioCErrno{en: 22, msg: "invalid argument"}
 
 func ioErrno(err error) int64 {
 	var en syscall.Errno
@@ -587,7 +589,7 @@ func ioNewPreFile(L *State) *ioStream {
 	   was opened for is not ours to guess. */
 	s := &ioStream{canR: true, canW: true}
 	ioTrackStream(s)
-	L.NewUserData(s, 0)
+	L.NewUserData(s, 1) /* 5.3.4: one uservalue */
 	/* weak: see the note on the field */
 	s.uw = weak.Make(uvalue(&L.stack[L.top-1])) /* the handle C is handed */
 	ioSetMetaTableByName(L, ioFileHandle)
@@ -908,8 +910,8 @@ func ioReadChars(L *State, s *ioStream, n int64) bool {
 	if n < 0 {
 		/* C hands 'n' to the allocator as a 'size_t', so a negative
 		   count asks for SIZE_MAX bytes and no allocator has those:
-		   'file:read(-1)' reports "not enough memory". */
-		luaG_runerror(L, "not enough memory")
+		   'file:read(-1)' reports "not enough memory for buffer allocation". */
+		luaG_runerror(L, "not enough memory for buffer allocation")
 	}
 	if n > int64(1)<<31 || s.reader() == nil {
 		/* deviation: a count that large is read as end of file instead
@@ -1176,20 +1178,26 @@ func ioPOpen(L *State) int {
 	/* 'popen' takes a C string, so it is the bytes before the first
 	   zero that are handed to the shell. */
 	filename := luaCStr(L.CheckString(1))
-	mode := L.OptString(2, "r")
-	L.ArgCheck(ioCheckModeP(mode), 2, "invalid mode")
+	mode := "r"
+	if !L.IsNoneOrNil(2) {
+		mode = luaCStr(L.ToStringX(2)) /* luaL_optstring tostring coercion */
+	}
+	/* glibc popen accepts only "r"/"w" (+optional e); others → EINVAL. */
 	s := ioNewPreFile(L)
 	cmd := ioShellCommand(filename)
 	var err error
-	if mode == "r" {
+	switch {
+	case mode == "r" || mode == "re":
 		s.rd, err = cmd.StdoutPipe()
 		cmd.Stderr = os.Stderr
 		s.canW = false /* a pipe to the child's output: read only */
-	} else {
+	case mode == "w" || mode == "we":
 		s.wr, err = cmd.StdinPipe()
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		s.canR = false /* a pipe to the child's input: write only */
+	default:
+		err = errPopenMode
 	}
 	if err == nil {
 		err = cmd.Start()
@@ -1271,13 +1279,7 @@ func ioLines(L *State) int {
 		toclose = true /* close it after iteration */
 	}
 	ioAuxLines(L, toclose) /* push iteration function */
-	if toclose {
-		L.PushNil()    /* state */
-		L.PushNil()    /* control */
-		L.PushValue(1) /* file is the to-be-closed variable (4th result) */
-		return 4
-	}
-	return 1
+	return 1 /* 5.3.4: only the iterator (closing is via upvalue) */
 }
 
 // ioReadline is the iteration function of 'lines'.

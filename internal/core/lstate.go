@@ -851,45 +851,6 @@ func (L *State) resetThreadStatus(status int) int {
 	return status
 }
 
-// ResetThread resets a coroutine (Go helper; 5.3.4 C API has no lua_resetthread).
-func (L *State) ResetThread() int {
-	if L.isMain {
-		return LUA_ERRRUN
-	}
-	if !L.dead && L.status == LUA_YIELD && L.co != nil {
-		if L.co.live {
-			// still suspended on its goroutine: unwind it there
-			select {
-			case L.co.req <- resumeReq{kind: reqClose}:
-				select {
-				case <-L.co.resp:
-				case <-L.co.done:
-				}
-			case <-L.co.done:
-			}
-		} else {
-			// synchronous, and nothing is listening on the channel
-			_ = L.unwindForClose()
-		}
-	}
-	L.fastYield = false
-	L.dead = false
-	L.hasErr = false
-	L.lastErr = Value{}
-	L.started = false
-	L.status = LUA_YIELD
-	L.top = 1
-	L.ci = &L.baseCI
-	L.baseCI.next = nil
-	L.openupval = nil
-	L.errfunc = 0
-	L.nCcalls = 0
-	L.co = newCoRuntime()
-	L.co.live = true
-	go L.coMain()
-	return LUA_OK
-}
-
 // Resume resumes a coroutine with nargs values on top of L.
 func (L *State) Resume(from *State, nargs int) int {
 	co := L

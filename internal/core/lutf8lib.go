@@ -15,7 +15,7 @@ const utf8MsgInvalid = "invalid UTF-8 code"
 // utf8CharPattern is the pattern matching a single UTF-8 character
 // (UTF8PATT). In C it is built with sizeof - 1 because the literal
 // starts with an embedded NUL byte.
-const utf8CharPattern = "[\x00-\x7F\xC2-\xFD][\x80-\xBF]*"
+const utf8CharPattern = "[\x00-\x7F\xC2-\xF4][\x80-\xBF]*"
 
 func utf8IsCont(c byte) bool { return c&0xC0 == 0x80 }
 
@@ -73,8 +73,8 @@ func utf8libDecode(s string, i int, strict bool) (uint32, int, bool) {
 		next = i + count + 1 /* skip continuation bytes read */
 	}
 	if strict {
-		/* check for invalid code points; too large or surrogates */
-		if res > utf8MaxUnicode || (0xD800 <= res && res <= 0xDFFF) {
+		/* 5.3.4: only reject > MAXUNICODE (surrogates allowed; 5.4 rejects them). */
+		if res > utf8MaxUnicode {
 			return 0, 0, false
 		}
 	}

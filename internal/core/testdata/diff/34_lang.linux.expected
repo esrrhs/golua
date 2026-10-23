@@ -13,7 +13,7 @@ true|"7"	false|"bad argument #2 to 'string.format' (number expected, got string)
 false|"bad argument #2 to 'string.format' (no value)"	false|"invalid option '%y' to 'format'"
 3|-4|3.0|-4.0
 1|1|1.5|0.5|-1|-1
-9.2233720368548e+18|-9.2233720368548e+18|1.4142135623731|-nan
+9.2233720368548e+18|-9.2233720368548e+18|1.4142135623731|nan
 true
 -2|-9223372036854775808|0
 true|false
@@ -23,28 +23,28 @@ true|true
 true|9.2233720368548e+18
 9.2233720368548e+18|-9.2233720368548e+18
 1|-1|1|1.5
-false|"bad argument #2 to 'math.fmod' (zero)"	true|-nan
+false|"bad argument #2 to 'math.fmod' (zero)"	true|nan
 3|4|-4|-3
 true|9.2233720368548e+18	true|3
 3|3.5|-9223372036854775808
 11.0|9.0|20.0|2.5|100.0
 100.0|10.0|16.0|0.5
-false|"internal/core/testdata/diff/34_lang.lua:53: attempt to perform arithmetic on a string value"
-false|"internal/core/testdata/diff/34_lang.lua:54: attempt to perform arithmetic on a string value"
-false|"internal/core/testdata/diff/34_lang.lua:55: attempt to compare string with number"
+false|"34_lang.lua:53: attempt to perform arithmetic on a string value"
+false|"34_lang.lua:54: attempt to perform arithmetic on a string value"
+false|"34_lang.lua:55: attempt to compare string with number"
 "12"|"1.0"|"1.5x"|"a12.0"
-false|"internal/core/testdata/diff/34_lang.lua:57: attempt to concatenate a table value"	false|"internal/core/testdata/diff/34_lang.lua:57: attempt to concatenate a nil value"
+false|"34_lang.lua:57: attempt to concatenate a table value"	false|"34_lang.lua:57: attempt to concatenate a nil value"
 0|3|2|"xxx"
-false|"internal/core/testdata/diff/34_lang.lua:59: attempt to get length of a number value"	false|"internal/core/testdata/diff/34_lang.lua:59: attempt to get length of a nil value"
+false|"34_lang.lua:59: attempt to get length of a number value"	false|"34_lang.lua:59: attempt to get length of a nil value"
 float	float	two	two	2
 str	float	2
 3	3
 t1	t2	true
 yes	no	true
 true|nil
-false|"internal/core/testdata/diff/34_lang.lua:75: table index is NaN"
+false|"34_lang.lua:75: table index is NaN"
 true|nil
-false|"internal/core/testdata/diff/34_lang.lua:77: table index is nil"
+false|"34_lang.lua:77: table index is nil"
 3|4|1
 5|2
 2
@@ -68,14 +68,14 @@ x	y
 empty loops	1
 4	1.0,1.5,2.0,2.5
 3	1.0,2.0,3.0
-false|"internal/core/testdata/diff/34_lang.lua:171: 'for' initial value must be a number"
-true|function: 0x55e45a5a6c10
+false|"34_lang.lua:171: 'for' initial value must be a number"
+true|function: <ADDR>
 1:10,2:20,3:30
-false|"internal/core/testdata/diff/34_lang.lua:184: attempt to call a number value"
-false|"internal/core/testdata/diff/34_lang.lua:185: bad argument #1 to 'for iterator' (table expected, got nil)"
+false|"34_lang.lua:184: attempt to call a number value"
+false|"34_lang.lua:185: bad argument #1 to 'for iterator' (table expected, got nil)"
 99	true
-shadow	function: 0x55e43e1c5c50
-true|function: 0x55e45a5a7b30
+shadow	function: <ADDR>
+true|function: <ADDR>
 true|nil|"attempt to load a text chunk (mode is 'b')"
 true
 locked
@@ -86,6 +86,6 @@ false	true
 false|"bad argument #1 to 'setmetatable' (table expected, got nil)"
 1	1
 1
-false|"internal/core/testdata/diff/34_lang.lua:216: attempt to call a nil value (method 'nope')"
-false|"internal/core/testdata/diff/34_lang.lua:217: attempt to call a number value (field 'x')"
+false|"34_lang.lua:216: attempt to call a nil value (method 'nope')"
+false|"34_lang.lua:217: attempt to call a number value (field 'x')"
 ABC	bc	7	a|b|c	2

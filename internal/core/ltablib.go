@@ -82,7 +82,8 @@ func tableRemove(L *State) int {
 	pos := L.OptInteger(2, size)
 	if pos != size { /* validate 'pos' if given */
 		/* check whether 'pos' is in [1, size + 1] */
-		L.ArgCheck(uint64(pos)-1 <= uint64(size), 2, "position out of bounds")
+		/* 5.3.4 tremove: luaL_argcheck(..., 1, ...) — arg index is 1, not 2. */
+		L.ArgCheck(uint64(pos)-1 <= uint64(size), 1, "position out of bounds")
 	}
 	L.GetI(1, pos) /* result = t[pos] */
 	for ; pos < size; pos++ {

@@ -31,8 +31,8 @@ func hashpointer(t *Table, p unsafe.Pointer) int {
 	return hashmod(t, uint32(uintptr(p)))
 }
 
-// hashint is the hash for integer keys (ltable.c).
-func hashint(t *Table, i int64) int { return hashmod(t, uint32(uint64(i))) }
+// hashint is the hash for integer keys (ltable.c 5.3.4: hashpow2, not 5.4 hashmod).
+func hashint(t *Table, i int64) int { return hashpow2(t, uint32(uint64(i))) }
 
 // l_hashfloat is the hash for float keys (ltable.c).
 func l_hashfloat(n float64) int {
@@ -493,15 +493,11 @@ func luaH_newkey(L *State, t *Table, key, value *Value) {
 	t.nodes[mp].val = *value
 }
 
-// luaH_getint searches an integer key (ltable.c).
+// luaH_getint searches an integer key (ltable.c 5.3.4).
+// sizearray is always the real array length (alimit with realasize).
 func luaH_getint(t *Table, key int64) *Value {
-	alimit := t.alimit
-	if uint64(key)-1 < uint64(alimit) { /* 'key' in [1, alimit]? */
-		return &t.array[key-1]
-	}
-	if !isrealasize(t) &&
-		(((uint64(key) - 1) &^ uint64(alimit-1)) < uint64(alimit)) {
-		t.alimit = uint32(key) /* probably '#t' is here now */
+	asize := luaH_realasize(t)
+	if uint64(key)-1 < uint64(asize) { /* 'key' in [1, sizearray]? */
 		return &t.array[key-1]
 	}
 	/* key is not in the array part; check the hash */
@@ -628,29 +624,27 @@ func luaH_setint(L *State, t *Table, key int64, value *Value) {
 	}
 }
 
-// hash_search finds a boundary in the hash part (ltable.c).
-func hashSearch(t *Table, j uint64) uint64 {
-	var i uint64
-	if j == 0 {
-		j++ /* the caller ensures 'j + 1' is present */
-	}
-	for {
-		i = j /* 'i' is a present index */
-		if j <= uint64(LUA_MAXINTEGER)/2 {
-			j *= 2
-		} else {
-			j = uint64(LUA_MAXINTEGER)
-			if isempty(luaH_getint(t, int64(j))) {
-				break /* 'j' now is an absent index */
+// unboundSearch finds a boundary in the hash part (ltable.c 5.3.4).
+// 'j' is sizearray: either 0 or a present index at the end of the array.
+func unboundSearch(t *Table, j uint32) uint32 {
+	i := j /* i is zero or a present index */
+	jj := uint64(j) + 1
+	/* find 'i' and 'j' such that i is present and j is not */
+	for !isempty(luaH_getint(t, int64(jj))) {
+		i = uint32(jj)
+		if jj > uint64(math.MaxInt32)/2 { /* overflow? */
+			/* table was built with bad purposes: resort to linear search */
+			i = 1
+			for !isempty(luaH_getint(t, int64(i))) {
+				i++
 			}
-			return j /* max integer is a boundary */
+			return i - 1
 		}
-		if isempty(luaH_getint(t, int64(j))) {
-			break
-		}
+		jj *= 2
 	}
-	/* i < j  &&  t[i] present  &&  t[j] absent */
-	for j-i > 1 { /* binary search between them */
+	j = uint32(jj)
+	/* now do a binary search between them */
+	for j-i > 1 {
 		m := (i + j) / 2
 		if isempty(luaH_getint(t, int64(m))) {
 			j = m
@@ -661,60 +655,33 @@ func hashSearch(t *Table, j uint64) uint64 {
 	return i
 }
 
-func binsearch(array []Value, i, j uint32) uint32 {
-	for j-i > 1 { /* binary search */
-		m := (i + j) / 2
-		if isempty(&array[m-1]) {
-			j = m
-		} else {
-			i = m
-		}
-	}
-	return i
-}
-
-// luaH_getn returns a boundary of the table (ltable.c).
+// luaH_getn returns a boundary of the table (ltable.c 5.3.4).
+//
+// 5.3.4 uses sizearray only — no alimit / BITRAS shrinking. '#' must
+// match PUC for the same inserts and deletes, so this follows the C
+// binary search and unbound_search exactly, with luaH_realasize as
+// sizearray.
 func luaH_getn(t *Table) uint64 {
-	limit := t.alimit
-	if limit > 0 && isempty(&t.array[limit-1]) { /* (1)? */
-		/* there must be a boundary before 'limit' */
-		if limit >= 2 && !isempty(&t.array[limit-2]) {
-			/* 'limit - 1' is a boundary; can it be a new limit? */
-			if ispow2realasize(t) && !ispow2u(limit-1) {
-				t.alimit = limit - 1
-				setnorealasize(t)
+	j := luaH_realasize(t)
+	if j > 0 && isempty(&t.array[j-1]) {
+		/* there is a boundary in the array part: (binary) search for it */
+		var i uint32
+		for j-i > 1 {
+			m := (i + j) / 2
+			if isempty(&t.array[m-1]) {
+				j = m
+			} else {
+				i = m
 			}
-			return uint64(limit - 1)
 		}
-		/* must search for a boundary in [0, limit] */
-		boundary := binsearch(t.array, 0, limit)
-		if ispow2realasize(t) && boundary > luaH_realasize(t)/2 {
-			t.alimit = boundary
-			setnorealasize(t)
-		}
-		return uint64(boundary)
+		return uint64(i)
 	}
-	/* 'limit' is zero or present in table */
-	if !limitequalsasize(t) { /* (2)? */
-		if isempty(&t.array[limit]) { /* 'limit + 1' is empty? */
-			return uint64(limit) /* this is the boundary */
-		}
-		limit = luaH_realasize(t)
-		if isempty(&t.array[limit-1]) {
-			boundary := binsearch(t.array, t.alimit, limit)
-			t.alimit = boundary
-			return uint64(boundary)
-		}
-		/* else, new limit is present; check the hash part */
+	/* else must find a boundary in hash part */
+	if isdummy(t) { /* hash part is empty? */
+		return uint64(j) /* that is easy... */
 	}
-	/* (3) 'limit' is the last element and is zero or present */
-	if len(t.nodes) == 0 || isempty(luaH_getint(t, int64(limit)+1)) {
-		return uint64(limit)
-	}
-	return hashSearch(t, uint64(limit))
+	return uint64(unboundSearch(t, j))
 }
-
-func ispow2realasize(t *Table) bool { return !isrealasize(t) || ispow2u(t.alimit) }
 
 // floatToIntEq converts a float with an exact integer value to that
 // integer (luaV_flttointeger with mode F2Ieq).

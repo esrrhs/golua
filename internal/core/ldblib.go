@@ -403,26 +403,21 @@ func dbSetMetaTable(L *State) int {
 }
 
 func dbGetUserValue(L *State) int {
-	n := int(L.OptInteger(2, 1))
+	/* ldblib.c 5.3.4: one uservalue, return it (or nil). */
 	if L.Type(1) != LUA_TUSERDATA {
-		L.PushNil() /* not a userdata */
+		L.PushNil()
 		return 1
 	}
-	if L.GetUserValue(1, n) != LUA_TNONE {
-		L.PushBoolean(true)
-		return 2
-	}
+	L.GetUserValue(1, 1)
 	return 1
 }
 
 func dbSetUserValue(L *State) int {
-	n := int(L.OptInteger(3, 1))
+	/* ldblib.c 5.3.4: setuservalue; leave userdata as the result. */
 	L.CheckType(1, LUA_TUSERDATA)
 	L.CheckAny(2)
 	L.SetTop(2)
-	if L.SetUserValue(1, n) == 0 {
-		L.PushNil() /* deviation: C pops the value and pushes fail */
-	}
+	L.SetUserValue(1, 1)
 	return 1
 }
 
@@ -469,7 +464,7 @@ func dbGetInfoFunc(L *State) int {
 	var ar dbAr
 	arg := 0
 	L1 := dbGetThread(L, &arg)
-	options := L.OptString(arg+2, "flnSrtu")
+	options := L.OptString(arg+2, "flnStu") /* 5.3.4: no option r */
 	dbCheckStack(L, L1, 3)
 	L.ArgCheck(len(options) == 0 || options[0] != '>', arg+2, "invalid option '>'")
 	if L.IsFunction(arg + 1) { /* info about a function? */
@@ -776,9 +771,8 @@ func dbGetHook(L *State) int {
 	arg := 0
 	L1 := dbGetThread(L, &arg)
 	mask := int(L1.hookmask) /* lua_gethookmask(L1) */
-	if L1.hook == nil {      /* no hook? */
+	if L1.hook == nil { /* no hook? */
 		L.PushNil()
-		return 1
 	} else if L1.hookExternal { /* external hook (C: hook != hookf) */
 		L.PushString("external hook")
 	} else { /* hook table must exist */
@@ -791,7 +785,7 @@ func dbGetHook(L *State) int {
 	}
 	L.PushString(dbUnmakeMask(mask))       /* 2nd result = mask */
 	L.PushInteger(int64(L1.basehookcount)) /* 3rd result = count */
-	return 3
+	return 3 /* always three results (ldblib.c) */
 }
 
 // dbDebugFunc is 'db_debug': a prompt on stderr, one command per line

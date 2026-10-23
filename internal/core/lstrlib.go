@@ -2283,11 +2283,12 @@ func strUnpack(L *State) int {
 			L.PushString(data[pos+size : pos+size+int(len2)])
 			pos += int(len2) /* skip string */
 		case strKzstr:
+			/* 5.3.4: strlen on Lua string (always has sentinel '\0' past ld).
+			   No "unfinished string" error (that is 5.4). */
 			end := strings.IndexByte(data[pos:], 0)
 			if end < 0 {
-				end = len(data) - pos
+				end = ld - pos /* sentinel after last byte */
 			}
-			L.ArgCheck(pos+end < ld, 2, "unfinished string for format 'z'")
 			L.PushString(data[pos : pos+end])
 			pos += end + 1 /* skip string plus final '\0' */
 		case strKpaddalign, strKpadding, strKnop:

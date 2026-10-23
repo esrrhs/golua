@@ -232,39 +232,43 @@ func pkReadable(filename string) bool {
 //		no file 'y'
 //
 // for each name in path (pusherrornotfound).
-func pkPushErrorNotFound(L *State, path string) {
-	L.PushString("no file '" +
-		strings.ReplaceAll(path, pkPathSep, "'\n\tno file '") + "'")
+func pkPushErrorNotFound(L *State, filenames []string) {
+	/* C: lua_pushfstring(L, "\n\tno file '%s'", filename) per entry */
+	var b strings.Builder
+	for _, f := range filenames {
+		b.WriteString("\n\tno file '")
+		b.WriteString(f)
+		b.WriteByte('\'')
+	}
+	L.PushString(b.String())
 }
 
 // pkSearchPath searches for 'name' in 'path' (searchpath). It pushes the
 // file name found, or the error message when there is none.
-//
-// deviation: the C code writes the list of names into a luaL_Buffer and
-// walks it with getnextfilename; Go strings are immutable, so the list
-// is split with strings.Split, which yields the same names.
 func pkSearchPath(L *State, name, path, sep, dirsep string) bool {
 	/* 'luaL_addgsub' inserts the name with 'luaL_addstring', which is
 	   'strlen', so a name longer than the bytes before its first zero
 	   is not inserted: 'package.searchpath("a\0b", "?.lua")' looks for
-	   "a.lua" and says so.  Every other use of the name here is a use
-	   of what it has become. */
+	   "a.lua" and says so. */
 	name = luaCStr(name)
-	/* separator is non-empty and appears in 'name'? */
 	if sep != "" && strings.Contains(name, sep) {
-		name = strings.ReplaceAll(name, sep, dirsep) /* replace it by 'dirsep' */
+		name = strings.ReplaceAll(name, sep, dirsep)
 	}
-	/* add path to the buffer, replacing marks ('?') with the file name */
-	pathname := strings.ReplaceAll(path, pkPathMark, name)
-	for _, filename := range strings.Split(pathname, pkPathSep) {
-		if pkReadable(filename) { /* does file exist and is readable? */
-			L.PushString(filename) /* save and return name */
+	/* pushnexttemplate: skip empty separators; empty path → empty msg. */
+	var tried []string
+	for _, tmpl := range strings.Split(path, pkPathSep) {
+		if tmpl == "" {
+			continue
+		}
+		filename := strings.ReplaceAll(tmpl, pkPathMark, name)
+		if pkReadable(filename) {
+			L.PushString(filename)
 			return true
 		}
+		tried = append(tried, filename)
 	}
-	L.PushString(pathname)
-	pkPushErrorNotFound(L, pathname) /* create error message */
-	return false                     /* not found */
+	pkPushErrorNotFound(L, tried)
+	return false
 }
 
 // pkSearchPathFunc is ll_searchpath: package.searchpath.
@@ -405,10 +409,8 @@ func pkFindLoader(L *State, name string) {
 	}
 	/*  iterate over available searchers to find a loader */
 	for i := 1; ; i++ {
-		msg.WriteString("\n\t")                 /* error-message prefix */
 		if L.RawGetI(3, int64(i)) == LUA_TNIL { /* no more searchers? */
-			L.Pop(1)           /* remove nil */
-			pkBuffSub(&msg, 2) /* remove prefix */
+			L.Pop(1) /* remove nil */
 			L.PushString(msg.String())
 			L.Error2("module '%s' not found:%s", name, L.ToStringX(-1))
 		}
@@ -418,11 +420,10 @@ func pkFindLoader(L *State, name string) {
 			return /* module loader found */
 		} else if L.IsString(-2) { /* searcher returned error message? */
 			L.Pop(1) /* remove extra return */
-			msg.WriteString(L.ToStringX(-1))
+			msg.WriteString(L.ToStringX(-1)) /* already has "\n\t" */
 			L.Pop(1) /* remove the message */
 		} else { /* no error message */
-			L.Pop(2)           /* remove both returns */
-			pkBuffSub(&msg, 2) /* remove prefix */
+			L.Pop(2) /* remove both returns */
 		}
 	}
 }
@@ -467,8 +468,9 @@ func pkRequire(L *State) int {
 		L.Copy(-1, -2)       /* replace loader result */
 		L.SetField(2, cname) /* LOADED[cname] = true */
 	}
-	L.Rotate(L.AbsIndex(-2), 1) /* loader data <-> module result */
-	return 2                    /* return module result and loader data */
+	/* 5.3.4 returns only the module (5.4 also returns loader data). */
+	L.Remove(-2) /* drop loader data under the result */
+	return 1
 }
 
 // ---------------------------------------------------------------------
