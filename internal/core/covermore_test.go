@@ -12,9 +12,10 @@ import (
 )
 
 // The functions below are reached only from edges a short script never
-// takes: mixed int/float order at runtime, a \z escape, a lax UTF-8
-// walk, a write-only file, a constructor past the constant-index limit
-// of an instruction, and the warning state machine once it is turned on.
+// takes: mixed int/float order at runtime, a \z escape, a UTF-8
+// surrogate codepoint (allowed in 5.3.4), a write-only file, a constructor
+// past the constant-index limit of an instruction, and the warning state
+// machine once it is turned on.
 
 func TestEdgesTheShortScriptsMiss(t *testing.T) {
 	wo := filepath.Join(t.TempDir(), "wo.txt")
@@ -43,11 +44,12 @@ say("a\z
 	b" == "ab")
 
 local s = "\xED\xA0\x80"
-local iter, st, p = utf8.codes(s, true)
+-- 5.3.4 allows surrogates; no lax/strict split (5.4).
+local iter, st, p = utf8.codes(s)
 local _, c = iter(st, p)
 say(c)
-local strict = utf8.codes(s)
-say(pcall(strict, s, 0))
+local again = utf8.codes(s)
+say(pcall(again, s, 0))
 
 local fh = assert(io.open(os.getenv("COVER_WO"), "w"))
 local x, err, en = fh:read(1)
@@ -99,7 +101,7 @@ return table.concat(out, "\n")
 		"false",
 		"true",
 		"55296",
-		"false",
+		"true",
 		"true",
 		"Bad file descriptor",
 		"9",
