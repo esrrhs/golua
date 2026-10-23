@@ -228,8 +228,12 @@ func (L *State) CheckStack(n int) bool {
 	return res
 }
 
-// XMove moves n values between two states of the same global state.
+// XMove moves n values between two states of the same global state
+// (lua_xmove). Same-state is a no-op, matching C's early return.
 func (L *State) XMove(from *State, n int) {
+	if from == L {
+		return
+	}
 	if L.g != from.g {
 		panic("moving values across states")
 	}
@@ -381,18 +385,29 @@ func (L *State) ToUserData(idx int) any {
 }
 
 // ToPointer returns a unique identifier for the value at idx
-// (lua_topointer).
+// (lua_topointer). Matches C: NULL for strings/numbers/nil/boolean;
+// TLCL / TCCL / TLCF distinguished like lapi.c.
 func (L *State) ToPointer(idx int) uintptr {
 	v := index2value(L, idx)
-	switch ttype(v) {
-	case LUA_TTABLE, LUA_TFUNCTION, LUA_TTHREAD, LUA_TUSERDATA:
+	switch ttypetag(v) {
+	case LUA_TTABLE:
+		return ptrID(unsafe.Pointer(hvalue(v)))
+	case LUA_TLCL:
+		return ptrID(unsafe.Pointer(clLvalue(v)))
+	case LUA_TCCL:
+		return ptrID(unsafe.Pointer(clCvalue(v)))
+	case LUA_TLCF:
+		/* C: cast(void *, cast(size_t, fvalue(o))) */
+		return uintptr(v.p)
+	case LUA_TTHREAD:
+		return ptrID(unsafe.Pointer(thvalue(v)))
+	case LUA_TUSERDATA:
 		return ptrID(gcvalue(v))
 	case LUA_TLIGHTUSERDATA:
 		return ptrID(pvalue(v))
-	case LUA_TSTRING:
-		return ptrID(unsafe.Pointer(tsvalue(v)))
+	default:
+		return 0 /* strings, numbers, nil, boolean, … */
 	}
-	return 0
 }
 
 // ToThread returns the thread at idx (lua_tothread).
@@ -610,7 +625,10 @@ func (L *State) CreateTable(narr, nrec int) {
 func (L *State) NewTable() { L.CreateTable(0, 0) }
 
 // NewUserData creates a full userdata wrapping a Go value
-// (lua_newuserdata).
+// (lua_newuserdata). C 5.3.4 allocates a size_t byte blob with a single
+// uservalue; Go keeps a value wrapper plus optional uv[] (nuvalue). Prefer
+// nuvalue==1 for C-shaped userdata; multi-uv remains a Go/5.4-shaped SPEC
+// pending a later lobject/lstring reshape.
 func (L *State) NewUserData(val any, nuvalue int) any {
 	u := luaS_newudata(L, nuvalue, val)
 	L.checkStack(1)
@@ -909,12 +927,14 @@ func (L *State) PCall(nargs, nresults, msgh int) int {
 // pcallK is lua_pcallk. 'k' tells whether the caller supplied a
 // continuation function; that is how 'pcall' and 'xpcall' ask for a
 // *yieldable* protected call (lbaselib.c passes 'finishpcall' as the
-// continuation).  C then leaves the call unprotected and lets errors
-// escape to the nearest recovery point -- a coroutine's 'resume', which
-// unwinds back into 'finishpcall'.  In this port a coroutine runs on its
-// own goroutine, so the error is still caught here; the part that must
-// be reproduced is that the call is *not* marked non-yieldable, so a
-// 'coroutine.yield' can cross a 'pcall'.
+// continuation).
+//
+// C (yieldable path): set CIST_YPCALL, save errfunc, bare luaD_call;
+// errors unwind to resume/findpcall → finishpcallk. This port runs
+// coroutines on goroutines with goCont resume, so a true bare-call +
+// findpcall redesign would risk breaking Yield/Resume. Safe alignment:
+// mark ci.ypcall (CIST_YPCALL), keep luaD_call (not noyield) inside
+// luaD_pcall so yield can cross pcall and errors stay recovered here.
 func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 	funcIdx := L.top - (nargs + 1)
 	var ef int
@@ -923,14 +943,14 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 	}
 	var status int
 	if k && yieldable(L) {
-		/* C's lua_pcallk takes the yieldable path: the call is made
-		   with CIST_YPCALL set so a 'coroutine.yield' can cross pcall.
-		   5.3.4 has no to-be-closed / __close. */
+		ci := L.ci
+		ci.ypcall = true /* CIST_YPCALL */
+		defer func() { ci.ypcall = false }()
 		status = luaD_pcall(L, func() {
 			luaD_call(L, funcIdx, nresults)
 		}, funcIdx, ef)
 	} else {
-		/* the conventional call: C's f_call goes through luaD_pcall */
+		/* conventional: C's f_call via luaD_pcall (noyield) */
 		status = luaD_pcall(L, func() {
 			luaD_callnoyield(L, funcIdx, nresults)
 		}, funcIdx, ef)
