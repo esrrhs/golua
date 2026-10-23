@@ -508,7 +508,8 @@ func (c *luac) printCode(f *Proto) {
 		case OP_SETLIST:
 			if carg == 0 {
 				pc++
-				fmt.Fprintf(c.out, "\t; %d", code[pc].A)
+				/* C prints (int)code[++pc] — raw packed Instruction word, not Ax */
+				fmt.Fprintf(c.out, "\t; %d", int(packInstruction(code[pc])))
 			} else {
 				fmt.Fprintf(c.out, "\t; %d", carg)
 			}

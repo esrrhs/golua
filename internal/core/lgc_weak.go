@@ -125,7 +125,12 @@ var (
 
 // luaC_checkWeakMode is the '__mode' half of 'luaC_checkfinalizer': a
 // table whose metatable has a '__mode' field starts to be swept.
+//
+// C re-reads TM_MODE every mark (traversetable); nil mt / non-weak mode
+// means a strong table. Always clear weakMode first so setmetatable(t, nil)
+// or a metatable without '__mode' stops weak sweeping.
 func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
+	t.weakMode = 0
 	if mt == nil {
 		return
 	}
@@ -143,10 +148,10 @@ func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
 			mode |= weakVal
 		}
 	}
-	t.weakMode = byte(mode)
 	if mode == 0 {
 		return
 	}
+	t.weakMode = byte(mode)
 	gcWeakMu.Lock()
 	gcWeakTables = append(gcWeakTables, weak.Make(t))
 	gcWeakMu.Unlock()
@@ -168,6 +173,14 @@ type weakSlot struct {
 // gcSweepWeak is 'cleartable' (lgc.c): it drops the entries of the weak
 // tables whose object is no longer reachable from anywhere else.  It runs
 // from the collector step, as it does in C.
+//
+// Ephemeron note (__mode="k"): C marks a value only when its key is already
+// marked (traverseephemeron). Leaving nd.val strong across runtime.GC lets a
+// value→key cycle keep the key alive, so the entry never clears. During the
+// detach window we therefore also weaken collectable values for weak-key
+// tables. Residual vs full convergeephemerons: a strong value that is only
+// reachable through an alive weak key may be cleared here (Go has no
+// ephemeron map); full parity needs a redesign beyond this bridge.
 func (L *State) gcSweepWeak() {
 	if gcWeakCount.Load() == 0 {
 		return
@@ -205,6 +218,13 @@ func (L *State) gcSweepWeak() {
 				if w := makeWeakRef(&kv); w != nil {
 					slots = append(slots, weakSlot{n: nd, isKey: true, w: w})
 					setnilkey(nd)
+					/* ephemeron: do not leave the value strong across GC */
+					if mode&weakVal == 0 {
+						if vw := makeWeakRef(&nd.val); vw != nil {
+							slots = append(slots, weakSlot{n: nd, v: &nd.val, w: vw})
+							setnilvalue(&nd.val)
+						}
+					}
 				}
 			}
 			if mode&weakVal != 0 {
@@ -241,6 +261,11 @@ func (L *State) gcSweepWeak() {
 			if s.isKey {
 				setnodekey(s.n, &sv)
 			} else {
+				/* C allweak: clearkeys nils the value when the key dies.
+				   Do not resurrect a live value into a DEADKEY node. */
+				if s.n != nil && s.n.keytt == LUA_TDEADKEY {
+					continue
+				}
 				*s.v = sv
 			}
 			continue

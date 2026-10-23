@@ -815,7 +815,8 @@ func ioReadNumber(L *State, s *ioStream) bool {
 	}
 	count := 0
 	hex := false
-	decp := ".." /* the decimal point; always accept a dot */
+	/* C: decp[0]=lua_getlocaledecpoint(); decp[1]='.' */
+	decp := string([]byte{localeDecPoint[0], '.'})
 	rn.test2("-+")
 	if rn.test2("00") {
 		if rn.test2("xX") {
