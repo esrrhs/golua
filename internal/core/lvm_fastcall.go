@@ -2,8 +2,6 @@ package core
 
 import "math"
 
-const fastForMax = 32 // shared leaf-register budget (was lvm_fastfor.go)
-
 const (
 	fastLeafUnknown = iota
 	fastLeafNo
