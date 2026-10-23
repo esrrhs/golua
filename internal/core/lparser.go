@@ -1,11 +1,13 @@
 // Translation of lparser.h / lparser.c (PUC-Lua 5.4.9).
 //
-// Adaptations:
-//   - the block/function states are heap allocated (Go has no stack objects,
-//     and the collector reclaims them);
-//   - luaC_objbarrier / luaC_checkGC are gone;
-//   - luaM_growvector becomes append;
-//   - enterlevel/leavelevel guard the recursion depth directly.
+// Adaptations (FLAG — intentional; see NOTES.md):
+//   - BlockCnt / FuncState are addressable locals (escape to heap under Go);
+//   - luaC_objbarrier / luaC_checkGC omitted (Go GC);
+//   - luaM_growvector → append + checklimit for C hard limits;
+//   - enterlevel/leavelevel = luaE_incCstack / nCcalls-- (5.4.9; no
+//     "too many syntax levels" message);
+//   - FuncState omits nabslineinfo/iwthabs (lineinfo is absolute; see lcode);
+//   - expdesc union flattened; eqstr may fall back to content after intern flush.
 package core
 
 import "fmt"
@@ -262,6 +264,7 @@ func codename(ls *LexState, e *expdesc) {
 
 // registerlocalvar registers a new local variable for debug information.
 func registerlocalvar(ls *LexState, fs *FuncState, varname *TString) int {
+	checklimit(fs, fs.ndebugvars+1, SHRT_MAX, "local variables")
 	fs.f.locvars = append(fs.f.locvars, LocVar{varname: varname, startpc: fs.pc})
 	idx := fs.ndebugvars
 	fs.ndebugvars++
@@ -273,6 +276,7 @@ func new_localvar(ls *LexState, name *TString) int {
 	fs := ls.fs
 	dyd := ls.dyd
 	checklimit(fs, dyd.actvar.n+1-fs.firstlocal, MAXVARS, "local variables")
+	checklimit(fs, dyd.actvar.n+1, SHRT_MAX, "local variables")
 	for len(dyd.actvar.arr) <= dyd.actvar.n {
 		dyd.actvar.arr = append(dyd.actvar.arr, Vardesc{})
 	}
@@ -547,6 +551,7 @@ func findlabel(ls *LexState, name *TString) *Labeldesc {
 
 func newlabelentry(ls *LexState, l *Labellist, name *TString, line, pc int) int {
 	n := l.n
+	checklimit(ls.fs, n+1, SHRT_MAX, "labels/gotos")
 	for len(l.arr) <= n {
 		l.arr = append(l.arr, Labeldesc{})
 	}
@@ -666,6 +671,7 @@ func leaveblock(fs *FuncState) {
 func addprototype(ls *LexState) *Proto {
 	fs := ls.fs
 	f := fs.f
+	checklimit(fs, fs.np+1, MAXARG_Bx, "functions")
 	clp := luaF_newproto(ls.L)
 	for len(f.p) <= fs.np {
 		f.p = append(f.p, nil)

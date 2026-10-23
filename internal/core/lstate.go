@@ -1,9 +1,10 @@
-// Translation of lstate.h / lstate.c (PUC-Lua 5.4).
+// Translation of lstate.h / lstate.c (PUC-Lua 5.4.9).
 //
-// GC-related fields are gone (there is no collector); object lifetime is
-// the Go runtime's job. Error handling uses panic/recover instead of
-// setjmp/longjmp, and each coroutine runs on its own goroutine so that a
-// Go function can yield from the middle of a call.
+// Intentional adaptations (see NOTES.md):
+//   - Go GC replaces lgc (keep finalizer/warn bridge knobs; ignore mark/sweep).
+//   - Error handling uses panic/recover instead of setjmp/longjmp.
+//   - Index stack (funcIdx / int tops) instead of StkIdRel / TValue*.
+//   - Goroutine (+ sync fast-path) coroutines instead of C-stack longjmp resume.
 package core
 
 import (
@@ -32,19 +33,40 @@ type GoFunc func(L *State) int
 // WarnFunc is the Go equivalent of lua_WarnFunction.
 type WarnFunc func(L *State, msg string, tocont bool)
 
-// CallInfo status bits (lstate.h).
+// CallInfo status bits (lstate.h 5.4.9).
 const (
-	CIST_OAH       = 1 << 0
-	CIST_C         = 1 << 1
-	CIST_FRESH     = 1 << 2
-	CIST_HOOKED    = 1 << 3
-	CIST_YPCALL    = 1 << 4
-	CIST_TAIL      = 1 << 5
-	CIST_HOOKYIELD = 1 << 6
-	CIST_FIN       = 1 << 7
-	CIST_TRAN      = 1 << 8
-	CIST_CLSRET    = 1 << 9
+	CIST_OAH       = 1 << 0 /* original value of 'allowhook' */
+	CIST_C         = 1 << 1 /* call is running a C function */
+	CIST_FRESH     = 1 << 2 /* call is on a fresh "luaV_execute" frame */
+	CIST_HOOKED    = 1 << 3 /* call is running a debug hook */
+	CIST_YPCALL    = 1 << 4 /* doing a yieldable protected call */
+	CIST_TAIL      = 1 << 5 /* call was tail called */
+	CIST_HOOKYIELD = 1 << 6 /* last hook called yielded */
+	CIST_FIN       = 1 << 7 /* function "called" a finalizer */
+	CIST_TRAN      = 1 << 8 /* 'ci' has transfer information */
+	CIST_CLSRET    = 1 << 9 /* function is closing tbc variables */
+	/* Bits 10-12 are used for CIST_RECST (see below) */
+	CIST_RECST     = 10
 )
+
+// setoah / getoah store/load allowhook in CIST_OAH (lstate.h).
+// assume CIST_OAH has offset 0 and that v is strictly 0/1.
+func setoah(st *uint16, v byte) {
+	*st = (*st &^ CIST_OAH) | uint16(v&1)
+}
+
+func getoah(st uint16) byte {
+	return byte(st & CIST_OAH)
+}
+
+// getcistrecst / setcistrecst: recover status while closing tbc (lstate.h).
+func getcistrecst(ci *CallInfo) int {
+	return int((ci.callstatus >> CIST_RECST) & 7)
+}
+
+func setcistrecst(ci *CallInfo, st int) {
+	ci.callstatus = (ci.callstatus &^ (7 << CIST_RECST)) | (uint16(st&7) << CIST_RECST)
+}
 
 // incnny/decnny manipulate the "non-yieldable" part of nCcalls, which
 // lives in the upper 16 bits (lstate.h).
@@ -56,6 +78,9 @@ const (
 func incnny(L *State) { L.nCcalls += 0x10000 }
 
 func decnny(L *State) { L.nCcalls -= 0x10000 }
+
+// getCcalls is the real number of C calls (lower 16 bits).
+func getCcalls(L *State) int { return int(L.nCcalls & 0xffff) }
 
 // yieldable reports whether the thread has no non-yieldable call in the
 // stack (lstate.h).
@@ -472,6 +497,10 @@ func (L *State) shrinkStack() {
 // CallInfo management (lstate.c)
 // ---------------------------------------------------------------------
 
+// extendCI is luaE_extendCI (lstate.c). C takes an 'err' flag and may
+// return NULL on OOM; Go allocation cannot fail, so there is no err path.
+// C returns the new CI without assigning L->ci; here L.ci is advanced
+// (callers in ldo expect that). trap is cleared like C's ci->u.l.trap = 0.
 func (L *State) extendCI() *CallInfo {
 	var ci *CallInfo
 	if n := len(L.ciPool); n > 0 {
@@ -486,6 +515,7 @@ func (L *State) extendCI() *CallInfo {
 		L.ci.next = ci
 	}
 	ci.next = nil
+	ci.trap = false /* C: ci->u.l.trap = 0 */
 	L.ci = ci
 	return ci
 }
@@ -498,7 +528,12 @@ func (L *State) freeCI(ci *CallInfo) {
 	L.nci--
 }
 
-func (L *State) shrinkCI() {
+// unwindCIToBase frees every active CallInfo back to baseCI.
+// NOT luaE_shrinkCI (that frees half of the *unused* CI tail — C keeps
+// it in lstate.c; this port's equivalent free/shrink of unused CI lives
+// with stack helpers or is omitted under the CI pool). Prior name
+// shrinkCI collided with C; covermore_test must retarget on apply.
+func (L *State) unwindCIToBase() {
 	for L.ci != &L.baseCI && L.ci != nil {
 		prev := L.ci.prev
 		L.freeCI(L.ci)
@@ -534,7 +569,7 @@ func NewState() *State {
 	L.top = 1
 	L.ci = &L.baseCI
 	L.baseCI.funcIdx = 0
-	L.baseCI.top = 1
+	L.baseCI.top = L.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
 	L.baseCI.callstatus = CIST_C
 	L.baseCI.nresults = 0
 	gcTrackThread(L) /* so that the collector can clear its stale slots */
@@ -553,24 +588,25 @@ func NewState() *State {
 	g.gcPause = 200
 	g.gcStepMul = 100
 	g.gcMode = gcModeGen
-	g.nilValue = Value{tt: LUA_VNIL}
+	g.nilValue = Value{tt: LUA_VNIL} /* completestate(g): ttisnil(&g->nilvalue) */
 	g.strt = newStringTable()
 	g.memErrMsg = luaS_new(L, "not enough memory")
-	luaT_init(L)
+	/* f_luaopen order: luaS_init, luaT_init, luaX_init (C lstate.c) */
 	luaS_init(L)
+	luaT_init(L)
 	luaX_init(L)
-	// registry
+	/* init_registry */
 	sethvalue(&g.registry, luaH_new(L))
-	// registry[1] = main thread, registry[2] = globals table
+	luaH_resize(L, hvalue(&g.registry), LUA_RIDX_LAST, 0)
 	var th Value
 	setthvalue(&th, L)
-	luaH_setint(L, hvalue(&g.registry), 1, &th)
+	luaH_setint(L, hvalue(&g.registry), LUA_RIDX_MAINTHREAD, &th)
 	var gl Value
 	gt := luaH_new(L)
 	sethvalue(&gl, gt)
-	luaH_setint(L, hvalue(&g.registry), 2, &gl)
-	/* luaL_newstate's last act: the default warning function keeps the
-	   warning system off until 'warn("@on")' or the '-W' option. */
+	luaH_setint(L, hvalue(&g.registry), LUA_RIDX_GLOBALS, &gl)
+	/* FLAG: C's lua_newstate leaves warnf NULL; luaL_newstate installs
+	   the default. This NewState folds that lauxlib last act in. */
 	g.setWarnf(warnfOff)
 	return L
 }
@@ -701,7 +737,7 @@ func (L *State) NewThread() *State {
 	L1.top = 1
 	L1.ci = &L1.baseCI
 	L1.baseCI.funcIdx = 0
-	L1.baseCI.top = 1
+	L1.baseCI.top = L1.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
 	L1.baseCI.callstatus = CIST_C
 	L1.baseCI.nresults = 0
 	gcTrackThread(L1) /* so that the collector can clear its stale slots */
@@ -715,6 +751,9 @@ func (L *State) NewThread() *State {
 	L1.basehookcount = L.basehookcount
 	L1.hookcount = L.basehookcount /* resethookcount(L1) */
 	L1.hookExternal = L.hookExternal
+	/* FLAG: C memcpy's LUA_EXTRASPACE from mainthread; Go allocates
+	   cstate lazily on first C hand-off, so extraspace inherit is omitted
+	   (optional apply debt when first allocating L1.cstate). */
 	L1.co = newCoRuntime()
 	L1.co.sync = true
 	// the thread object goes on the stack of the creating state
@@ -825,6 +864,7 @@ func (L *State) coRun(args []Value, ccalls int) (status int, closed bool) {
 					   handed to the resumer would be a real one. */
 					L.co.vals = L.co.vals[:0]
 				}
+				L.baseCI.top = L.top + LUA_MINSTACK /* luaE_resetthread */
 				return
 			case *luaError:
 				status = x.status
@@ -976,7 +1016,7 @@ func (L *State) Resume(from *State, nargs int) int {
 	co.status = LUA_OK
 	ccalls := 0
 	if from != nil {
-		ccalls = int(from.nCcalls & 0xffff) /* getCcalls(from) */
+		ccalls = getCcalls(from)
 	}
 	if ccalls >= LUAI_MAXCCALLS {
 		/* C's resume_error: message goes on the resumed thread */
@@ -1328,10 +1368,12 @@ func (L *State) unwindForClose() int {
 	if st != LUA_OK {
 		luaD_seterrorobj(L, st, 1)
 		L.co.vals = append(L.co.vals[:0], L.stack[1])
+		L.baseCI.top = L.top + LUA_MINSTACK /* luaE_resetthread */
 		return st
 	}
 	L.top = 1
 	L.co.vals = L.co.vals[:0]
+	L.baseCI.top = L.top + LUA_MINSTACK /* luaE_resetthread */
 	return LUA_OK
 }
 
@@ -1553,8 +1595,19 @@ func warnfOn(L *State, msg string, tocont bool) {
 	warnfCont(L, msg, tocont)              /* finish processing */
 }
 
+// luaE_warnerror generates a warning from an error message (lstate.c).
+// Produces "error in %s (%s)" from where + the string on top of the stack.
 func luaE_warnerror(L *State, where string) {
-	luaE_warning(L, fmt.Sprintf("%s: WARNING: failed to write warning: ", where), false)
+	errobj := &L.stack[L.top-1] /* error object */
+	msg := "error object is not a string"
+	if ttisstring(errobj) {
+		msg = tsvalue(errobj).val
+	}
+	luaE_warning(L, "error in ", true)
+	luaE_warning(L, where, true)
+	luaE_warning(L, " (", true)
+	luaE_warning(L, msg, true)
+	luaE_warning(L, ")", false)
 }
 
 // AtPanic sets the panic function (lua_atpanic).

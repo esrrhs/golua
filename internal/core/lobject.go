@@ -1,9 +1,10 @@
-// Package lua is a pure-Go port of PUC-Lua 5.4.
+// Translation of lobject.h / lobject.c (PUC-Lua 5.4.9).
 //
-// This file is the translation of lobject.h / lobject.c: the value
-// representation (TValue) and the basic object operations. The garbage
-// collector (lgc.c) is not translated: object lifetime is handled by the
-// Go runtime.
+// Type definitions for Lua objects and generic operations over them.
+// Value is the tagged-value representation (TValue). Collectable
+// lifetime is handled by the Go runtime (no CommonHeader next/marked).
+//
+// Intentional: compact Value{i, p, tt} (not C's union Value overlay).
 package core
 
 import (
@@ -29,6 +30,7 @@ const (
 	LUA_TUSERDATA      = 7
 	LUA_TTHREAD        = 8
 	LUA_NUMTYPES       = 9
+	LUA_NUMTAGS        = LUA_NUMTYPES // lua.h
 )
 
 // Status codes (lua.h).
@@ -51,6 +53,7 @@ const (
 	LUA_MULTRET     = -1
 	LUA_IDSIZE      = 60
 	MAXNUMBER2STR   = 44
+	UTF8BUFFSZ      = 8 // size of buffer for luaO_utf8esc (lobject.h)
 	LUA_INTEGER_FMT = "%d"
 	LUA_NUMBER_FMT  = "%.14g"
 )
@@ -71,11 +74,15 @@ const (
 	BIT_ISCOLLECTABLE = 1 << 6
 )
 
-// makevariant / ctb / novariant, exactly as lobject.h. 'ctb' answers a
-// byte because that is the type a tag has inside a Value.
-func makevariant(t, v int) int { return t | (v << 4) }
-func ctb(t int) uint8          { return uint8(t) | BIT_ISCOLLECTABLE }
-func novariant(t int) int      { return t & 0x0F }
+// makevariant / ctb / novariant / withvariant, exactly as lobject.h.
+// 'ctb' answers a byte because that is the type a tag has inside a Value.
+func makevariant(t, v int) int        { return t | (v << 4) }
+func ctb(t int) uint8                 { return uint8(t) | BIT_ISCOLLECTABLE }
+func novariant(t int) int             { return t & 0x0F }
+func withvariant(t int) int           { return t & 0x3F }
+func rawtt(o *Value) uint8            { return o.tt }
+func checktag(o *Value, t uint8) bool { return o.tt == t }
+func checktype(o *Value, t int) bool  { return ttype(o) == t }
 
 // Variant tags (lobject.h). The values are 'makevariant(t, v)', written
 // out literally because Go constants cannot call functions.
@@ -110,10 +117,14 @@ const (
 
 // Extra types for collectable non-values (lobject.h).
 const (
-	LUA_TUPVAL   = LUA_NUMTYPES
-	LUA_TPROTO   = LUA_NUMTYPES + 1
-	LUA_TDEADKEY = LUA_NUMTYPES + 2
+	LUA_TUPVAL   = LUA_NUMTYPES     // upvalues
+	LUA_TPROTO   = LUA_NUMTYPES + 1 // function prototypes
+	LUA_TDEADKEY = LUA_NUMTYPES + 2 // removed keys in tables
 )
+
+// LUA_TOTALTYPES: number of all possible types (including LUA_TNONE
+// but excluding DEADKEY). C: (LUA_TPROTO + 2).
+const LUA_TOTALTYPES = LUA_TPROTO + 2
 
 // Arithmetic op codes (lua.h LUA_OP*).
 const (
@@ -133,26 +144,27 @@ const (
 	LUA_OPBNOT = 13
 )
 
+// Comparison op codes (lua.h) — distinct from arith LUA_OP* numbering.
+const (
+	LUA_OPEQ = 0
+	LUA_OPLT = 1
+	LUA_OPLE = 2
+)
+
 // Value is the translation of TValue: a tag plus the value itself.
 //
-// C's TValue is a tagged union, and so is this, with two deliberate
-// differences.  Where C overlays an integer, a float and a pointer in
-// the same bytes, this has two fields, 'i' for the integer (or a
-// boolean, or the bits of a float -- which is what C's union does
-// anyway) and 'p' for every collectable.  And where C keeps an int
-// tag, this keeps a byte: 24 bytes in all instead of C's 16, which is
-// as small as a tagged value can be while the Go collector can still
-// see the pointer.  (NaN-boxing would hide it; an interface would
-// cost a second word.)
+// KEEP intentional (do not "fix" to C union layout): compact
+// Value{i, p, tt}. C overlays gc/p/f/i/n in a union Value plus lu_byte
+// tt_; Go splits integer/float bits into 'i' and every pointer into 'p'
+// so the Go GC can see references. ~24 bytes vs C's ~16; NaN-boxing
+// would hide pointers from the GC; an interface would cost another word.
 //
-// 'p' is a real pointer the GC scans, never a hidden one.  A light C
-// function is stored as its closure pointer: a Go func value *is* a
-// pointer to a funcval, so the round trip through unsafe.Pointer
-// loses nothing and keeps the closure alive.
+// 'p' is a real pointer the GC scans. A light C function is stored as
+// its closure pointer (Go func value → funcval).
 type Value struct {
-	i  int64          // an integer, or the bits of a float
-	p  unsafe.Pointer // a collectable object, light userdata, or a funcval
-	tt uint8
+	i  int64          // integer, or bits of a float (LUA_VNUMFLT)
+	p  unsafe.Pointer // collectable, light userdata, or light C funcval
+	tt uint8          // raw type tag (variant + collectable bit)
 }
 
 // ---------------------------------------------------------------------
@@ -160,12 +172,13 @@ type Value struct {
 // ---------------------------------------------------------------------
 
 func ttype(v *Value) int    { return novariant(int(v.tt)) }
-func ttypetag(v *Value) int { return int(v.tt) & 0x3F }
+func ttypetag(v *Value) int { return withvariant(int(v.tt)) }
 
-func ttisnil(v *Value) bool       { return ttype(v) == LUA_TNIL }
-func ttisstrictnil(v *Value) bool { return v.tt == LUA_VNIL }
-func isabstkey(v *Value) bool     { return v.tt == LUA_VABSTKEY }
-func isempty(v *Value) bool       { return ttisnil(v) }
+func ttisnil(v *Value) bool        { return ttype(v) == LUA_TNIL }
+func ttisstrictnil(v *Value) bool  { return v.tt == LUA_VNIL }
+func isabstkey(v *Value) bool      { return v.tt == LUA_VABSTKEY }
+func isempty(v *Value) bool        { return ttisnil(v) }
+func isnonstrictnil(v *Value) bool { return ttisnil(v) && !ttisstrictnil(v) }
 
 func ttisboolean(v *Value) bool { return ttype(v) == LUA_TBOOLEAN }
 func ttisfalse(v *Value) bool   { return v.tt == LUA_VFALSE }
@@ -316,33 +329,49 @@ func getnodekey(dst *Value, n *node) {
 func setnilkey(n *node) { n.keytt = LUA_VNIL; n.kp = nil; n.ki = 0 }
 
 // Table is a Lua table: an array part plus an open-addressing hash part.
+//
+// About 'alimit' (lobject.h 5.4.9): if isrealasize(t) is true, then
+// 'alimit' is the real size of 'array'. Otherwise, the real size of
+// 'array' is the smallest power of two not smaller than 'alimit' (or
+// zero iff 'alimit' is zero); 'alimit' is then used as a hint for #t.
+// BITRAS in flags marks the "not real asize" case.
 type Table struct {
-	flags     byte // 1<<p means tagmethod(p) is not present
-	lsizenode byte // log2 of size of 'node' array
-	alimit    uint32
+	flags     byte   // 1<<p means tagmethod(p) is not present; BITRAS for alimit
+	lsizenode byte   // log2 of size of 'node' array
+	alimit    uint32 // "limit" of 'array' array (5.4; not 5.3 sizearray)
 	array     []Value
 	nodes     []node
-	lastfree  int
+	lastfree  int // any free position is before this position
 	metatable *Table
-	weakMode  byte // 0 or "k"/"v"/"kv" bits, replacing GC-driven weakness
+	// Go-GC bridge (not in C Table): weakMode / finalized replace gclist+colors.
+	weakMode  byte // 0 or "k"/"v"/"kv" bits
 	finalized bool // a Go finalizer has been set to run its '__gc'
 }
 
 func isrealasize(t *Table) bool { return t.flags&BITRAS == 0 }
 func setrealasize(t *Table)     { t.flags &= ^byte(BITRAS) }
 func setnorealasize(t *Table)   { t.flags |= BITRAS }
-func sizenode(t *Table) int     { return 1 << t.lsizenode }
 func twoto(x byte) int          { return 1 << x }
+func sizenode(t *Table) int     { return twoto(t.lsizenode) }
+
+// lmod is the module operation for hashing (size is always a power of 2).
+func lmod(s uint32, size int) int { return int(s) & (size - 1) }
 
 // ---------------------------------------------------------------------
 // Udata (lobject.h)
 // ---------------------------------------------------------------------
 
-// Udata is a full userdata: a Go value plus a metatable and user values.
+// Udata is a full userdata (lobject.h 5.4.9).
+//
+// Multi-UV userdata: 'nuvalue' is the number of user values and 'uv' is
+// the slice of those TValues (C: UValue uv[1] flex array). C also has
+// Udata0 (no user values, no gclist) and udatamemoffset/getudatamem/
+// sizeudata; Go keeps one Udata shape and stores binary data in
+// 'cblock'/'len' or the Go 'val' instead of trailing bytes.
 type Udata struct {
-	nuvalue   uint16
+	nuvalue   uint16 // number of user values (5.4 multi-UV)
 	metatable *Table
-	uv        []Value        // user values
+	uv        []Value        // user values (length == nuvalue)
 	val       any            // the Go value carried by this userdata
 	finalized bool           // being watched: its '__gc' is to run
 	finSet    bool           // the Go finalizer has been set, which happens once
@@ -377,19 +406,20 @@ type AbsLineInfo struct {
 	line int
 }
 
-// Proto is a function prototype.
+// Proto is a function prototype (lobject.h).
 type Proto struct {
 	numparams    byte
-	isVararg     byte
+	isVararg     byte // C: is_vararg
 	maxstacksize byte
-	fastLeaf     byte // cached straight-line numeric leaf classification
+	fastLeaf     byte // Go SPEC: cached straight-line numeric leaf (not in C)
 
-	sizeupvalues int
-	sizek        int
-	sizecode     int
-	sizelineinfo int
-	sizep        int
-	sizelocvars  int
+	sizeupvalues    int
+	sizek           int
+	sizecode        int
+	sizelineinfo    int
+	sizep           int
+	sizelocvars     int
+	sizeabslineinfo int // size of 'abslineinfo' (5.4.9; dump/undump)
 
 	linedefined     int
 	lastlinedefined int
@@ -398,9 +428,9 @@ type Proto struct {
 	code     []Instruction
 	p        []*Proto
 	upvalues []Upvaldesc
-	// lineinfo holds the absolute source line of each instruction.
-	// (PUC-Lua stores line deltas plus an 'abslineinfo' array; the
-	// absolute form is equivalent and much simpler.)
+	// FLAG: C stores signed-byte line deltas in lineinfo plus abslineinfo
+	// for absolute lines; this port keeps absolute lines in lineinfo and
+	// still retains abslineinfo for binary dump/undump round-trips.
 	lineinfo    []int32
 	abslineinfo []AbsLineInfo
 	locvars     []LocVar
@@ -464,7 +494,7 @@ func intarith(L *State, op int, v1, v2 int64) int64 {
 		return v1 ^ v2
 	case LUA_OPSHL:
 		return int64(luaV_shiftl(v1, v2))
-	case LUA_OPSHR:
+	case LUA_OPSHR: // C: luaV_shiftr(v1, v2); Go has only luaV_shiftl
 		return int64(luaV_shiftl(v1, -v2))
 	case LUA_OPUNM:
 		return -v1
@@ -538,25 +568,27 @@ func luaO_arith(L *State, op int, p1, p2 *Value, res int) {
 	}
 }
 
-// luaO_utf8esc encodes x as UTF-8, returning the bytes.
+// luaO_utf8esc encodes x as UTF-8 (lobject.c).
+// C writes backwards into char buff[UTF8BUFFSZ] and returns n; Go returns
+// the byte slice of those n bytes (same algorithm).
 func luaO_utf8esc(x uint32) []byte {
-	if x < 0x80 {
+	if x < 0x80 { // ascii?
 		return []byte{byte(x)}
 	}
-	var buf [8]byte
-	n := 1
-	mfb := uint32(0x3f)
+	var buf [UTF8BUFFSZ]byte
+	n := 1              // number of bytes put in buffer (backwards)
+	mfb := uint32(0x3f) // maximum that fits in first byte
 	for {
-		buf[8-n] = byte(0x80 | (x & 0x3f))
+		buf[UTF8BUFFSZ-n] = byte(0x80 | (x & 0x3f))
 		n++
 		x >>= 6
 		mfb >>= 1
-		if x <= mfb {
+		if x <= mfb { // still needs continuation byte?
 			break
 		}
 	}
-	buf[8-n] = byte((^mfb << 1) | x)
-	return buf[8-n:]
+	buf[UTF8BUFFSZ-n] = byte((^mfb << 1) | x) // add first byte
+	return buf[UTF8BUFFSZ-n:]
 }
 
 // tostringbuff converts a number object to its string representation.

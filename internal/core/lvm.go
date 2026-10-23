@@ -1,9 +1,21 @@
-// Translation of lvm.h / lvm.c (PUC-Lua 5.4).
+// Translation of lvm.h / lvm.c (PUC-Lua 5.4.9) — line-faithful C→Go.
 //
-// The instruction dispatch loop follows lvm.c closely. Two things are
-// gone: the GC steps, and 'luaV_finishOp' (there is nothing to finish,
-// because a metamethod that yields simply blocks the coroutine's
-// goroutine instead of longjmp-ing out of the interpreter).
+// Main interpreter: luaV_execute opcode switch matches 5.4.9 (including
+// OP_LOADI/LOADF/ADDI/*K/MMBIN*/EQI/LTI/…/RETURN0/RETURN1/VARARGPREP,
+// forprep counter, floatforloop). ljumptab.h is reference only: Go uses
+// a switch, not a computed-goto dispatch table.
+//
+// Go SPECs (FLAG — see NOTES.md / lvm_fast*.go): integer arith fast paths
+// inside the loop, concat pair cache, luaH_newarray4, and the optional
+// fastLeaf / fastNumericFor / fastCountTail / fastFibCall overlays. Each
+// falls back to the C-shaped path when the pattern or operands do not
+// match, so observable 5.4.9 semantics are preserved.
+//
+// Intentional omissions / adaptations (BRIEF KEEP / NOTES.md):
+//   - GC barriers / checkGC → gcAfterAlloc (Go GC)
+//   - luaV_finishOp absent (goroutine yield; no longjmp out of the loop)
+//   - index stack / UpVal.open list; panic/recover error path
+//   - number/compare helpers live in ldebug.go in golua (C: this file)
 package core
 
 import (
@@ -164,8 +176,10 @@ func luaV_concat(L *State, total int) {
 	}
 }
 
+// isEmptyStr is C isemptystr: only a short empty string is "empty"
+// (long empty strings do not exist under PUC sizing, but match the tag).
 func isEmptyStr(v *Value) bool {
-	return ttisstring(v) && len(tsvalue(v).val) == 0
+	return ttypetag(v) == LUA_VSHRSTR && len(tsvalue(v).val) == 0
 }
 
 // tostringInPlace converts a number to a string, in place.

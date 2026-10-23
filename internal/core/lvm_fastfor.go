@@ -1,8 +1,12 @@
+// Go SPEC overlay for numeric for / related hot loops (not in PUC lvm.c).
+// Pattern-matches the body and falls back to luaV_execute otherwise.
+// FLAG: keep only while observationally equivalent to 5.4.9; see NOTES.md.
 package core
 
 import (
 	"math"
 	"strconv"
+	"strings"
 )
 
 // fastForMax is the largest frame a numeric 'for' will run outside the
@@ -1713,4 +1717,19 @@ func fastBin(op int, xt, yt uint8, x, y int64) (uint8, int64, bool) {
 		return 0, 0, false
 	}
 	return LUA_VNUMFLT, int64(math.Float64bits(r)), true
+}
+
+// simpleIntFormat recognizes a single "%d"/"%i" format with optional
+// literal prefix/suffix (no other %). Used by the OP_FORLOOP fast path
+// SPEC; the public string.format path is C-faithful without this shortcut.
+func simpleIntFormat(format string) (prefix, suffix string, ok bool) {
+	i := strings.IndexByte(format, '%')
+	if i < 0 || i+1 >= len(format) ||
+		(format[i+1] != 'd' && format[i+1] != 'i') {
+		return "", "", false
+	}
+	if strings.IndexByte(format[i+2:], '%') >= 0 {
+		return "", "", false
+	}
+	return format[:i], format[i+2:], true
 }

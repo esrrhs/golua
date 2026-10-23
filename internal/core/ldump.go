@@ -1,22 +1,8 @@
-// Translation of ldump.c (PUC-Lua 5.4.9): save precompiled chunks.
+// Translation of ldump.c (PUC-Lua 5.4.9): save precompiled Lua chunks.
 //
-// The bytes produced here are a standard Lua 5.4 binary chunk: the
-// header (signature, version, LUAC_DATA, the sizes of Instruction /
-// lua_Integer / lua_Number, LUAC_INT and LUAC_NUM), then the main
-// prototype. Multi-byte values are written in little-endian order,
-// which is what 'luac' produces on x86/ARM hosts.
-//
-// Differences from C:
-//
-//  1. No GC: the luaC_objbarrier calls are gone.
-//
-//  2. The writer is a Go func instead of a lua_Writer plus a void*;
-//     memory allocation errors cannot happen, so 'status' is only
-//     non-zero if the writer itself reports an error.
-//
-//  3. Proto.lineinfo holds absolute lines, while the format wants
-//     signed byte deltas plus an 'abslineinfo' array: dumpLineInfo
-//     converts them back, mirroring lcode.c savelineinfo.
+// Format matches PUC-Lua 5.4.9 on little-endian hosts: 7-bit size encoding,
+// header without sizeof(int)/sizeof(size_t), upvalue 'kind', ttypetag
+// constants, and debug lineinfo as signed-byte deltas + abslineinfo.
 package core
 
 import (
@@ -24,19 +10,28 @@ import (
 	"math"
 )
 
+/*
+** All high-level dumps go through dumpVector; you can change it to
+** change the endianness of the result. Go writes fixed little-endian
+** multi-byte values (see dumpInteger / dumpNumber / dumpCode).
+ */
+
 // dumpWriter is the Go counterpart of lua_Writer: it returns 0 on
-// success and anything else to stop the dump.
+// success and anything else to stop the dump. C also passes a void*
+// data pointer; Go closes over that in the func value.
 type dumpWriter func(L *State, b []byte) int
 
-// DumpState is the Go counterpart of the C struct of the same name.
+// DumpState is the Go counterpart of the C struct of the same name
+// (no 'data' field; carried by dumpWriter).
 type DumpState struct {
 	L      *State
 	writer dumpWriter
-	strip  bool
+	strip  bool /* C: int */
 	status int
 }
 
-// dumpBlock writes raw bytes (dumpBlock).
+// dumpBlock writes raw bytes (dumpBlock). No lua_lock/lua_unlock (Go
+// has no VM locks).
 func (D *DumpState) dumpBlock(b []byte) {
 	if D.status == 0 && len(b) > 0 {
 		D.status = D.writer(D.L, b)
@@ -44,10 +39,16 @@ func (D *DumpState) dumpBlock(b []byte) {
 }
 
 // dumpByte writes a single byte (dumpByte).
-func (D *DumpState) dumpByte(y int) { D.dumpBlock([]byte{byte(y)}) }
+func (D *DumpState) dumpByte(y int) {
+	x := byte(y) /* lu_byte */
+	D.dumpBlock([]byte{x})
+}
 
-// dmpDibs is DIBS: the number of bytes a 64-bit size_t needs in
-// dumpSize ((sizeof(size_t) * CHAR_BIT + 6) / 7).
+/*
+** 'dumpSize' buffer size: each byte can store up to 7 bits. (The "+6"
+** rounds up the division.)
+** DIBS = ((sizeof(size_t) * CHAR_BIT + 6) / 7) = ((8*8+6)/7) = 10
+ */
 const dmpDibs = 10
 
 // dumpSize writes a size_t in 7-bits-per-byte form (dumpSize).
@@ -55,7 +56,7 @@ func (D *DumpState) dumpSize(x uint64) {
 	var buff [dmpDibs]byte
 	n := 0
 	for {
-		buff[dmpDibs-1-n] = byte(x & 0x7f) /* fill buffer in reverse order */
+		buff[dmpDibs-(n+1)] = byte(x & 0x7f) /* fill buffer in reverse order */
 		n++
 		x >>= 7
 		if x == 0 {
@@ -63,51 +64,56 @@ func (D *DumpState) dumpSize(x uint64) {
 		}
 	}
 	buff[dmpDibs-1] |= 0x80 /* mark last byte */
-	D.dumpBlock(buff[dmpDibs-n:])
+	D.dumpBlock(buff[dmpDibs-n : dmpDibs])
 }
 
-// dumpInt writes an int (dumpInt).
+// dumpInt writes an int via dumpSize (dumpInt) — 5.4 varint, not fixed width.
 func (D *DumpState) dumpInt(x int) { D.dumpSize(uint64(x)) }
 
-// dumpInteger writes a lua_Integer (8 bytes, host byte order).
-func (D *DumpState) dumpInteger(x int64) {
-	var b [8]byte
-	binary.LittleEndian.PutUint64(b[:], uint64(x))
-	D.dumpBlock(b[:])
-}
-
-// dumpNumber writes a lua_Number (8 bytes, host byte order).
+// dumpNumber writes a lua_Number (8 bytes, little-endian).
 func (D *DumpState) dumpNumber(x float64) {
 	var b [8]byte
 	binary.LittleEndian.PutUint64(b[:], math.Float64bits(x))
 	D.dumpBlock(b[:])
 }
 
-// dumpString writes a nullable string: a size of 0 means NULL
-// (dumpString).
+// dumpInteger writes a lua_Integer (8 bytes, little-endian).
+func (D *DumpState) dumpInteger(x int64) {
+	var b [8]byte
+	binary.LittleEndian.PutUint64(b[:], uint64(x))
+	D.dumpBlock(b[:])
+}
+
+// dumpString writes a nullable string (dumpString): size 0 means NULL;
+// otherwise size+1 then the bytes (no trailing NUL on disk).
 func (D *DumpState) dumpString(s *TString) {
 	if s == nil {
 		D.dumpSize(0)
 	} else {
-		D.dumpSize(uint64(len(s.val)) + 1)
-		D.dumpBlock([]byte(s.val))
+		size := uint64(tsslen(s))
+		str := getstr(s)
+		D.dumpSize(size + 1)
+		D.dumpBlock([]byte(str))
 	}
 }
 
 // dumpCode writes the bytecode of a function (dumpCode).
 func (D *DumpState) dumpCode(f *Proto) {
-	n := len(f.code)
+	n := f.sizecode /* C: f->sizecode */
 	D.dumpInt(n)
+	if n <= 0 {
+		return
+	}
 	b := make([]byte, 4*n)
-	for i, ins := range f.code {
-		binary.LittleEndian.PutUint32(b[4*i:], packInstruction(ins))
+	for i := 0; i < n; i++ {
+		binary.LittleEndian.PutUint32(b[4*i:], packInstruction(f.code[i]))
 	}
 	D.dumpBlock(b)
 }
 
 // dumpConstants writes the constant table (dumpConstants).
 func (D *DumpState) dumpConstants(f *Proto) {
-	n := len(f.k)
+	n := f.sizek /* C: f->sizek */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
 		o := &f.k[i]
@@ -117,25 +123,28 @@ func (D *DumpState) dumpConstants(f *Proto) {
 		case LUA_VNUMFLT:
 			D.dumpNumber(fltvalue(o))
 		case LUA_VNUMINT:
-			D.dumpInteger(o.i)
+			D.dumpInteger(ivalue(o))
 		case LUA_VSHRSTR, LUA_VLNGSTR:
 			D.dumpString(tsvalue(o))
+		default:
+			/* C: lua_assert(tt == LUA_VNIL || tt == LUA_VFALSE || tt == LUA_VTRUE); */
 		}
 	}
 }
 
-// dumpProtos writes the nested prototypes (dumpProtos).
+// dumpProtos writes nested prototypes (dumpProtos).
 func (D *DumpState) dumpProtos(f *Proto) {
-	n := len(f.p)
+	n := f.sizep /* C: f->sizep */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
 		D.dumpFunction(f.p[i], f.source)
 	}
 }
 
-// dumpUpvalues writes the upvalue descriptions (dumpUpvalues).
+// dumpUpvalues writes upvalue descriptions (dumpUpvalues), including
+// the 5.4 'kind' byte.
 func (D *DumpState) dumpUpvalues(f *Proto) {
-	n := len(f.upvalues)
+	n := f.sizeupvalues /* C: f->sizeupvalues */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
 		D.dumpByte(int(f.upvalues[i].instack))
@@ -144,47 +153,53 @@ func (D *DumpState) dumpUpvalues(f *Proto) {
 	}
 }
 
-// dumpLineInfo converts the absolute lines of 'f.lineinfo' into the
-// on-disk form (signed byte deltas plus 'abslineinfo' entries), the way
-// lcode.c savelineinfo builds it.
+/*
+** dumpLineInfo converts Proto.lineinfo (absolute lines; see lobject.go /
+** lcode.go) into the on-disk form C stores natively: signed-byte deltas
+** plus AbsLineInfo entries — same algorithm as lcode.c savelineinfo.
+** C dumpDebug dumps f->lineinfo / f->abslineinfo directly.
+ */
 func (D *DumpState) dumpLineInfo(f *Proto) {
 	if D.strip {
-		D.dumpInt(0)
-		D.dumpInt(0)
+		D.dumpInt(0) /* sizelineinfo */
+		D.dumpInt(0) /* sizeabslineinfo */
 		return
 	}
-	deltas := make([]byte, len(f.lineinfo))
+	n := f.sizelineinfo /* C: f->sizelineinfo */
+	deltas := make([]byte, n)
 	var abs []AbsLineInfo
 	previousline := f.linedefined
 	iwthabs := 0
-	for pc, line := range f.lineinfo {
-		linedif := int(line) - previousline
+	for pc := 0; pc < n; pc++ {
+		line := int(f.lineinfo[pc])
+		linedif := line - previousline
+		/* C savelineinfo: abs(linedif) >= LIMLINEDIFF || iwthabs++ >= MAXIWTHABS */
 		if linedif >= limLineDiff || linedif <= -limLineDiff ||
 			iwthabs >= maxIwthAbs {
-			abs = append(abs, AbsLineInfo{pc: pc, line: int(line)})
+			abs = append(abs, AbsLineInfo{pc: pc, line: line})
 			linedif = absLineInfo /* signal that there is absolute info */
 			iwthabs = 1           /* restart counter */
 		} else {
 			iwthabs++
 		}
 		deltas[pc] = byte(int8(linedif))
-		previousline = int(line)
+		previousline = line
 	}
-	D.dumpInt(len(deltas))
+	D.dumpInt(n)
 	D.dumpBlock(deltas)
-	D.dumpInt(len(abs))
-	for _, a := range abs {
-		D.dumpInt(a.pc)
-		D.dumpInt(a.line)
+	D.dumpInt(len(abs)) /* C: f->sizeabslineinfo; Proto has no sizeabslineinfo field */
+	for i := 0; i < len(abs); i++ {
+		D.dumpInt(abs[i].pc)
+		D.dumpInt(abs[i].line)
 	}
 }
 
-// dumpDebug writes the debug information (dumpDebug).
+// dumpDebug writes debug information (dumpDebug).
 func (D *DumpState) dumpDebug(f *Proto) {
-	D.dumpLineInfo(f)
+	D.dumpLineInfo(f) /* lineinfo + abslineinfo (converted; see FLAG) */
 	n := 0
 	if !D.strip {
-		n = len(f.locvars)
+		n = f.sizelocvars /* C: f->sizelocvars */
 	}
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
@@ -194,7 +209,7 @@ func (D *DumpState) dumpDebug(f *Proto) {
 	}
 	n = 0
 	if !D.strip {
-		n = len(f.upvalues)
+		n = f.sizeupvalues /* C: f->sizeupvalues */
 	}
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
@@ -202,9 +217,8 @@ func (D *DumpState) dumpDebug(f *Proto) {
 	}
 }
 
-// dumpFunction writes one prototype; 'psource' is the source of the
-// parent, so that a child with the same source does not repeat it
-// (dumpFunction).
+// dumpFunction writes one prototype (dumpFunction); psource is the
+// parent's source so a child with the same source omits it.
 func (D *DumpState) dumpFunction(f *Proto, psource *TString) {
 	if D.strip || f.source == psource {
 		D.dumpString(nil) /* no debug info or same source as its parent */
@@ -223,21 +237,24 @@ func (D *DumpState) dumpFunction(f *Proto, psource *TString) {
 	D.dumpDebug(f)
 }
 
-// dumpHeader writes the chunk header (dumpHeader).
+// dumpHeader writes the chunk header (dumpHeader). 5.4 omits
+// sizeof(int) and sizeof(size_t) that 5.3 wrote.
 func (D *DumpState) dumpHeader() {
-	D.dumpBlock([]byte(dmpSignature))
-	D.dumpByte(dmpVersion)
-	D.dumpByte(dmpFormat)
-	D.dumpBlock([]byte(dmpData))
-	D.dumpByte(4) /* sizeof(Instruction) */
-	D.dumpByte(8) /* sizeof(lua_Integer) */
-	D.dumpByte(8) /* sizeof(lua_Number) */
-	D.dumpInteger(dmpInt)
-	D.dumpNumber(dmpNum)
+	D.dumpBlock([]byte(dmpSignature)) /* LUA_SIGNATURE */
+	D.dumpByte(dmpVersion)            /* LUAC_VERSION */
+	D.dumpByte(dmpFormat)             /* LUAC_FORMAT */
+	D.dumpBlock([]byte(dmpData))      /* LUAC_DATA */
+	D.dumpByte(4)                     /* sizeof(Instruction) */
+	D.dumpByte(8)                     /* sizeof(lua_Integer) */
+	D.dumpByte(8)                     /* sizeof(lua_Number) */
+	D.dumpInteger(dmpInt)             /* LUAC_INT */
+	D.dumpNumber(dmpNum)              /* LUAC_NUM */
 }
 
-// luaU_dump dumps a prototype as a precompiled chunk (ldump.c
-// luaU_dump).
+/*
+** dump Lua function as precompiled chunk (luaU_dump).
+** No writer 'data' arg — closed over by dumpWriter.
+ */
 func luaU_dump(L *State, f *Proto, w dumpWriter, strip bool) int {
 	var D DumpState
 	D.L = L
@@ -245,13 +262,13 @@ func luaU_dump(L *State, f *Proto, w dumpWriter, strip bool) int {
 	D.strip = strip
 	D.status = 0
 	D.dumpHeader()
-	D.dumpByte(len(f.upvalues))
+	D.dumpByte(f.sizeupvalues) /* C: DumpByte(f->sizeupvalues) */
 	D.dumpFunction(f, nil)
 	return D.status
 }
 
-// luaDump is lua_dump (lapi.c): it dumps the Lua function on the top of
-// the stack, returning non-zero if it is not a Lua function.
+// luaDump is lua_dump (lapi.c), colocated here as a thin wrapper.
+// Non-L-closure → 1. No api_checknelems / locks.
 func luaDump(L *State, w dumpWriter, strip bool) int {
 	o := index2value(L, -1)
 	if !ttisLclosure(o) {

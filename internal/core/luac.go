@@ -45,6 +45,7 @@ type luac struct {
 	dumping   int
 	stripping int
 	output    string // "" means standard output ('-o -')
+	tmname    [TM_N]*TString // C: static TString **tmname (= G(L)->tmname)
 }
 
 // Luac runs the Lua compiler and returns the process exit status. The
@@ -174,6 +175,7 @@ func (c *luac) pmain(files []string) int {
 	   needs nothing from them. */
 	L := NewState()
 	defer L.Close()
+	c.tmname = L.g.tmNames /* C: tmname=G(L)->tmname */
 	if !L.CheckStack(len(files)) {
 		c.fatal("too many input files")
 		return 1
@@ -285,6 +287,11 @@ func (c *luac) upvalName(f *Proto, x int) string {
 		return f.upvalues[x].name.val
 	}
 	return "-"
+}
+
+// eventname is eventname(i): getstr(tmname[i]).
+func (c *luac) eventname(i int) string {
+	return c.tmname[i].val
 }
 
 // printString is PrintString: a string the way a Lua literal would
@@ -498,15 +505,15 @@ func (c *luac) printCode(f *Proto) {
 				fmt.Fprint(c.out, " ")
 				c.printConstant(f, carg)
 			}
+		case OP_NEWTABLE:
+			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
+			fmt.Fprintf(c.out, "\t; %d", carg+code[pc+1].A*(MAXARG_C+1)) /* C: c+EXTRAARGC */
 		case OP_SELF:
 			fmt.Fprintf(c.out, "%d %d %d%s", a, b, carg, iskMark)
 			if isk != 0 {
 				fmt.Fprint(c.out, "\t; ")
 				c.printConstant(f, carg)
 			}
-		case OP_NEWTABLE:
-			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-			fmt.Fprintf(c.out, "\t; %d", carg+code[pc+1].A*(MAXARG_C+1))
 		case OP_ADDI:
 			fmt.Fprintf(c.out, "%d %d %d", a, b, sc)
 		case OP_ADDK, OP_SUBK, OP_MULK, OP_MODK, OP_POWK, OP_DIVK, OP_IDIVK,
@@ -521,16 +528,16 @@ func (c *luac) printCode(f *Proto) {
 			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
 		case OP_MMBIN:
 			fmt.Fprintf(c.out, "%d %d %d", a, b, carg)
-			fmt.Fprintf(c.out, "\t; %s", luaT_eventname[carg])
+			fmt.Fprintf(c.out, "\t; %s", c.eventname(carg))
 		case OP_MMBINI:
 			fmt.Fprintf(c.out, "%d %d %d %d", a, sb, carg, isk)
-			fmt.Fprintf(c.out, "\t; %s", luaT_eventname[carg])
+			fmt.Fprintf(c.out, "\t; %s", c.eventname(carg))
 			if isk != 0 {
 				fmt.Fprint(c.out, " flip")
 			}
 		case OP_MMBINK:
 			fmt.Fprintf(c.out, "%d %d %d %d", a, b, carg, isk)
-			fmt.Fprintf(c.out, "\t; %s ", luaT_eventname[carg])
+			fmt.Fprintf(c.out, "\t; %s ", c.eventname(carg))
 			c.printConstant(f, b)
 			if isk != 0 {
 				fmt.Fprint(c.out, " flip")

@@ -8,6 +8,9 @@
 // 'lStr') to avoid clashes with the other files of the package.  The
 // control flow follows the C source closely; the C pointer arithmetic
 // on 'const char *' becomes integer offsets into a Go string.
+//
+// Align-wip-54: line-faithful to lua-5.4.9/src/lstrlib.c (no gmatch/format
+// shortcuts; string metamethods registered; printf SPECs FLAG'd).
 package core
 
 import (
@@ -125,7 +128,7 @@ func strRep(L *State) int {
 	lsep := len(sep)
 	if n <= 0 {
 		L.PushString("")
-	} else if l+lsep > math.MaxInt32/int(n) { /* may overflow? */
+	} else if l+lsep < l || l+lsep > math.MaxInt32/int(n) { /* may overflow? */
 		return L.Error2("resulting string too large")
 	} else {
 		var sb strings.Builder
@@ -239,29 +242,13 @@ func strTryMt(L *State, mtname string) {
 		L.Error2("attempt to %s a '%s' with a '%s'", mtname[2:],
 			TypeName(L.Type(-2)), TypeName(L.Type(-1)))
 	}
-	/* call the metamethod with the two original arguments */
-	L.PushValue(1)
-	L.PushValue(2)
-	L.Call(2, 1)
-	L.Copy(-1, 1) /* the single result becomes the returned value */
-	L.SetTop(1)
-}
-
-// strArithOp performs 'op' on the two values on the top of the stack,
-// leaving one result (lua_arith).
-func strArithOp(L *State, op int) {
-	if op == LUA_OPUNM || op == LUA_OPBNOT {
-		L.PushValue(-1) /* add fake 2nd operand */
-	}
-	p1 := L.stack[L.top-2]
-	p2 := L.stack[L.top-1]
-	luaO_arith(L, op, &p1, &p2, L.top-2)
-	L.top-- /* remove second operand */
+	L.Insert(-3) /* put metamethod before arguments */
+	L.Call(2, 1) /* call metamethod */
 }
 
 func strArith(L *State, op int, mtname string) int {
 	if strTonum(L, 1) && strTonum(L, 2) {
-		strArithOp(L, op) /* result will be on the top */
+		L.Arith(op) /* result will be on the top (lua_arith) */
 	} else {
 		strTryMt(L, mtname)
 	}
@@ -820,15 +807,11 @@ type strGMatchState struct {
 	src       int /* current position (offset into the subject) */
 	p         int /* pattern offset (always 0 here) */
 	lastmatch int /* end of last match */
-	plain     byte
 	ms        strMatchState
 }
 
 func strGmatchAux(L *State) int {
 	gm, _ := L.ToUserData(UpvalueIndex(3)).(*strGMatchState)
-	if gm.plain == 'a' {
-		return strGmatchAlpha(L, gm)
-	}
 	gm.ms.L = L
 	for src := gm.src; src <= gm.ms.srcEnd; src++ {
 		strReprepState(&gm.ms)
@@ -841,55 +824,21 @@ func strGmatchAux(L *State) int {
 	return 0 /* not found */
 }
 
-// strGmatchAlpha finds the next run of letters. '%a+' cannot match
-// empty, so each success moves the cursor forward.
-func strGmatchAlpha(L *State, gm *strGMatchState) int {
-	src := gm.ms.src
-	end := gm.ms.srcEnd
-	i := gm.src
-	for i < end {
-		c := src[i]
-		if !strIsAlpha(c) {
-			i++
-			continue
-		}
-		start := i
-		i++
-		for i < end {
-			c = src[i]
-			if !strIsAlpha(c) {
-				break
-			}
-			i++
-		}
-		gm.src = i
-		gm.lastmatch = i
-		L.PushString(src[start:i])
-		return 1
-	}
-	gm.src = end + 1
-	return 0
-}
-
 func strGmatch(L *State) int {
 	s := L.CheckString(1)
 	p := L.CheckString(2)
 	ls := len(s)
+	lp := len(p)
 	init := strPosRelatI(L.OptInteger(3, 1), ls) - 1
 	L.SetTop(2)    /* keep strings on closure to avoid being collected */
 	if init > ls { /* start after string's end? */
 		init = ls + 1 /* avoid overflows in 's + init' */
 	}
 	gm := &strGMatchState{}
-	strPrepState(&gm.ms, L, s, ls, p, len(p))
+	strPrepState(&gm.ms, L, s, ls, p, lp)
 	gm.src = init
 	gm.p = 0
-	gm.lastmatch = -1
-	/* '%a+' is a scan for letter runs. The general matcher retries the
-	   whole pattern at every byte, and this pattern is most of gmatch. */
-	if p == "%a+" && (ctypeIsC.Load() || ctypeIsAlpha == nil) {
-		gm.plain = 'a'
-	}
+	gm.lastmatch = -1 /* NULL in C */
 	L.NewUserData(gm, 0)
 	L.PushGoClosure(strGmatchAux, 3)
 	return 1
@@ -1661,22 +1610,6 @@ func strFormat(L *State) int {
 	top := L.GetTop()
 	arg := 1
 	strfrmt := L.CheckString(arg)
-	/* A single unmodified decimal conversion with literal text around it
-	   is the overwhelmingly common logging/serialization form. Going
-	   through luaL_Buffer, the format parser and fmt.Sprintf for
-	   "%d-suffix" costs several allocations. strconv already has the
-	   exact decimal spelling Lua needs. Keep formats with flags, width,
-	   precision or another '%' on the full path below. */
-	if top == 2 {
-		if prefix, suffix, ok := simpleIntFormat(strfrmt); ok {
-			var scratch [128]byte
-			out := append(scratch[:0], prefix...)
-			out = strconv.AppendInt(out, L.CheckInteger(2), 10)
-			out = append(out, suffix...)
-			L.PushString(string(out))
-			return 1
-		}
-	}
 	b := L.NewBuffer()
 	i := 0
 	for i < len(strfrmt) {
@@ -1776,18 +1709,6 @@ func strFormat(L *State) int {
 	}
 	b.PushResult()
 	return 1
-}
-
-func simpleIntFormat(format string) (prefix, suffix string, ok bool) {
-	i := strings.IndexByte(format, '%')
-	if i < 0 || i+1 >= len(format) ||
-		(format[i+1] != 'd' && format[i+1] != 'i') {
-		return "", "", false
-	}
-	if strings.IndexByte(format[i+2:], '%') >= 0 {
-		return "", "", false
-	}
-	return format[:i], format[i+2:], true
 }
 
 // ---------------------------------------------------------------------

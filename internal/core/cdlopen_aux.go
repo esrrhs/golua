@@ -116,16 +116,6 @@ func init() {
 // Unary operations act on the top value alone; everything else consumes
 // two. luaO_arith already falls back to the metamethod, which is what
 // lua_arith does too.
-func (L *State) Arith(op int) {
-	if op == LUA_OPUNM || op == LUA_OPBNOT {
-		L.CheckStack(1)
-		L.PushValue(-1) /* unary operations: fake second operand */
-	}
-	L.checkStack(0)
-	res := L.top - 2
-	luaO_arith(L, op, &L.stack[L.top-2], &L.stack[L.top-1], res)
-	L.top--
-}
 
 // ---------------------------------------------------------------------
 // lua_closeslot
@@ -139,31 +129,11 @@ func (L *State) Arith(op int) {
 // in C: PUC-Lua's 'hastocloseCfunc' looks for a count below
 // LUA_MULTRET, and luaD_poscall closes what is pending before it moves
 // the results.
-func (L *State) CloseSlotAt(idx int) {
-	level := stackIndexOf(L, idx)
-	if level < 0 {
-		return
-	}
-	luaF_newtbcupval(L, level)
-	if !hastocloseCfunc(L.ci.nresults) { /* not marked yet? */
-		L.ci.nresults = codeNresults(L.ci.nresults) /* mark it */
-	}
-}
 
 // CloseSlot closes the to-be-closed variable at 'idx' right now and
 // leaves nil in its slot (lua_closeslot, lapi.c:1320).  C insists the
 // slot was marked first; closing anything else is the same no-op here
 // that luaF_close is on a level with nothing pending above it.
-func (L *State) CloseSlot(idx int) {
-	level := stackIndexOf(L, idx)
-	if level < 0 {
-		return
-	}
-	luaF_close(L, level, closeKTOP, false)
-	if level >= 0 && level < len(L.stack) {
-		setnilvalue(&L.stack[level])
-	}
-}
 
 // ---------------------------------------------------------------------
 // luaL_typeerror

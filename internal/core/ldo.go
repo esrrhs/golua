@@ -1,148 +1,210 @@
-// Translation of ldo.h / ldo.c (PUC-Lua 5.4).
+// Translation of ldo.h / ldo.c (PUC-Lua 5.4.9), line-faithful.
 //
-// setjmp/longjmp become panic/recover (see State.rawRunProtected in
-// lstate.go) and the allocator is gone.
+// Intentional adaptations only (see NOTES.md):
+//   - panic/recover instead of setjmp/longjmp (rawRunProtected in lstate.go)
+//   - index stack ([]Value indices), not TValue* / StkId pointers
+//   - Go GC (no luaC_checkGC / emergency GC stop around realloc)
+//   - goroutine coroutines: precallC may migrateAbort / fastYield;
+//     resume / yield / unroll / finishCcall / precover / protectedparser
+//     live in lstate.go / lbaselib.go / lauxlib.go (colocated SPEC)
+//   - no lua_Alloc / lua_lock / lua_unlock
+//   - luaD_closeprotected / luaD_pcall take extra yy (yieldable close)
 package core
 
 const (
 	LUAI_MAXCCALLS = 200
 )
 
-// CIST flags for fresh frames are in lstate.go.
+// errorstatus reports whether 's' is a real error (not OK / YIELD).
+// C: #define errorstatus(s) ((s) > LUA_YIELD)
+func errorstatus(s int) bool { return s > LUA_YIELD }
 
-// tryfuncTM puts the __call metamethod below the original function so
-// that the call can proceed (ldo.c).
-func tryfuncTM(L *State, funcIdx int) {
-	L.checkStack(1)
-	tm := luaT_gettmbyobj(L, &L.stack[funcIdx], TM_CALL)
-	if ttisnil(tm) {
-		luaG_callerror(L, &L.stack[funcIdx])
-		return
+// ---------------------------------------------------------------------
+// Error-recovery functions (ldo.c)
+// ---------------------------------------------------------------------
+
+// luaD_seterrorobj puts the error object at 'oldtop' (ldo.c 5.4.9).
+//
+// 5.4 dropped the LUA_ERRERR case: luaD_errerr already pushes the
+// message before throw, so the default arm copies it.
+func luaD_seterrorobj(L *State, errcode, oldtop int) {
+	switch errcode {
+	case LUA_ERRMEM: /* memory error? */
+		var v Value
+		setsvalue(&v, L.g.memErrMsg) /* reuse preregistered msg. */
+		L.stack[oldtop] = v
+	case LUA_OK: /* special case only for closing upvalues */
+		setnilvalue(&L.stack[oldtop]) /* no error message */
+	default:
+		/* real error: message is on current top */
+		L.stack[oldtop] = L.stack[L.top-1]
 	}
-	for p := L.top; p > funcIdx; p-- { /* open space for metamethod */
-		L.stack[p] = L.stack[p-1]
-	}
-	L.top++
-	L.stack[funcIdx] = *tm
+	L.top = oldtop + 1
 }
 
-// moveresults moves nres results at the top of the stack to 'res'
-// (ldo.c).
-func moveresults(L *State, res, nres, wanted int) {
-	switch wanted {
-	case 0: /* no values needed */
-		L.top = res
-		return
-	case 1: /* one value needed */
-		if nres == 0 {
-			setnilvalue(&L.stack[res]) /* adjust with nil */
-		} else {
-			L.stack[res] = L.stack[L.top-nres] /* move it to proper place */
-		}
-		L.top = res + 1
-		return
-	case LUA_MULTRET:
-		wanted = nres /* we want all results */
-	}
-	/* generic case */
-	firstresult := L.top - nres
-	if nres > wanted {
-		nres = wanted
-	}
-	i := 0
-	for ; i < nres; i++ { /* move all results to correct place */
-		L.stack[res+i] = L.stack[firstresult+i]
-	}
-	for ; i < wanted; i++ { /* complete wanted number of results */
-		setnilvalue(&L.stack[res+i])
-	}
-	L.top = res + wanted
-}
-
-// luaD_poscall finishes a function call (ldo.c).
-func luaD_poscall(L *State, ci *CallInfo, nres int) {
-	wanted := ci.nresults
-	if hastocloseCfunc(wanted) { /* to-be-closed variables pending? */
-		/* C does this inside 'moveresults', before the results are moved
-		   and with the return hook saved until after the '__close's --
-		   a hook cannot run with a close still pending. */
-		wanted = decodeNresults(wanted)
-		ci.nresults = wanted
-		luaF_close(L, ci.funcIdx+1, closeKTOP, true)
-		if L.hookmask != 0 {
-			rethook(L, ci, nres)
-		}
-		moveresults(L, ci.funcIdx, nres, wanted)
-		L.ci = ci.prev
-		return
-	}
-	if L.hookmask != 0 {
-		rethook(L, ci, nres)
-	}
-	moveresults(L, ci.funcIdx, nres, wanted)
-	L.ci = ci.prev
-}
-
-// hastocloseCfunc, codeNresults and decodeNresults are lapi.h's: whether
-// a C frame has to-be-closed variables pending, which PUC-Lua encodes in
-// the sign of the frame's 'nresults'.
-func hastocloseCfunc(n int) bool { return n < LUA_MULTRET }
-func codeNresults(n int) int     { return -n - 3 }
-func decodeNresults(n int) int   { return -n - 3 }
-
-// prepCallInfo prepares the CallInfo for a new call (ldo.c).
-func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
-	var ci *CallInfo
-	if L.ci != nil && L.ci.next != nil {
-		ci = L.ci.next
-		ci.prev = L.ci
-		L.ci = ci
+// luaD_throw raises an error with the given status (ldo.c 5.4.9).
+//
+// C: if L->errorJmp → set status + LUAI_THROW; else resetthread, then
+// either copy to mainthread and rethrow, or g->panic + abort().
+// Go: panic/recover (rawRunProtected) stands in for the longjmp chain.
+// The error object is copied into the panic value because a Go defer
+// between throw and recover can pop the Lua stack (C longjmp does not
+// run those). Mainthread rethrow omitted — coroutine errors recover on
+// the running thread (goroutine SPEC). Unprotected atpanic: Apply debt
+// (needs errorJmp nesting counter in State; see NOTES).
+func luaD_throw(L *State, errcode int) {
+	var v Value
+	if L.top > 0 {
+		v = L.stack[L.top-1]
 	} else {
-		ci = L.extendCI()
+		setnilvalue(&v)
 	}
-	ci.funcIdx = funcIdx
-	ci.nresults = nret
-	ci.callstatus = mask
-	ci.top = top
-	ci.savedpc = 0
-	ci.nExtraArgs = 0
-	ci.goCont = nil
-	ci.migrateFunc = nil
-	return ci
+	/* Protected path: rawRunProtected recovers this panic.
+	   Unprotected: unrecovered panic ≡ C abort().
+	   Apply debt: with an errorJmp nesting counter on State, the
+	   unprotected arm should luaE_resetthread, call g.panic(L), then
+	   panic (and omit mainthread rethrow — goroutine SPEC). */
+	panic(&luaError{status: errcode, value: v})
 }
 
-// precallC calls a Go function (ldo.c).
-func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
-	L.checkStack(LUA_MINSTACK)
-	ci := prepCallInfo(L, funcIdx, nresults, CIST_C, L.top+LUA_MINSTACK)
-	if L.hookmask&dbMaskCall != 0 { /* is call hook on? */
-		narg := L.top - funcIdx - 1
-		luaD_hook(L, hookCall, -1, 1, narg)
-	}
-	/* The synchronous coroutine path may only unwind pure Lua and
-	   coroutine.yield. Any other Go function can call back into Lua,
-	   establish an error boundary, or expose the live stack through the
-	   debug API. Move its already-pushed frame before entering it. */
-	if L.co != nil && L.co.sync && L.inVM &&
-		funcptr(f) != funcptr(coYield) {
-		ci.migrateFunc = f
-		panic(&migrateAbort{})
-	}
-	n := f(L)
-	if L.fastYield {
-		/* synchronous yield: the frame stays, Resume finishes it */
-		return 0
-	}
-	luaD_poscall(L, ci, n)
-	return n
+// luaD_rawrunprotected is luaD_rawrunprotected (ldo.c).
+// Delegates to State.rawRunProtected (panic/recover adaptation of setjmp).
+func luaD_rawrunprotected(L *State, f func()) int {
+	return L.rawRunProtected(f)
 }
 
 // ---------------------------------------------------------------------
-// hooks (ldo.c)
+// Stack reallocation (ldo.c)
+// ---------------------------------------------------------------------
+//
+// Index-stack SPEC: C's relstack/correctstack convert pointers ↔ offsets
+// across realloc. Go indices stay valid; those helpers are no-ops.
+// Runtime grow/check methods also live on *State in lstate.go; the
+// luaD_* forms below are the C-faithful API for this unit (Apply debt:
+// merge callers onto these, or make State methods thin wrappers).
+
+// relstack / correctstack: no-ops with index-based stacks.
+func relstack(L *State)     { _ = L }
+func correctstack(L *State) { _ = L }
+
+// ERRORSTACKSIZE is defined in lstate.go (LUAI_MAXSTACK + 200).
+
+// luaD_errerr raises an error while running the message handler (ldo.c).
+func luaD_errerr(L *State) {
+	ts := luaS_new(L, "error in error handling")
+	if L.top >= len(L.stack) {
+		L.reallocStack(len(L.stack) + EXTRA_STACK) /* assume EXTRA_STACK */
+	}
+	setsvalue(&L.stack[L.top], ts)
+	L.top++
+	luaD_throw(L, LUA_ERRERR)
+}
+
+// luaD_checkminstack checks whether stacks have enough space to run a
+// simple function such as a finalizer (ldo.c 5.4.9): BASIC_STACK_SIZE
+// free Lua slots, two available CallInfos, two C-stack slots.
+//
+// FLAG: Go CI extend always succeeds (heap alloc); C's luaE_extendCI(L,0)
+// can fail under lua_Alloc. We only enforce the C-call and Lua-stack arms.
+func luaD_checkminstack(L *State) int {
+	if getCcalls(L) >= LUAI_MAXCCALLS-2 {
+		return 0 /* not enough C-stack slots */
+	}
+	/* C also requires two free CallInfos; Go heap-extend cannot fail. */
+	if L.stackLast-L.top >= BASIC_STACK_SIZE {
+		return 1 /* enough free slots */
+	}
+	if luaD_growstack(L, BASIC_STACK_SIZE, false) {
+		return 1
+	}
+	return 0
+}
+
+// getCcalls is the lower 16 bits of nCcalls (lstate.h).
+
+// luaD_reallocstack reallocates the stack to 'newsize' usable slots
+// (ldo.c 5.4.9). 'raiseerror' selects throw vs soft failure.
+// Index-stack: no relstack/correctstack; no emergency-GC stop (Go GC).
+func luaD_reallocstack(L *State, newsize int, raiseerror bool) bool {
+	/* C: assert newsize <= LUAI_MAXSTACK || newsize == ERRORSTACKSIZE */
+	L.reallocStack(newsize)
+	_ = raiseerror /* Go reallocStack does not fail; soft-fail N/A */
+	return true
+}
+
+// luaD_growstack grows the stack by at least 'n' elements (ldo.c 5.4.9).
+// When raiseerror is false, returns false on failure instead of throwing.
+func luaD_growstack(L *State, n int, raiseerror bool) bool {
+	return L.growStackNoRaise(n, raiseerror)
+}
+
+// stackinuse computes how much of the stack is in use (ldo.c).
+func stackinuse(L *State) int {
+	lim := L.top
+	for ci := L.ci; ci != nil; ci = ci.prev {
+		if lim < ci.top {
+			lim = ci.top
+		}
+	}
+	res := lim + 1 /* part of stack in use (C: lim - stack + 1) */
+	if res < LUA_MINSTACK {
+		res = LUA_MINSTACK /* ensure a minimum size */
+	}
+	return res
+}
+
+// luaD_shrinkstack shrinks an oversized stack (ldo.c 5.4.9).
+//
+// Apply debt: master State.shrinkStack uses a different heuristic
+// (halve when used < size/4). This form matches C 5.4.9; on merge,
+// point luaD_pcall / cdlopen at this (or make shrinkStack call it).
+func luaD_shrinkstack(L *State) {
+	inuse := stackinuse(L)
+	max := inuse * 3
+	if inuse > LUAI_MAXSTACK/3 {
+		max = LUAI_MAXSTACK
+	}
+	size := L.stackSize() /* usable = C stacksize(L) */
+	if inuse <= LUAI_MAXSTACK && size > max {
+		nsize := inuse * 2
+		if inuse > LUAI_MAXSTACK/2 {
+			nsize = LUAI_MAXSTACK
+		}
+		luaD_reallocstack(L, nsize, false) /* ok if that fails */
+	}
+	/* else: C condmovestack debug only — omitted */
+	luaE_shrinkCI(L) /* shrink CI list */
+}
+
+// luaD_inctop is luaD_inctop (ldo.c).
+func luaD_inctop(L *State) {
+	L.checkStack(1)
+	L.top++
+}
+
+// luaE_shrinkCI frees half of the unused CallInfo nodes (lstate.c).
+// C lives in lstate.c; kept here because luaD_shrinkstack calls it.
+// Distinct from State.shrinkCI in lstate.go (that one unwinds to baseCI).
+func luaE_shrinkCI(L *State) {
+	ci := L.ci
+	if ci == nil {
+		return
+	}
+	for ci.next != nil && ci.next.next != nil {
+		next2 := ci.next.next
+		L.freeCI(ci.next) /* free next */
+		ci.next = next2
+		next2.prev = ci
+		ci = next2
+	}
+}
+
+// ---------------------------------------------------------------------
+// Hooks (ldo.c)
 // ---------------------------------------------------------------------
 
-// luaD_hook calls the hook for the given event, making sure there is one
-// to be called (ldo.c).
+// luaD_hook calls the hook for the given event (ldo.c 5.4.9).
+// ftransfer/ntransfer are 5.4 transferinfo for call/return hooks.
 func luaD_hook(L *State, event, line, ftransfer, ntransfer int) {
 	hook := L.hook
 	if hook == nil || L.allowhook == 0 {
@@ -175,9 +237,7 @@ func luaD_hook(L *State, event, line, ftransfer, ntransfer int) {
 }
 
 // luaD_hookcall executes a call hook for Lua functions (ldo.c).
-//
-// It is called whenever 'hookmask' is not zero, so it checks whether call
-// hooks are active.
+// Called whenever 'hookmask' is not zero; checks whether call hooks are active.
 func luaD_hookcall(L *State, ci *CallInfo) {
 	L.oldpc = 0                     /* set 'oldpc' for new function */
 	if L.hookmask&dbMaskCall != 0 { /* is call hook on? */
@@ -193,7 +253,7 @@ func luaD_hookcall(L *State, ci *CallInfo) {
 }
 
 // rethook executes a return hook for Lua and Go functions and sets /
-// corrects 'oldpc' (ldo.c). The correction is needed by the line hook, so
+// corrects 'oldpc' (ldo.c). Correction is needed by the line hook, so
 // it is done even when return hooks are off.
 func rethook(L *State, ci *CallInfo, nres int) {
 	if L.hookmask&dbMaskRet != 0 { /* is return hook on? */
@@ -211,14 +271,19 @@ func rethook(L *State, ci *CallInfo, nres int) {
 		ci.funcIdx -= delta
 	}
 	if prev := ci.prev; prev != nil && isLua(prev) {
-		L.oldpc = prev.savedpc - 1 /* set 'oldpc' (pcRel) */
+		/* C: L->oldpc = pcRel(ci->u.l.savedpc, ...); Go savedpc is already
+		   an instruction index, so pcRel ≡ savedpc-1 when savedpc > 0. */
+		L.oldpc = prev.savedpc - 1
 	}
 }
 
-// setTraps marks every Lua frame as needing a hook check (ldebug.c).
+// setTraps marks every Lua frame as needing a hook check (ldebug.c
+// lua_sethook side effect; colocated here for the Go VM).
 //
-// 'lua_sethook' sets the mark so that a hook installed in the middle of a
-// call is seen by the interpreter loop of the running function.
+// C 5.4 sets ci->u.l.trap when the stack is corrected after realloc and
+// when hooks are installed; the interpreter tests trap each instruction.
+// FLAG: Go VM SPEC — same trap bit, used so a mid-call lua_sethook is
+// seen without polling hookmask every opcode.
 func setTraps(L *State) {
 	for ci := L.ci; ci != nil; ci = ci.prev {
 		if isLua(ci) {
@@ -227,9 +292,165 @@ func setTraps(L *State) {
 	}
 }
 
-// luaD_precall prepares a call; it returns the CallInfo when the callee
-// is a Lua function (the caller must then run luaV_execute), or nil when
-// the callee was a Go function and the results are already on the stack.
+// ---------------------------------------------------------------------
+// Call preparation / results (ldo.c)
+// ---------------------------------------------------------------------
+
+// tryfuncTM puts the __call metamethod below the original function so
+// that the call can proceed (ldo.c). Raises if there is no __call.
+func tryfuncTM(L *State, funcIdx int) {
+	L.checkStack(1) /* space for metamethod (C: checkstackGCp) */
+	tm := luaT_gettmbyobj(L, &L.stack[funcIdx], TM_CALL)
+	if ttisnil(tm) {
+		luaG_callerror(L, &L.stack[funcIdx])
+		return
+	}
+	for p := L.top; p > funcIdx; p-- { /* open space for metamethod */
+		L.stack[p] = L.stack[p-1]
+	}
+	L.top++
+	L.stack[funcIdx] = *tm /* metamethod is the new function to be called */
+}
+
+// hastocloseCfunc, codeNresults and decodeNresults are lapi.h's: whether
+// a C frame has to-be-closed variables pending, which PUC-Lua encodes in
+// the sign of the frame's 'nresults'.
+func hastocloseCfunc(n int) bool { return n < LUA_MULTRET }
+func codeNresults(n int) int     { return -n - 3 }
+func decodeNresults(n int) int   { return -n - 3 }
+
+// moveresults moves nres results at the top of the stack to 'res' (ldo.c).
+//
+// FLAG vs C 5.4.9: C handles hastocloseCfunc *inside* moveresults
+// (sets CIST_CLSRET, may yield in luaF_close, then rethook). Go does
+// the close in luaD_poscall before calling moveresults, because CallInfo
+// has no u2.nres slot for finishCcall yet and the goroutine yield path
+// does not re-enter moveresults the C way. Semantics for non-yielding
+// closes match; yielding __close across a C return is Apply debt
+// (finishCcall / CIST_CLSRET — see NOTES colocated section).
+func moveresults(L *State, res, nres, wanted int) {
+	switch wanted { /* handle typical cases separately */
+	case 0: /* no values needed */
+		L.top = res
+		return
+	case 1: /* one value needed */
+		if nres == 0 { /* no results? */
+			setnilvalue(&L.stack[res]) /* adjust with nil */
+		} else {
+			L.stack[res] = L.stack[L.top-nres] /* move it to proper place */
+		}
+		L.top = res + 1
+		return
+	case LUA_MULTRET:
+		wanted = nres /* we want all results */
+	}
+	/* generic case (C also folds the post-close decode path here) */
+	firstresult := L.top - nres /* index of first result */
+	if nres > wanted {          /* extra results? */
+		nres = wanted /* don't need them */
+	}
+	i := 0
+	for ; i < nres; i++ { /* move all results to correct place */
+		L.stack[res+i] = L.stack[firstresult+i]
+	}
+	for ; i < wanted; i++ { /* complete wanted number of results */
+		setnilvalue(&L.stack[res+i])
+	}
+	L.top = res + wanted /* top points after the last result */
+}
+
+// luaD_poscall finishes a function call (ldo.c 5.4.9).
+//
+// C: rethook only when hookmask && !hastocloseCfunc; close lives in
+// moveresults. Go: close-then-hook branch here (FLAG above).
+func luaD_poscall(L *State, ci *CallInfo, nres int) {
+	wanted := ci.nresults
+	if hastocloseCfunc(wanted) { /* to-be-closed variables pending? */
+		/* C does this inside 'moveresults', before the results are moved
+		   and with the return hook saved until after the '__close's —
+		   a hook cannot run with a close still pending. */
+		wanted = decodeNresults(wanted)
+		ci.nresults = wanted
+		luaF_close(L, ci.funcIdx+1, closeKTOP, true)
+		if L.hookmask != 0 {
+			rethook(L, ci, nres)
+		}
+		moveresults(L, ci.funcIdx, nres, wanted)
+		L.ci = ci.prev
+		return
+	}
+	if L.hookmask != 0 {
+		rethook(L, ci, nres)
+	}
+	moveresults(L, ci.funcIdx, nres, wanted)
+	/* C asserts !(HOOKED|YPCALL|FIN|TRAN|CLSRET) */
+	L.ci = ci.prev /* back to caller */
+}
+
+// next_ci is next_ci (ldo.c): reuse free CI or extend.
+func next_ci(L *State) *CallInfo {
+	if L.ci != nil && L.ci.next != nil {
+		L.ci = L.ci.next
+		return L.ci
+	}
+	return L.extendCI()
+}
+
+// prepCallInfo prepares the CallInfo for a new call (ldo.c).
+//
+// FLAG: also clears Go-only fields (goCont, migrateFunc, nExtraArgs,
+// savedpc) so a recycled CI from the pool cannot leak a continuation.
+func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
+	ci := next_ci(L) /* new frame */
+	ci.funcIdx = funcIdx
+	ci.nresults = nret
+	ci.callstatus = mask
+	ci.top = top
+	ci.savedpc = 0
+	ci.nExtraArgs = 0
+	ci.goCont = nil
+	ci.migrateFunc = nil
+	return ci
+}
+
+// precallC calls a Go/C function (ldo.c).
+//
+// FLAG goroutine SPEC:
+//   - migrateAbort when a sync coroutine in the VM is about to enter a
+//     non-yield Go function (must keep C/Go stack for later yield).
+//   - fastYield early return skips poscall; Resume finishes the frame.
+func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
+	L.checkStack(LUA_MINSTACK) /* ensure minimum stack size (C: checkstackGCp) */
+	ci := prepCallInfo(L, funcIdx, nresults, CIST_C, L.top+LUA_MINSTACK)
+	if L.hookmask&dbMaskCall != 0 { /* is call hook on? */
+		narg := L.top - funcIdx - 1
+		luaD_hook(L, hookCall, -1, 1, narg)
+	}
+	/* The synchronous coroutine path may only unwind pure Lua and
+	   coroutine.yield. Any other Go function can call back into Lua,
+	   establish an error boundary, or expose the live stack through the
+	   debug API. Move its already-pushed frame before entering it. */
+	if L.co != nil && L.co.sync && L.inVM &&
+		funcptr(f) != funcptr(coYield) {
+		ci.migrateFunc = f
+		panic(&migrateAbort{})
+	}
+	n := f(L) /* do the actual call */
+	if L.fastYield {
+		/* synchronous yield: the frame stays, Resume finishes it */
+		return 0
+	}
+	luaD_poscall(L, ci, n)
+	return n
+}
+
+// luaD_precall prepares a call (ldo.c 5.4.9).
+// Returns the CallInfo when the callee is a Lua function (caller must
+// then run luaV_execute), or nil when the callee was a Go function and
+// the results are already on the stack.
+//
+// 5.4: Lua path only pads missing fixed params with nil — no 5.3
+// adjust_varargs reshape (varargs are OP_VARARG*).
 func luaD_precall(L *State, funcIdx, nresults int) *CallInfo {
 retry:
 	fv := &L.stack[funcIdx]
@@ -246,8 +467,9 @@ retry:
 		narg := L.top - funcIdx - 1
 		nfixparams := int(p.numparams)
 		fsize := int(p.maxstacksize)
-		L.checkStack(fsize)
+		L.checkStack(fsize) /* C: checkstackGCp */
 		ci := prepCallInfo(L, funcIdx, nresults, 0, funcIdx+1+fsize)
+		/* ci->u.l.savedpc = p->code; Go: savedpc index 0 */
 		for ; narg < nfixparams; narg++ {
 			setnilvalue(&L.stack[L.top])
 			L.top++
@@ -259,17 +481,11 @@ retry:
 	}
 }
 
-// luaD_pretailcall prepares a tail call (ldo.c).
+// luaD_pretailcall prepares a tail call (ldo.c 5.4.9).
 //
-// It returns -1 when the callee is a Lua function: unlike a regular
-// call, no new CallInfo is created -- the frame of the caller is
-// reused in place (that is what makes the call a *proper* tail call).
-// It returns the number of results when the callee was a Go function,
-// in which case the caller must still be finished with luaD_poscall.
-//
-// Allocating an extra CallInfo here (as a regular call would) corrupts
-// the 'prev' links of the call chain, because L.ci is then left behind
-// pointing at the old frame while ci.next is already the new one.
+// Returns -1 when the callee is a Lua function: no new CallInfo — the
+// caller's frame is reused (proper tail call). Returns the number of
+// results when the callee was a Go function (caller still needs poscall).
 func luaD_pretailcall(L *State, ci *CallInfo, funcIdx, narg1, delta int) int {
 retry:
 	fv := &L.stack[funcIdx]
@@ -304,10 +520,13 @@ retry:
 	}
 }
 
-// ccall is the common part of luaD_call / luaD_callnoyield (ldo.c).
-// luaE_incCstack counts one more C level and raises when there are none
-// left (lstate.c).  Only the lower 16 bits of 'nCcalls' count levels; the
-// upper 16 only say "not yieldable" and must not look like depth.
+// ---------------------------------------------------------------------
+// ccall / luaD_call / luaD_callnoyield (ldo.c)
+// ---------------------------------------------------------------------
+
+// luaE_incCstack counts one more C level and raises when exhausted (lstate.c).
+// Only the lower 16 bits of nCcalls count levels; the upper 16 mark
+// "not yieldable" and must not look like depth.
 func luaE_incCstack(L *State) {
 	L.nCcalls++
 	if L.nCcalls&0xffff >= LUAI_MAXCCALLS {
@@ -315,9 +534,23 @@ func luaE_incCstack(L *State) {
 	}
 }
 
+// luaE_checkcstack raises when the C stack is exhausted (lstate.c).
+func luaE_checkcstack(L *State) {
+	calls := L.nCcalls & 0xffff
+	if calls == LUAI_MAXCCALLS {
+		luaG_runerror(L, "C stack overflow")
+	} else if calls >= LUAI_MAXCCALLS/10*11 {
+		luaD_errerr(L) /* error while handling stack error */
+	}
+}
+
+// ccall is the common part of luaD_call / luaD_callnoyield (ldo.c).
+// 'inc' is 1 or nyci (also bumps the non-yieldable upper half).
 func ccall(L *State, funcIdx, nresults int, inc int) {
 	L.nCcalls += uint32(inc)
 	if L.nCcalls&0xffff >= LUAI_MAXCCALLS {
+		/* C: checkstackp(L, 0, func) frees EXTRA_STACK use before raise */
+		L.checkStack(0)
 		luaE_checkcstack(L)
 	}
 	if ci := luaD_precall(L, funcIdx, nresults); ci != nil {
@@ -329,70 +562,33 @@ func ccall(L *State, funcIdx, nresults int, inc int) {
 
 func luaD_call(L *State, funcIdx, nresults int) { ccall(L, funcIdx, nresults, 1) }
 
-// nyci is the increment used by 'luaD_callnoyield': it also bumps the
-// upper 16 bits of 'nCcalls', which is what makes 'yieldable' false
-// inside the call (lstate.h).
+// nyci is the increment used by luaD_callnoyield: bumps the upper 16
+// bits of nCcalls, which makes yieldable false inside the call (lstate.h).
 const nyci = 0x10000 | 1
 
 func luaD_callnoyield(L *State, funcIdx, nresults int) { ccall(L, funcIdx, nresults, nyci) }
 
-// luaD_errerr is 'luaD_errerr' (ldo.c): it raises an error while the
-// message handler is running. It throws directly instead of going through
-// 'luaG_errormsg', which is what stops a handler that keeps raising from
-// recursing forever.
-func luaD_errerr(L *State) {
-	ts := luaS_new(L, "error in error handling")
-	if L.top >= len(L.stack) {
-		L.reallocStack(len(L.stack) + EXTRA_STACK) /* assume EXTRA_STACK */
-	}
-	setsvalue(&L.stack[L.top], ts)
-	L.top++
-	luaD_throw(L, LUA_ERRERR)
-}
+// ---------------------------------------------------------------------
+// Protected close / pcall (ldo.c)
+// ---------------------------------------------------------------------
+//
+// C's finishpcallk / finishCcall / unroll / findpcall / precover /
+// resume / lua_resume / lua_yieldk / luaD_protectedparser are NOT in
+// this file — goroutine/API split places them in lstate.go and load
+// paths. Documented in NOTES (colocated yield/resume).
 
-// luaE_checkcstack raises an error when the C stack is exhausted
-// (lstate.c). A depth of exactly LUAI_MAXCCALLS reports a plain overflow;
-// going well past it means the overflow handling itself failed, which is
-// reported as an error in error handling.
-func luaE_checkcstack(L *State) {
-	calls := L.nCcalls & 0xffff
-	if calls == LUAI_MAXCCALLS {
-		luaG_runerror(L, "C stack overflow")
-	} else if calls >= LUAI_MAXCCALLS/10*11 {
-		luaD_errerr(L) /* error while handling stack error */
-	}
-}
-
-// closeP carries the arguments of 'closepaux' (ldo.c).
+// closeP carries the arguments of closepaux (ldo.c).
 type closeP struct {
 	level  int
 	status int
 }
 
-// luaD_closeprotected closes to-be-closed variables, running the close
-// methods under a protected call (ldo.c).
+// luaD_closeprotected closes to-be-closed variables under a protected
+// call (ldo.c).
 //
-// A '__close' that raises must not escape: C keeps closing the remaining
-// variables, remembering the newest error, and only then hands that error
-// to the enclosing protected call. Closing unprotected instead makes an
-// 'error' inside '__close' bypass the 'pcall' around the function that
-// declared the variable.
-//
-// 'yy' is the one C's own 'closepaux' does not take: it passes 0, and
-// that is the half this function is named for -- a '__close' run from
-// here may not suspend.  It is what 'luaE_resetthread' asks, and so what
-// 'coroutine.close' asks: with a pending to-be-closed variable whose
-// '__close' yields, 'coroutine.close' answers
-// false, "attempt to yield across a C-call boundary", and not the value
-// the metamethod yielded.
-//
-// The other half is C's 'finishpcallk', which runs '__close' with 'yy' 1,
-// and it is the half an ordinary 'pcall' in a yieldable thread takes:
-// 'locals.lua' suspends three times inside the '__close' of a function
-// that raised, and that is meant to work.  C tells the two apart by
-// which function does the closing -- 'closepaux' or 'finishpcallk' --
-// and this port, whose 'pcall' is one function either way, takes it as an
-// argument instead.
+// FLAG: extra 'yy' — C's closepaux always passes 0 (non-yieldable);
+// finishpcallk closes with yy=1. This port's single pcall path takes
+// yy as an argument instead of splitting the two C entry points.
 func luaD_closeprotected(L *State, level, status int, yy bool) int {
 	oldCI := L.ci
 	oldAllowHooks := L.allowhook
@@ -409,32 +605,10 @@ func luaD_closeprotected(L *State, level, status int, yy bool) int {
 	}
 }
 
-// luaD_seterrorobj puts the error object at 'oldtop' (ldo.c).
-func luaD_seterrorobj(L *State, errcode, oldtop int) {
-	switch errcode {
-	case LUA_ERRMEM:
-		var v Value
-		setsvalue(&v, L.g.memErrMsg)
-		L.stack[oldtop] = v
-	case LUA_ERRERR:
-		var v Value
-		setsvalue(&v, luaS_new(L, "error in error handling"))
-		L.stack[oldtop] = v
-	case LUA_OK: /* special case only for closing upvalues */
-		setnilvalue(&L.stack[oldtop]) /* no error message */
-	default:
-		L.stack[oldtop] = L.stack[L.top-1]
-	}
-	L.top = oldtop + 1
-}
-
 // luaD_pcall runs f in protected mode (ldo.c).
 //
-// 'yy' is the 'yy' of the 'luaF_close' it may have to do -- see
-// luaD_closeprotected.  C's 'lua_pcallk' with a continuation in a
-// yieldable thread does not come through here at all: it is recovered by
-// 'finishpcallk', whose 'yy' is 1.  This port's yieldable 'pcall' does
-// come through here, so it has to say which of the two it is being.
+// FLAG: extra 'yy' for the close path — see luaD_closeprotected.
+// Uses L.shrinkStack (master) today; Apply debt: switch to luaD_shrinkstack.
 func luaD_pcall(L *State, f func(), oldTop, ef int, yy bool) int {
 	oldCI := L.ci
 	oldAllowHooks := L.allowhook
@@ -446,25 +620,17 @@ func luaD_pcall(L *State, f func(), oldTop, ef int, yy bool) int {
 		L.allowhook = oldAllowHooks
 		status = luaD_closeprotected(L, oldTop, status, yy)
 		luaD_seterrorobj(L, status, oldTop)
-		L.shrinkStack()
+		L.shrinkStack() /* restore stack size in case of overflow */
 	}
 	L.errfunc = oldErrFunc
 	return status
 }
 
-// luaD_throw raises an error with the given status.
-// luaD_throw raises an error with the given status (ldo.c).
-//
-// In C the error object is left on the top of the stack of the throwing
-// thread and picked up later by luaD_seterrorobj; because a Go panic
-// unwinds without any chance to inspect the stack, the object is copied
-// into the panic value here.
-func luaD_throw(L *State, status int) {
-	var v Value
-	if L.top > 0 {
-		v = L.stack[L.top-1]
-	} else {
-		setnilvalue(&v)
-	}
-	panic(&luaError{status: status, value: v})
-}
+// ---------------------------------------------------------------------
+// Colocated elsewhere (C ldo.c → Go other files) — see NOTES.md
+// ---------------------------------------------------------------------
+// finishpcallk, finishCcall, unroll, findpcall, resume_error, resume,
+// precover, lua_resume, lua_isyieldable, lua_yieldk  →  lstate.go
+//   (Resume / Yield / unroll / fastYield / migrateAbort / coMain)
+// luaD_protectedparser / f_parser / checkmode / SParser  →  load path
+//   (lbaselib.go Load* / lauxlib helpers; mode checks in load)

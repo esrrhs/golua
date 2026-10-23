@@ -1,3 +1,6 @@
+// Go SPEC overlay for constant/numeric leaf CALL (not in PUC lvm.c).
+// Falls back to luaD_precall when the prototype or args do not match.
+// FLAG: keep only while observationally equivalent to 5.4.9; see NOTES.md.
 package core
 
 const (

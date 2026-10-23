@@ -1,4 +1,5 @@
-// Command lua is the standalone Lua interpreter, a Go port of lua.c.
+// Command lua is the standalone Lua interpreter, a Go port of lua.c
+// (PUC-Rio Lua 5.4.9).
 //
 // Usage:
 //
@@ -6,12 +7,18 @@
 //
 // Options:
 //
-//	-e stat  execute string 'stat'
-//	-l name  require library 'name'
-//	-i       enter interactive mode after executing 'script'
-//	-v       show version information
-//	-        stop handling options and execute stdin as a file
-//	--       stop handling options
+//	-e stat   execute string 'stat'
+//	-i        enter interactive mode after executing 'script'
+//	-l mod    require library 'mod' into global 'mod'
+//	-l g=mod  require library 'mod' into global 'g'
+//	-v        show version information
+//	-E        ignore environment variables
+//	-W        turn warnings on
+//	--        stop handling options
+//	-         stop handling options and execute stdin
+//
+// Platform signal_* companions (SIGINT → hook) are intentional FLAG; do not
+// delete them when present.
 package main
 
 import (
@@ -20,6 +27,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unsafe"
 
 	lua "github.com/esrrhs/golua"
 )
@@ -62,12 +70,20 @@ func pmainDriver(argv []string) int {
 	if len(argv) > 0 && argv[0] != "" {
 		progName = argv[0]
 	}
-	L = lua.NewState()
+	L = lua.NewState() /* luaL_newstate */
+	if L == nil {
+		/* C: cannot create state: not enough memory — Go NewState does not
+		   return nil (FLAG: Go allocator); kept for lua.c shape. */
+		fmt.Fprintf(os.Stderr, "%s: cannot create state: not enough memory\n", progName)
+		return 1
+	}
 	defer L.Close()
+	/* lua_gc(L, LUA_GCSTOP): stop GC while building state.
+	   FLAG: Go GC — no-op (intentional; see NOTES). */
 	/* the libraries are opened inside 'pmain', after '-E' has had its
 	   say about the environment (see pmain) */
 
-	L.PushGoClosure(pmain, 0)
+	L.PushGoClosure(pmain, 0) /* to call 'pmain' in protected mode */
 	L.PushInteger(int64(len(argv))) /* 1st argument: argc */
 	L.PushInteger(0)                /* 2nd argument: argv (a pointer in C) */
 	status := L.PCall(2, 1, 0)
@@ -97,7 +113,14 @@ func pmainDriver(argv []string) int {
 // that call.
 func pmain(L *lua.State) int {
 	argv := pmainArgv
+	argc := len(argv)
 	args, script := collectArgs(argv)
+	optlim := argc /* first argv not an option */
+	if script > 0 {
+		optlim = script
+	}
+	/* luaL_checkversion(L) — version num 504, LUAL_NUMSIZES */
+	L.CheckVersion_(504, unsafe.Sizeof(int64(0))*16+unsafe.Sizeof(float64(0)))
 	if args == hasError { /* bad arg? */
 		printUsage(argv[script]) /* 'script' has the index of the bad arg */
 		L.PushBoolean(false)
@@ -107,19 +130,17 @@ func pmain(L *lua.State) int {
 		printVersion()
 	}
 	if args&hasEnv != 0 { /* option '-E'? */
-		L.PushBoolean(true)
+		L.PushBoolean(true) /* signal for libraries to ignore env. vars. */
 		L.SetField(lua.LUA_REGISTRYINDEX, "LUA_NOENV")
 	}
 	/* lua.c opens the libraries here, not before 'pmain': the packages
 	   read LUA_PATH from the environment, and '-E' must already have
 	   signalled that they should not. */
-	L.OpenLibs()
-	optlim := len(argv) /* first argv that is not an option */
-	if script > 0 {
-		optlim = script
-	}
-	createArgTable(L, argv, script) /* create table 'arg' */
-	if args&hasEnv == 0 {           /* no option '-E'? */
+	L.OpenLibs() /* open standard libraries */
+	createArgTable(L, argv, argc, script) /* create table 'arg' */
+	/* lua_gc(L, LUA_GCRESTART); lua_gc(L, LUA_GCGEN, 0, 0);
+	   FLAG: Go GC — no-op (intentional; see NOTES). */
+	if args&hasEnv == 0 { /* no option '-E'? */
 		if !handleLuaInit() { /* run LUA_INIT */
 			L.PushBoolean(false)
 			return 1
@@ -155,13 +176,13 @@ func pmain(L *lua.State) int {
 // option handling
 // ---------------------------------------------------------------------
 
-// The option flags of lua.c.
+// bits of various argument indicators in 'args' (lua.c)
 const (
-	hasError = 1  /* bad option */
-	hasI     = 2  /* -i */
-	hasV     = 4  /* -v */
-	hasE     = 8  /* -e */
-	hasEnv   = 16 /* -E */
+	hasError = 1  /* has_error — bad option */
+	hasI     = 2  /* has_i — -i */
+	hasV     = 4  /* has_v — -v */
+	hasE     = 8  /* has_e — -e */
+	hasEnv   = 16 /* has_E — -E */
 )
 
 func usage() string {
@@ -303,15 +324,16 @@ func runArgs(argv []string, optlim int) bool {
 	return true
 }
 
-// createArgTable builds the global 'arg' table the way lua.c's
-// 'createargtable' does: arg[i - script] = argv[i] for every argument, so
-// arg[0] is the script name, arg[1..] the script arguments and the
-// negative indices hold the interpreter and the options.  'script' is the
-// index of the script in argv, or 0 when there is none.
-func createArgTable(L *lua.State, argv []string, script int) {
-	L.NewTable()
-	for i, a := range argv {
-		L.PushString(a)
+// createArgTable is 'createargtable' of lua.c: arg[i - script] = argv[i]
+// for every argument, so arg[0] is the script name, arg[1..] the script
+// arguments and the negative indices hold the interpreter and the options.
+// 'script' is the index of the script in argv, or 0 when there is none.
+// If there is no script name, assume interpreter's name as base.
+func createArgTable(L *lua.State, argv []string, argc, script int) {
+	narg := argc - (script + 1) /* number of positive indices */
+	L.CreateTable(narg, script+1)
+	for i := 0; i < argc; i++ {
+		L.PushString(argv[i])
 		L.RawSetI(-2, int64(i-script))
 	}
 	L.SetGlobal("arg")
@@ -518,12 +540,19 @@ func msghandler(L *lua.State) int {
 // docall is 'docall' of lua.c: it runs the function that sits below
 // 'narg' arguments with 'msghandler' installed under it, so that an
 // uncaught error comes back with a traceback.
+//
+// C also does: globalL = L; setsignal(SIGINT, laction); ...; setsignal(SIGINT, SIG_DFL).
+// FLAG: platform signal_* companions (lstop/laction/setsignal) — intentional;
+// SetHook's *dbAr is not exported to cmd/lua, so SIGINT→hook lives in
+// signal_*.go when present (do not delete). No-op here without those files.
 func docall(narg, nres int) error {
 	base := L.GetTop() - narg /* function index */
-	L.PushGoClosure(msghandler, 0)
-	L.Insert(base) /* put the handler under the function and its arguments */
+	L.PushGoClosure(msghandler, 0) /* push message handler */
+	L.Insert(base)                 /* put it under function and args */
+	/* FLAG signal: setsignal(SIGINT, laction) — see signal_* */
 	status := L.PCall(narg, nres, base)
-	L.Remove(base) /* remove the message handler */
+	/* FLAG signal: setsignal(SIGINT, SIG_DFL) */
+	L.Remove(base) /* remove message handler from the stack */
 	if status != lua.LUA_OK {
 		return lastError()
 	}

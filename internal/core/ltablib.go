@@ -1,10 +1,9 @@
-// Translation of ltablib.c (PUC-Lua 5.4): the table manipulation
+// Translation of ltablib.c (PUC-Lua 5.4.9): the table manipulation
 // library, including the quicksort used by table.sort.
 package core
 
 import (
 	"math"
-	"slices"
 	"time"
 )
 
@@ -58,7 +57,7 @@ func tableIncr(n *int) int {
 func tableInsert(L *State) int {
 	var pos int64 /* where to insert new element */
 	e := tableAuxGetn(L, 1, tabRW)
-	e = e + 1 /* first empty element */
+	e = e + 1 /* first empty element (luaL_intop(+, e, 1)) */
 	switch L.GetTop() {
 	case 2: /* called with only 2 arguments */
 		pos = e /* insert new element at the end */
@@ -133,84 +132,10 @@ func tableMove(L *State) int {
 	return 1
 }
 
-// tableConcatRaw joins a dense array of strings without the per-element
-// stack traffic of the general buffer path. Anything that is not a plain
-// table of strings (a metatable, a number that still has to be converted,
-// a hole) falls back so the error and the conversion stay the same.
-func tableConcatRaw(L *State) (string, bool) {
-	top := L.GetTop()
-	if top < 1 || top > 4 {
-		return "", false
-	}
-	base := L.ci.funcIdx + 1
-	tv := &L.stack[base]
-	if tv.tt != ctb(LUA_VTABLE) {
-		return "", false
-	}
-	t := hvalue(tv)
-	if t.metatable != nil {
-		return "", false
-	}
-	sep := ""
-	if top >= 2 && !ttisnil(&L.stack[base+1]) {
-		if !ttisstring(&L.stack[base+1]) {
-			return "", false
-		}
-		sep = tsvalue(&L.stack[base+1]).val
-	}
-	i := int64(1)
-	last := int64(luaH_getn(t))
-	if top >= 3 && !ttisnil(&L.stack[base+2]) {
-		if L.stack[base+2].tt != LUA_VNUMINT {
-			return "", false
-		}
-		i = L.stack[base+2].i
-	}
-	if top >= 4 && !ttisnil(&L.stack[base+3]) {
-		if L.stack[base+3].tt != LUA_VNUMINT {
-			return "", false
-		}
-		last = L.stack[base+3].i
-	}
-	if i > last {
-		return "", true
-	}
-	if i < 1 || last > int64(luaH_realasize(t)) || last-i >= math.MaxInt32 {
-		return "", false
-	}
-	count := last - i + 1
-	total := 0
-	if count > 1 && len(sep) > 0 {
-		if int64(len(sep)) > (int64(math.MaxInt)-1)/(count-1) {
-			return "", false
-		}
-		total = len(sep) * int(count-1)
-	}
-	for k := i; k <= last; k++ {
-		e := &t.array[k-1]
-		if !ttisstring(e) {
-			return "", false
-		}
-		ln := len(tsvalue(e).val)
-		if ln > math.MaxInt-total {
-			return "", false
-		}
-		total += ln
-	}
-	buf := make([]byte, total)
-	p := 0
-	for k := i; k <= last; k++ {
-		if k != i && len(sep) > 0 {
-			p += copy(buf[p:], sep)
-		}
-		p += copy(buf[p:], tsvalue(&t.array[k-1]).val)
-	}
-	return string(buf), true
-}
-
 func tableAddField(L *State, b *Buffer, i int64) {
 	L.GetI(1, i)
 	if !L.IsString(-1) {
+		/* C: "%I" / LUAI_UACINT; Go fmt uses %d for int64 */
 		L.Error2("invalid value (%s) at index %d in table for 'concat'",
 			TypeName(L.Type(-1)), i)
 	}
@@ -218,10 +143,6 @@ func tableAddField(L *State, b *Buffer, i int64) {
 }
 
 func tableConcat(L *State) int {
-	if s, ok := tableConcatRaw(L); ok {
-		L.PushString(s)
-		return 1
-	}
 	last := tableAuxGetn(L, 1, tabR)
 	sep := L.OptString(2, "")
 	i := L.OptInteger(3, 1)
@@ -238,22 +159,22 @@ func tableConcat(L *State) int {
 	return 1
 }
 
-// ---------------------------------------------------------------------
-// Pack/unpack
-// ---------------------------------------------------------------------
+/*
+** {======================================================
+** Pack/unpack
+** =======================================================
+ */
 
 func tablePack(L *State) int {
-	n := L.GetTop()           /* number of elements to pack */
-	L.CreateTable(n, 1)       /* create result table */
+	n := L.GetTop()     /* number of elements to pack */
+	L.CreateTable(n, 1) /* create result table */
+	L.Insert(1)         /* put it at index 1 */
 	for i := n; i >= 1; i-- { /* assign elements */
-		// The C version pushes the new table below its arguments with
-		// lua_insert; copying them has exactly the same effect.
-		L.PushValue(i)
-		L.SetI(-2, int64(i))
+		L.SetI(1, int64(i))
 	}
 	L.PushInteger(int64(n))
-	L.SetField(-2, "n") /* t.n = number of elements */
-	return 1            /* return table */
+	L.SetField(1, "n") /* t.n = number of elements */
+	return 1           /* return table */
 }
 
 func tableUnpack(L *State) int {
@@ -290,22 +211,27 @@ func tableUnpack(L *State) int {
 	return int(n)
 }
 
-// ---------------------------------------------------------------------
-// Quicksort
-// (based on 'Algorithms in MODULA-3', Robert Sedgewick;
-//  Addison-Wesley, 1993.)
-// ---------------------------------------------------------------------
+/* }====================================================== */
 
 /*
-** Produce a "random" value to randomize pivot choice. It is used only
-** when 'sort' detects a big imbalance in the result of a partition.
+** {======================================================
+** Quicksort
+** (based on 'Algorithms in MODULA-3', Robert Sedgewick;
+**  Addison-Wesley, 1993.)
+** =======================================================
+ */
+
+/*
+** Produce a "random" 'unsigned int' to randomize pivot choice. This
+** is used only when 'sort' detects a big imbalance in the result of
+** a partition. (C: clock()+time() into unsigned int buff[]; Go: UnixNano.)
  */
 func tableRandomizePivot() uint32 {
 	now := time.Now().UnixNano()
 	return uint32(now) ^ uint32(now>>32)
 }
 
-// arrays larger than 'tabRanLimit' may use randomized pivots
+/* arrays larger than 'tabRanLimit' may use randomized pivots */
 const tabRanLimit = 100
 
 // tableSet2 stores the two values on top of the stack into t[i] and
@@ -323,6 +249,7 @@ func tableSortComp(L *State, a, b int) bool {
 	if L.IsNil(2) { /* no function? */
 		return L.LessThan(a, b) /* a < b */
 	}
+	/* function */
 	L.PushValue(2)         /* push function */
 	L.PushValue(a - 1)     /* -1 to compensate function */
 	L.PushValue(b - 2)     /* -2 to compensate function and 'a' */
@@ -388,7 +315,9 @@ func tablePartition(L *State, lo, up uint32) uint32 {
  */
 func tableChoosePivot(lo, up, rnd uint32) uint32 {
 	r4 := (up - lo) / 4 /* range/4 */
-	return rnd%(r4*2) + (lo + r4)
+	p := rnd%(r4*2) + (lo + r4)
+	/* lua_assert(lo + r4 <= p && p <= up - r4) — C debug-only */
+	return p
 }
 
 /*
@@ -439,11 +368,11 @@ func tableAuxSort(L *State, lo, up, rnd uint32) {
 		if p-lo < up-p { /* lower interval is smaller? */
 			tableAuxSort(L, lo, p-1, rnd) /* call recursively for lower interval */
 			n = p - lo                    /* size of smaller interval */
-			lo = p + 1                    /* tail call for [p + 1 .. up] */
+			lo = p + 1                    /* tail call for [p + 1 .. up] (upper interval) */
 		} else {
 			tableAuxSort(L, p+1, up, rnd) /* call recursively for upper interval */
 			n = up - p                    /* size of smaller interval */
-			up = p - 1                    /* tail call for [lo .. p - 1] */
+			up = p - 1                    /* tail call for [lo .. p - 1]  (lower interval) */
 		}
 		if (up-lo)/128 > n { /* partition too imbalanced? */
 			rnd = tableRandomizePivot() /* try a new randomization */
@@ -457,8 +386,6 @@ func tableSort(L *State) int {
 		L.ArgCheck(n < int64(math.MaxInt32), 1, "array too big")
 		if !L.IsNoneOrNil(2) { /* is there a 2nd argument? */
 			L.CheckType(2, LUA_TFUNCTION) /* must be a function */
-		} else if tableSortRawInts(L, n) {
-			return 0
 		}
 		L.SetTop(2) /* make sure there are two arguments */
 		tableAuxSort(L, 1, uint32(n), 0)
@@ -466,41 +393,7 @@ func tableSort(L *State) int {
 	return 0
 }
 
-// tableSortRawInts sorts a dense array of integers without a comparison
-// function. The library sort otherwise pushes every element onto the
-// Lua stack and calls back through '<' ; for plain integers that is a
-// write barrier per comparison and nothing else can observe it. Equal
-// keys stay in an unspecified order, which is what the quicksort above
-// already guarantees.
-func tableSortRawInts(L *State, n int64) bool {
-	t := index2value(L, 1)
-	if !ttistable(t) {
-		return false
-	}
-	h := hvalue(t)
-	if h.metatable != nil || uint64(n) > uint64(luaH_realasize(h)) || int(n) > len(h.array) {
-		return false
-	}
-	arr := h.array[:n]
-	for i := range arr {
-		if arr[i].tt != LUA_VNUMINT {
-			return false
-		}
-	}
-	keys := make([]int64, len(arr))
-	for i := range arr {
-		keys[i] = arr[i].i
-	}
-	slices.Sort(keys)
-	for i := range arr {
-		arr[i].i = keys[i]
-	}
-	return true
-}
-
-// ---------------------------------------------------------------------
-// library registration
-// ---------------------------------------------------------------------
+/* }====================================================== */
 
 var tableFuncs = []Reg{
 	{Name: "concat", Func: tableConcat},

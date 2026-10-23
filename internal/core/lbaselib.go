@@ -1,12 +1,9 @@
 // Translation of lbaselib.c (PUC-Lua 5.4.9): the basic library.
 //
-// Every luaB_* function keeps its C name prefixed with 'base', and the
-// control flow follows the C source.  Three things are necessarily
-// different from C: there is no collector of our own (so
-// 'collectgarbage' only implements collect+count over Go's GC -- see
-// baseCollectGarbage), the error mechanism is panic/recover instead of
-// setjmp/longjmp (which is already handled by luaD_pcall), and every C
-// function is a GoFunc.
+// Every luaB_* function is named base*; control flow follows the C source.
+// Intentional port exceptions (see NOTES.md): Go GC collectgarbage subset,
+// panic/recover instead of setjmp, index-stack (not TValue*), goroutine
+// coroutines (goCont only on sync co). Every C function is a GoFunc.
 package core
 
 import (
@@ -16,15 +13,14 @@ import (
 	"strings"
 )
 
-// LUA_GNAME and LUA_VERSION are not defined in this port; they are
-// local to the base library.
+// LUA_GNAME / LUA_VERSION (lua.h / lauxlib.h) — local to the base library.
 const (
 	baseGName   = "_G"
-	baseVersion = "Lua 5.4"
+	baseVersion = "Lua 5.4" /* LUA_VERSION */
 )
 
 // ---------------------------------------------------------------------
-// lTolstring (lauxlib.c luaL_tolstring)
+// lTolstring (lauxlib.c luaL_tolstring) — thin wrapper; body in lstrlib
 // ---------------------------------------------------------------------
 
 // lTolstring converts the value at 'idx' to a string using the
@@ -39,20 +35,21 @@ func lTolstring(L *State, idx int) string {
 }
 
 // ---------------------------------------------------------------------
-// print / warn
+// print / warn  (luaB_print / luaB_warn)
 // ---------------------------------------------------------------------
 
 func basePrint(L *State) int {
 	n := L.GetTop()           /* number of arguments */
 	for i := 1; i <= n; i++ { /* for each argument */
-		s := lTolstring(L, i) /* convert it to string */
+		s := lTolstring(L, i) /* convert it to string (luaL_tolstring) */
 		if i > 1 {            /* not the first element? */
-			os.Stdout.WriteString("\t") /* add a tab before it */
+			os.Stdout.WriteString("\t") /* lua_writestring("\t", 1) */
 		}
-		os.Stdout.WriteString(s) /* print it */
+		os.Stdout.WriteString(s) /* lua_writestring(s, l) */
 		L.Pop(1)                 /* pop result */
 	}
 	os.Stdout.WriteString("\n")
+	os.Stdout.Sync() /* lua_writeline: fwrite("\n") + fflush(stdout) */
 	return 0
 }
 
@@ -69,7 +66,7 @@ func baseWarn(L *State) int {
 	}
 	for i := 1; i < n; i++ { /* compose warning */
 		s, _ := L.ToString(i)
-		luaE_warning(L, s, true)
+		luaE_warning(L, s, true) /* lua_warning(..., 1) */
 	}
 	s, _ := L.ToString(n)
 	luaE_warning(L, s, false) /* close warning */
@@ -77,15 +74,15 @@ func baseWarn(L *State) int {
 }
 
 // ---------------------------------------------------------------------
-// tonumber
+// tonumber  (SPACECHARS / b_str2int / luaB_tonumber)
 // ---------------------------------------------------------------------
 
-const baseSpaceChars = " \f\n\r\t\v"
+const baseSpaceChars = " \f\n\r\t\v" /* SPACECHARS */
 
 // baseStr2Int converts 's' in the given base; it returns the value, the
 // index where the conversion stopped, and whether it succeeded
 // (b_str2int).  The conversion is only valid when it consumes the
-// whole string.
+// whole string (caller checks end == len(s), matching C "s + l").
 func baseStr2Int(s string, base int) (int64, int, bool) {
 	i := 0
 	for i < len(s) && strings.IndexByte(baseSpaceChars, s[i]) >= 0 {
@@ -94,7 +91,7 @@ func baseStr2Int(s string, base int) (int64, int, bool) {
 	neg := false
 	if i < len(s) && s[i] == '-' {
 		i++
-		neg = true
+		neg = true /* handle sign */
 	} else if i < len(s) && s[i] == '+' {
 		i++
 	}
@@ -132,11 +129,14 @@ func baseToNumber(L *State) int {
 		if L.Type(1) == LUA_TNUMBER { /* already a number? */
 			L.SetTop(1) /* yes; return it */
 			return 1
+		} else {
+			/* lua_tolstring + lua_stringtonumber == l+1 → whole-string parse */
+			if s, ok := L.ToString(1); ok && strStringToNumber(L, s) {
+				return 1 /* successful conversion to number */
+			}
+			/* else not a number */
+			L.CheckAny(1) /* (but there must be some parameter) */
 		}
-		if s, ok := L.ToString(1); ok && strStringToNumber(L, s) {
-			return 1 /* successful conversion to number */
-		}
-		L.CheckAny(1) /* (but there must be some parameter) */
 	} else {
 		base := L.CheckInteger(2)
 		L.CheckType(1, LUA_TSTRING) /* no numbers as strings */
@@ -147,12 +147,12 @@ func baseToNumber(L *State) int {
 			return 1
 		} /* else not a number */
 	} /* else not a number */
-	L.PushNil() /* not a number */
+	L.PushNil() /* luaL_pushfail — not a number */
 	return 1
 }
 
 // ---------------------------------------------------------------------
-// error
+// error  (luaB_error)
 // ---------------------------------------------------------------------
 
 func baseError(L *State) int {
@@ -167,7 +167,7 @@ func baseError(L *State) int {
 }
 
 // ---------------------------------------------------------------------
-// metatables
+// metatables  (luaB_getmetatable / luaB_setmetatable)
 // ---------------------------------------------------------------------
 
 func baseGetMetatable(L *State) int {
@@ -193,7 +193,7 @@ func baseSetMetatable(L *State) int {
 }
 
 // ---------------------------------------------------------------------
-// raw functions
+// raw*  (luaB_rawequal / rawlen / rawget / rawset)
 // ---------------------------------------------------------------------
 
 func baseRawEqual(L *State) int {
@@ -205,8 +205,7 @@ func baseRawEqual(L *State) int {
 
 func baseRawLen(L *State) int {
 	t := L.Type(1)
-	/* lbaselib.c uses 'luaL_argexpected', so the message names the type
-	   that came: "table or string expected, got boolean". */
+	/* luaL_argexpected → "table or string expected, got …" */
 	L.ArgExpected(t == LUA_TTABLE || t == LUA_TSTRING, 1, "table or string")
 	L.PushInteger(int64(L.RawLen(1)))
 	return 1
@@ -230,7 +229,7 @@ func baseRawSet(L *State) int {
 }
 
 // ---------------------------------------------------------------------
-// collectgarbage
+// collectgarbage  (pushmode / luaB_collectgarbage) — intentional Go-GC
 // ---------------------------------------------------------------------
 
 // The PUC option names (including 5.4 mode names), in C's order.  Kept
@@ -239,7 +238,7 @@ func baseRawSet(L *State) int {
 var baseGCOpts = []string{"stop", "restart", "collect", "count", "step",
 	"setpause", "setstepmul", "isrunning", "generational", "incremental"}
 
-// indices into baseGCOpts
+// indices into baseGCOpts (optsnum order)
 const (
 	baseGCStop = iota
 	baseGCRestart
@@ -282,15 +281,11 @@ func gcCount() float64 {
 //
 // "collect" sweeps weak tables and runs '__gc' of unreachable objects,
 // then pushes 0.  "count" is Kbytes of the whole Go heap (not per-state).
+// Inside a finalizer (gcInFinalizer), push fail/nil for every option
+// (C: lua_gc → -1 → checkvalres → luaL_pushfail).
 func baseCollectGarbage(L *State) int {
-	/* From inside a '__gc' PUC-Lua answers nil for every option, and not
-	   0: it has stopped the collector for the duration of the finalizer,
-	   and 'lua_gc' turns that into -1, which lbaselib.c's 'checkvalres'
-	   makes a fail.  So does this, for the same reason -- a finalizer is
-	   the one place where "the collector cannot be asked" is something a
-	   program can see. */
 	if L.g.gcInFinalizer {
-		L.PushNil()
+		L.PushNil() /* luaL_pushfail — invalid call (inside a finalizer) */
 		return 1
 	}
 	switch L.CheckOption(1, "collect", baseGCOpts) {
@@ -303,16 +298,16 @@ func baseCollectGarbage(L *State) int {
 		return 1
 	default:
 		/* stop, restart, step, setpause, setstepmul, isrunning,
-		   generational, incremental: ignore. */
+		   generational, incremental: ignore (push 0 like a successful
+		   no-op lua_gc integer result). */
 		L.PushInteger(0)
 		return 1
 	}
 }
 
 // gcSetParam is 'setgcparam' inside 'lua_gc': the value it is handed
-// replaces the knob -- a 0 is a value like any other, and 'setpause'
-// with no argument really does set the pause to 0 -- and the value the
-// knob had is what is answered.
+// replaces the knob — a 0 is a value like any other — and the value the
+// knob had is what is answered. Used by cdlopen lua_gc bridge.
 func gcSetParam(p *int, v int64) int {
 	prev := *p
 	*p = int(v)
@@ -343,9 +338,17 @@ func baseNext(L *State) int {
 	L.SetTop(2) /* create a 2nd argument if there isn't one */
 	if L.Next(1) {
 		return 2
+	} else {
+		L.PushNil()
+		return 1
 	}
-	L.PushNil()
-	return 1
+}
+
+// basePairsCont is pairscont (unused args; returns 3).
+func basePairsCont(L *State, status int) int {
+	_ = L
+	_ = status
+	return 3
 }
 
 func basePairs(L *State) int {
@@ -356,10 +359,9 @@ func basePairs(L *State) int {
 		L.PushNil()            /* and initial value */
 	} else {
 		L.PushValue(1) /* argument 'self' to metamethod */
-		/* C passes 'pairscont' as the continuation of lua_callk, which
-		   makes the call yieldable: '__pairs' may yield. */
+		/* C: lua_callk(..., pairscont) — yieldable. Sync co installs goCont. */
 		if L.co != nil && L.co.sync {
-			L.ci.goCont = func(L *State, status int) int { return 3 }
+			L.ci.goCont = basePairsCont
 		}
 		L.callK(1, 3, true) /* get 3 values from metamethod */
 		if L.ci != nil {
@@ -372,7 +374,7 @@ func basePairs(L *State) int {
 // baseIPairsAux is the traversal function for 'ipairs' (ipairsaux).
 func baseIPairsAux(L *State) int {
 	i := L.CheckInteger(2)
-	i++ /* next index */
+	i++ /* luaL_intop(+, i, 1) */
 	L.PushInteger(i)
 	if L.GetI(1, i) == LUA_TNIL {
 		return 1
@@ -383,6 +385,7 @@ func baseIPairsAux(L *State) int {
 /*
 ** 'ipairs' function. Returns 'ipairsaux', given "table", 0.
 ** (The given "table" may not be a table.)
+** 5.4: no LUA_COMPAT_IPAIRS / __ipairs path.
  */
 func baseIPairs(L *State) int {
 	L.CheckAny(1)
@@ -396,56 +399,43 @@ func baseIPairs(L *State) int {
 // load / loadfile / dofile
 // ---------------------------------------------------------------------
 
-// baseSetupValue sets the value on top of the stack as the first
-// upvalue (_ENV) of the closure at 'idx', popping it; it returns false
-// when there is no such upvalue (lua_setupvalue).
-func baseSetupValue(L *State, idx int) bool {
-	v := index2value(L, idx)
-	if !ttisLclosure(v) || clLvalue(v).nupvalues < 1 {
-		return false
-	}
-	cl := clLvalue(v)
-	setobj(&cl.upvals[0].v, &L.stack[L.top-1])
-	L.top--
-	return true
-}
-
 // baseLoadAux finishes a 'load': on success it returns the chunk (with
 // its environment set), on failure it returns fail plus the error
 // message (load_aux).
+//
+// C passes a status and finds the error message already on the stack;
+// the Go load helpers return an error and restore top, so the failure
+// path re-pushes the message (same Lua results).
 func baseLoadAux(L *State, err error, env int) int {
 	if err == nil {
 		if env != 0 { /* 'env' parameter? */
-			L.PushValue(env)            /* environment for loaded function */
-			if !baseSetupValue(L, -2) { /* set it as 1st upvalue */
+			L.PushValue(env) /* environment for loaded function */
+			/* lua_setupvalue(L, -2, 1) */
+			if _, ok := dbSetUpvalue(L, -2, 1); !ok {
 				L.Pop(1) /* remove 'env' if not used by previous call */
 			}
 		}
 		return 1
+	} else { /* error (message reconstructed; C has it on stack already) */
+		L.PushNil() /* luaL_pushfail */
+		L.PushString(err.Error())
+		return 2 /* return fail plus error message */
 	}
-	/* error */
-	L.PushNil()               /* return fail ... */
-	L.PushString(err.Error()) /* ... plus error message */
-	return 2
 }
 
-// baseReadStdin reads a whole chunk from the standard input.
+// baseReadStdin reads a whole chunk from the standard input
+// (stand-in for luaL_loadfilex with NULL filename).
 func baseReadStdin() ([]byte, error) {
 	return io.ReadAll(os.Stdin)
 }
 
 func baseLoadFile(L *State) int {
-	/* 'luaL_optstring(L, 1, NULL)': stdin is what the *absent* or nil
-	   argument means, not the empty string -- 'loadfile("")' really does
-	   try to open a file with no name, and fails. */
+	/* luaL_optstring(L, 1, NULL): absent/nil → stdin; "" opens empty name. */
 	stdin := L.IsNoneOrNil(1)
-	/* 'luaL_loadfilex' hands the name to 'fopen', which is a C
-	   function: it is the bytes before the first zero that are opened,
-	   and the message names those and no more. */
+	/* fopen-like: bytes before first NUL. */
 	fname := luaCStr(L.OptString(1, ""))
-	/* 'luaL_optstring(L, 2, NULL)': C gives 'lua_load' a NULL mode when
-	   the argument is absent, and 'checkmode' does nothing then.  "bt"
-	   allows the same two kinds of chunk, so it stands in for NULL. */
+	/* luaL_optstring(L, 2, NULL): "bt" stands in for NULL mode
+	   (checkmode skip ≡ allow b+t). */
 	mode := L.OptString(2, "bt")
 	env := 0
 	if !L.IsNone(3) { /* 'env' index or 0 if no 'env' */
@@ -463,51 +453,43 @@ func baseLoadFile(L *State) int {
 	return baseLoadAux(L, err, env)
 }
 
-// baseLoadReader is generic_reader: it calls the reader function once
-// and hands back what it returned, or nil when the chunk is over.
+/*
+** {======================================================
+** Generic Read function
+** =======================================================
+*/
+
+// RESERVEDSLOT (lbaselib.c): above all arguments, holds a copy of the
+// reader string so the parser can keep a stable pointer (C GC). Go still
+// copies to []byte for the stream API; the slot mirrors C stack layout.
+const baseReservedSlot = 5 /* RESERVEDSLOT */
+
+// baseLoadReader is generic_reader.
 //
-// In C the reader is called from inside the parser, which is protected,
-// so an error raised by the reader -- or by the "must return a string"
-// check -- becomes the status of 'lua_load' and 'load' returns nil plus
-// the message.  Raising the error here does the same: the parser runs
-// inside 'rawRunProtected', which turns it into the status of the load.
-//
-// The function is called through 'LoadStream', which pulls the pieces
-// one at a time as the lexer needs them; that is what lets a chunk that
-// fails to parse stop the reader instead of draining it.
+// Called from inside protected LoadStream / rawRunProtected (as C's
+// reader runs inside protected lua_load), so L.Call errors become the
+// load status. Empty string → size 0 for that fill (EOZ that fill);
+// nil → end. Re-call after empty is an llex/ZIO concern (NOTES).
 func baseLoadReader(L *State) func() []byte {
-	done := false /* the reader said it was over: do not ask again */
 	return func() []byte {
-		if done {
-			return nil
-		}
+		L.CheckStack2(2, "too many nested functions")
 		L.PushValue(1) /* get function */
-		if L.PCall(0, 1, 0) != LUA_OK {
-			L.Error()  /* the reader's own error, with its position */
-			return nil /* not reached */
-		}
+		L.Call(0, 1)   /* call it (unprotected; outer load is protected) */
 		if L.IsNil(-1) {
 			L.Pop(1) /* pop result */
-			done = true
-			return nil /* end of chunk */
-		}
-		if !L.IsString(-1) {
-			L.Pop(1)
-			L.PushString("reader function must return a string")
-			L.Error()
+			return nil
+		} else if !L.IsString(-1) {
+			L.Error2("reader function must return a string")
 			return nil /* not reached */
 		}
-		s, _ := L.ToString(-1)
-		L.Pop(1)
-		if s == "" { /* empty string ends the chunk */
-			done = true
-			return nil
-		}
+		L.Replace(baseReservedSlot) /* save string in reserved slot */
+		s, _ := L.ToString(baseReservedSlot)
 		return []byte(s)
 	}
 }
 
 func baseLoad(L *State) int {
+	var status error
 	s, ok := L.ToString(1)
 	mode := L.OptString(3, "bt")
 	env := 0
@@ -516,45 +498,48 @@ func baseLoad(L *State) int {
 	}
 	if ok { /* loading a string? */
 		chunkname := L.OptString(2, s)
-		if len(s) > 0 && s[0] == dmpSignature[0] {
-			/* precompiled chunk: 'lua_load' calls luaU_undump instead
-			   of the parser (ldo.c f_parser) */
-			return baseLoadAux(L, luaU_loadBinary(L, []byte(s), chunkname, mode), env)
-		}
-		return baseLoadAux(L, L.LoadBytesMode([]byte(s), chunkname, mode), env)
-	}
-	/* loading from a reader function */
-	chunkname := L.OptString(2, "=(load)")
-	L.CheckType(1, LUA_TFUNCTION)
-	L.SetTop(5) /* create reserved slot */
-	more := baseLoadReader(L)
-	/* f_parser reads the first character *inside* the protected call
-	   (ldo.c), so an error raised by the very first call to the reader
-	   is the status of the load; it must not escape 'load' itself. */
-	var first []byte
-	top := L.top
-	if status := L.rawRunProtected(func() { first = more() }); status != LUA_OK {
-		msg := ""
-		if L.top > top {
-			msg = valueToStr(&L.stack[L.top-1])
-		}
-		L.top = top
-		return baseLoadAux(L, &LuaError{Status: status, Message: msg}, env)
-	}
-	if len(first) > 0 && first[0] == dmpSignature[0] {
-		/* a precompiled chunk: undump wants the whole thing, so the
-		   rest of it is collected before it starts */
-		data := append([]byte{}, first...)
-		for {
-			piece := more()
-			if piece == nil {
-				break
+		status = L.LoadBytesMode([]byte(s), chunkname, mode) /* luaL_loadbufferx */
+	} else { /* loading from a reader function */
+		chunkname := L.OptString(2, "=(load)")
+		L.CheckType(1, LUA_TFUNCTION)
+		L.SetTop(baseReservedSlot) /* create reserved slot */
+		more := baseLoadReader(L)
+		/* C: lua_load(generic_reader) — first byte inside protected f_parser.
+		   Go LoadStream is text-oriented; peek first piece (protected) to
+		   dispatch binary undump vs text stream (NOTES / Apply debt). */
+		var first []byte
+		top := L.top
+		if st := L.rawRunProtected(func() { first = more() }); st != LUA_OK {
+			msg := ""
+			if L.top > top {
+				msg = valueToStr(&L.stack[L.top-1])
 			}
-			data = append(data, piece...)
+			L.top = top
+			return baseLoadAux(L, &LuaError{Status: st, Message: msg}, env)
 		}
-		return baseLoadAux(L, luaU_loadBinary(L, data, chunkname, mode), env)
+		if len(first) > 0 && first[0] == dmpSignature[0] {
+			data := append([]byte{}, first...)
+			for {
+				piece := more()
+				if piece == nil || len(piece) == 0 { /* EOZ: nil or empty */
+					break
+				}
+				data = append(data, piece...)
+			}
+			status = luaU_loadBinary(L, data, chunkname, mode)
+		} else {
+			status = L.LoadStream(first, more, chunkname, mode)
+		}
 	}
-	return baseLoadAux(L, L.LoadStream(first, more, chunkname, mode), env)
+	return baseLoadAux(L, status, env)
+}
+
+/* }====================================================== */
+
+// baseDoFileCont is dofilecont.
+func baseDoFileCont(L *State, status int) int {
+	_ = status
+	return L.GetTop() - 1
 }
 
 func baseDoFile(L *State) int {
@@ -574,18 +559,15 @@ func baseDoFile(L *State) int {
 		L.PushString(err.Error())
 		return L.Error()
 	}
-	/* C passes 'dofilecont' as the continuation of lua_callk, so the
-	   loaded chunk may yield when 'dofile' runs inside a coroutine.
-	   A synchronous yield unwinds this frame and the resume finishes
-	   it with the same result count. */
+	/* C: lua_callk(..., dofilecont). Sync co installs goCont. */
 	if L.co != nil && L.co.sync {
-		L.ci.goCont = func(L *State, status int) int { return L.GetTop() - 1 }
+		L.ci.goCont = baseDoFileCont
 	}
 	L.callK(0, LUA_MULTRET, true)
 	if L.ci != nil {
 		L.ci.goCont = nil
 	}
-	return L.GetTop() - 1 /* return all results */
+	return baseDoFileCont(L, 0)
 }
 
 // ---------------------------------------------------------------------
@@ -595,20 +577,20 @@ func baseDoFile(L *State) int {
 func baseAssert(L *State) int {
 	if L.ToBoolean(1) { /* condition is true? */
 		return L.GetTop() /* return all arguments */
+	} else { /* error */
+		L.CheckAny(1)                     /* there must be a condition */
+		L.Remove(1)                       /* remove it */
+		L.PushString("assertion failed!") /* default message */
+		L.SetTop(1)                       /* leave only message (default if no other one) */
+		return baseError(L)               /* call 'error' */
 	}
-	/* error */
-	L.CheckAny(1)                     /* there must be a condition */
-	L.Remove(1)                       /* remove it */
-	L.PushString("assertion failed!") /* default message */
-	L.SetTop(1)                       /* leave only message (default if no other one) */
-	return baseError(L)               /* call 'error' */
 }
 
 func baseSelect(L *State) int {
 	n := L.GetTop()
 	if L.Type(1) == LUA_TSTRING {
 		s, _ := L.ToString(1)
-		if len(s) > 0 && s[0] == '#' {
+		if len(s) > 0 && s[0] == '#' { /* *lua_tostring == '#' */
 			L.PushInteger(int64(n - 1))
 			return 1
 		}
@@ -619,7 +601,7 @@ func baseSelect(L *State) int {
 	} else if i > int64(n) {
 		i = int64(n)
 	}
-	L.ArgCheck(i >= 1, 1, "index out of range")
+	L.ArgCheck(1 <= i, 1, "index out of range")
 	return n - int(i)
 }
 
@@ -639,21 +621,20 @@ func baseFinishPCall(L *State, status, extra int) int {
 		L.PushBoolean(false) /* first result (false) */
 		L.PushValue(-2)      /* error message */
 		return 2             /* return false, msg */
+	} else {
+		return L.GetTop() - extra /* return all results */
 	}
-	return L.GetTop() - extra /* return all results */
 }
 
 func basePCall(L *State) int {
 	L.CheckAny(1)
 	L.PushBoolean(true) /* first result if no errors */
-	L.Insert(1)         /* put it in place (lua_insert(L, 1)) */
-	/* 'finishpcall' is the continuation: in a yieldable thread C takes
-	   the yieldable path (lua_pcallk), so 'coroutine.yield' may cross
-	   a 'pcall'. A synchronous yield unwinds this frame; the resume
-	   calls the continuation instead of returning here. */
+	L.Insert(1)         /* put it in place */
+	/* finishpcall continuation: sync co may yield across pcall. */
 	if L.co != nil && L.co.sync {
+		extra := 0
 		L.ci.goCont = func(L *State, status int) int {
-			return baseFinishPCall(L, status, 0)
+			return baseFinishPCall(L, status, extra)
 		}
 	}
 	status := L.pcallK(L.GetTop()-2, LUA_MULTRET, 0, true)
@@ -697,7 +678,7 @@ func baseToString(L *State) int {
 }
 
 // ---------------------------------------------------------------------
-// library registration
+// library registration  (base_funcs / luaopen_base)
 // ---------------------------------------------------------------------
 
 var baseFuncs = []Reg{

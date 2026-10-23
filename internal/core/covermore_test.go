@@ -162,7 +162,7 @@ return "ok"
 		L.Warning("@on", false)
 		luaE_warnerror(L, "stderr")
 	})
-	want := "Lua warning: hello\nLua warning: foobar\nLua warning: stderr: WARNING: failed to write warning: \n"
+	want := "Lua warning: hello\nLua warning: foobar\nLua warning: error in stderr (ok)\n"
 	if text != want {
 		t.Fatalf("stderr:\n%q", text)
 	}
@@ -217,9 +217,9 @@ func TestCallInfoPoolAndThrow(t *testing.T) {
 		t.Fatal("G")
 	}
 	L.extendCI()
-	L.shrinkCI()
+	L.unwindCIToBase()
 	if L.ci != &L.baseCI || L.ci.next != nil || L.nci != 0 {
-		t.Fatal("shrinkCI")
+		t.Fatal("unwindCIToBase")
 	}
 	L.OpenLibs()
 	if err := L.LoadString("return 1", "=test"); err != nil {

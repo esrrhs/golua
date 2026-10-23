@@ -14,7 +14,10 @@ func newPkgState(t *testing.T) *State {
 	t.Helper()
 	L := NewState()
 	t.Cleanup(L.Close)
-	OpenPackage(L)
+	/* OpenPackage ≡ luaopen_package: leaves the table on the stack but
+	   does not SetGlobal; RequireF owns LOADED + _G registration. */
+	L.RequireF("package", OpenPackage, true)
+	L.Pop(1)
 	return L
 }
 

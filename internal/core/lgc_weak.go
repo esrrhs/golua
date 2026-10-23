@@ -7,8 +7,9 @@ import (
 	"weak"
 )
 
-// Weak tables (lgc.c's 'cleartable' and 'luaC_checkfinalizer' for
-// '__mode').
+// Weak tables (lgc.c's clearbykeys/clearbyvalues; '__mode' is detected
+// in C inside traversetable, not luaC_checkfinalizer — here a separate
+// luaC_checkWeakMode because there is no mark traverse).
 //
 // A weak table holds its keys or its values without keeping them alive.
 // Lua's collector can tell whether an object is still reachable, because
@@ -123,8 +124,9 @@ var (
 	gcWeakCount  atomic.Int32          // nonzero while any weak table exists
 )
 
-// luaC_checkWeakMode is the '__mode' half of 'luaC_checkfinalizer': a
-// table whose metatable has a '__mode' field starts to be swept.
+// luaC_checkWeakMode registers a table for weak sweeping when its
+// metatable has a '__mode' string (C detects this in traversetable via
+// TM_MODE; without a mark traverse the port checks at setmetatable).
 func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
 	if mt == nil {
 		return
@@ -165,9 +167,10 @@ type weakSlot struct {
 	w     weakRef
 }
 
-// gcSweepWeak is 'cleartable' (lgc.c): it drops the entries of the weak
-// tables whose object is no longer reachable from anywhere else.  It runs
-// from the collector step, as it does in C.
+// gcSweepWeak approximates clearbykeys+clearbyvalues (lgc.c): it drops
+// entries of weak tables whose object is no longer reachable from
+// anywhere else.  It runs from the collector step, as those clears do
+// in C's atomic phase.
 func (L *State) gcSweepWeak() {
 	if gcWeakCount.Load() == 0 {
 		return
@@ -249,7 +252,7 @@ func (L *State) gcSweepWeak() {
 			setnilvalue(s.v)
 			continue
 		}
-		/* gone: remove the entry the way lgc.c's 'removeentry' does --
+		/* gone: remove the entry the way lgc.c's 'clearkey' does --
 		   the value goes, and the key is marked dead so that 'next'
 		   steps over the hole without losing the collision chain */
 		setnilvalue(&s.n.val)
@@ -257,7 +260,7 @@ func (L *State) gcSweepWeak() {
 	}
 }
 
-// setdeadkey marks a node's key as dead: 'removeentry' leaves one behind
-// so that 'next' can step over the hole while the collision chain stays
-// intact.
+// setdeadkey marks a node's key as dead: lgc.c's 'clearkey' leaves one
+// behind so that 'next' can step over the hole while the collision chain
+// stays intact.
 func setdeadkey(n *node) { n.keytt = LUA_TDEADKEY; n.kp = nil; n.ki = 0 }

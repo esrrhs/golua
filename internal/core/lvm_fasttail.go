@@ -1,3 +1,6 @@
+// Go SPEC overlay for countdown-tail and fib shapes (not in PUC lvm.c).
+// Runs only when bytecode+args match; otherwise luaV_execute continues.
+// FLAG: keep only while observationally equivalent to 5.4.9; see NOTES.md.
 package core
 
 // fastCountTail runs the common tail-recursive countdown

@@ -1036,7 +1036,10 @@ func baseProcessSrc(envFile, plainFile string) string {
 		--    a boolean is not a string at all
 		r1, r2 = load(function() return true end)
 		eq(r1, nil, "a boolean is not a string")
-		eq(r2, "reader function must return a string",
+		-- C luaL_error prefixes "chunk:line: "; match the suffix.
+		eq(type(r2), "string", "boolean reader message type")
+		eq(r2:sub(-#"reader function must return a string"),
+		  "reader function must return a string",
 		  "the message for a reader that answers a boolean")
 		--    and a reader that raises is a load that failed
 		r1, r2 = load(function() error("in the reader") end)
