@@ -1,27 +1,26 @@
 # Lua 5.3.4 port status (branch `5.3.4`)
 
 ## Done
-- Version surface: 5.3.4 / 503 / chunk `0x53`, headers, `_VERSION`, package.cpath `5.3`, LUA_COPYRIGHT
-- `lopcodes.go`: full 5.3.4 ISA (RK/BITRK, 9-bit B/C)
-- Instruction pack/unpack: 5.3 bit layout
-- `lcode.go` / `lparser.go` / `lvm` execute: re-translated for 5.3.4
-- `ldump.go` / `lundump.go`: 5.3.4 fixed-size format (int/size_t sizes in header, string size byte/`0xFF`+size_t, dump tags NUMFLT=3 / NUMINT=19, upvalues without kind, absolute lineinfo)
-- Binary chunk interchange with PUC 5.3.4 `lua`/`luac` verified both directions (same size on smoke chunk)
-- `bit32` library (`lbitlib.go`) wired in `OpenLibs`
-- `luac -l` listing matches PUC 5.3.4 PrintCode (MYK / ISK)
-- `ldebug` name resolution ported to 5.3 RK / getobjname / funcnamefromcode
-- `adjust_varargs` + `CallInfo.base` (5.3 vararg layout); CONCAT no longer clobbers `L.top` via savestate
-- Official `testes/` retargeted to Lua 5.3.4 suite; CI downloads `lua-5.3.4`
-- Smoke: arithmetic, tables, fields, functions, for-loops, if/else, recursion, pcall, bit32, string/math, string.dump, vararg OK
+- Version surface: 5.3.4 / 503 / chunk `0x53`, `_VERSION`, package.cpath `5.3`, LUA_COPYRIGHT 1994-2017
+- Full 5.3.4 ISA, codegen, parser, VM execute; bit32; dump/undump interchange with PUC 5.3.4
+- `luac -l` / `ldebug` name resolution for 5.3 RK; `adjust_varargs` + `CallInfo.base`
+- CONCAT top fix; parser `nCcalls&0xffff` mask; int/float K-cache separation (lightuserdata keys for ints)
+- Public `include/lua.h` matches 5.3.4 by default; Lua 5.4 names behind **`LUA_COMPAT_54`** (off). Cgo still exports no-op/compat stubs for ABI.
+- Conformance / corolib / close tests for `<close>` / `<const>` / `coroutine.close` skipped or adapted
+- Official `testes/` = 5.3.4 suite; CI + `LUA_REF` → lua-5.3.4; **Linux goldens captured** (`*.linux.expected`)
+- Regression: float literal `3.0` stays float (`TestFloatLiteralTag`)
 
 ## Remaining / known gaps
-1. 5.4 API stubs retained for ABI (`lua_warning`, `lua_toclose`, `lua_newuserdatauv`, `lua_getiuservalue`, …) — annotated in `include/lua.h`; runtime is no-op / single-uservalue
-2. Official/diff goldens need re-capture under `LUA_REF` pointing at PUC 5.3.4 (linux expected files not checked in yet; darwin ones are stale 5.4.9)
-3. VM fastpaths still stubbed — re-enable once official suite is green
-4. Some third-party / fuzz expected files still mention 5.4.9
-5. README polish after parity
+1. **Official suite** under captured goldens: only ~7 files identical; many still diverge (bitwise-on-string messages, goto/labels, math edge cases, utf8, tpack, sort comparison counts, etc.). Not silent — `TestOfficialSuite` fails until parity improves.
+2. **Darwin** `*.darwin.expected` still from 5.4.9 era — re-capture on macOS with PUC 5.3.4.
+3. **VM fastpaths** remain stubbed (`lvm_fastcall.go`): leaf recognition was 5.4-opcode-shaped; rewrite for 5.3 RK before enabling.
+4. **varinfo** for bitwise RK ops does not yet append `(constant '…')` (test skipped).
+5. **Numeric for + NaN step** not matching PUC yet (test skipped).
+6. Third-party goldens (LPeg, etc.) captured from 5.4.9 — LPeg test skipped pending re-capture; fuzz corpora that embed `<close>`/`coroutine.close` are harmless under LUA_REF=5.3.4 (both sides error) but should be trimmed when convenient.
+7. `lua_resume` C signature keeps 5.4 out-param form (documented in lua.h).
+8. README polish after official suite is closer to green.
 
 ## Paths
-- C ref: `/workspace/lua-sources/lua-5.3.4` (built `src/lua`, `src/luac`)
-- Official tests tarball: `/workspace/lua-sources/lua-5.3.4-tests`
+- C ref: `/workspace/lua-sources/lua-5.3.4` (`src/lua`, `src/luac`)
+- Official tests: `/workspace/lua-sources/lua-5.3.4-tests` → `internal/core/testdata/official/`
 - Branch: https://github.com/esrrhs/golua/tree/5.3.4

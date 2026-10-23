@@ -1,0 +1,11 @@
+testing stand-alone interpreter
+progname: /workspace/lua-sources/lua-5.3.4/src/lua
+Lua 5.3.4  Copyright (C) 1994-2017 Lua.org, PUC-Rio
+(temporary program file used in these tests: /tmp/lua_6cxa3c)
++
+testing Ctrl C
+(if test fails now, it may leave a Lua script running in background, pid 458546)
+done
+(if test fails now, it may leave a Lua script running in background, pid 458549)
+done (with 2 kills)
+OK

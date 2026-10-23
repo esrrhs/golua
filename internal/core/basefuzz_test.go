@@ -1108,7 +1108,7 @@ func baseProcessSrc(envFile, plainFile string) string {
 		--    option answers nil rather than a number.
 		local seen
 		do
-		  local t <close> = nil
+		  -- (5.3.4: no <close>; bare block)
 		  local doomed = setmetatable({}, {__gc = function()
 		    seen = tostring(collectgarbage("count")) .. "," ..
 		           tostring(collectgarbage("collect"))

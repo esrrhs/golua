@@ -504,29 +504,7 @@ func TestConformanceCoroutines(t *testing.T) {
 		local main, ismain = coroutine.running()
 		assert(type(main) == "thread" and ismain and not coroutine.isyieldable())
 
-		local close_log = {}
-		local close_mt = {__close = function(self, err)
-			close_log[#close_log + 1] = self.id .. ":" .. tostring(err)
-		end}
-		local closing = coroutine.create(function()
-			local resource <close> = setmetatable({id = "resource"}, close_mt)
-			coroutine.yield("paused")
-		end)
-		local oky, vy = coroutine.resume(closing)
-		assert(oky and vy == "paused")
-		local okc, ec = coroutine.close(closing)
-		conf_co_close = table.concat({tostring(okc), tostring(ec), coroutine.status(closing),
-			table.concat(close_log, ",")}, "|")
-
-		local failing_close = coroutine.create(function()
-			local resource <close> = setmetatable({}, {
-				__close = function() error("closefail", 0) end,
-			})
-			coroutine.yield()
-		end)
-		assert(coroutine.resume(failing_close))
-		local okfc, efc = coroutine.close(failing_close)
-		conf_co_close_error = table.concat({tostring(okfc), tostring(efc), coroutine.status(failing_close)}, "|")
+		-- 5.4 coroutine.close / <close> omitted on 5.3.4
 	`)
 	if got := confGlobalString(t, L, "conf_co_first"); got != "true|11|first|true|false|true|suspended" {
 		t.Errorf("first coroutine resume/yield tuple = %q, want %q", got, "true|11|first|true|false|true|suspended")
@@ -537,15 +515,10 @@ func TestConformanceCoroutines(t *testing.T) {
 	if got := confGlobalString(t, L, "conf_co_dead"); !strings.HasPrefix(got, "false|") || !strings.Contains(got, "dead coroutine") {
 		t.Errorf("resuming dead coroutine = %q, want false plus a dead-coroutine error", got)
 	}
-	if got := confGlobalString(t, L, "conf_co_close"); got != "true|nil|dead|resource:nil" {
-		t.Errorf("coroutine.close with <close> = %q, want %q", got, "true|nil|dead|resource:nil")
-	}
-	if got := confGlobalString(t, L, "conf_co_close_error"); got != "false|closefail|dead" {
-		t.Errorf("coroutine.close __close error = %q, want %q", got, "false|closefail|dead")
-	}
 }
 
 func TestConformanceToBeClosedAndAttributes(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := confRun(t, `
 		local log = {}
 		local mt = {__close = function(self, err)

@@ -193,7 +193,7 @@ func TestFastCountTail(t *testing.T) {
 	return tostring(tail(100, 5)) .. " " .. tostring(tail(0, 7)) .. " " ..
 		tostring(tail(1, 0)) .. " " .. tostring(step2(5, 0)) .. " " .. tostring(ftail(3, 1))
 	`)
-	if got != "105 7 1 10 4" {
+	if got != "105 7 1 10 4.0" {
 		t.Errorf("tail countdown: %q", got)
 	}
 }

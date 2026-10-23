@@ -225,6 +225,7 @@ const (
 	OP_NOT        = core.OP_NOT
 	OP_LEN        = core.OP_LEN
 	OP_CONCAT     = core.OP_CONCAT
+	// 5.4-only opcode stubs (negative); not emitted by the 5.3.4 compiler.
 	OP_CLOSE      = core.OP_CLOSE
 	OP_TBC        = core.OP_TBC
 	OP_JMP        = core.OP_JMP

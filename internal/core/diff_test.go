@@ -353,6 +353,7 @@ func TestLoadMode(t *testing.T) {
 // TestCloseDeadCoroutine checks 'coroutine.close' on a coroutine that ended
 // with an error: it reports that error once again, and only once.
 func TestCloseDeadCoroutine(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()

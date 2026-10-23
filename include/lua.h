@@ -8,9 +8,11 @@
 ** the usual way -- without linking liblua -- resolves these names at
 ** load time, which is what dlopen does when the host exports them.
 **
-** Types and constants follow PUC-Lua 5.3 so that source written for it
-** compiles unchanged.
+** Types and constants follow PUC-Lua 5.3.4 so that source written for it
+** compiles unchanged. Optional Lua 5.4 names are behind LUA_COMPAT_54
+** (off by default); the Go/cgo host may still export no-op stubs for ABI.
 */
+
 #ifndef lua_h
 #define lua_h
 
@@ -160,7 +162,9 @@ typedef int (*lua_KFunction)(lua_State *L, int status, lua_KContext ctx);
 typedef const char *(*lua_Reader)(lua_State *L, void *data, size_t *size);
 typedef int (*lua_Writer)(lua_State *L, const void *p, size_t sz, void *ud);
 typedef void *(*lua_Alloc)(void *ud, void *ptr, size_t osize, size_t nsize);
+#ifdef LUA_COMPAT_54
 typedef void (*lua_WarnFunction)(void *ud, const char *msg, int tocont);
+#endif
 
 struct lua_Debug; /* defined below: lua_Hook only ever points at one */
 typedef void (*lua_Hook)(lua_State *L, struct lua_Debug *ar);
@@ -198,14 +202,16 @@ typedef struct lua_Debug lua_Debug;
 lua_State *lua_newstate(lua_Alloc f, void *ud);
 void       lua_close(lua_State *L);
 lua_State *lua_newthread(lua_State *L);
-int        lua_resetthread(lua_State *L);
-int        lua_closethread(lua_State *L, lua_State *from);
 lua_CFunction lua_atpanic(lua_State *L, lua_CFunction panicf);
 lua_Number lua_version(lua_State *L);
 lua_Alloc  lua_getallocf(lua_State *L, void **ud);
 void       lua_setallocf(lua_State *L, lua_Alloc f, void *ud);
+#ifdef LUA_COMPAT_54
+int        lua_resetthread(lua_State *L);
+int        lua_closethread(lua_State *L, lua_State *from);
 int        lua_setcstacklimit(lua_State *L, unsigned int limit);
 void       lua_toclose(lua_State *L, int idx);
+#endif
 
 /* ---- stack ---- */
 int  lua_absindex(lua_State *L, int idx);
@@ -217,7 +223,9 @@ void lua_rotate(lua_State *L, int idx, int n);
 void lua_copy(lua_State *L, int fromidx, int toidx);
 void lua_insert(lua_State *L, int idx);     /* macro in PUC-Lua */
 void lua_remove(lua_State *L, int idx);     /* macro in PUC-Lua */
+#ifdef LUA_COMPAT_54
 void lua_closeslot(lua_State *L, int idx);
+#endif
 
 /* ---- access ---- */
 int  lua_type(lua_State *L, int idx);
@@ -283,9 +291,12 @@ int lua_rawgetp(lua_State *L, int idx, const void *p);
 int lua_getmetatable(lua_State *L, int idx);
 void lua_createtable(lua_State *L, int narr, int nrec);
 void lua_newtable(lua_State *L);            /* macro in PUC-Lua */
+void *lua_newuserdata(lua_State *L, size_t sz);
+int  lua_getuservalue(lua_State *L, int idx);
+#ifdef LUA_COMPAT_54
 void *lua_newuserdatauv(lua_State *L, size_t sz, int nuvalue);
-void *lua_newuserdata(lua_State *L, size_t sz);  /* macro in PUC-Lua */
 int  lua_getiuservalue(lua_State *L, int idx, int n);
+#endif
 
 /* ---- set ---- */
 void lua_setglobal(lua_State *L, const char *name);
@@ -296,7 +307,10 @@ void lua_rawset(lua_State *L, int idx);
 void lua_rawseti(lua_State *L, int idx, lua_Integer n);
 void lua_rawsetp(lua_State *L, int idx, const void *p);
 int  lua_setmetatable(lua_State *L, int idx);
+int  lua_setuservalue(lua_State *L, int idx);
+#ifdef LUA_COMPAT_54
 int  lua_setiuservalue(lua_State *L, int idx, int n);
+#endif
 
 /* ---- load and call ---- */
 void lua_callk(lua_State *L, int nargs, int nresults, lua_KContext ctx, lua_KFunction k);
@@ -311,20 +325,19 @@ int  lua_error(lua_State *L);
 int  lua_next(lua_State *L, int idx);
 void lua_concat(lua_State *L, int n);
 void lua_len(lua_State *L, int idx);
+/* 5.3 is lua_resume(L,from,narg); this port keeps the 5.4 out-param form
+ * so callers can learn the result count (same as PUC 5.4). */
 int  lua_resume(lua_State *L, lua_State *from, int nargs, int *nresults);
 int  lua_status(lua_State *L);
 int  lua_isyieldable(lua_State *L);
 int  lua_yieldk(lua_State *L, int nresults, lua_KContext ctx, lua_KFunction k);
 int  lua_yield(lua_State *L, int nresults);
 
-/* ---- warnings / to-be-closed / multi-uservalue (5.4 API stubs) ----
- * Retained so existing C extensions that link against this header keep
- * compiling. Lua 5.3.4 has none of these; the Go runtime treats them as
- * no-ops or single-uservalue aliases.
- */
-/* ---- warnings ---- */
+#ifdef LUA_COMPAT_54
+/* Optional 5.4 surface: warn / to-be-closed aliases. Off by default. */
 void lua_warning(lua_State *L, const char *msg, int tocont);
 void lua_setwarnf(lua_State *L, lua_WarnFunction f, void *ud);
+#endif
 
 /* ---- garbage collection, hooks, misc ---- */
 int lua_gc(lua_State *L, int what, ...);
@@ -340,8 +353,6 @@ void *lua_upvalueid(lua_State *L, int fidx, int n);
 void  lua_upvaluejoin(lua_State *L, int fidx1, int n1, int fidx2, int n2);
 void  lua_xmove(lua_State *from, lua_State *to, int n);
 
-#define lua_getuservalue(L,idx)   lua_getiuservalue(L, idx, 1)
-#define lua_setuservalue(L,idx)   lua_setiuservalue(L, idx, 1)
 #define lua_pushliteral(L,s)      lua_pushstring(L, "" s)
 #define lua_replace(L,idx)        (lua_copy(L, -1, (idx)), lua_pop(L, 1))
 #define lua_pushunsigned(L,n)     lua_pushinteger(L, (lua_Integer)(n))
@@ -353,7 +364,11 @@ void  lua_xmove(lua_State *from, lua_State *to, int n);
 #define lua_tostring(L,i)     lua_tolstring(L, (i), NULL)
 #define lua_tonumber(L,i)     lua_tonumberx(L,i,NULL)
 #define lua_tointeger(L,i)    lua_tointegerx(L,(i),NULL)
+#ifdef LUA_COMPAT_54
 #define lua_newuserdata(L,s)  lua_newuserdatauv(L, s, 1)
+#define lua_getuservalue(L,idx)   lua_getiuservalue(L, idx, 1)
+#define lua_setuservalue(L,idx)   lua_setiuservalue(L, idx, 1)
+#endif
 #define lua_pushcfunction(L,f) lua_pushcclosure(L, (f), 0)
 #define lua_register(L,n,f)   (lua_pushcfunction(L, (f)), lua_setglobal(L, (n)))
 #define lua_insert(L,idx)     lua_rotate(L, (idx), 1)

@@ -1,0 +1,6 @@
+testing i/o
+/workspace/lua-sources/lua-5.3.4/src/lua: files.lua:81: assertion failed!
+stack traceback:
+	[C]: in function 'assert'
+	files.lua:81: in main chunk
+	[C]: in ?

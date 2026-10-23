@@ -279,6 +279,7 @@ func TestCoroutineRunning(t *testing.T) {
 // ---------------------------------------------------------------------
 
 func TestCoroutineCloseSuspended(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := coNew(t)
 	coRun(t, L, `
 		local co = coroutine.create(function()
@@ -317,6 +318,7 @@ func TestCoroutineCloseSuspended(t *testing.T) {
 // allowed: the coroutine yields from inside its own '__close' and the
 // next resume carries on.
 func TestCoroutineCloseMayNotYield(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := coNew(t)
 	coRun(t, L, `
 		local co = coroutine.create(function()
@@ -356,6 +358,7 @@ func TestCoroutineCloseMayNotYield(t *testing.T) {
 }
 
 func TestCoroutineCloseRunning(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := coNew(t)
 	coRun(t, L, `
 		-- a coroutine cannot close itself: the error escapes through resume
@@ -386,6 +389,7 @@ func TestCoroutineCloseRunning(t *testing.T) {
 }
 
 func TestCoroutineCloseDead(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := coNew(t)
 	coRun(t, L, `
 		local co = coroutine.create(function() return 1 end)

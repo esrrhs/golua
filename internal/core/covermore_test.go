@@ -517,7 +517,7 @@ say(ok)
 say(coroutine.status(co2))
 local dead = coroutine.create(function() end)
 coroutine.resume(dead)
-say(coroutine.close(dead))
+say(coroutine.status(dead))  -- 5.3.4: no coroutine.close
 
 local i, fl = 2, 2.5
 local big = math.maxinteger
@@ -586,7 +586,7 @@ return table.concat(out, "\n")
 		"dead",
 		"false",
 		"dead",
-		"true",
+		"dead",
 		"true",
 		"false",
 		"false",

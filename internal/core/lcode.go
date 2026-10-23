@@ -1,7 +1,10 @@
 // Translation of lcode.h / lcode.c (PUC-Lua 5.3.4).
 package core
 
-import "math"
+import (
+	"math"
+	"unsafe"
+)
 
 const MAXREGS = 255
 const NO_JUMP = -1
@@ -309,7 +312,8 @@ func addk(fs *FuncState, key, v *Value) int {
 		idx := luaH_get(L, fs.ls.h, key)
 		if ttisinteger(idx) {
 			k := int(ivalue(idx))
-			if k < fs.nk && luaV_rawequalobj(&f.k[k], v) {
+			/* distinguish floats from integers (lcode.c addk) */
+			if k < fs.nk && ttype(&f.k[k]) == ttype(v) && luaV_rawequalobj(&f.k[k], v) {
 				return k
 			}
 		}
@@ -338,9 +342,11 @@ func stringK(fs *FuncState, s *TString) int {
 func luaK_stringK(fs *FuncState, s *TString) int { return stringK(fs, s) }
 
 func luaK_intK(fs *FuncState, n int64) int {
+	/* Integers use lightuserdata as keys to avoid collision with floats
+	   of the same numeric value (lcode.c luaK_intK, Lua 5.3.4). */
 	var k, o Value
+	setpvalue(&k, unsafe.Pointer(uintptr(n)))
 	setivalue(&o, n)
-	setivalue(&k, n)
 	return addk(fs, &k, &o)
 }
 

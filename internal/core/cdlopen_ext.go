@@ -180,6 +180,16 @@ func lua_setiuservalue(p *C.lua_State, idx, n C.int) C.int {
 	return C.int(stateOf(p).SetUserValue(idxInt(idx), int(n)))
 }
 
+//export lua_getuservalue
+func lua_getuservalue(p *C.lua_State, idx C.int) C.int {
+	return lua_getiuservalue(p, idx, 1)
+}
+
+//export lua_setuservalue
+func lua_setuservalue(p *C.lua_State, idx C.int) C.int {
+	return lua_setiuservalue(p, idx, 1)
+}
+
 //export lua_pushthread
 func lua_pushthread(p *C.lua_State) C.int { return cBool(stateOf(p).PushThread()) }
 
