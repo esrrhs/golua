@@ -166,8 +166,12 @@ func luaH_next(L *State, t *Table, keyIdx int) bool {
 	for ; i < t.sizearray; i++ {           /* try first array part */
 		v := checkSlot(&t.array[i])
 		if !ttisnil(v) { /* a non-nil value? */
+			sv := slotVal(v)
+			if ttisnil(&sv) {
+				continue
+			}
 			setivalue(&L.stack[keyIdx], int64(i)+1)
-			L.stack[keyIdx+1] = slotVal(v)
+			L.stack[keyIdx+1] = sv
 			return true
 		}
 	}
@@ -176,8 +180,17 @@ func luaH_next(L *State, t *Table, keyIdx int) bool {
 		_ = cleanNodeKey(nd)
 		v := checkSlot(&nd.val)
 		if !ttisnil(v) {
-			getnodekey(&L.stack[keyIdx], nd)
-			L.stack[keyIdx+1] = slotVal(v)
+			var nk Value
+			getnodekey(&nk, nd)
+			if ttisnil(&nk) || ttisdeadkey(&nk) {
+				continue
+			}
+			sv := slotVal(v)
+			if ttisnil(&sv) {
+				continue
+			}
+			L.stack[keyIdx] = nk
+			L.stack[keyIdx+1] = sv
 			if mode != 0 {
 				/* For weak tables, clear any stale stack slots above keyIdx+2
 				   so a discarded result of next(t) does not stay pinned above top. */
@@ -307,7 +320,9 @@ func luaH_resize(L *State, t *Table, nasize uint32, nhsize uint32) {
 			v := checkSlot(&oldArray[i])
 			if !ttisnil(v) {
 				val := slotVal(v)
-				luaH_setint(L, t, int64(i)+1, &val)
+				if !ttisnil(&val) {
+					luaH_setint(L, t, int64(i)+1, &val)
+				}
 			}
 		}
 		na := make([]Value, nasize)
@@ -323,7 +338,9 @@ func luaH_resize(L *State, t *Table, nasize uint32, nhsize uint32) {
 			v := checkSlot(&newt.nodes[j].val)
 			if !ttisnil(v) && !ttisnil(&k) && !ttisdeadkey(&k) {
 				val := slotVal(v)
-				luaH_setval(L, t, &k, &val)
+				if !ttisnil(&val) {
+					luaH_setval(L, t, &k, &val)
+				}
 			}
 		}
 	}

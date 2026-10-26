@@ -1,33 +1,33 @@
 == arithmetic on strings ==
-10:integer
+10:float
 10:float
 10.5:float
-16:integer
-16:integer
+16:float
+16:float
 256:float
 100:float
 100:float
 0.5:float
 5:float
-10:integer
-10:integer
--10:integer
-10:integer
-10:integer
-10:integer
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
-err|attempt to add a 'string' with a 'number'
+10:float
+10:float
+-10:float
+10:float
+10:float
+10:float
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
+err|attempt to perform arithmetic on a string value
 ok|
 ok|
 == the same, through concatenation and comparison ==

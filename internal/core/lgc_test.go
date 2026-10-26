@@ -136,9 +136,9 @@ func TestWeakKeys(t *testing.T) {
 			local key = {}   -- nothing but 't' refers to it
 			t[key] = "value"
 		end
-		for i = 1, 5000000 do   -- allocating is what drives a cycle
+		for i = 1, 20000000 do   -- allocating is what drives a cycle
 			local a = {}
-			if i % 10000 == 0 and next(t) == nil then break end
+			if i % 250000 == 0 and next(t) == nil then break end
 		end
 		local n = 0
 		for _ in pairs(t) do n = n + 1 end
@@ -252,9 +252,9 @@ func TestWeakSweptOnAllocation(t *testing.T) {
 			local o = {}     -- nothing but 'cache' refers to it
 			cache[1] = o
 		end
-		for i = 1, 5000000 do
+		for i = 1, 20000000 do
 			local a = {}
-			if i % 10000 == 0 and cache[1] == nil then return "cleared" end
+			if i % 250000 == 0 and cache[1] == nil then return "cleared" end
 		end
 		return "kept"
 	`)

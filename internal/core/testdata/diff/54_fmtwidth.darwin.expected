@@ -72,7 +72,7 @@ false|"bad argument #2 to 'string.format' (string contains zeros)"
 "[ 3.14]"
 "[    a1]"
 "[ab你好]"
-lua: 54_fmtwidth.lua:85: invalid conversion '%1$' to 'format'
+lua: 54_fmtwidth.lua:85: invalid option '%$' to 'format'
 stack traceback:
 	[C]: in function 'string.format'
 	54_fmtwidth.lua:85: in main chunk

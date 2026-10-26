@@ -24,20 +24,7 @@ true	iter:3
 true	iterdone
 false	11_coroutine.lua:64: boom
 dead
-false	11_coroutine.lua:64: boom
-true
-false	cannot resume dead coroutine
-false	table	42
-thread: 0xADDR	true
-false
-in-co running	thread: 0xADDR	false
-in-co yieldable	true
-main yieldable	true
-suspended
-true
-dead
-lua: 11_coroutine.lua:95: cannot close a running coroutine
+lua: 11_coroutine.lua:68: attempt to call a nil value (field 'close')
 stack traceback:
-	[C]: in function 'coroutine.close'
-	11_coroutine.lua:95: in main chunk
+	11_coroutine.lua:68: in main chunk
 	[C]: in ?

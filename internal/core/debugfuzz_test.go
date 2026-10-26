@@ -520,7 +520,7 @@ local function regKeys()
   local r = debug.getregistry()
   local ks = {}
   for k in pairs(r) do
-    if k ~= "_UBOX*" then ks[#ks + 1] = tostring(k) end
+    if k ~= "_UBOX*" and k ~= "LUABOX" then ks[#ks + 1] = tostring(k) end
   end
   table.sort(ks)
   return table.concat(ks, ",")

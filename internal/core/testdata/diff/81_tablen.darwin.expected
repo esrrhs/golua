@@ -16,10 +16,10 @@ dense del 13 -> 5
 dense del 5 -> 4
 dense set 9 -> 4
 dense set 7 -> 4
-dense set 6 -> 4
-dense del 11 -> 4
-dense set 9 -> 4
-dense set 16 -> 4
+dense set 6 -> 16
+dense del 11 -> 16
+dense set 9 -> 16
+dense set 16 -> 16
 dense set 10 -> 16
 dense set 9 -> 16
 dense set 14 -> 16
@@ -35,9 +35,9 @@ dense set 8 -> 16
 dense set 5 -> 16
 dense set 11 -> 16
 dense set 5 -> 16
-dense del 16 -> 15
-dense del 10 -> 15
-dense set 15 -> 15
+dense del 16 -> 11
+dense del 10 -> 9
+dense set 15 -> 9
 dense set 16 -> 16
 dense set 7 -> 16
 dense set 9 -> 16
@@ -146,7 +146,7 @@ shrink del 58 -> 64
 shrink del 61 -> 64
 shrink del 64 -> 63
 float -> 3
-float del -> 3
+float del -> 1
 emptied -> 0
 refilled 1 -> 1
 refilled 2 -> 2

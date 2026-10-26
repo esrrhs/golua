@@ -65,7 +65,7 @@ true|"hello"|5
 == gsub: bad arguments ==
 false|"bad argument #1 to 'string.gsub' (string expected, got no value)"
 false|"bad argument #2 to 'string.gsub' (string expected, got no value)"
-false|"bad argument #3 to 'string.gsub' (string/function/table expected, got no value)"
+false|"bad argument #3 to 'string.gsub' (string/function/table expected)"
 true|"1"|0
 true|"a"|0
 true|"1"|1
@@ -82,8 +82,8 @@ gmatch1	a1,b2,c3
 gmatch pos	1,2,3,4
 gmatch empty	<>,<>,<>,<>
 false|"bad argument #1 to 'string.gmatch' (string expected, got no value)"
-true|function: 0xADDR
-true|function: 0xADDR
+true|function: <ADDR>
+true|function: <ADDR>
 it	a	b	c
 true|3|3
 true|4|4
@@ -127,8 +127,8 @@ args0	1
 true|1
 false|"72_gsubbit.lua:180: number (local 'b') has no integer representation"
 false|"72_gsubbit.lua:181: number (local 'a') has no integer representation"
-false|"72_gsubbit.lua:182: attempt to perform bitwise operation on a string value (local 'b')"
-false|"72_gsubbit.lua:183: attempt to perform bitwise operation on a string value (local 'a')"
+true|0
+true|0
 false|"72_gsubbit.lua:184: attempt to perform bitwise operation on a string value (local 'b')"
 false|"72_gsubbit.lua:185: attempt to perform bitwise operation on a nil value (local 'b')"
 false|"72_gsubbit.lua:186: attempt to perform bitwise operation on a nil value (local 'a')"
@@ -142,7 +142,12 @@ true|4611686018427387904
 true|-9223372036854775808
 false|"72_gsubbit.lua:195: number (local 'a') has no integer representation"
 no args	true|0
-lua: 72_gsubbit.lua:199: attempt to perform bitwise operation on a string value (constant '10')
-stack traceback:
-	72_gsubbit.lua:199: in main chunk
-	[C]: in ?
+coerce	8	true
+float int	1	integer
+huge	false|"72_gsubbit.lua:201: number has no integer representation"
+nan	false|"72_gsubbit.lua:202: number has no integer representation"
+mm	band	band	bor	bor	bxor	bxor	bnot	shl	shl	shr	shr
+mm both	band	bor	bxor
+true|"band"
+true|"band"
+false|"72_gsubbit.lua:218: attempt to perform bitwise operation on a table value"

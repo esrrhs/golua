@@ -289,8 +289,8 @@
 [Received:success] { "[\"one\",null,null,\"sparse test\"]" }
 
 ==> Test [73] Encode sparse array as object: PASS
-[Input] { { [1] = "one", [5] = "sparse test" } }
-[Received:success] { "{\"1\":\"one\",\"5\":\"sparse test\"}" }
+[Input] { { [5] = "sparse test", [1] = "one" } }
+[Received:success] { "{\"5\":\"sparse test\",\"1\":\"one\"}" }
 
 ==> Test [74] Encode table with numeric string key as object: PASS
 [Input] { { ["2"] = "numeric string key test" } }

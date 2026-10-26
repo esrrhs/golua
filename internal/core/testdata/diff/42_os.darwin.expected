@@ -33,7 +33,7 @@ true|"1969"
 1234567890	day=13 hour=23 isdst=false min=31 month=2 sec=30 wday=6 yday=44 year=2009
 false
 true
-true|table: 0xADDR
+true|table: <ADDR>
 true|"z*t"
 true|"q*t"
 == time round trips ==
@@ -46,8 +46,8 @@ true|"q*t"
 0
 false|"bad argument #1 to 'os.time' (table expected, got number)"
 false|"bad argument #1 to 'os.time' (table expected, got string)"
-false|"field 'year' missing in date table"
-false|"field 'month' missing in date table"
+false|"field 'day' missing in date table"
+false|"field 'day' missing in date table"
 false|"field 'day' missing in date table"
 true|946728000
 false|"field 'hour' is not an integer"
@@ -92,9 +92,9 @@ true|true
 true|true|"exit"|0
 true|nil|"exit"|3
 true|nil|"exit"|1
-sh: 42: command not found
+sh: 1: 42: not found
 true|nil|"exit"|127
-sh: no_such_command_xyz: command not found
+sh: 1: no_such_command_xyz: not found
 true|nil|"exit"|127
 == clock and tmpname ==
 number

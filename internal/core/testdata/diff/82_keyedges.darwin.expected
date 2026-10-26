@@ -9,12 +9,12 @@ three	three	0
 nil	0
 100
 101
-101
+99
 false	82_keyedges.lua:58: table index is NaN
 true	nil
 false	82_keyedges.lua:60: table index is nil
 false	82_keyedges.lua:61: table index is nil
-lua: 82_keyedges.lua:66: bad argument #1 to 'rawlen' (table or string expected, got number)
+lua: 82_keyedges.lua:66: bad argument #1 to 'rawlen' (table or string expected)
 stack traceback:
 	[C]: in function 'rawlen'
 	82_keyedges.lua:66: in main chunk

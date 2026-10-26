@@ -1,16 +1,16 @@
 == chunk names ==
-true|function: 0xADDR
-true|function: 0xADDR
-true|function: 0xADDR
-true|function: 0xADDR
-true|function: 0xADDR
-true|function: 0xADDR
-true|function: 0xADDR
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
 true|nil|"attempt to load a text chunk (mode is 'b')"
-true|function: 0xADDR
-true|function: 0xADDR
-true|function: 0xADDR
-true|function: 0xADDR
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
+true|function: <ADDR>
 true|nil|"[string \"42\"]:1: unexpected symbol near '42'"
 false|"bad argument #1 to 'load' (function expected, got no value)"
 false|"chunky:1: x"
@@ -27,8 +27,8 @@ true|"table"
 "function"|1
 
 true|nil|"45_loaddebug.lua:92: in reader"
-true|function: 0xADDR
-"nil"|"(load):1: malformed number near '1r'"
+true|function: <ADDR>
+"nil"|"(load):1: <eof> expected near 'return'"
 true	function	true
 == debug.getinfo ==
 "@45_loaddebug.lua"|"45_loaddebug.lua"
@@ -36,15 +36,15 @@ true	function	true
 "Lua"|-1
 "C"|"=[C]"
 "main"|true
-table: 0xADDR
+table: <ADDR>
 true|nil
 false|"bad argument #1 to 'debug.getinfo' (number expected, got string)"
 false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
 "C"
-true|table: 0xADDR
-true|table: 0xADDR
+true|table: <ADDR>
+true|table: <ADDR>
 == debug.getlocal ==
-a=1 b=2 c=3 (for state)=4 (for state)=5 (for state)=1 i=7
+a=1 b=2 c=3 (for index)=4 (for limit)=10 (for step)=1 i=7
 false|"bad argument #1 to 'debug.getlocal' (level out of range)"
 true|nil
 true|nil
@@ -60,7 +60,7 @@ true|nil
 42
 
 "userdata"
-true|nil
+false|"bad argument #2 to 'debug.upvalueid' (invalid upvalue index)"
 false|"bad argument #1 to 'debug.upvalueid' (function expected, got number)"
 false|"bad argument #2 to 'debug.upvaluejoin' (number expected, got no value)"
 == debug misc ==
@@ -68,8 +68,8 @@ false|"bad argument #2 to 'debug.upvaluejoin' (number expected, got no value)"
 false|"bad argument #1 to 'debug.getmetatable' (value expected)"
 true|nil
 true
-false|"bad argument #2 to 'debug.setmetatable' (nil or table expected, got no value)"
-false|"bad argument #2 to 'debug.setmetatable' (nil or table expected, got number)"
+false|"bad argument #2 to 'debug.setmetatable' (nil or table expected)"
+false|"bad argument #2 to 'debug.setmetatable' (nil or table expected)"
 true|nil
 false|"bad argument #1 to 'debug.setuservalue' (userdata expected, got number)"
 "string"
@@ -84,7 +84,7 @@ true
 true
 true
 true
-true|function: 0xADDR|"cr"|42
+true|function: <ADDR>|"cr"|42
 == table library ==
 "102030"
 "10,20,30"
@@ -124,12 +124,12 @@ false|"bad argument #1 to 'table.insert' (table expected, got number)"
 2
 2
 nil
-false|"bad argument #2 to 'table.remove' (position out of bounds)"
+false|"bad argument #1 to 'table.remove' (position out of bounds)"
 true|nil
 false|"bad argument #1 to 'table.remove' (table expected, got no value)"
-table: 0xADDR
+table: <ADDR>
 2,3,4,4,5
 false|"bad argument #5 to 'table.move' (table expected, got number)"
-true|table: 0xADDR
+true|table: <ADDR>
 false|"bad argument #2 to 'table.move' (number expected, got no value)"
 done

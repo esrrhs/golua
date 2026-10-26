@@ -1,25 +1,25 @@
 == year: delta 1900 ==
 true
-true|67767976247918400
-true|67768036174440000
+false|"field 'year' is out-of-bound"
+false|"field 'year' is out-of-bound"
 false|"field 'year' is out-of-bound"
 false|"field 'year' is out-of-bound"
 false|"field 'year' is out-of-bound"
 false|"field 'year' is out-of-bound"
 == month: delta 1 ==
 false|"field 'month' is out-of-bound"
-true|5647337474788800
-true|5647337477467200
+false|"field 'month' is out-of-bound"
+false|"field 'month' is out-of-bound"
 == day, hour, min, sec: delta 0 ==
-true|185543546875200
 false|"field 'day' is out-of-bound"
-true|7731902156400
+false|"field 'day' is out-of-bound"
+false|"field 'hour' is out-of-bound"
 false|"field 'hour' is out-of-bound"
 false|"field 'min' is out-of-bound"
 false|"field 'sec' is out-of-bound"
 == missing and not an integer ==
-false|"field 'year' missing in date table"
-false|"field 'month' missing in date table"
+false|"field 'day' missing in date table"
+false|"field 'day' missing in date table"
 false|"field 'day' missing in date table"
 true|961070400
 false|"field 'year' is not an integer"

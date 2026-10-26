@@ -1087,6 +1087,7 @@ func strPadField(f strFmtSpec, s string) string {
 // one character -- where Go took the first three characters.
 func strFormatS(form, s string) string {
 	f := strParseFormat(form)
+	f.zero = false
 	if f.prec >= 0 && len(s) > f.prec {
 		s = s[:f.prec] /* the precision is a byte count */
 	}
@@ -1654,7 +1655,9 @@ func strFormat(L *State) int {
 			if len(form) == 2 {
 				b.AddChar(c)
 			} else {
-				b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", string([]byte{c})))
+				f := strParseFormat(form)
+				f.zero = false
+				b.AddString(strPadField(f, string([]byte{c})))
 			}
 		case 'd', 'i':
 			/* C fetches the argument first */
@@ -2152,16 +2155,17 @@ func strUnpack(L *State) int {
 		case strKchar:
 			L.PushString(data[pos : pos+size])
 		case strKstring:
-			/* C keeps this length in a 'size_t' and compares it as
-			   one: 'size_t len = (size_t)unpackint(...)', and then
-			   'len <= ld - pos - size'.  A length read as eight
-			   bytes of 0xff is 2^64-1 there and -1 here, and -1 is
-			   less than whatever is left of the string -- so the
-			   comparison was the wrong way round and the slice
-			   below it went out of range.  It is unsigned, which
-			   is what C's 'size_t' is. */
+			/* 5.3.4 lstrlib.c: size_t len = (size_t)unpackint(...);
+			   luaL_argcheck(L, pos + size + len <= ld, 2, "data string too short");
+			   lua_pushlstring(L, data + pos + size, len);
+			   When pos + size + len wraps around size_t (e.g. len == ~0),
+			   5.3.4 passes the argcheck and fails in luaS_newlstr with
+			   "memory allocation error: block too big" (len >= MAX_SIZE - sizeof(TString)). */
 			len2 := uint64(strUnpackInt(L, data, pos, h.islittle, size, 0))
-			L.ArgCheck(len2 <= uint64(ld-pos-size), 2, "data string too short")
+			L.ArgCheck(uint64(pos)+uint64(size)+len2 <= uint64(ld), 2, "data string too short")
+			if len2 > uint64(ld-pos-size) {
+				luaG_runerror(L, "memory allocation error: block too big")
+			}
 			L.PushString(data[pos+size : pos+size+int(len2)])
 			pos += int(len2) /* skip string */
 		case strKzstr:

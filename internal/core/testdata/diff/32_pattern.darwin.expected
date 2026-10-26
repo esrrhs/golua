@@ -73,7 +73,7 @@ hello,world
 a1,b2
 4	<><><><>
 4	<><><><>
-true|function: 0xADDR	true|function: 0xADDR
+true|function: <ADDR>	true|function: <ADDR>
 5|5	5|5
 2|2	nil
 4|3	1|0
@@ -84,6 +84,6 @@ false|"bad argument #2 to 'string.find' (string expected, got nil)"	2|2
 0|15|"ab-ab"
 true|""	false|"resulting string too large"
 true|"abc"	true|"42"
-"[\0-\127Â-ý][€-¿]*"	"h"
+"[\0-\127Â-ô][€-¿]*"	"h"
 5	h,Ã©,l,l,o
 5|nil|2
