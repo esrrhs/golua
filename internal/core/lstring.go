@@ -17,6 +17,7 @@ package core
 
 import (
 	"strings"
+	"unsafe"
 )
 
 // ---------------------------------------------------------------------
@@ -172,14 +173,31 @@ func luaS_createlngstrobj(L *State, s string) *TString {
 func internshrstr(L *State, str string) *TString {
 	g := L.g
 	tb := g.strt
-	h := luaS_hash(str, len(str), g.seed)
 	if ts := tb.get(str); ts != nil {
 		/* found! (C may changewhite if dead — Go GC, no resurrect) */
 		return ts
 	}
 	/* else must create a new string */
+	h := luaS_hash(str, len(str), g.seed)
 	ts := createstrobj(L, str, LUA_VSHRSTR, h)
 	tb.put(str, ts)
+	return ts
+}
+
+func internshrstrBytes(L *State, b []byte) *TString {
+	if len(b) == 0 {
+		return internshrstr(L, "")
+	}
+	g := L.g
+	tb := g.strt
+	tmp := unsafe.String(unsafe.SliceData(b), len(b))
+	if ts := tb.get(tmp); ts != nil {
+		return ts
+	}
+	s := string(b)
+	h := luaS_hash(s, len(s), g.seed)
+	ts := createstrobj(L, s, LUA_VSHRSTR, h)
+	tb.put(s, ts)
 	return ts
 }
 
@@ -193,6 +211,13 @@ func luaS_newlstr(L *State, s string) *TString {
 	}
 	/* long string: C createlngstrobj + memcpy; Go passes content in s */
 	return luaS_createlngstrobj(L, s)
+}
+
+func luaS_newlstrBytes(L *State, b []byte) *TString {
+	if len(b) <= LUAI_MAXSHORTLEN {
+		return internshrstrBytes(L, b)
+	}
+	return luaS_createlngstrobj(L, string(b))
 }
 
 /*

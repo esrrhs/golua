@@ -167,7 +167,8 @@ func utf8Char(L *State) int {
 	if n == 1 {     /* optimize common case of single char */
 		utf8PushChar(L, 1)
 	} else {
-		b := L.NewBuffer() /* luaL_Buffer; luaL_buffinit */
+		var b Buffer /* luaL_Buffer; luaL_buffinit */
+		L.BuffInit(&b)
 		for i := 1; i <= n; i++ {
 			utf8PushChar(L, i)
 			b.AddValue() /* luaL_addvalue */
