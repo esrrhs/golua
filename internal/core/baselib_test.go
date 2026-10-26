@@ -96,6 +96,7 @@ func TestBasePrint(t *testing.T) {
 }
 
 func TestBaseWarn(t *testing.T) {
+	t.Skip("Lua 5.3.4: no warn()")
 	L := baseNew(t)
 	baseRun(t, L, `warn("hello", " world")`)
 	baseRun(t, L, `warn("one")`)
@@ -445,19 +446,23 @@ func TestBaseCollectGarbage(t *testing.T) {
 	   ignored: always push integer 0, no side effects. */
 	for _, opt := range []string{
 		"stop", "restart", "step", "setpause", "setstepmul", "isrunning",
-		"generational", "incremental",
 	} {
 		baseCheck(t, L, `r = tostring(collectgarbage("`+opt+`"))`, "r", "0")
 	}
 	baseCheck(t, L, `r = tostring(collectgarbage("step", 20000))`, "r", "0")
 	baseCheck(t, L, `r = tostring(collectgarbage("setpause", 100))`, "r", "0")
 	baseCheck(t, L, `r = tostring(collectgarbage("setstepmul", 50))`, "r", "0")
+	/* stop does not toggle isrunning; still 0. */
 	baseCheck(t, L, `r = tostring(collectgarbage("stop"))`, "r", "0")
 	baseCheck(t, L, `r = tostring(collectgarbage("isrunning"))`, "r", "0")
 	/* Ignored options do not validate a second argument. */
 	baseCheck(t, L, `r = tostring(collectgarbage("step", "x"))`, "r", "0")
 	if msg := baseRunErr(t, `collectgarbage("foo")`); !strings.Contains(msg, "invalid option") {
 		t.Errorf("collectgarbage('foo') = %q", msg)
+	}
+	/* 5.3.4 has no mode names in collectgarbage. */
+	if msg := baseRunErr(t, `collectgarbage("generational")`); !strings.Contains(msg, "invalid option") {
+		t.Errorf("collectgarbage('generational') = %q", msg)
 	}
 }
 
@@ -495,7 +500,7 @@ func TestBaseCollectGarbageCollects(t *testing.T) {
 func TestBaseGlobals(t *testing.T) {
 	L := baseNew(t)
 	baseCheck(t, L, `r = tostring(_G._G == _G)`, "r", "true")
-	baseCheck(t, L, `r = _VERSION`, "r", "Lua 5.4")
+	baseCheck(t, L, `r = _VERSION`, "r", "Lua 5.3")
 	baseCheck(t, L, `r = tostring(type(_G))`, "r", "table")
 	/* the library functions are visible as globals */
 	baseCheck(t, L, `r = tostring(type(print)) .. tostring(type(pairs)) ..

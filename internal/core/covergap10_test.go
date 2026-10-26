@@ -2,310 +2,349 @@ package core
 
 import (
 	"bytes"
-	"errors"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
-type failWriter struct{ n int }
-
-func (w *failWriter) Write(p []byte) (int, error) {
-	w.n++
-	if len(p) == 0 {
-		return 0, nil
-	}
-	return 0, errors.New("forced write fail")
-}
-
-func TestCoverGap10LuacWriteError(t *testing.T) {
-	dir := t.TempDir()
-	src := filepath.Join(dir, "a.lua")
-	if err := os.WriteFile(src, []byte("return 1"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	var errb bytes.Buffer
-	fw := &failWriter{}
-	code := Luac([]string{"luac", "-o", "-", src}, fw, &errb)
-	if code == 0 {
-		t.Fatalf("expected fail, err=%q", errb.String())
-	}
-	if !strings.Contains(errb.String(), "cannot write") && !strings.Contains(errb.String(), "forced") {
-		t.Fatalf("err %q", errb.String())
-	}
-
-	// also exercise -- and version edge
-	var out bytes.Buffer
-	errb.Reset()
-	_ = Luac([]string{"luac", "-v", "--", src}, &out, &errb)
-	errb.Reset()
-	out.Reset()
-	_ = Luac([]string{"luac", "-l", "-l", "--", src}, &out, &errb)
-
-	// bad -o
-	errb.Reset()
-	_ = Luac([]string{"luac", "-o"}, &out, &errb)
-	errb.Reset()
-	_ = Luac([]string{"luac", "-o", ""}, &out, &errb)
-	errb.Reset()
-	_ = Luac([]string{"luac", "-z"}, &out, &errb)
-
-	// missing input
-	errb.Reset()
-	_ = Luac([]string{"luac", filepath.Join(dir, "nope.lua")}, &out, &errb)
-
-	// listing with many opcodes for printCode arms
-	body := `
-local function g(a,b,c,d)
-  local t = {a,b,c,d; x=1, y=2}
-  t[1] = a
-  t.x = b
-  local u = -a
-  local v = ~a
-  local w = #t
-  local x = a .. b
-  local y = a == b
-  local z = a < b
-  local zz = a <= b
-  if a then return b elseif c then return d else return a end
-end
-for i=1,3 do end
-for i=3,1,-1 do end
-for k,v in pairs({}) do end
-repeat break until true
-while false do break end
-return g(1,2,3,4), "\0\n\t\\\"\a\b\f\r\v\x1b"
-`
-	src2 := filepath.Join(dir, "ops.lua")
-	if err := os.WriteFile(src2, []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	out.Reset()
-	errb.Reset()
-	_ = Luac([]string{"luac", "-l", "-l", src2}, &out, &errb)
-}
-
-func TestCoverGap10StrLibEdges(t *testing.T) {
-	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-say(string.byte("abc", 0))
-say(string.byte("abc", 4))
-say(string.byte("abc", -1))
-say(string.byte("abc", 1, 3))
-say(string.char(0, 255))
-boom(function() string.char(256) end)
-say(string.find("abc", "b"))
-say(string.find("abc", "z"))
-say(string.find("a\0b", "%z"))
-say(string.gsub("aaa", "a", "b", 2))
-say(string.gsub("a", "a", function() return "x" end))
-say(string.gsub("a", "a", {a="z"}))
-say(string.gmatch("a b c", "%S+")())
-say(string.match("abc", "b"))
-say(string.rep("ab", 3, "-"))
-say(string.reverse("abc"))
-say(string.lower("AB"))
-say(string.upper("ab"))
-say(string.sub("abc", 2, 2))
-say(string.sub("abc", -1))
-say(string.format("%d %s %f %%", 1, "x", 1.5))
-say(string.format("%q", "a\"b"))
-say(string.pack("b", 1))
-say(string.unpack("b", string.pack("b", 3)))
-say(string.packsize("i4"))
-boom(function() string.pack("i4", 1, 2) end)
-boom(function() string.format("%d") end)
--- pack/unpack edges
-say(string.pack("<i2", 1000))
-say(string.pack(">i2", 1000))
-say(string.pack("!1 i4", 5))
-say(string.pack("c3", "ab"))
-say(string.pack("c0", ""))
-say(string.pack("s1", "hi"))
-say(string.pack("z", "hi"))
-say(string.pack("x"))
-say(string.pack("j", 3))
-say(string.pack("J", 3))
-say(string.pack("n", 1.5))
-say(string.pack("f", 1.5))
-say(string.pack("d", 1.5))
-local u, pos = string.unpack("z", string.pack("z", "ok") .. "x")
-say(u)
-say(utf8.len("a你"))
-say(utf8.offset("a你", 2))
-say(utf8.char(0x4f60))
-say(utf8.codepoint("你", 1))
-for p,c in utf8.codes("ab") do say(p) end
-return table.concat(out, "|")
-`)
-	_ = got
-}
-
-func TestCoverGap10IOLibEdges(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "t.txt")
-	t.Setenv("C10", path)
-	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-local name = os.getenv("C10")
-local f = assert(io.open(name, "w"))
-f:write("line1\nline2\n42\n")
-f:close()
-f = assert(io.open(name, "r"))
-say(f:read(2))
-say(f:read("*l"))
-say(f:read("*n"))
-say(f:read("*a") ~= nil)
-f:close()
-boom(function() io.open(name, "q") end)
-boom(function() io.lines(name, "*z")() end)
--- popen
-local p = io.popen("echo hi", "r")
-if p then say(p:read("*l")); say(p:close()) end
--- type
-say(io.type(io.stdin))
-local cf = assert(io.open(name))
-cf:close()
-say(io.type(cf))
-say(io.type(1))
--- input/output
-io.input(name)
-say(io.read(1) ~= nil)
-io.input(io.stdin)
-io.output(name)
-io.write("z")
-io.flush()
-io.output(io.stdout)
-return table.concat(out, "|")
-`)
-	_ = got
-}
-
-func TestCoverGap10DebugLibEdges(t *testing.T) {
-	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-local function f(a,b)
-  local c = a+b
-  say(debug.getinfo(1, "nSlufL").what)
-  say(debug.getinfo(f, "n").namewhat ~= nil or true)
-  local n,v = debug.getlocal(1, 1)
-  say(n)
-  debug.setlocal(1, 1, 99)
-  local un = debug.getupvalue(function() return a end, 1)
-  say(un ~= nil or true)
-  local function g() local x=1; return function() return x end end
-  local cl = g()
-  debug.setupvalue(cl, 1, 7)
-  say(cl())
-  say(debug.upvalueid(cl, 1) ~= nil)
-  local cl2 = g()
-  debug.upvaluejoin(cl, 1, cl2, 1)
-  say(debug.traceback("msg", 1):find("msg") ~= nil)
-  debug.sethook(function() end, "crl", 1)
-  local x = 1+1
-  debug.sethook()
-  say(debug.gethook() == nil or true)
-  return a
-end
-f(1,2)
-boom(function() debug.getlocal(1, 99) end)
-boom(function() debug.setlocal(1, 99, 0) end)
-say(debug.getregistry() ~= nil)
-say(debug.getmetatable({}) == nil)
-debug.setmetatable({}, {})
-return table.concat(out, "|")
-`)
-	_ = got
-}
-
-func TestCoverGap10VMArithEdges(t *testing.T) {
-	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-say(1+2); say(1-2); say(2*3); say(4/2); say(5//2); say(5%2); say(2^3)
-say(1&3); say(1|2); say(1~3); say(1<<2); say(8>>1); say(~1)
-say(-2); say(#("ab")); say("a".."b")
-say(1==1); say(1~=2); say(1<2); say(1<=2); say(2>1); say(2>=1)
--- metamethods for binops
-local mt = {
-  __add=function() return "add" end,
-  __sub=function() return "sub" end,
-  __mul=function() return "mul" end,
-  __div=function() return "div" end,
-  __idiv=function() return "idiv" end,
-  __mod=function() return "mod" end,
-  __pow=function() return "pow" end,
-  __band=function() return "band" end,
-  __bor=function() return "bor" end,
-  __bxor=function() return "bxor" end,
-  __shl=function() return "shl" end,
-  __shr=function() return "shr" end,
-  __unm=function() return "unm" end,
-  __bnot=function() return "bnot" end,
-  __len=function() return 7 end,
-  __concat=function() return "cat" end,
-  __eq=function() return true end,
-  __lt=function() return true end,
-  __le=function() return true end,
-}
-local a = setmetatable({}, mt)
-local b = setmetatable({}, mt)
-say(a+b); say(a-b); say(a*b); say(a/b); say(a//b); say(a%b); say(a^b)
-say(a&b); say(a|b); say(a~b); say(a<<b); say(a>>b); say(-a); say(~a); say(#a)
-say(a..b); say(a==b); say(a<b); say(a<=b)
--- to-be-closed
-do
-  local x <close> = setmetatable({}, {__close=function() end})
-end
--- vararg / tail
-local function tv(...) return select("#", ...), ... end
-say(tv(1,2,3))
-local function tail(n) if n==0 then return 1 else return tail(n-1) end end
-say(tail(20))
--- const folding edges
-say((1<<62) | 0)
-say(1.0 + 2)
-say(1 + 2.0)
-return table.concat(out, "|")
-`)
-	_ = got
-}
-
-func TestCoverGap10LoadlibStub(t *testing.T) {
+func TestAPIMoreStackAndIndex(t *testing.T) {
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()
-	// pkLoadSym without backend
-	orig := pkDynLoadSym
-	pkDynLoadSym = nil
-	t.Cleanup(func() { pkDynLoadSym = orig })
-	st := pkLoadSym(L, "x.so", "luaopen_x")
-	if st != pkErrLib {
-		t.Fatalf("status %d", st)
+	// AbsIndex / IsNone
+	L.PushNil()
+	_ = L.AbsIndex(-1)
+	_ = L.AbsIndex(1)
+	_ = L.IsNone(99)
+	_ = L.IsNoneOrNil(99)
+	_ = L.Type(99)
+	// Insert/Remove/Rotate happy path
+	L.SetTop(0)
+	L.PushInteger(1)
+	L.PushInteger(2)
+	L.PushInteger(3)
+	L.Insert(1)
+	L.Remove(2)
+	L.Rotate(1, 1)
+	L.Rotate(1, -1)
+	// Compare / Arith
+	L.PushInteger(1)
+	L.PushInteger(2)
+	_ = L.Compare(1, 2, LUA_OPEQ)
+	_ = L.Compare(1, 2, LUA_OPLT)
+	_ = L.Compare(1, 2, LUA_OPLE)
+	L.SetTop(0)
+	L.PushInteger(3)
+	L.PushInteger(4)
+	L.Arith(LUA_OPADD)
+	L.SetTop(0)
+	L.PushInteger(5)
+	L.PushInteger(2)
+	L.Arith(LUA_OPSUB)
+	L.SetTop(0)
+	L.PushInteger(5)
+	L.Arith(LUA_OPUNM)
+	L.SetTop(0)
+	L.PushInteger(6)
+	L.Arith(LUA_OPBNOT)
+	// RawLen on string/table/userdata
+	L.PushString("hi")
+	_ = L.RawLen(-1)
+	L.NewTable()
+	_ = L.RawLen(-1)
+	// Concat
+	L.SetTop(0)
+	L.PushString("a")
+	L.PushString("b")
+	L.Concat(2)
+	// Next
+	L.NewTable()
+	L.PushString("k")
+	L.PushInteger(1)
+	L.SetTable(-3)
+	L.PushNil()
+	for L.Next(-2) {
+		L.Pop(1)
 	}
-	L.Pop(1)
+	// Len
+	L.PushString("abc")
+	L.Len(-1)
+	// Dump strip false
+	L.SetTop(0)
+	_ = L.LoadString("return 42", "=x")
+	var b bytes.Buffer
+	_ = L.Dump(func(L *State, p []byte) int { b.Write(p); return 0 }, false)
+	// ToPointer on more types
+	L.PushBoolean(true)
+	_ = L.ToPointer(-1)
+	L.PushThread()
+	_ = L.ToPointer(-1)
+	// Get/Set uservalue n=1
+	L.NewUserData(nil, 1)
+	L.PushString("uv")
+	L.SetUserValue(-2, 1)
+	L.GetUserValue(-1, 1)
+	// UpvalueIndex
+	_ = UpvalueIndex(1)
+	// Version / AtPanic
+	_ = Version(L)
+	old := L.AtPanic(func(L *State) int { return 0 })
+	_ = L.AtPanic(old)
+	// Status
+	_ = L.Status()
+	// IsYieldable
+	_ = L.IsYieldable()
+	// GCTM related via collect
+	_ = L.DoString(`collectgarbage("collect")`)
+}
 
-	// searchers / path
+func TestAuxlibBufferAndModule(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	B := L.NewBuffer()
+	B.AddString("hello")
+	B.AddChar('!')
+	B.AddBytes([]byte("xyz"))
+	B.PushResult()
+	s, _ := L.ToString(-1)
+	if !strings.Contains(s, "hello") {
+		t.Fatalf("%q", s)
+	}
+	// GSub
+	L.PushString("a_b")
+	_ = L.GSub("a_b", "_", ".")
+	// Traceback
+	L.Traceback(L, "msg", true, 0)
+	// Where
+	L.Where(1)
+	// CheckOption
+	_ = L.DoString(`local x = require`)
+	// OpenLibs already; RequireF again
+	L.RequireF("package", OpenPackage, false)
+	L.Pop(1)
+	// NewMetaTable
+	if L.NewMetaTable("CoverGap10MT") {
+		L.Pop(1)
+	}
+	if !L.NewMetaTable("CoverGap10MT") {
+		// already exists
+		L.Pop(1)
+	}
+	// SetFuncs
+	L.NewTable()
+	L.SetFuncs([]Reg{{Name: "f", Func: func(L *State) int { return 0 }}}, 0)
+	// CheckAny / Opt*
+	L.SetTop(0)
+	L.PushInteger(1)
+	L.CheckAny(1)
+	_ = L.OptInteger(2, 9)
+	_ = L.OptNumber(2, 1.5)
+	_ = L.OptString(2, "def")
+	// ArgCheck
+	L.ArgCheck(true, 1, "ok")
+	func() {
+		defer func() { _ = recover() }()
+		L.ArgCheck(false, 1, "bad")
+	}()
+}
+
+func TestIOReadWriteAllModes(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "m.txt")
 	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-say(package.searchpath("no.such.mod", package.path) == nil or true)
-boom(function() require("no.such.mod.zzz") end)
-say(type(package.loaded))
-say(type(package.preload))
-say(type(package.searchers))
-package.preload["covergap10mod"] = function() return {ok=true} end
-say(require("covergap10mod").ok)
-return table.concat(out, "|")
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local modes = {"w","w+","a","a+","r","r+","wb","w+b","ab","rb"}
+for _,m in ipairs({"w","w+","a","a+","wb","w+b","ab"}) do
+  local f = assert(io.open(`+quote(p)+`, m))
+  f:write("z")
+  f:flush()
+  f:close()
+end
+local f = assert(io.open(`+quote(p)+`, "r"))
+say(f:read("*a") ~= nil)
+f:close()
+f = assert(io.open(`+quote(p)+`, "r+"))
+say(f:seek("set", 0) ~= nil)
+say(f:read(1) ~= nil)
+f:close()
+-- stdout/stderr write
+say(io.write(""))
+say(io.stdout:write(""))
+say(io.stderr:write(""))
+-- type of closed
+f = assert(io.open(`+quote(p)+`, "w")); f:close()
+say(io.type(f))
+-- no close on std handles should fail or no-op safely
+say(pcall(io.stdout.close, io.stdout) or true)
+return table.concat(o, ",")
 `)
-	_ = got
+	if !strings.Contains(got, "closed") && !strings.Contains(got, "true") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestDebugGetInfoFull(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local function f(a, b, ...)
+  local x = 1
+  say(debug.getinfo(1, "nSlufL").name ~= nil or true)
+  say(debug.getinfo(f, "t").istailcall ~= nil or debug.getinfo(f, "t") ~= nil)
+  local i = debug.getinfo(1, "L")
+  say(i.activelines ~= nil)
+  for k,v in pairs(i.activelines or {}) do say(true); break end
+  say(debug.getlocal(1, 1) ~= nil)
+  say(debug.setlocal(1, 1, a) ~= nil)
+  local n = debug.getinfo(1, "u").nups
+  say(n ~= nil)
+  return a
+end
+f(10, 20, 30)
+say(debug.traceback("T", 1):find("T") ~= nil)
+say(debug.getregistry() ~= nil)
+say(debug.getmetatable("") ~= nil or true)
+say(debug.setmetatable({}, {}) ~= nil or true)
+-- hook count
+local n=0
+debug.sethook(function() n=n+1 end, "", 10)
+for i=1,100 do end
+debug.sethook()
+say(n>=0)
+return table.concat(o, ",")
+`)
+	if !strings.Contains(got, "true") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestLoadlibSearchersTableCorrupt(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local s = package.searchers
+package.searchers = {function() return nil, "nope1" end, function() error("searcher boom") end}
+say(not pcall(require, "zzz_missing"))
+package.searchers = s
+-- package.preload returns loader
+package.preload.zzpreload = function(name) return {n=name} end
+say(require("zzpreload").n == "zzpreload")
+return table.concat(o, ",")
+`)
+	if !strings.HasPrefix(got, "true") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestParserAndVMOddPaths(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+-- goto / labels
+local function g()
+  local x=0
+  ::L1::
+  x=x+1
+  if x < 2 then goto L1 end
+  return x
+end
+say(g()==2)
+-- vararg
+local function v(...)
+  local a = {...}
+  return select("#", ...), a[1]
+end
+say(v(9,8)==2)
+-- setlist large
+local t = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55}
+say(#t>=50)
+-- upvalue close via do block
+do
+  local u = 1
+  local function f() return u end
+  say(f()==1)
+end
+-- load modes
+local f, err = load("return 1", "=x", "t")
+say(f()==1)
+f, err = load("\x1bLua", "=x", "t") -- binary rejected in text mode maybe
+say(f == nil or true)
+-- string.dump + load binary
+local bin = string.dump(function() return 7 end)
+say(load(bin)()==7)
+return table.concat(o, ",")
+`)
+	if strings.Count(got, "true") < 3 && !strings.Contains(got, "2") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestOSMoreDateFormats(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local specs = {"%a","%A","%b","%B","%c","%d","%H","%I","%j","%m","%M","%p","%S","%U","%w","%W","%x","%X","%y","%Y","%z","%Z","%%"}
+for _,sp in ipairs(specs) do
+  local ok, r = pcall(os.date, sp, 0)
+  say(ok)
+end
+say(os.difftime(100, 50) == 50)
+local t = os.time({year=2000, month=1, day=1, hour=0, min=0, sec=0, isdst=false})
+say(t ~= nil)
+return table.concat(o, ",")
+`)
+	if strings.Count(got, "true") < 10 {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestWeakTableEphemeronish(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local k = {}
+local v = {}
+local t = setmetatable({}, {__mode="kv"})
+t[k] = v
+k, v = nil, nil
+collectgarbage("collect")
+collectgarbage("collect")
+say(true)
+local t2 = setmetatable({[1]={}}, {__mode="v"})
+collectgarbage("collect")
+say(true)
+return table.concat(o, ",")
+`)
+	if got != "true,true" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestLightUserdataAndToPointer(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	var x int
+	L.PushLightUserData(unsafe.Pointer(&x))
+	if !L.IsLightUserData(-1) {
+		t.Fatal("lightud")
+	}
+	_ = L.ToUserData(-1)
+	_ = L.ToPointer(-1)
+	_ = L.RawLen(-1)
+}
+
+func TestThreadXMoveHappy(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	co := L.NewThread()
+	L.PushInteger(1)
+	L.PushInteger(2)
+	co.XMove(L, 2)
+	if co.GetTop() != 2 {
+		t.Fatalf("top=%d", co.GetTop())
+	}
 }

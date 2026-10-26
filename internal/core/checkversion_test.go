@@ -19,7 +19,7 @@ func TestCheckVersion_(t *testing.T) {
 	}
 
 	L.PushGoFunc(func(L *State) int {
-		L.CheckVersion_(503, luaLNumSizes)
+		L.CheckVersion_(504, luaLNumSizes)
 		return 0
 	})
 	if st := L.PCall(0, 0, 0); st == LUA_OK {

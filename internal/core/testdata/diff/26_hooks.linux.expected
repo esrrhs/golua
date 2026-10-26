@@ -1,0 +1,15 @@
+false|"26_hooks.lua:39: boom"
+false	table	7
+false|"attempt to yield from outside a coroutine"
+false|"attempt to yield across a C-call boundary"
+dead
+false|"26_hooks.lua:62: inner"
+dead
+true	6
+true	true
+true|6
+true
+false|"26_hooks.lua:94: x"
+nil		0
+nil		0
+done

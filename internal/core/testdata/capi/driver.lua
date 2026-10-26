@@ -1,4 +1,4 @@
--- The driver for capi.c.  Run under PUC-Lua 5.4.9 to produce
+-- The driver for capi.c.  Run under PUC-Lua 5.3.4 to produce
 -- expected.txt, and inside this port to produce the same lines.
 -- Everything is printed with 'print', which the harness replaces by a
 -- collector, so a line is just the tab-joined tostring of its results.
@@ -34,27 +34,6 @@ print("argerr", pcall(capi.argerr))
 print("typeerr", pcall(capi.typeerr, 1))
 print("where", capi.where())
 
--- G. userdata with user values
-print("muv", capi.muv(3, "u1", "u2", "u3"))
-print("muv0", capi.muv(0))
-
--- H. to-be-closed from C
-do
-  local closed = false
-  local obj = setmetatable({}, {__close = function() closed = true end})
-  local v1, v2 = capi.toclose(obj)
-  print("toclose", closed, v2, type(v1))
-end
-do
-  local order = {}
-  local obj = setmetatable({}, {__close = function() order[#order + 1] = "c" end})
-  local a, b = capi.closeslot(obj)
-  order[#order + 1] = "b"
-  print("closeslot", tostring(a), b, table.concat(order, ","))
-end
-
--- I. warnings (they go to stderr; only check that it returns)
-print("warn", capi.warn())
 
 -- J. hooks and the debug API
 print("hook", capi.hook(function() return 1 end))
@@ -84,7 +63,6 @@ function capi_cobody2()
 end
 print("coro", capi.coro())
 print("xmove", capi.xmove())
-print("reset", capi.reset())
 
 -- L. buffers
 print("buf", capi.buf())

@@ -742,7 +742,7 @@ func TestTableInProcess(t *testing.T) {
 		assert(table.remove(t, 2) == nil and #t == 1)
 		ok, e = pcall(table.remove, t, 3)
 		assert(not ok and e ==
-		  "bad argument #2 to 'table.remove' (position out of bounds)", e)
+		  "bad argument #1 to 'table.remove' (position out of bounds)", e)
 		t = {10,20,30}
 		assert(table.remove(t, 1, 99) == 10 and #t == 2)
 		assert(t[1] == 20 and t[2] == 30, "what a third argument leaves")
@@ -761,7 +761,7 @@ func TestTableInProcess(t *testing.T) {
 		assert(ok and e == nil, "and so it is for 'remove'")
 		ok, e = pcall(table.remove, {1,2,3,4,5}, 7)
 		assert(not ok and e ==
-		  "bad argument #2 to 'table.remove' (position out of bounds)", e)
+		  "bad argument #1 to 'table.remove' (position out of bounds)", e)
 		ok, e = pcall(table.insert, {}, 1, 1, 1)
 		assert(not ok and e == "wrong number of arguments to 'insert'", e)
 

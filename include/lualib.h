@@ -9,7 +9,7 @@
 ** exports: luaL_openlibs and the luaopen_* of the libraries that are
 ** written in C and may be required by hand.
 **
-** Types and constants follow PUC-Lua 5.4 so that source written for it
+** Types and constants follow PUC-Lua 5.3 so that source written for it
 ** compiles unchanged.  See the notice at the end of this file.
 */
 #ifndef lualib_h
@@ -41,6 +41,9 @@ LUAMOD_API int (luaopen_string) (lua_State *L);
 #define LUA_UTF8LIBNAME "utf8"
 LUAMOD_API int (luaopen_utf8) (lua_State *L);
 
+#define LUA_BITLIBNAME  "bit32"
+LUAMOD_API int (luaopen_bit32) (lua_State *L);
+
 #define LUA_MATHLIBNAME "math"
 LUAMOD_API int (luaopen_math) (lua_State *L);
 
@@ -55,8 +58,13 @@ LUAMOD_API int (luaopen_package) (lua_State *L);
 LUALIB_API void (luaL_openlibs) (lua_State *L);
 
 
+#if !defined(lua_assert)
+#define lua_assert(x)	((void)0)
+#endif
+
+
 /*
-** Copyright (C) 1994-2026 Lua.org, PUC-Rio.
+** Copyright (C) 1994-2017 Lua.org, PUC-Rio.
 **
 ** Permission is hereby granted, free of charge, to any person obtaining
 ** a copy of this software and associated documentation files (the

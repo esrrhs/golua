@@ -1,0 +1,30 @@
+start	1	2
+true	3
+suspended
+got	10
+true	done	10
+dead
+false	cannot resume dead coroutine
+1
+4
+9
+end
+false	cannot resume dead coroutine
+true	from-pcall
+true	1
+true	2
+true	mm:foo
+v	val
+true	val
+true	iter:1
+loop	2	10
+true	iter:2
+loop	3	20
+true	iter:3
+true	iterdone
+false	11_coroutine.lua:64: boom
+dead
+lua: 11_coroutine.lua:68: attempt to call a nil value (field 'close')
+stack traceback:
+	11_coroutine.lua:68: in main chunk
+	[C]: in ?

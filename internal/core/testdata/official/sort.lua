@@ -1,4 +1,4 @@
--- $Id: testes/sort.lua $
+-- $Id: sort.lua,v 1.38 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
 
 print "testing (parts of) table library"
@@ -20,7 +20,7 @@ end
 checkerror("wrong number of arguments", table.insert, {}, 2, 3, 4)
 
 local x,y,z,a,n
-a = {}; local lim = _soft and 200 or 2000
+a = {}; lim = _soft and 200 or 2000
 for i=1, lim do a[i]=i end
 assert(select(lim, unpack(a)) == lim and select('#', unpack(a)) == lim)
 x = unpack(a)
@@ -79,7 +79,7 @@ end
 print "testing pack"
 
 a = table.pack()
-assert(a[1] == undef and a.n == 0) 
+assert(a[1] == nil and a.n == 0) 
 
 a = table.pack(table)
 assert(a[1] == table and a.n == 1)
@@ -222,7 +222,7 @@ a = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep",
 table.sort(a)
 check(a)
 
-local function perm (s, n)
+function perm (s, n)
   n = n or #s
   if n == 1 then
     local t = {unpack(s)}
@@ -248,7 +248,7 @@ perm{1,2,3,3,5}
 perm{1,2,3,4,5,6}
 perm{2,2,3,3,5,6}
 
-local function timesort (a, n, func, msg, pre)
+function timesort (a, n, func, msg, pre)
   local x = os.clock()
   table.sort(a, func)
   x = (os.clock() - x) * 1000
@@ -257,7 +257,7 @@ local function timesort (a, n, func, msg, pre)
   check(a, func)
 end
 
-local limit = 50000
+limit = 50000
 if _soft then limit = 5000 end
 
 a = {}
@@ -274,7 +274,7 @@ for i=1,limit do
   a[i] = math.random()
 end
 
-local x = os.clock(); local i = 0
+x = os.clock(); i=0
 table.sort(a, function(x,y) i=i+1; return y<x end)
 x = (os.clock() - x) * 1000
 print(string.format("Invert-sorting other %d elements in %.2f msec., with %i comparisons",
@@ -289,19 +289,18 @@ timesort(a, limit,  function(x,y) return nil end, "equal")
 
 for i,v in pairs(a) do assert(v == false) end
 
-AA = {"\xE1lo", "\0first :-)", "alo", "then this one", "45", "and a new"}
-table.sort(AA)
-check(AA)
+A = {"álo", "\0first :-)", "alo", "then this one", "45", "and a new"}
+table.sort(A)
+check(A)
 
-table.sort(AA, function (x, y)
-          load(string.format("AA[%q] = ''", x), "")()
+table.sort(A, function (x, y)
+          load(string.format("A[%q] = ''", x), "")()
           collectgarbage()
           return x<y
         end)
 
-_G.AA = nil
 
-local tt = {__lt = function (a,b) return a.val < b.val end}
+tt = {__lt = function (a,b) return a.val < b.val end}
 a = {}
 for i=1,10 do  a[i] = {val=math.random(100)}; setmetatable(a[i], tt); end
 table.sort(a)

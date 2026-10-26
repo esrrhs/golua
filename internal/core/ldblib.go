@@ -1,12 +1,15 @@
-// Translation of ldblib.c (PUC-Lua 5.4.9): the debug library.
+// Translation of ldblib.c (PUC-Lua 5.3.4): the debug library.
 //
 // C calls the debug API of ldebug.c / lapi.c (lua_getstack, lua_getinfo,
-// lua_getlocal, lua_getupvalue, ...); counterparts are translated here
-// (dbGetStack, dbGetInfo, dbGetLocal, dbGetUpvalue, ...) on top of
-// currentLine, luaG_getfuncline, luaF_getlocalname, luaO_chunkid,
-// upvalValue, getFuncName. Upvalue bodies delegate to lapi
-// (GetUpvalue/SetUpvalue/UpvalueId). FLAG intentional diffs: see
-// /workspace/mafang/golua-align/reports2/ldblib.md.
+// lua_getlocal, ...); counterparts are translated here (dbGetStack,
+// dbGetInfo, ...) on top of currentLine, luaG_getfuncline,
+// luaF_getlocalname, luaO_chunkid, upvalValue.
+//
+// 5.3.4 surface: 16 dblib entries (no setcstacklimit); getinfo default
+// "flnStu"; no option 'r' / transfer info. Hooks, name/namewhat, and
+// debug.debug are implemented. collectvalidlines / get|setupvalue use
+// Proto sizelineinfo / sizeupvalues (not len(slice)). See
+// align-wip-534-review/ldblib/NOTES.md for intentional diffs.
 package core
 
 import (
@@ -17,8 +20,9 @@ import (
 	"unsafe"
 )
 
-// dbHookKey is the registry key of the hook table (HOOKKEY).
-const dbHookKey = "_HOOKKEY"
+// dbHookKey's address is the registry key of the hook table (C: static const int HOOKKEY = 0;
+// only the address matters; used with RawGetP/RawSetP like lua_rawgetp/rawsetp).
+var dbHookKey int
 
 // hook masks (lua.h)
 const (
@@ -51,8 +55,6 @@ type dbAr struct {
 	isvararg        bool
 	name            string
 	namewhat        string
-	ftransfer       int
-	ntransfer       int
 	istailcall      bool
 	ci              *CallInfo
 }
@@ -105,23 +107,31 @@ func dbPush(L *State, v *Value) {
 	L.top++
 }
 
-// dbFindLocal is luaG_findlocal with a stack-slot return (C: StkId *pos).
-// Control flow matches ldebug.c; vararg names/slots via findvararg;
-// PC via currentpc. ci.next nil-guard is defensive (C assumes ci->next
-// when ci != L->ci). Name-only callers use ldebug.luaG_findlocal.
+// dbFindLocal is luaG_findlocal: it returns the name and the stack slot
+// of the local variable at index 'n' (1-based) of a frame. An empty name
+// means "no such variable".
+//
+// Uses currentpc = savedpc-1 like C currentpc(ci). ci.next nil-guard is defensive
+// (C assumes ci->next when ci != L->ci).
 func dbFindLocal(L *State, ci *CallInfo, n int) (string, int) {
+	/* 5.3.4 findlocal/findvararg: varargs sit between func and base. */
+	if isLua(ci) && n < 0 { /* access to vararg values? */
+		cl := clLvalue(&L.stack[ci.funcIdx])
+		nparams := int(cl.p.numparams)
+		vn := -n /* 1-based vararg index */
+		if vn >= (ci.base-ci.funcIdx)-nparams {
+			return "", 0 /* no such vararg */
+		}
+		return "(*vararg)", ci.funcIdx + nparams + vn
+	}
 	base := ci.funcIdx + 1
+	if isLua(ci) {
+		base = ci.base
+	}
 	var name string
 	if isLua(ci) {
-		if n < 0 { /* access to vararg values? */
-			var pos int
-			name = findvararg(L, ci, n, &pos)
-			if name == "" {
-				return "", 0 /* no such vararg */
-			}
-			return name, pos
-		}
-		name = luaF_getlocalname(clLvalue(&L.stack[ci.funcIdx]).p, n, currentpc(ci))
+		cl := clLvalue(&L.stack[ci.funcIdx])
+		name = luaF_getlocalname(cl.p, n, ci.savedpc-1)
 	}
 	if name == "" { /* no 'standard' name? */
 		limit := L.top
@@ -129,31 +139,16 @@ func dbFindLocal(L *State, ci *CallInfo, n int) (string, int) {
 			limit = ci.next.funcIdx
 		}
 		if limit-base >= n && n > 0 { /* is 'n' inside 'ci' stack? */
-			/* generic name for any valid slot */
-			if isLua(ci) {
-				name = "(temporary)"
-			} else {
-				name = "(C temporary)"
-			}
-		} else {
-			return "", 0 /* no name */
+			return "(*temporary)", base + (n - 1)
 		}
+		return "", 0 /* no name */
 	}
-	return name, base + (n - 1) /* C: if (pos) *pos = base + (n - 1) */
+	return name, base + (n - 1)
 }
 
 // dbGetLocal is lua_getlocal(L, ar, n): it pushes the value of the local
 // variable and returns its name ("" when there is no such variable).
-// ar == nil is the non-active function path (name only; value not pushed).
 func dbGetLocal(L *State, ar *dbAr, n int) string {
-	if ar == nil { /* information about non-active function? */
-		fv := &L.stack[L.top-1]
-		if !ttisLclosure(fv) { /* not a Lua function? */
-			return ""
-		}
-		/* consider live variables at function start (parameters) */
-		return luaF_getlocalname(clLvalue(fv).p, n, 0)
-	}
 	ci := ar.ci
 	name, slot := dbFindLocal(L, ci, n)
 	if name == "" {
@@ -198,17 +193,14 @@ func dbFuncInfo(ar *dbAr, fv *Value) {
 			ar.what = "Lua"
 		}
 	}
-	/* FLAG: C passes srclen into luaO_chunkid; Go takes the whole
-	   string — equivalent short_src. */
+	/* C: luaO_chunkid(ar->short_src, ar->source, LUA_IDSIZE). */
 	ar.shortSrc = luaO_chunkid(ar.source)
 }
 
 // dbCollectValidLines is collectvalidlines: it pushes a table with the
 // active lines of a function (or nil for a non-Lua function).
 //
-// FLAG: lineinfo already holds absolute lines, so there is no
-// 'nextline' / ABSLINEINFO walk; each entry is used as the line key
-// (equivalent result for protos with debug info).
+// 5.3.4 stores absolute lines in lineinfo (no abslineinfo / nextline).
 func dbCollectValidLines(L *State, fv *Value) {
 	if fv == nil || !ttisLclosure(fv) {
 		L.PushNil()
@@ -216,17 +208,12 @@ func dbCollectValidLines(L *State, fv *Value) {
 	}
 	p := clLvalue(fv).p
 	L.NewTable()
-	if len(p.lineinfo) == 0 { /* proto without debug information? */
-		return
-	}
-	i := 0
-	if p.isVararg != 0 {
-		i = 1 /* skip first instruction (OP_VARARGPREP) */
-	}
-	for ; i < len(p.lineinfo); i++ {
-		line := luaG_getfuncline(p, i)
+	/* C: for (i = 0; i < f->l.p->sizelineinfo; i++) table[lineinfo[i]] = true.
+	   Use sizelineinfo (not len(lineinfo)): luac may zero sizelineinfo while
+	   leaving the slice (strip debug). */
+	for i := 0; i < p.sizelineinfo; i++ {
 		L.PushBoolean(true)
-		L.SetI(-2, int64(line)) /* table[line] = true */
+		L.SetI(-2, int64(p.lineinfo[i]))
 	}
 }
 
@@ -271,16 +258,6 @@ func dbAuxGetInfo(L *State, what string, ar *dbAr, fv *Value, ci *CallInfo) bool
 			} else {
 				ar.name = name
 			}
-		case 'r':
-			/* io->u2.transferinfo: set by luaD_hook while a call or
-			   return hook is running (ldebug.c). */
-			if ci == nil || ci.callstatus&CIST_TRAN == 0 {
-				ar.ftransfer = 0
-				ar.ntransfer = 0
-			} else {
-				ar.ftransfer = ci.ftransfer
-				ar.ntransfer = ci.ntransfer
-			}
 		case 'L', 'f': /* handled by dbGetInfo */
 		default:
 			status = false /* invalid option */
@@ -314,28 +291,84 @@ func dbGetInfo(L *State, what string, ar *dbAr) bool {
 	return status
 }
 
-// dbGetUpvalue is lua_getupvalue (body in lapi.GetUpvalue / aux_upvalue).
+// dbGetUpvalue is lua_getupvalue: it pushes the value of upvalue 'n' of
+// the closure at 'idx' and returns its name.
 func dbGetUpvalue(L *State, idx, n int) (string, bool) {
-	return L.GetUpvalue(idx, n)
+	fv := index2value(L, idx)
+	switch {
+	case ttisCclosure(fv):
+		f := clCvalue(fv)
+		if n < 1 || n > f.nupvalues {
+			return "", false
+		}
+		dbPush(L, &f.upvalue[n-1])
+		return "", true /* C closures have no upvalue names */
+	case ttisLclosure(fv):
+		f := clLvalue(fv)
+		p := f.p
+		if n < 1 || n > p.sizeupvalues { /* C: p->sizeupvalues */
+			return "", false
+		}
+		name := "(*no name)"
+		if p.upvalues[n-1].name != nil {
+			name = p.upvalues[n-1].name.val
+		}
+		dbPush(L, upvalValue(f.upvals[n-1]))
+		return name, true
+	}
+	return "", false /* not a closure */
 }
 
-// dbSetUpvalue is lua_setupvalue (body in lapi.SetUpvalue / aux_upvalue).
-// Barrier omitted in lapi (Go GC).
+// dbSetUpvalue is lua_setupvalue: it pops a value from the stack and
+// stores it in upvalue 'n' of the closure at 'idx'.
 func dbSetUpvalue(L *State, idx, n int) (string, bool) {
-	return L.SetUpvalue(idx, n)
+	fv := index2value(L, idx)
+	val := L.stack[L.top-1]
+	switch {
+	case ttisCclosure(fv):
+		f := clCvalue(fv)
+		if n < 1 || n > f.nupvalues {
+			return "", false
+		}
+		f.upvalue[n-1] = val
+		L.top--
+		return "", true
+	case ttisLclosure(fv):
+		f := clLvalue(fv)
+		p := f.p
+		if n < 1 || n > p.sizeupvalues { /* C: p->sizeupvalues */
+			return "", false
+		}
+		name := "(*no name)"
+		if p.upvalues[n-1].name != nil {
+			name = p.upvalues[n-1].name.val
+		}
+		*upvalValue(f.upvals[n-1]) = val
+		L.top--
+		return name, true
+	}
+	return "", false /* not a closure */
 }
 
-// dbUpvalueID is lua_upvalueid (body in lapi.UpvalueId). Soft-nil for
-// non-functions so cdlopen exports do not panic on a bad index tag;
-// C would api_check. Closure cases match getupvalref / sizeupvalues.
+// dbUpvalueID is lua_upvalueid: it returns an identity for an upvalue
+// (a light userdata in C, any pointer here).
 func dbUpvalueID(L *State, idx, n int) unsafe.Pointer {
 	fv := index2value(L, idx)
-	switch ttypetag(fv) {
-	case LUA_VLCL, LUA_VCCL, LUA_VLCF:
-		return L.UpvalueId(idx, n)
-	default:
-		return nil
+	switch {
+	case ttisCclosure(fv):
+		f := clCvalue(fv)
+		if n < 1 || n > f.nupvalues {
+			return nil
+		}
+		return unsafe.Pointer(&f.upvalue[n-1])
+	case ttisLclosure(fv):
+		f := clLvalue(fv)
+		if n < 1 || n > f.p.sizeupvalues { /* C getupvalref: p->sizeupvalues */
+			return nil
+		}
+		return unsafe.Pointer(f.upvals[n-1])
 	}
+	return nil
 }
 
 // ---------------------------------------------------------------------
@@ -357,33 +390,28 @@ func dbGetMetaTable(L *State) int {
 
 func dbSetMetaTable(L *State) int {
 	t := L.Type(2)
-	L.ArgExpected(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table")
+	L.ArgCheck(t == LUA_TNIL || t == LUA_TTABLE, 2, "nil or table expected")
 	L.SetTop(2)
 	L.SetMetaTable(1)
 	return 1 /* return 1st argument */
 }
 
 func dbGetUserValue(L *State) int {
-	n := int(L.OptInteger(2, 1))
+	/* ldblib.c 5.3.4: one uservalue, return it (or nil). */
 	if L.Type(1) != LUA_TUSERDATA {
-		L.PushFail() /* luaL_pushfail */
+		L.PushNil()
 		return 1
 	}
-	if L.GetUserValue(1, n) != LUA_TNONE {
-		L.PushBoolean(true)
-		return 2
-	}
+	L.GetUserValue(1, 1)
 	return 1
 }
 
 func dbSetUserValue(L *State) int {
-	n := int(L.OptInteger(3, 1))
+	/* ldblib.c 5.3.4: setuservalue; leave userdata as the result. */
 	L.CheckType(1, LUA_TUSERDATA)
 	L.CheckAny(2)
 	L.SetTop(2)
-	if L.SetUserValue(1, n) == 0 {
-		L.PushFail() /* luaL_pushfail */
-	}
+	L.SetUserValue(1, 1)
 	return 1
 }
 
@@ -430,9 +458,8 @@ func dbGetInfoFunc(L *State) int {
 	var ar dbAr
 	arg := 0
 	L1 := dbGetThread(L, &arg)
-	options := L.OptString(arg+2, "flnSrtu")
+	options := L.OptString(arg+2, "flnStu") /* 5.3.4: no option r; no ArgCheck rejecting leading '>' (that is 5.4) */
 	dbCheckStack(L, L1, 3)
-	L.ArgCheck(len(options) == 0 || options[0] != '>', arg+2, "invalid option '>'")
 	if L.IsFunction(arg + 1) { /* info about a function? */
 		options = ">" + options /* add '>' to 'options' */
 		L.PushValue(arg + 1)    /* move function to 'L1' stack */
@@ -440,7 +467,7 @@ func dbGetInfoFunc(L *State) int {
 	} else { /* stack level */
 		level := int(L.CheckInteger(arg + 1))
 		if !dbGetStack(L1, level, &ar) {
-			L.PushFail() /* luaL_pushfail: level out of range */
+			L.PushNil() /* level out of range */
 			return 1
 		}
 	}
@@ -449,8 +476,7 @@ func dbGetInfoFunc(L *State) int {
 	}
 	L.NewTable() /* table to collect results */
 	if strings.ContainsRune(options, 'S') {
-		L.PushString(ar.source)
-		L.SetField(-2, "source")
+		dbSetTabSS(L, "source", ar.source) /* C settabss; source never NULL after funcinfo */
 		dbSetTabSS(L, "short_src", ar.shortSrc)
 		dbSetTabSI(L, "linedefined", ar.linedefined)
 		dbSetTabSI(L, "lastlinedefined", ar.lastlinedefined)
@@ -471,10 +497,6 @@ func dbGetInfoFunc(L *State) int {
 		L.PushString(ar.namewhat)
 		L.SetField(-2, "namewhat")
 	}
-	if strings.ContainsRune(options, 'r') {
-		dbSetTabSI(L, "ftransfer", ar.ftransfer)
-		dbSetTabSI(L, "ntransfer", ar.ntransfer)
-	}
 	if strings.ContainsRune(options, 't') {
 		dbSetTabSB(L, "istailcall", ar.istailcall)
 	}
@@ -493,9 +515,15 @@ func dbGetLocalFunc(L *State) int {
 	nvar := int(L.CheckInteger(arg + 2)) /* local-variable index */
 	if L.IsFunction(arg + 1) {           /* function argument? */
 		L.PushValue(arg + 1) /* push function */
-		/* C: lua_pushstring(L, lua_getlocal(L, NULL, nvar));
-		   NULL name → push nil (not an empty string). */
-		name := dbGetLocal(L, nil, nvar)
+		/* information about a non-active function: the name of a
+		   parameter, as it is at the start of the function */
+		name := ""
+		if ttisLclosure(&L.stack[L.top-1]) {
+			cl := clLvalue(&L.stack[L.top-1])
+			name = luaF_getlocalname(cl.p, nvar, 0)
+		}
+		/* 'lua_pushstring(L, NULL)' pushes nil, so an out-of-range index
+		   yields nil here -- not an empty string. */
 		if name == "" {
 			L.PushNil()
 		} else {
@@ -516,7 +544,7 @@ func dbGetLocalFunc(L *State) int {
 		L.Rotate(-2, 1)    /* re-order */
 		return 2
 	}
-	L.PushFail() /* luaL_pushfail: no name (nor value) */
+	L.PushNil() /* no name (nor value) */
 	return 1
 }
 
@@ -536,9 +564,6 @@ func dbSetLocalFunc(L *State) int {
 	name := dbSetLocal(L1, &ar, nvar)
 	if name == "" {
 		L1.Pop(1) /* pop value (if not popped by dbSetLocal) */
-	}
-	/* C: lua_pushstring(L, name) — NULL → nil */
-	if name == "" {
 		L.PushNil()
 	} else {
 		L.PushString(name)
@@ -574,37 +599,29 @@ func dbAuxUpValue(L *State, get bool) int {
 func dbGetUpValueFunc(L *State) int { return dbAuxUpValue(L, true) }
 func dbSetUpValueFunc(L *State) int { L.CheckAny(3); return dbAuxUpValue(L, false) }
 
-// dbCheckUpVal checks whether an upvalue exists and returns its index
-// (checkupval); 'id' is nil when the index is invalid.
-func dbCheckUpVal(L *State, argf, argnup int, pnup *int) unsafe.Pointer {
-	n := int(L.CheckInteger(argnup)) /* upvalue index */
-	L.CheckType(argf, LUA_TFUNCTION) /* closure */
-	id := dbUpvalueID(L, argf, n)
-	if pnup != nil {
-		L.ArgCheck(id != nil, argnup, "invalid upvalue index")
-		*pnup = n
-	}
-	return id
+// dbCheckUpVal is checkupval: verify upvalue index and leave the upvalue
+// on the stack (C: lua_getupvalue); callers' return counts discard it.
+func dbCheckUpVal(L *State, argf, argnup int) int {
+	nup := int(L.CheckInteger(argnup)) /* upvalue index */
+	L.CheckType(argf, LUA_TFUNCTION)   /* closure */
+	_, ok := dbGetUpvalue(L, argf, nup)
+	L.ArgCheck(ok, argnup, "invalid upvalue index")
+	return nup
 }
 
 func dbUpValueIDFunc(L *State) int {
-	id := dbCheckUpVal(L, 1, 2, nil)
-	if id != nil {
-		L.PushLightUserData(id)
-	} else {
-		L.PushFail() /* luaL_pushfail */
-	}
-	return 1
+	n := dbCheckUpVal(L, 1, 2)
+	L.PushLightUserData(dbUpvalueID(L, 1, n))
+	return 1 /* discards the upvalue left by checkupval */
 }
 
 func dbUpValueJoin(L *State) int {
-	var n1, n2 int
-	dbCheckUpVal(L, 1, 2, &n1)
-	dbCheckUpVal(L, 3, 4, &n2)
+	n1 := dbCheckUpVal(L, 1, 2)
+	n2 := dbCheckUpVal(L, 3, 4)
 	L.ArgCheck(!L.IsGoFunction(1), 1, "Lua function expected")
 	L.ArgCheck(!L.IsGoFunction(3), 3, "Lua function expected")
-	L.UpvalueJoin(1, n1, 3, n2) /* lua_upvaluejoin; barrier omitted in lapi (Go GC) */
-	return 0
+	L.UpvalueJoin(1, n1, 3, n2)
+	return 0 /* discards the two upvalues left by checkupval */
 }
 
 // ---------------------------------------------------------------------
@@ -633,7 +650,7 @@ var dbHookNames = []string{"call", "return", "line", "count", "tail call"}
 // dbHookFunc is the hookf of ldblib.c: it calls the Lua function stored
 // in the hook table for the running thread.
 func dbHookFunc(L *State, ar *dbAr) {
-	L.GetField(LUA_REGISTRYINDEX, dbHookKey) /* hook table */
+	L.RawGetP(LUA_REGISTRYINDEX, unsafe.Pointer(&dbHookKey)) /* hook table */
 	L.PushThread()
 	if L.RawGet(-2) == LUA_TFUNCTION { /* is there a hook function? */
 		L.PushString(dbHookNames[ar.event]) /* push event name */
@@ -642,11 +659,8 @@ func dbHookFunc(L *State, ar *dbAr) {
 		} else {
 			L.PushNil()
 		}
-		/* C: lua_assert(lua_getinfo(L, "lS", ar)); release assert is
-		   ((void)0) — skipped. Stack still holds hooktable under the
-		   call; luaD_hook restores top after return. */
-		/* lua_call (not pcall): errors propagate; yield across hook is a
-		   C-call boundary. */
+		/* C: lua_assert(lua_getinfo(L,"lS",ar)); release assert is ((void)0). */
+		/* lua_call (not pcall): errors propagate; yield across hook is a C-call boundary. */
 		L.Call(2, 0) /* call hook function */
 	}
 	/* leftover hook table (+ non-function) discarded when luaD_hook restores top */
@@ -685,17 +699,6 @@ func dbUnmakeMask(mask int) string {
 	return string(smask)
 }
 
-// dbCreateHookTable creates (and initializes) the hook table.
-func dbCreateHookTable(L *State) {
-	if !L.GetSubTable(LUA_REGISTRYINDEX, dbHookKey) {
-		/* table just created; initialize it */
-		L.PushString("k")
-		L.SetField(-2, "__mode") /* hooktable.__mode = "k" */
-		L.PushValue(-1)
-		L.SetMetaTable(-2) /* metatable(hooktable) = hooktable */
-	}
-}
-
 func dbSetHook(L *State) int {
 	arg := 0
 	L1 := dbGetThread(L, &arg)
@@ -716,18 +719,19 @@ func dbSetHook(L *State) int {
 		hook = dbHookFunc
 		mask = dbMakeMask(smask, count)
 	}
-	/* Whether a hook was installed is what 'gethook' asks about, and
-	   'lua_sethook' installs none when the mask is empty (ldebug.c):
-	   "turn off hooks" sets both the mask and the function to zero.  A
-	   mask with no recognised character in it -- 'debug.sethook(f, "z")'
-	   -- is such an empty mask, so the function is stored in the hook
-	   table but the hook itself is off, and 'debug.gethook()' answers
-	   nil rather than the function.  Nothing else needs recording: the
-	   mask and the count are on the thread, as in C. */
-	dbCreateHookTable(L)
+	/* ensure hook table at registry[&HOOKKEY]; weak keys "k" */
+	if L.RawGetP(LUA_REGISTRYINDEX, unsafe.Pointer(&dbHookKey)) == LUA_TNIL {
+		L.CreateTable(0, 2) /* create a hook table */
+		L.PushValue(-1)
+		L.RawSetP(LUA_REGISTRYINDEX, unsafe.Pointer(&dbHookKey)) /* set it in position */
+		L.PushString("k")
+		L.SetField(-2, "__mode") /* hooktable.__mode = "k" */
+		L.PushValue(-1)
+		L.SetMetaTable(-2) /* setmetatable(hooktable) = hooktable */
+	}
 	dbCheckStack(L, L1, 1)
-	L1.PushThread()      /* key (thread) */
-	L.XMove(L1, 1)       /* move it to the stack of L */
+	L1.PushThread()
+	L.XMove(L1, 1)       /* key (thread) */
 	L.PushValue(arg + 1) /* value (hook function) */
 	L.RawSet(-3)         /* hooktable[L1] = new Lua hook */
 	L1.setHook(hook, mask, count)
@@ -739,12 +743,11 @@ func dbGetHook(L *State) int {
 	L1 := dbGetThread(L, &arg)
 	mask := int(L1.hookmask) /* lua_gethookmask(L1) */
 	if L1.hook == nil {      /* no hook? */
-		L.PushFail() /* luaL_pushfail */
-		return 1
+		L.PushNil()
 	} else if L1.hookExternal { /* external hook (C: hook != hookf) */
 		L.PushString("external hook")
 	} else { /* hook table must exist */
-		L.GetField(LUA_REGISTRYINDEX, dbHookKey)
+		L.RawGetP(LUA_REGISTRYINDEX, unsafe.Pointer(&dbHookKey))
 		dbCheckStack(L, L1, 1)
 		L1.PushThread()
 		L.XMove(L1, 1)
@@ -753,7 +756,7 @@ func dbGetHook(L *State) int {
 	}
 	L.PushString(dbUnmakeMask(mask))       /* 2nd result = mask */
 	L.PushInteger(int64(L1.basehookcount)) /* 3rd result = count */
-	return 3
+	return 3                               /* always three results (ldblib.c) */
 }
 
 // dbDebugFunc is 'db_debug': a prompt on stderr, one command per line
@@ -770,12 +773,11 @@ func dbDebugFunc(L *State) int {
 		if err != nil || line == "cont\n" {
 			return 0
 		}
-		/* C: luaL_loadbuffer || lua_pcall → luaL_tolstring on error.
-		   LoadBytes returns a Go error (message not left on stack). */
 		if lerr := L.LoadBytes([]byte(line), "=(debug command)"); lerr != nil {
 			fmt.Fprintf(os.Stderr, "%s\n", lerr.Error())
 		} else if L.PCall(0, 0, 0) != LUA_OK {
-			fmt.Fprintf(os.Stderr, "%s\n", L.ToLString(-1))
+			msg, _ := L.ToString(-1)
+			fmt.Fprintf(os.Stderr, "%s\n", msg)
 		}
 		L.SetTop(0) /* remove eventual returns */
 	}
@@ -825,16 +827,8 @@ func dbTraceback(L *State) int {
 	return 1
 }
 
-// FLAG: no mutable C-stack limit in this port; answer with the fixed
-// LUAI_MAXCCALLS (same as cdlopen lua_setcstacklimit stub).
-func dbSetCStackLimit(L *State) int {
-	L.CheckInteger(1)
-	L.PushInteger(int64(LUAI_MAXCCALLS))
-	return 1
-}
-
 // ---------------------------------------------------------------------
-// registration
+// registration (ldblib.c dblib[] — Lua 5.3.4 has no setcstacklimit)
 // ---------------------------------------------------------------------
 
 var dbFuncs = []Reg{
@@ -854,7 +848,6 @@ var dbFuncs = []Reg{
 	{Name: "setmetatable", Func: dbSetMetaTable},
 	{Name: "setupvalue", Func: dbSetUpValueFunc},
 	{Name: "traceback", Func: dbTraceback},
-	{Name: "setcstacklimit", Func: dbSetCStackLimit},
 }
 
 // OpenDebug opens the debug library (luaopen_debug).

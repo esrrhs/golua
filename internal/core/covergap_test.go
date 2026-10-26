@@ -1,687 +1,625 @@
 package core
 
 import (
+	"bytes"
 	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 	"unsafe"
 )
 
-// Direct calls and small Lua snippets that the earlier cover* tests miss.
-// Prefer many small cases so a single failure is easy to spot.
+// Tests that close statement-coverage holes the shorter cover* suites miss:
+// bit32, auxlib userdata/module helpers, warning Go API, Dump/Where/
+// GetUpvalue wrappers, debug GetLocal/SetLocal/GetInfo, and package-local
+// C-macro helpers that the runtime call graph never reaches.
 
-func TestCoverGapHelpers(t *testing.T) {
-	if !isupvalue(LUA_REGISTRYINDEX-1) || isupvalue(LUA_REGISTRYINDEX) {
-		t.Fatal("isupvalue")
+func TestBit32Library(t *testing.T) {
+	got := runChunk(t, `
+local o = {}
+local function say(s) o[#o+1] = tostring(s) end
+say(bit32.band(0xFF, 0x0F, 0x07))
+say(bit32.bor(1, 2, 4))
+say(bit32.bxor(0xFF, 0x0F))
+say(bit32.bnot(0))
+say(bit32.btest(1, 2))
+say(bit32.btest(3, 1))
+say(bit32.lshift(1, 3))
+say(bit32.rshift(8, 2))
+say(bit32.arshift(8, 2))
+say(bit32.arshift(0x80000000, 1))
+say(bit32.arshift(0x80000000, 40))
+say(bit32.lshift(1, 40))
+say(bit32.rshift(1, 40))
+say(bit32.lrotate(1, 1))
+say(bit32.rrotate(2, 1))
+say(bit32.lrotate(1, 0))
+say(bit32.extract(0xF0, 4, 4))
+say(bit32.replace(0, 0xF, 4, 4))
+local ok = pcall(bit32.extract, 0, -1)
+say(ok)
+ok = pcall(bit32.extract, 0, 0, 0)
+say(ok)
+ok = pcall(bit32.extract, 0, 30, 4)
+say(ok)
+return table.concat(o, ",")
+`)
+	parts := strings.Split(got, ",")
+	if len(parts) < 20 {
+		t.Fatalf("too few results: %q", got)
 	}
-	if !errorstatus(LUA_ERRRUN) || errorstatus(LUA_OK) || errorstatus(LUA_YIELD) {
-		t.Fatal("errorstatus")
+	wantPrefix := []string{"7", "7", "240", "4294967295", "false", "true", "8", "2", "2"}
+	for i, w := range wantPrefix {
+		if parts[i] != w {
+			t.Fatalf("part %d: got %q want %q (full %q)", i, parts[i], w, got)
+		}
 	}
-	_ = ltolower('A')
-	_ = ltolower('z')
-	_ = ltolower(0)
-	if math2Trunc(1.9) != 1 || math2Trunc(-1.9) != -1 {
-		t.Fatal("math2Trunc")
-	}
-	if math2NumMod(10, 3) != 1 || math.Abs(math2NumMod(-10, 3)-2) > 1e-9 {
-		t.Fatalf("math2NumMod %v", math2NumMod(-10, 3))
-	}
-	if math2Idiv(10, 3) != 3 || math2Idiv(-10, 3) != -4 {
-		t.Fatalf("math2Idiv %v %v", math2Idiv(10, 3), math2Idiv(-10, 3))
-	}
-	if mathFloor(1.9) != 1 || mathCeil(1.1) != 2 {
-		t.Fatal("mathFloor/Ceil")
-	}
-	if sC2int(OFFSET_sC) != 0 || sJ(OFFSET_sJ) != 0 {
-		t.Fatal("sC2int/sJ")
-	}
-	ins := newAsBx(OP_FORLOOP, 1, 2)
-	if ins.Op != OP_FORLOOP {
-		t.Fatal("newAsBx")
-	}
-	_ = testOTMode(int(OP_CALL))
-	_ = isOT(newABC(OP_CALL, 0, 0, 0, 0))
-	if !osStrftimeYearSafe(time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)) {
-		t.Fatal("osStrftimeYearSafe")
-	}
-	_ = gcWatchEmpty()
-
-	var st uint16
-	setoah(&st, 1)
-	if getoah(st) != 1 {
-		t.Fatal("oah")
-	}
-	setoah(&st, 0)
-	if getoah(st) != 0 {
-		t.Fatal("oah clear")
-	}
-	ci := &CallInfo{}
-	setcistrecst(ci, 5)
-	if getcistrecst(ci) != 5 {
-		t.Fatal("cistrecst")
-	}
-
-	p := int(7)
-	if gcSetParam(&p, 9) != 7 || p != 9 {
-		t.Fatal("gcSetParam")
+	if parts[len(parts)-3] != "false" || parts[len(parts)-2] != "false" || parts[len(parts)-1] != "false" {
+		t.Fatalf("error paths: %q", got)
 	}
 }
 
-func TestCoverGapObjectAndOpcodes(t *testing.T) {
-	var v Value
-	setnilvalue(&v)
-	if rawtt(&v) != v.tt || !checktag(&v, v.tt) || !checktype(&v, LUA_TNIL) {
-		t.Fatal("rawtt/check")
-	}
-	if isnonstrictnil(&v) {
-		t.Fatal("strict nil is not nonstrict")
-	}
-	setabstkey(&v)
-	// empty table node helpers
-	n := &node{}
-	_ = keytt(n)
-	_ = keyiscollectable(n)
-	_ = gckey(n)
-	_ = gckeyN(n)
-
-	L := NewState()
-	defer L.Close()
-	ts := luaO_pushfstring(L, "x=%d", 3)
-	if ts == nil || !strings.Contains(ts.val, "3") {
-		t.Fatalf("pushfstring %v", ts)
-	}
-	ts2 := luaO_pushvfstring(L, "y=%s", "z")
-	if ts2 == nil || ts2.val != "y=z" {
-		t.Fatalf("pushvfstring %q", ts2)
-	}
-	if toStringAny("a") != "a" || toStringAny([]byte("b")) != "b" ||
-		toStringAny(nil) != "(null)" || toStringAny(7) != "7" {
-		t.Fatalf("toStringAny %q %q", toStringAny(nil), toStringAny(7))
-	}
-	ts3 := luaS_new(L, "s")
-	if toStringAny(ts3) != "s" {
-		t.Fatal("toStringAny TString")
-	}
-	if toIntAny(3) != 3 || toIntAny(int64(4)) != 4 || toIntAny(int32(5)) != 5 ||
-		toIntAny(uint(6)) != 6 || toIntAny(uint64(7)) != 7 || toIntAny(byte(8)) != 8 ||
-		toIntAny(9.5) != 9 || toIntAny("x") != 0 {
-		t.Fatal("toIntAny")
-	}
-	if toPtrAny(luaH_new(L)) == 0 || toPtrAny(ts3) == 0 ||
-		toPtrAny(&LClosure{}) == 0 || toPtrAny(&CClosure{}) == 0 ||
-		toPtrAny(&Udata{}) == 0 || toPtrAny(L) == 0 ||
-		toPtrAny(unsafe.Pointer(&v)) == 0 || toPtrAny(0) != 0 {
-		t.Fatal("toPtrAny more")
+func TestStringLowerUpperAndLongDump(t *testing.T) {
+	got := runChunk(t, `
+local s = string.lower("AbC")
+local u = string.upper("AbC")
+-- force DumpString size >= 0xFF so dumpSizeT/loadSizeT run
+local long = string.rep("x", 300)
+local f = load("return [[" .. long .. "]]")
+local bin = string.dump(f)
+local g = assert(load(bin))
+local back = g()
+return s .. "|" .. u .. "|" .. tostring(#back == 300 and back == long)
+`)
+	if got != "abc|ABC|true" {
+		t.Fatalf("got %q", got)
 	}
 }
 
-func TestCoverGapAPIDirect(t *testing.T) {
+func TestAuxlibUserdataAndModule(t *testing.T) {
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()
 
-	if stackIndexOf(L, 1) < 0 {
-		t.Fatal("stackIndexOf pos")
-	}
-	if stackIndexOf(L, LUA_REGISTRYINDEX) != -1 {
-		t.Fatal("stackIndexOf registry")
-	}
-	func() {
-		defer func() { _ = recover() }()
-		_ = stackIndexOf(L, 0)
-		t.Fatal("expected panic for idx 0")
-	}()
-	if L.indexToAbs(LUA_REGISTRYINDEX) != -1 {
-		t.Fatal("indexToAbs pseudo")
-	}
-	L.PushInteger(1)
-	if L.indexToAbs(-1) != L.top-1 {
-		t.Fatal("indexToAbs neg")
-	}
-	L.Pop(1)
-
-	n := L.StringToNumber("42")
-	if n == 0 {
-		t.Fatal("StringToNumber ok")
-	}
-	L.Pop(1)
-	if L.StringToNumber("nope") != 0 {
-		t.Fatal("StringToNumber fail")
-	}
-
-	if L.ToLString(LUA_REGISTRYINDEX) == "" && false {
-		t.Fatal("ToLString")
-	}
-	L.PushString("hi")
-	if L.ToLString(-1) != "hi" {
-		t.Fatal("ToLString hi")
-	}
-	L.Pop(1)
-
-	if !L.NewMetaTable("cover.gap.mt") {
+	if !L.NewMetaTable("cover.ud") {
 		t.Fatal("NewMetaTable first")
 	}
-	if L.NewMetaTable("cover.gap.mt") {
-		t.Fatal("NewMetaTable second")
+	if L.NewMetaTable("cover.ud") {
+		t.Fatal("NewMetaTable second should be false")
 	}
-	L.Pop(1) // leave previous mt
-	L.NewUserData("ud", 1)
-	L.SetMetaTableByName("cover.gap.mt")
-	if L.TestUserData(-1, "cover.gap.mt") == nil {
-		t.Fatal("TestUserData")
+	L.Pop(1) // leave previous metatable
+
+	L.NewUserData("payload", 1)
+	L.SetMetaTableByName("cover.ud")
+	if p := L.TestUserData(-1, "cover.ud"); p != "payload" {
+		t.Fatalf("TestUserData: %#v", p)
 	}
-	if L.CheckUserData(-1, "cover.gap.mt") == nil {
-		t.Fatal("CheckUserData")
+	if p := L.TestUserData(-1, "cover.other"); p != nil {
+		t.Fatalf("wrong mt: %#v", p)
 	}
-	if L.TestUserData(-1, "cover.gap.other") != nil {
-		t.Fatal("TestUserData wrong")
+	if p := L.CheckUserData(-1, "cover.ud"); p != "payload" {
+		t.Fatalf("CheckUserData: %#v", p)
+	}
+	{
+		L2 := NewState()
+		defer L2.Close()
+		L2.PushInteger(1)
+		func() {
+			defer func() { _ = recover() }()
+			_ = L2.CheckUserData(-1, "cover.ud")
+			t.Fatal("CheckUserData should error on integer")
+		}()
+	}
+	L.SetTop(0)
+
+	L.PushModule("covergap.pushmod", 2)
+	if !L.IsTable(-1) {
+		t.Fatal("PushModule")
 	}
 	L.Pop(1)
-	L.PushInteger(1)
-	if L.TestUserData(-1, "cover.gap.mt") != nil {
-		t.Fatal("TestUserData non-ud")
+	// second PushModule hits LOADED cache path
+	L.PushModule("covergap.pushmod", 2)
+	if !L.IsTable(-1) {
+		t.Fatal("PushModule cached")
 	}
 	L.Pop(1)
 
-	B, room := L.BuffInitSize(8)
-	if len(room) < 8 {
-		t.Fatal("BuffInitSize")
+	regs := []Reg{{Name: "ping", Func: func(L *State) int {
+		L.PushString("pong")
+		return 1
+	}}}
+	L.OpenLib("covergap.openlib", regs, 0)
+	if err := L.DoString(`assert(covergap.openlib.ping() == "pong")`); err != nil {
+		t.Fatal(err)
 	}
-	copy(room, "abcd")
-	B.PushResultSize(4)
+
+	L.PushGlobalTable()
+	if frag := L.FindTable(-1, "covergap.mod.sub", 2); frag != "" {
+		t.Fatalf("FindTable create: %q", frag)
+	}
+	L.Pop(1)
+	L.PushGlobalTable()
+	L.PushString("notatable")
+	L.SetField(-2, "covergap_conflict")
+	if frag := L.FindTable(-1, "covergap_conflict.mod", 1); frag == "" {
+		t.Fatal("FindTable conflict expected")
+	}
+	L.SetTop(0)
+
+	B, room := L.BuffInitSize(16)
+	copy(room, "hi")
+	B.AddSize(2)
+	B.PushResult()
 	s, _ := L.ToString(-1)
-	if s != "abcd" {
-		t.Fatalf("PushResultSize %q", s)
-	}
-	L.Pop(1)
-	B2 := &Buffer{L: L, b: make([]byte, 4), size: 4, onStack: false}
-	r := B2.PrepBuffSize(2)
-	if len(r) < 2 {
-		t.Fatal("PrepBuffSize nostack")
-	}
-	r2 := B2.prepbuffsizeNoStack(100)
-	if len(r2) < 100 {
-		t.Fatal("prepbuffsizeNoStack grow")
+	if s != "hi" {
+		t.Fatalf("BuffInitSize %q", s)
 	}
 
-	L.CheckStack2(2, "cover")
-	L.CheckStack2(2, "")
-
-	basePushMode(L, -1)
-	if !L.IsNil(-1) {
-		t.Fatal("basePushMode fail")
-	}
-	L.Pop(1)
-	basePushMode(L, baseGCModeInc)
-	s, _ = L.ToString(-1)
-	if s != "incremental" {
-		t.Fatal(s)
-	}
-	L.Pop(1)
-	basePushMode(L, 99)
-	s, _ = L.ToString(-1)
-	if s != "generational" {
-		t.Fatal(s)
-	}
-	L.Pop(1)
-	if basePairsCont(L, 0) != 3 {
-		t.Fatal("basePairsCont")
-	}
-	prev := gcSetMode(L, "generational")
-	_ = prev
-	_ = gcSetMode(L, "incremental")
-
-	luaE_setdebt(nil, 1)
-	luaE_setdebt(L.g, 42)
-	if L.g.gcDebt != 42 {
-		t.Fatal("setdebt")
-	}
-	if L.SetCStackLimit(100) != LUAI_MAXCCALLS {
-		t.Fatal("SetCStackLimit")
-	}
-
-	th := L.NewThread()
-	_ = th.CloseThread(L)
-	luaE_freethread(L, L.NewThread())
-
-	t4 := luaH_newarray4(L)
-	if t4 == nil {
-		t.Fatal("luaH_newarray4")
-	}
-	luaH_free(L, t4)
-
-	var a, b Value
-	setivalue(&a, 1)
-	setivalue(&b, 2)
-	if luaV_lessequal(L, &b, &a) {
-		t.Fatal("lessequal")
-	}
-	if !luaV_lessequal(L, &a, &b) {
-		t.Fatal("lessequal ok")
-	}
-
-	_ = touserdataPtr(&a)
-	L.NewUserData(nil, 0)
-	ud := &L.stack[L.top-1]
-	_ = touserdataPtr(ud)
-	L.Pop(1)
-
-	deltas := deltasFromAbsolute(&Proto{
-		linedefined: 1,
-		lineinfo:    []int32{1, 2, 10, 11},
-	}, 4, []AbsLineInfo{{pc: 2, line: 10}})
-	if len(deltas) != 4 {
-		t.Fatal("deltasFromAbsolute")
-	}
-
-	st := luaD_rawrunprotected(L, func() {})
-	if st != LUA_OK {
-		t.Fatal("rawrunprotected ok")
-	}
-	st = luaD_rawrunprotected(L, func() {
-		panic(&luaError{status: LUA_ERRRUN})
-	})
-	if st != LUA_ERRRUN {
-		t.Fatalf("rawrunprotected err %d", st)
-	}
-	_ = luaD_checkminstack(L)
+	L.CheckStack2(8, "")
+	L.CheckStack2(8, "msg")
 }
 
-func TestCoverGapDumpWhereDebug(t *testing.T) {
+func TestWarningGoAPI(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	// Default is warnfOff; turn on via control message.
+	text := captureStderr(t, func() {
+		L.Warning("@on", false)
+		L.Warning("part1", true)
+		L.Warning("part2", false)
+		L.Warning("@off", false)
+		L.Warning("hidden", false)
+		L.Warning("@on", false)
+		L.Warning("again", false)
+		luaE_warnerror(L, "where")
+		L.Warning("@unknown", false) // ignored control
+	})
+	if !strings.Contains(text, "Lua warning: part1part2") {
+		t.Fatalf("cont: %q", text)
+	}
+	if !strings.Contains(text, "Lua warning: again") {
+		t.Fatalf("again: %q", text)
+	}
+	if !strings.Contains(text, "where: WARNING: failed to write warning:") {
+		t.Fatalf("warnerror: %q", text)
+	}
+	if strings.Contains(text, "hidden") {
+		t.Fatalf("should be off: %q", text)
+	}
+
+	var seen []string
+	L.SetWarnFunction(func(L *State, msg string, tocont bool) {
+		seen = append(seen, msg)
+	}, "ud")
+	L.Warning("custom", false)
+	if len(seen) != 1 || seen[0] != "custom" {
+		t.Fatalf("custom warnf: %#v", seen)
+	}
+}
+
+func TestAPIDumpWhereUpvalueVersion(t *testing.T) {
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()
-	if err := L.LoadString("local a = 1\nreturn function(x) local y = x + a; return y end", "=dump"); err != nil {
+	if err := L.LoadString(`
+local x = 10
+local function f() return x end
+return f
+`, "=chunk"); err != nil {
 		t.Fatal(err)
 	}
 	if L.PCall(0, 1, 0) != LUA_OK {
-		t.Fatal("pcall")
+		t.Fatal(L.ToString(-1))
 	}
-	var dumped []byte
-	rc := L.Dump(func(_ *State, b []byte) int {
-		dumped = append(dumped, b...)
-		return 0
-	}, false)
-	if rc != 0 || len(dumped) == 0 {
-		t.Fatalf("Dump %d len %d", rc, len(dumped))
-	}
-	rc = L.Dump(func(_ *State, b []byte) int { return 1 }, true)
-	if rc == 0 {
-		// writer abort may still return non-zero from dump path
-	}
-	L.PushInteger(1)
-	if L.Dump(func(_ *State, b []byte) int { return 0 }, false) != 1 {
-		t.Fatal("Dump non-function")
+	// stack: f
+	name, ok := L.GetUpvalue(-1, 1)
+	if !ok || name == "" {
+		t.Fatalf("GetUpvalue name=%q ok=%v", name, ok)
 	}
 	L.Pop(1)
+	id := L.UpvalueId(-1, 1)
+	if id == nil {
+		t.Fatal("UpvalueId")
+	}
+	if L.UpvalueId(-1, 99) != nil {
+		t.Fatal("UpvalueId OOB")
+	}
+
+	var buf bytes.Buffer
+	status := L.Dump(func(_ *State, b []byte) int {
+		_, _ = buf.Write(b)
+		return 0
+	}, false)
+	if status != 0 || buf.Len() == 0 {
+		t.Fatalf("Dump status=%d len=%d", status, buf.Len())
+	}
+	// aborting writer
+	status = L.Dump(func(_ *State, b []byte) int { return 1 }, true)
+	if status == 0 {
+		t.Fatal("Dump abort expected non-zero")
+	}
+
+	if Version(L) != float64(luaVersionNumGo) || Version(nil) != float64(luaVersionNumGo) {
+		t.Fatalf("Version %v", Version(L))
+	}
 
 	// Where from inside a Lua call
-	L.PushValue(-1) // the function
-	L.PushInteger(2)
-	if err := L.LoadString(`
-local f = ...
-local function wrap()
-  return (function()
-    -- call Go Where via debug? we call from Go after nesting
-    return f(3)
-  end)()
-end
-return wrap
-`, "=w"); err != nil {
+	where := ""
+	L.PushGoFunc(func(L *State) int {
+		where = L.Where(1)
+		return 0
+	})
+	L.SetGlobal("gowhere")
+	if err := L.DoString(`gowhere()`); err != nil {
 		t.Fatal(err)
 	}
-	if L.PCall(0, 1, 0) != LUA_OK {
-		t.Fatal("wrap load")
+	if where == "" || !strings.Contains(where, ":") {
+		t.Fatalf("Where %q", where)
 	}
-	// Call f directly with nesting via DoString that errors with Where
-	L.SetTop(0)
-	if err := L.LoadString("local function f()\n  error('x')\nend\nf()", "=where"); err != nil {
-		t.Fatal(err)
+	if L.Where(99) != "" {
+		t.Fatalf("Where deep %q", L.Where(99))
 	}
-	_ = L.PCall(0, 0, 0)
-	_ = L.Where(0)
-	_ = L.Where(1)
-	_ = L.Where(99)
+}
 
-	// GetInfo / GetLocal / SetLocal wrappers
-	L.SetTop(0)
+func TestDebugGetInfoLocalInterrupt(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+
 	if err := L.LoadString(`
-local function f(a)
-  local b = a + 1
-  return b
+local a, b = 1, 2
+local function inner(...)
+  local c = 3
+  return debug.getinfo(1, "nSlufL"), a, b, c, ...
 end
-return f
-`, "=loc"); err != nil {
+return inner
+`, "=dbg"); err != nil {
 		t.Fatal(err)
 	}
 	if L.PCall(0, 1, 0) != LUA_OK {
-		t.Fatal("loc")
+		t.Fatal(L.ToString(-1))
 	}
+	// Call via Go so we can use GetLocal/SetLocal on a live frame from a hook.
 	called := false
 	L.SetHook(func(L *State, ar *dbAr) {
 		if called {
 			return
 		}
 		called = true
-		_ = L.GetInfo("nSlu", ar)
-		_ = L.GetLocal(ar, 1)
+		if !L.GetInfo("nSluf", ar) {
+			t.Error("GetInfo failed")
+		}
+		n := L.GetLocal(ar, 1)
+		if n == "" {
+			t.Error("GetLocal empty")
+		} else {
+			L.Pop(1)
+		}
 		L.PushInteger(99)
-		_ = L.SetLocal(ar, 1)
+		if L.SetLocal(ar, 1) == "" {
+			t.Error("SetLocal")
+		}
+		// vararg locals (negative indices) when present
+		_ = L.GetLocal(ar, -1)
+		if L.GetTop() > 0 && L.IsString(-1) || L.IsNumber(-1) {
+			L.Pop(1)
+		}
 	}, dbMaskCall, 0)
-	L.PushValue(-1)
-	L.PushInteger(1)
-	_ = L.PCall(1, 1, 0)
+
+	L.PushValue(-1) // inner
+	L.PushInteger(7)
+	L.PushInteger(8)
+	if L.PCall(2, 0, 0) != LUA_OK {
+		msg, _ := L.ToString(-1)
+		t.Fatal(msg)
+	}
+	if !called {
+		t.Fatal("hook not called")
+	}
 	L.SetHook(nil, 0, 0)
 
-	// findvararg path: call a vararg function under a hook
-	L.SetTop(0)
-	if err := L.LoadString(`
-local function f(a, ...)
-  local x = ...
-  return a, x
-end
-return f
-`, "=va"); err != nil {
+	// GetLocal on non-active function (ar == nil)
+	if err := L.LoadString(`local function f(x, y) return x+y end; return f`, "=p"); err != nil {
 		t.Fatal(err)
 	}
 	if L.PCall(0, 1, 0) != LUA_OK {
-		t.Fatal("va")
+		t.Fatal(L.ToString(-1))
 	}
-	L.SetHook(func(L *State, ar *dbAr) {
-		var dar dbAr
-		if !dbGetStack(L, 0, &dar) {
-			return
-		}
-		pos := 0
-		_ = findvararg(L, L.ci, 1, &pos)
-		_ = findlocal(L, L.ci, 1, &pos)
-	}, dbMaskCall, 0)
-	L.PushValue(-1)
-	L.PushInteger(1)
-	L.PushInteger(2)
-	L.PushInteger(3)
-	_ = L.PCall(3, 2, 0)
-	L.SetHook(nil, 0, 0)
-}
-
-func TestCoverGapLuaLibs(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "t.txt")
-	t.Setenv("COVER_GAP", path)
-
-	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out + 1] = tostring(s) end
-
-say(string.lower("AbC"))
-say(string.upper("AbC"))
-say(string.reverse("abc"))
-say(string.len("ab"))
-say(string.rep("ab", 3, "-"))
-say(pcall(string.rep, "x", 1e12))
-say(string.byte("abc", 2, 3))
-say(string.char(65, 66))
-say(string.sub("abcdef", 2, 4))
-say(string.find("abc", "b"))
-say(string.gmatch("a1b2", "%d")())
-say(select("#", 1, 2, 3))
-say(select(2, 10, 20, 30))
-
-local t = {a=1, b=2}
-local n = 0
-for k in pairs(t) do n = n + 1 end
-say(n)
-local mt = {__pairs = function(self)
-  return function(_, k)
-    if k == nil then return "x", 1 end
-  end, self, nil
-end}
-local o = setmetatable({}, mt)
-for k in pairs(o) do say(k) end
-
-say(collectgarbage("count") >= 0)
-say(collectgarbage("step"))
-say(collectgarbage("setpause"))
-say(collectgarbage("setstepmul"))
-say(collectgarbage("isrunning"))
-say(collectgarbage("generational"))
-say(collectgarbage("incremental"))
-say(collectgarbage("collect"))
-
-local name = os.getenv("COVER_GAP")
-local f = assert(io.open(name, "w"))
-f:write("line1\nline2\n")
-f:flush()
-f:close()
-f = assert(io.open(name, "r"))
-say(io.type(f))
-say(f:read("*l"))
-say(f:lines()())
-f:close()
-say(io.type(f))
-f = assert(io.open(name, "a+"))
-f:write("x")
-f:seek("set", 0)
-say(#(f:read("*a") or ""))
-f:close()
-local p = io.popen("false", "r")
-if p then
-  p:read("*a")
-  local a,b,c = p:close()
-  say(tostring(a))
-  say(tostring(b))
-end
-local p2 = io.popen("echo ok", "r")
-if p2 then
-  say((p2:read("*l") or ""):gsub("\r$",""))
-  p2:close()
-end
-
-say(math.cosh(0))
-say(math.sinh(0))
-say(math.tanh(0))
-say(math.modf(1.5))
-say(math.tointeger("3"))
-say(math.type(3))
-say(math.type(3.5))
-say(math.ult(1, 2))
-say(math.max(1, 3, 2))
-say(math.min(1, 3, 2))
-say(math.random(1, 1))
-math.randomseed(1)
-say(type(math.random()))
-
-say(os.date("%Y", 0))
-say(os.date("%y", 0))
-say(os.date("%C", 0))
-say(os.date("!%Y-%m-%dT%H:%M:%S", 0))
-local okd = pcall(os.date, "%Y", math.maxinteger)
-say(okd)
-
-say(utf8.len("abc"))
-say(utf8.char(0x20AC))
-say(select(1, utf8.len("a\x80b")))
-
-local packed = string.pack("<i4", 7)
-say(string.unpack("<i4", packed))
-say(string.packsize("i4"))
-say(#string.pack("z", "hi"))
-say(string.unpack("z", string.pack("z", "hi")))
-
-return table.concat(out, "\n")
-`)
-	if !strings.Contains(got, "abc\n") && !strings.HasPrefix(got, "abc") {
-		// first line should be lower
+	if name := L.GetLocal(nil, 1); name == "" {
+		// may be stripped; still exercise the path
+		_ = L.GetLocal(nil, 1)
 	}
-	lines := strings.Split(got, "\n")
-	if len(lines) < 10 {
-		t.Fatalf("too few lines: %q", got)
-	}
-	if lines[0] != "abc" || lines[1] != "ABC" {
-		t.Fatalf("lower/upper: %q %q", lines[0], lines[1])
+	_ = L.GetLocal(nil, 99)
+
+	// SetInterruptHook: next count event raises interrupted!
+	L.SetInterruptHook()
+	err := L.DoString(`local s=0; for i=1,100000 do s=s+i end`)
+	if err == nil || !strings.Contains(err.Error(), "interrupted") {
+		t.Fatalf("interrupt: %v", err)
 	}
 }
 
-func TestCoverGapAPIEdges(t *testing.T) {
+func TestToPointerAndDoFileErrors(t *testing.T) {
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()
 
-	L.PushInteger(1)
-	L.PushInteger(2)
-	L.Copy(-1, 1)
-	n, _ := L.ToInteger(1)
-	if n != 2 {
-		t.Fatal("Copy")
+	L.PushNil()
+	if L.ToPointer(-1) != 0 {
+		t.Fatal("nil pointer")
 	}
-	L.PushInteger(3)
-	L.Rotate(1, 1)
-	L.SetTop(0)
-
-	L2 := L.NewThread()
-	L.PushInteger(9)
-	L2.XMove(L, 1)
-	n, _ = L2.ToInteger(-1)
-	if n != 9 {
-		t.Fatal("XMove")
+	L.PushBoolean(true)
+	if L.ToPointer(-1) != 0 {
+		t.Fatal("bool pointer")
 	}
-	L2.Pop(1)
-
-	_ = TypeName(LUA_TNONE)
-	_ = L.TypeName(1) // empty
-
-	L.PushGoFunc(func(L *State) int { return 0 })
-	if L.ToGoFunction(-1) == nil {
-		t.Fatal("ToGoFunction")
-	}
-	L.PushInteger(1)
-	if L.ToGoFunction(-1) != nil {
-		t.Fatal("ToGoFunction non")
-	}
-	L.Pop(2)
-
-	L.CreateTable(0, 0)
+	L.NewTable()
 	if L.ToPointer(-1) == 0 {
-		t.Fatal("ToPointer table")
+		t.Fatal("table pointer")
 	}
-	L.PushInteger(1)
-	_ = L.ToPointer(-1)
-	L.Pop(2)
-
-	L.NewUserData("x", 2)
-	L.PushString("uv")
-	if L.SetUserValue(-2, 1) != 1 {
-		t.Fatal("SetUserValue")
+	L.PushGoFunc(func(L *State) int { return 0 })
+	if L.ToPointer(-1) == 0 {
+		t.Fatal("cclosure/lcf pointer")
 	}
-	if L.GetUserValue(-1, 1) != LUA_TSTRING {
-		t.Fatal("GetUserValue")
+	L.PushThread()
+	if L.ToPointer(-1) == 0 {
+		t.Fatal("thread pointer")
 	}
-	L.Pop(1)
-	if L.GetUserValue(-1, 99) != LUA_TNONE && L.GetUserValue(-1, 99) != LUA_TNIL {
-		// out of range
+	L.PushLightUserData(unsafe.Pointer(&L))
+	if L.ToPointer(-1) == 0 {
+		t.Fatal("lightud pointer")
 	}
-	L.Pop(1)
-
-	L.PushInteger(1)
-	L.PushInteger(1)
-	if !L.RawEqual(-1, -2) {
-		t.Fatal("RawEqual")
+	L.NewUserData(123, 0)
+	if L.ToPointer(-1) == 0 {
+		t.Fatal("userdata pointer")
 	}
-	if !L.Compare(-1, -2, LUA_OPEQ) {
-		t.Fatal("Compare eq")
-	}
-	L.Pop(2)
+	L.SetTop(0)
 
 	dir := t.TempDir()
-	p := filepath.Join(dir, "f.lua")
-	if err := os.WriteFile(p, []byte("return 5\n"), 0o644); err != nil {
+	bad := filepath.Join(dir, "missing.lua")
+	if err := L.DoFile(bad); err == nil {
+		t.Fatal("missing file")
+	}
+	path := filepath.Join(dir, "boom.lua")
+	if err := os.WriteFile(path, []byte("error('boom')\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := L.LoadFileMode(p, "t"); err != nil {
+	if err := L.DoFile(path); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("runtime err: %v", err)
+	}
+	shebang := filepath.Join(dir, "shebang.lua")
+	if err := os.WriteFile(shebang, []byte("#!/usr/bin/env lua\nreturn 42\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	L.Pop(1)
-	if err := L.DoFile(p); err != nil {
+	if err := L.DoFile(shebang); err != nil {
 		t.Fatal(err)
 	}
-	L.Pop(1)
-	if err := L.DoFile(filepath.Join(dir, "missing.lua")); err == nil {
-		t.Fatal("DoFile missing")
-	}
+}
 
-	// UpvalueId
-	if err := L.LoadString("local x = 1; return function() return x end", "=u"); err != nil {
+func TestMacroHelpersDirect(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+
+	_ = errorstatus(LUA_OK)
+	_ = errorstatus(LUA_ERRRUN)
+	correctstack(L, nil)
+	luaD_inctop(L)
+	L.top--
+	luaE_freeCI(L)
+	_ = gcWatchEmpty()
+	luaH_free(L, nil)
+
+	v := &Value{}
+	_ = isabstkey(v)
+	_ = isabstkey(&luaO_nilobject)
+	setbvalue(v, false)
+	_ = ttisfalse(v)
+	setbvalue(v, true)
+	_ = ttisfalse(v)
+	_ = deadvalue(v)
+	setempty(v)
+	setfltvalue(v, 1.5)
+	chgfltvalue(v, 2.5)
+	setivalue(v, 7)
+	chgivalue(v, 8)
+	setdeadvalue(v)
+	ts := luaS_newlstr(L, "abc")
+	_ = getstr(ts)
+	u := &Udata{}
+	setuservalue(u, v)
+	var out Value
+	getuservalue(u, &out)
+
+	_ = newAsBx(0, 0, 0)
+	_ = vkisinreg(VLOCAL)
+	_ = vkisinreg(VVOID)
+	_ = stackIndexOf(L, 1)
+	_ = stackIndexOf(L, -1)
+	_ = stackIndexOf(L, LUA_REGISTRYINDEX)
+	for _, tt := range []int{LUA_TNIL, LUA_TBOOLEAN, LUA_TNUMBER, LUA_TSTRING, LUA_TTABLE, LUA_TFUNCTION, LUA_TUSERDATA, LUA_TLIGHTUSERDATA, LUA_TTHREAD, 99} {
+		_ = typeName(&Value{tt: uint8(tt)})
+	}
+	_ = typeName(&Value{})
+
+	_ = L.resetThreadStatus(LUA_OK)
+	_ = L.resetThreadStatus(LUA_YIELD)
+}
+
+func TestMathHyperbolicEdges(t *testing.T) {
+	// Exercise math.sinh/cosh for ordinary values; libm path on this box.
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+say(math.sinh(0))
+say(math.cosh(0))
+say(math.tanh(0))
+say(math.sinh(1) > 0)
+say(math.cosh(1) >= 1)
+say(math.sinh(700) > 0 or math.sinh(700) == math.huge)
+say(math.cosh(700) > 0 or math.cosh(700) == math.huge)
+say(math.sinh(-1) < 0)
+return table.concat(o, ",")
+`)
+	if !strings.HasPrefix(got, "0") && strings.Contains(got, "true,true,true") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestCoroutineFastYieldAndDebugUpvalue(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local co = coroutine.create(function(a)
+  say(a)
+  local x = coroutine.yield(10)
+  say(x)
+  return 20
+end)
+local ok, v = coroutine.resume(co, 1)
+say(ok); say(v)
+ok, v = coroutine.resume(co, 2)
+say(ok); say(v)
+ok, v = coroutine.resume(co)
+say(ok); say(v)
+
+local x = 5
+local function f() return x end
+say(debug.upvalueid(f, 1) ~= nil)
+local a, b = f, function() return x end
+debug.upvaluejoin(a, 1, b, 1)
+say(debug.getupvalue(f, 1))
+return table.concat(o, ",")
+`)
+	if !strings.Contains(got, "true,10") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestParseHexFloatAndForlimitEdges(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+say(0x1.8p1)
+say(tonumber("0x1p-1"))
+say(tonumber("0X1.Fp+2"))
+local n=0
+for i=1.5,3.5,1 do n=n+1 end
+say(n)
+n=0
+for i=10,1,-2 do n=n+i end
+say(n)
+-- empty numeric for
+n=0
+for i=1,0 do n=n+1 end
+say(n)
+return table.concat(o, ",")
+`)
+	if got == "" {
+		t.Fatal("empty")
+	}
+}
+
+func TestIOAndOSCoverageExtras(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "t.txt")
+	t.Setenv("COVERGAP_PATH", path)
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local p = os.getenv("COVERGAP_PATH")
+local f = assert(io.open(p, "w"))
+say(f:write("abc"))
+say(f:seek("set", 1))
+say(f:close())
+f = assert(io.open(p, "r"))
+say(f:read(2))
+say(io.type(f))
+say(f:close())
+say(io.type(f))
+say(select(1, os.remove(p)))
+say(os.date("%Y", 0) ~= nil)
+say(math.type(1))
+say(math.type(1.5))
+say(math.type("x"))
+local ok, err = pcall(error, "x", 0)
+say(not ok)
+return table.concat(o, ",")
+`)
+	if !strings.Contains(got, "ab") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestLoadlibAndPackageEdges(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+say(type(package.searchpath))
+local ok, err = package.searchpath("no_such_mod_covergap", "?.lua")
+say(ok == nil)
+say(type(err) == "string")
+say(type(package.loaded) == "table")
+say(type(package.preload) == "table")
+local ok2, mod = pcall(require, "no_such_mod_covergap_xyz")
+say(not ok2)
+return table.concat(o, ",")
+`)
+	if !strings.HasPrefix(got, "function,true,true,true,true,true") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestLuacMoreOptions(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "c.lua")
+	if err := os.WriteFile(src, []byte("local a = '"+strings.Repeat("z", 300)+"'\nreturn a\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if L.PCall(0, 1, 0) != LUA_OK {
-		t.Fatal("uv")
+	outPath := filepath.Join(dir, "c.out")
+	var out, errb bytes.Buffer
+	if code := Luac([]string{"luac", "-o", outPath, src}, &out, &errb); code != 0 {
+		t.Fatalf("compile %d %s", code, errb.String())
 	}
-	id := L.UpvalueId(-1, 1)
-	if id == nil {
-		t.Fatal("UpvalueId")
+	out.Reset()
+	errb.Reset()
+	if code := Luac([]string{"luac", "-l", "-l", outPath}, &out, &errb); code != 0 {
+		t.Fatalf("list %d %s", code, errb.String())
 	}
-	_ = L.UpvalueId(-1, 99)
-	L.Pop(1)
-
-	// ToClose / CloseSlot
-	L.NewUserData(nil, 0)
-	if L.NewMetaTable("cover.close") {
-		L.PushGoFunc(func(L *State) int { return 0 })
-		L.SetField(-2, "__close")
+	if !strings.Contains(out.String(), "main") {
+		t.Fatalf("listing %q", out.String())
 	}
-	L.SetMetaTableByName("cover.close")
-	L.ToClose(-1)
-	L.CloseSlot(-1)
-	L.SetTop(0)
+	// load binary back
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	if err := L.DoFile(outPath); err != nil {
+		t.Fatal(err)
+	}
+}
 
-	// pcallK path
-	L.PushGoFunc(func(L *State) int {
-		L.PushInteger(1)
-		return 1
-	})
-	_ = L.pcallK(0, 1, 0, false)
-	L.SetTop(0)
-
-	// Error()
-	L.PushString("boom")
+func TestCheckStack2Overflow(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	err := L.DoString(`
+local function rec(n)
+  if n > 0 then return rec(n-1) end
+end
+`)
+	_ = err
+	// Force CheckStack2 failure path with absurd size when possible.
 	func() {
 		defer func() { _ = recover() }()
-		L.Error()
-	}()
-
-	// index2value upvalue / invalid
-	func() {
-		defer func() { _ = recover() }()
-		_ = index2value(L, 0)
-	}()
-	_ = index2value(L, LUA_REGISTRYINDEX-1) // upvalue of light C / none
-
-	// fastYieldNow via recover
-	L2 = L.NewThread()
-	L2.co = &coRuntime{sync: true}
-	func() {
-		defer func() { _ = recover() }()
-		L2.fastYieldNow(0)
+		L.CheckStack2(math.MaxInt32/4, "overflow-test")
 	}()
 }
 
-func TestCoverGapPairsMetamethodYield(t *testing.T) {
-	// Hit basePairsCont install path with sync coroutine
-	got := runChunk(t, `
-local out = {}
-local mt = {__pairs = function(self)
-  return function(_, k)
-    if k == nil then return 1, "a" end
-  end, self, nil
-end}
-local o = setmetatable({}, mt)
-for k,v in pairs(o) do out[#out+1] = tostring(k)..tostring(v) end
-return table.concat(out, ",")
-`)
-	if got == "" {
-		t.Fatalf("pairs mt empty")
+func TestOpenBit32Direct(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.PushGoFunc(OpenBit32)
+	L.PushString("bit32")
+	L.Call(1, 1)
+	if !L.IsTable(-1) {
+		t.Fatal("OpenBit32")
 	}
 }

@@ -48,6 +48,23 @@ func init() {
 	ctypeIsUpper = func(c byte) bool { return C.cdl_isupper(C.int(c)) != 0 }
 	ctypeIsAlnum = func(c byte) bool { return C.cdl_isalnum(C.int(c)) != 0 }
 	ctypeIsXDigit = func(c byte) bool { return C.cdl_isxdigit(C.int(c)) != 0 }
+
+	/* os.date: libc strftime so LC_TIME from os.setlocale is visible. */
+	osStrftimeC = func(epoch int64, utc bool, spec string) (string, bool) {
+		cspec := C.CString(spec)
+		defer C.free(unsafe.Pointer(cspec))
+		var buf [250]byte /* SIZETIMEFMT in loslib.c */
+		u := C.int(0)
+		if utc {
+			u = 1
+		}
+		n := C.cdl_strftime((*C.char)(unsafe.Pointer(&buf[0])), C.size_t(len(buf)),
+			cspec, C.longlong(epoch), u)
+		if n == ^C.size_t(0) { /* (size_t)-1: gmtime/localtime failed */
+			return "", false
+		}
+		return C.GoStringN((*C.char)(unsafe.Pointer(&buf[0])), C.int(n)), true
+	}
 }
 
 // localeCatOf turns the category os.setlocale was given into the LC_* it

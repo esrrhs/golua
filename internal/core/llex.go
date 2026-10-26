@@ -1,14 +1,15 @@
-// Translation of llex.h / llex.c (PUC-Lua 5.4.9).
-// lctype.h / lctype.c are folded here (lexer is the main consumer of
-// charint ctype tests; lobject.go keeps separate byte helpers for
-// numeral parsing).
+// Translation of llex.h / llex.c (PUC-Lua 5.3.4).
+// Aligned to lua-5.3.4/src/llex.c + llex.h (not 5.4 token2str / read_numeral /
+// skip_sep return encoding / luaX_newstring t[str]=str).
 //
-// Intentional Go diffs (KEEP — do not "fix" to C shapes):
-//   - Go GC: luaC_fix / luaC_checkGC omitted. Reserved words are also
-//     recorded in reservedTokens so they survive string-table flush()
-//     (TString.extra alone would be lost on re-intern).
-//   - ZIO → []byte + pos + optional fill (lzio reader stand-in).
-//   - Mbuffer → []byte (no NUL terminators; buffRemove/reslice instead).
+// Adaptations (same rules as the rest of the package):
+//   - no GC: luaC_fix is gone; reserved words are anchored by a package-level
+//     map instead of by TString.extra (which would be lost if the intern
+//     table is flushed);
+//   - the ZIO stream becomes a plain byte slice plus a position;
+//   - Mbuffer becomes a []byte, so NUL terminators are unnecessary;
+//   - luaX_newstring uses C 5.3.4 t[str]=true + key reuse (via luaH_getstrkey ≡
+//     keyfromval); addk may overwrite the value with a constant index.
 package core
 
 // EOZ marks the end of the input stream (lzio.h).
@@ -16,20 +17,13 @@ const EOZ = -1
 
 const maxInt = int(^uint(0) >> 1)
 
-// maxSize stand-in for llimits.h MAX_SIZE (save: "lexical element too long").
-const maxSize = int(^uint(0) >> 1)
+// FIRST_RESERVED — llex.h 5.3.4 (#define FIRST_RESERVED 257).
+const FIRST_RESERVED = 257
 
-/*
-** Single-char tokens (terminal symbols) are represented by their own
-** numeric code. Other tokens start at the following value.
-** C: #define FIRST_RESERVED (UCHAR_MAX + 1)
- */
-const FIRST_RESERVED = 256
+const maxSize = int(^uint(0) >> 1) /* llimits.h MAX_SIZE ≈ max int */
 
-/*
-* WARNING: if you change the order of this enumeration,
-* grep "ORDER RESERVED"
- */
+// Token codes. WARNING: if you change the order of this enumeration,
+// grep "ORDER RESERVED".
 const (
 	/* terminal symbols denoted by reserved words */
 	TK_AND = FIRST_RESERVED + iota
@@ -72,10 +66,10 @@ const (
 	TK_STRING
 )
 
-/* number of reserved words */
+// NUM_RESERVED is the number of reserved words.
 const NUM_RESERVED = TK_WHILE - FIRST_RESERVED + 1
 
-/* C: #if !defined(LUA_ENV) #define LUA_ENV "_ENV" */
+// LUA_ENV is the name of the environment upvalue of every chunk.
 const LUA_ENV = "_ENV"
 
 /* ORDER RESERVED */
@@ -90,9 +84,9 @@ var luaX_tokens = []string{
 }
 
 // reservedTokens maps a reserved word to its token. PUC-Lua stores the
-// index in TString.extra and pins the string with luaC_fix; after a Go
-// intern-table flush a re-interned short has extra==0, so the map is the
-// durable authority (FLAG / intentional Go-GC).
+// index in TString.extra and pins the string with luaC_fix; we have no GC
+// and the intern table may be flushed, so a global map is the safe
+// equivalent.
 var reservedTokens = map[string]int{}
 
 // SemInfo is the semantic information of a token (llex.h).
@@ -111,31 +105,31 @@ type Token struct {
 // LexState is the state of the lexer plus the state of the parser shared
 // by all functions (llex.h).
 type LexState struct {
-	current    int /* current character (charint) */
-	linenumber int /* input line counter */
-	lastline   int /* line of last token 'consumed' */
-	t          Token
-	lookahead  Token
+	current    int   // current character (charint)
+	linenumber int   // input line counter
+	lastline   int   // line of last token 'consumed'
+	t          Token // current token
+	lookahead  Token // look ahead token
 	fs         *FuncState
 	L          *State
-	src        []byte /* input stream (replaces ZIO *z) */
+	src        []byte // input stream (replaces ZIO)
 	pos        int
-	// fill pulls the next piece of the stream; stand-in for ZIO's reader
-	// (lzio.c). nil means the whole chunk is already in 'src'.
+	// fill pulls the next piece of the stream; it is what C's ZIO does
+	// with a reader function (lzio.c).  nil means the whole chunk is
+	// already in 'src'.  The pieces are asked for one at a time and only
+	// when the lexer runs out, so a chunk that fails to parse stops the
+	// reader instead of draining it.
 	fill   func() []byte
-	buff   []byte   /* buffer for tokens (replaces Mbuffer *buff) */
-	h      *Table   /* to avoid collection/reuse strings */
-	dyd    *Dyndata /* dynamic structures used by the parser */
-	source *TString /* current source name */
-	envn   *TString /* environment variable name */
+	buff   []byte // buffer for tokens (replaces Mbuffer)
+	h      *Table // to avoid collection/reuse strings
+	dyd    *Dyndata
+	source *TString // current source name
+	envn   *TString // environment variable name
 }
 
-// ---------------------------------------------------------------------
-// input stream (lzio.h next / zgetc)
-// ---------------------------------------------------------------------
+// --- input stream (lzio.h) ---
 
 // next reads the next character from the input stream.
-// C: #define next(ls) (ls->current = zgetc(ls->z))
 func (ls *LexState) next() {
 	if ls.pos >= len(ls.src) {
 		ls.pull()
@@ -148,7 +142,9 @@ func (ls *LexState) next() {
 	}
 }
 
-// pull asks the reader for the next piece (lzio.c luaZ_fill).
+// pull asks the reader for the next piece of the stream, dropping what
+// has been consumed already (lzio.c's luaZ_fill).  An empty piece, or a
+// nil one, is the end of the stream.
 func (ls *LexState) pull() {
 	if ls.fill == nil {
 		return
@@ -166,32 +162,27 @@ func (ls *LexState) pull() {
 	}
 }
 
-// C: #define currIsNewline(ls) (ls->current == '\n' || ls->current == '\r')
 func currIsNewline(ls *LexState) bool {
 	return ls.current == '\n' || ls.current == '\r'
 }
 
-// ---------------------------------------------------------------------
-// token buffer (lzio.h Mbuffer helpers)
-// ---------------------------------------------------------------------
+// --- token buffer (lzio.h) ---
 
 func (ls *LexState) resetbuffer() { ls.buff = ls.buff[:0] }
 
 func (ls *LexState) buffer() string { return string(ls.buff) }
 
-// save appends c to the token buffer (llex.c).
 func (ls *LexState) save(c int) {
-	/* C: if (luaZ_sizebuffer(b) >= MAX_SIZE/2) → "lexical element too long" */
+	/* llex.c: luaZ_sizebuffer >= MAX_SIZE/2 → "lexical element too long" */
 	if len(ls.buff) >= maxSize/2 {
 		lexerror(ls, "lexical element too long", 0)
 	}
 	ls.buff = append(ls.buff, byte(c))
 }
 
-// C: #define save_and_next(ls) (save(ls, ls->current), next(ls))
+// saveAndNext saves the current character and reads the next one.
 func (ls *LexState) saveAndNext() { ls.save(ls.current); ls.next() }
 
-// buffRemove is luaZ_buffremove (lzio.h).
 func (ls *LexState) buffRemove(n int) {
 	if n > len(ls.buff) {
 		n = len(ls.buff)
@@ -199,85 +190,47 @@ func (ls *LexState) buffRemove(n int) {
 	ls.buff = ls.buff[:len(ls.buff)-n]
 }
 
-// ---------------------------------------------------------------------
-// lctype.h / lctype.c (ASCII LUA_USE_CTYPE==0; NONA default 0 — no LUA_UCID)
-// ---------------------------------------------------------------------
+// --- lctype.h ---
 
-const (
-	ALPHABIT  = 0
-	DIGITBIT  = 1
-	PRINTBIT  = 2
-	SPACEBIT  = 3
-	XDIGITBIT = 4
-)
-
-func MASK(b int) byte { return 1 << uint(b) }
-
-// testprop: C #define testprop(c,p) (luai_ctype_[(c)+1] & (p))
-// Index +1 allows EOZ (-1).
-func testprop(c int, p byte) bool {
-	if c < EOZ || c > 255 {
+func lislalpha(c int) bool {
+	if c == EOZ {
 		return false
 	}
-	return luai_ctype_[c+1]&p != 0
+	r := rune(c)
+	return r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
 }
 
-func lislalpha(c int) bool { return testprop(c, MASK(ALPHABIT)) }
 func lislalnum(c int) bool {
-	return testprop(c, MASK(ALPHABIT)|MASK(DIGITBIT))
-}
-func lisdigit(c int) bool { return testprop(c, MASK(DIGITBIT)) }
-func lisprint(c int) bool { return testprop(c, MASK(PRINTBIT)) }
-
-// lisspaceChar is lispace for charint (avoids clash with lobject.lisspace(byte)).
-func lisspaceChar(c int) bool { return testprop(c, MASK(SPACEBIT)) }
-
-// lisxdigitChar is C lisxdigit for charint (avoids clash with lobject.lisxdigit(byte)).
-func lisxdigitChar(c int) bool { return testprop(c, MASK(XDIGITBIT)) }
-
-// ltolower matches lctype.h (ASCII): enough for alphabetic chars and '.'.
-func ltolower(c int) int {
-	return c | ('A' ^ 'a')
+	if c == EOZ {
+		return false
+	}
+	return lislalpha(c) || lisdigit(c)
 }
 
-// NONA: C lctype.c — 0x01 if LUA_UCID (Unicode identifiers), else 0x00 (default).
-const NONA byte = 0x00
+func lisdigit(c int) bool {
+	return c >= '0' && c <= '9'
+}
 
-// luai_ctype_: one entry for each character and for -1 (EOZ). Matches lctype.c.
-var luai_ctype_ = [255 + 2]byte{ /* UCHAR_MAX+2 */
-	0x00,                                           /* EOZ */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 0. */
-	0x00, 0x08, 0x08, 0x08, 0x08, 0x08, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* 1. */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x0c, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, /* 2. */
-	0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
-	0x16, 0x16, 0x16, 0x16, 0x16, 0x16, 0x16, 0x16, /* 3. */
-	0x16, 0x16, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04,
-	0x04, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x05, /* 4. */
-	0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05,
-	0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, /* 5. */
-	0x05, 0x05, 0x05, 0x04, 0x04, 0x04, 0x04, 0x05,
-	0x04, 0x15, 0x15, 0x15, 0x15, 0x15, 0x15, 0x05, /* 6. */
-	0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05,
-	0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, 0x05, /* 7. */
-	0x05, 0x05, 0x05, 0x04, 0x04, 0x04, 0x04, 0x00,
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA, /* 8. */
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA,
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA, /* 9. */
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA,
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA, /* a. */
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA,
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA, /* b. */
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA,
-	0x00, 0x00, NONA, NONA, NONA, NONA, NONA, NONA, /* c. */
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA,
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA, /* d. */
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA,
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA, /* e. */
-	NONA, NONA, NONA, NONA, NONA, NONA, NONA, NONA,
-	NONA, NONA, NONA, NONA, NONA, 0x00, 0x00, 0x00, /* f. */
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+// lisxdigitInt is lctype.h lisxdigit for lexer charint (EOZ-safe).
+// Distinct from lobject.lisxdigit(byte) — Go has no overloads (lctype folded).
+func lisxdigitInt(c int) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+// lisprint reports whether c is a printable ASCII character (lctype.h).
+// Used by pushfString '%c' (5.3.4 luaO_pushvfstring in lobject.go).
+func lisprint(c int) bool {
+	return c >= ' ' && c <= '~'
+}
+
+// lisspaceByte is lctype.h lisspace for lexer charint (EOZ → false).
+// Distinct from lobject.lisspace(byte).
+func lisspaceByte(c int) bool {
+	switch byte(c) {
+	case ' ', '\t', '\n', '\v', '\f', '\r':
+		return true
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------
@@ -285,42 +238,27 @@ var luai_ctype_ = [255 + 2]byte{ /* UCHAR_MAX+2 */
 // ---------------------------------------------------------------------
 
 // luaX_init creates the reserved words (llex.c).
-// FLAG: luaC_fix omitted (Go GC); reservedTokens survives intern flush.
 func luaX_init(L *State) {
-	e := luaS_new(L, LUA_ENV) /* create env name */
-	_ = e
-	/* C: luaC_fix(L, obj2gco(e)); — never collect this name */
+	luaS_new(L, LUA_ENV) /* C: create env name + luaC_fix; no fix under Go GC */
 	for i := 0; i < NUM_RESERVED; i++ {
-		ts := luaS_new(L, luaX_tokens[i])
-		/* C: luaC_fix(L, obj2gco(ts)); — reserved words are never collected */
-		ts.extra = byte(i + 1) /* reserved word */
+		luaS_new(L, luaX_tokens[i])
 		reservedTokens[luaX_tokens[i]] = FIRST_RESERVED + i
+		/* C: ts->extra = i+1; reserved via reservedTokens map (no TString.extra) */
 	}
 }
 
-// isreserved is C #define isreserved(s) ((s)->tt == LUA_VSHRSTR && (s)->extra > 0)
-func isreserved(s *TString) bool {
-	return s.tt == LUA_VSHRSTR && s.extra > 0
-}
-
-// reservedToken returns the token for a reserved word.
-// Prefers TString.extra (C); falls back to reservedTokens after flush.
-func reservedToken(ts *TString) (int, bool) {
-	if isreserved(ts) {
-		return int(ts.extra) - 1 + FIRST_RESERVED, true
-	}
+// isreserved reports whether ts is a reserved word, returning its token.
+func isreservedToken(ts *TString) (int, bool) {
 	tk, ok := reservedTokens[ts.val]
 	return tk, ok
 }
 
-// luaX_token2str returns a printable representation of a token (llex.c).
+// luaX_token2str returns a printable representation of a token (llex.c 5.3.4).
+// Always "'%c'" for token < FIRST_RESERVED (not 5.4's lisprint / "'<\%d>'" branch).
+// Non-printable escaping lives in pushfString '%c' (luaO_pushvfstring), as in C.
 func luaX_token2str(ls *LexState, token int) string {
 	if token < FIRST_RESERVED { /* single-byte symbols? */
-		if lisprint(token) {
-			return pushfString(ls.L, "'%c'", token).val
-		}
-		/* control character */
-		return pushfString(ls.L, "'<\\%d>'", token).val
+		return pushfString(ls.L, "'%c'", token).val
 	}
 	s := luaX_tokens[token-FIRST_RESERVED]
 	if token < TK_EOS { /* fixed format (symbols and reserved words)? */
@@ -332,7 +270,7 @@ func luaX_token2str(ls *LexState, token int) string {
 func txtToken(ls *LexState, token int) string {
 	switch token {
 	case TK_NAME, TK_STRING, TK_FLT, TK_INT:
-		/* C: save(ls, '\0'); — Go []byte needs no NUL */
+		/* C: save('\0'); return luaO_pushfstring(L, "'%s'", buffer) — no NUL on []byte */
 		return pushfString(ls.L, "'%s'", ls.buffer()).val
 	default:
 		return luaX_token2str(ls, token)
@@ -343,9 +281,9 @@ func txtToken(ls *LexState, token int) string {
 func lexerror(ls *LexState, msg string, token int) {
 	msg = luaG_addinfo(ls.L, msg, ls.source, ls.linenumber)
 	if token != 0 {
-		/* C: luaO_pushfstring(ls->L, "%s near %s", msg, txtToken(ls, token)) */
+		/* C: luaO_pushfstring(L, "%s near %s", msg, txtToken(...)) */
 		ts := pushfString(ls.L, "%s near %s", msg, txtToken(ls, token))
-		ls.L.pushMessage(ts)
+		ls.L.pushMessage(ts) /* pushMessage: no checkStack (error path) */
 	}
 	luaD_throw(ls.L, LUA_ERRSYNTAX)
 }
@@ -355,46 +293,34 @@ func luaX_syntaxerror(ls *LexState, msg string) {
 	lexerror(ls, msg, ls.t.token)
 }
 
-/*
-** Creates a new string and anchors it in scanner's table so that it
-** will not be collected until the end of the compilation; by that time
-** it should be anchored somewhere. It also internalizes long strings,
-** ensuring there is only one copy of each unique string.  The table
-** here is used as a set: the string enters as the key, while its value
-** is irrelevant. We use the string itself as the value only because it
-** is a TValue readily available. Later, the code generation can change
-** this value.
-**
-** FLAG: present-case copy via luaH_getstrkey (≡ keystrval(nodefromval(o)));
-** addk may overwrite the value with a constant index, so the value is not
-** a reliable handle on the stored string.
- */
+// luaX_newstring creates a new string and anchors it in the scanner's table
+// so that it will not be collected/reused until the end of the compilation
+// (llex.c 5.3.4).
 func luaX_newstring(ls *LexState, str string) *TString {
 	L := ls.L
 	ts := luaS_newlstr(L, str) /* create new string */
-	o := luaH_getstr(L, ls.h, ts)
-	if !ttisnil(o) { /* string already present? */
-		ts = luaH_getstrkey(L, ls.h, ts) /* get saved copy */
-	} else { /* not in use yet */
-		L.checkStack(1)
-		stv := &L.stack[L.top]
-		L.top++
-		setsvalue(stv, ts)                   /* temporarily anchor the string */
-		luaH_finishset(L, ls.h, stv, o, stv) /* t[string] = string */
-		/* table is not a metatable, so it does not need to invalidate cache */
-		/* C: luaC_checkGC(L); — omitted (Go GC) */
-		L.top-- /* remove string from stack */
+	/* C: setsvalue2s(L, L->top++, ts); o = luaH_set(...);
+	   if ttisnil(o) setbvalue(o,1); else ts = tsvalue(keyfromval(o));
+	   L->top--.
+	   Go: no stack anchor (Go GC). Reuse via key (luaH_getstrkey ≡ keyfromval):
+	   addk may overwrite the *value* with a constant index, so never read value. */
+	if saved := luaH_getstrkey(L, ls.h, ts); saved != nil {
+		return saved /* string already present — re-use key */
 	}
+	/* not in use yet? */
+	var key Value
+	setsvalue(&key, ts)
+	o := luaH_set(L, ls.h, &key)
+	/* boolean value does not need GC barrier;
+	   table has no metatable, so it does not need to invalidate cache */
+	setbvalue(o, true) /* t[string] = true — C 5.3.4 (not 5.4 t[str]=str) */
 	return ts
 }
 
-/*
-** increment line number and skips newline sequence (any of
-** \n, \r, \n\r, or \r\n)
- */
+// inclinenumber increments the line number and skips a newline sequence
+// (any of \n, \r, \n\r, or \r\n) (llex.c).
 func (ls *LexState) inclinenumber() {
 	old := ls.current
-	/* lua_assert(currIsNewline(ls)) */
 	ls.next() /* skip '\n' or '\r' */
 	if currIsNewline(ls) && ls.current != old {
 		ls.next() /* skip '\n\r' or '\r\n' */
@@ -406,7 +332,6 @@ func (ls *LexState) inclinenumber() {
 }
 
 // luaX_setinput initializes the lexer for a new chunk (llex.c).
-// Go: src/fill replace ZIO; resetbuffer stands in for luaZ_resizebuffer(..., LUA_MINBUFFER).
 func luaX_setinput(L *State, ls *LexState, src []byte, source *TString, firstchar int, fill func() []byte) {
 	ls.t.token = 0
 	ls.L = L
@@ -420,14 +345,14 @@ func luaX_setinput(L *State, ls *LexState, src []byte, source *TString, firstcha
 	ls.lastline = 1
 	ls.source = source
 	ls.envn = luaS_new(L, LUA_ENV) /* get env name */
-	ls.resetbuffer()               /* C: luaZ_resizebuffer(..., LUA_MINBUFFER) */
+	ls.resetbuffer()
 }
 
 // ---------------------------------------------------------------------
 // LEXICAL ANALYZER
 // ---------------------------------------------------------------------
 
-// checkNext1 checks whether the current char is c, consuming it (llex.c check_next1).
+// checkNext1 checks whether the current char is c, consuming it (llex.c).
 func (ls *LexState) checkNext1(c int) bool {
 	if ls.current == c {
 		ls.next()
@@ -436,12 +361,9 @@ func (ls *LexState) checkNext1(c int) bool {
 	return false
 }
 
-/*
-** Check whether current char is in set 'set' (with two chars) and
-** saves it (llex.c check_next2).
- */
+// checkNext2 checks whether the current char is in set (two chars) and
+// saves it (llex.c).
 func (ls *LexState) checkNext2(set string) bool {
-	/* lua_assert(set[2] == '\0') */
 	if ls.current == int(set[0]) || ls.current == int(set[1]) {
 		ls.saveAndNext()
 		return true
@@ -449,41 +371,33 @@ func (ls *LexState) checkNext2(set string) bool {
 	return false
 }
 
-/* LUA_NUMBER */
-/*
-** This function is quite liberal in what it accepts, as 'luaO_str2num'
-** will reject ill-formed numerals. Roughly, it accepts the following
-** pattern:
-**
-**   %d(%x|%.|([Ee][+-]?))* | 0[Xx](%x|%.|([Pp][+-]?))*
-**
-** The only tricky part is to accept [+-] only after a valid exponent
-** mark, to avoid reading '3-4' or '0xe+1' as a single number.
-**
-** The caller might have already read an initial dot.
- */
+// read_numeral reads a numeral (llex.c 5.3.4).
+// Quite liberal: luaO_str2num rejects ill-formed numerals.
+// Loop shape is 5.3.4 (two separate ifs per iteration), not 5.4 else-if.
+// Does not force-save a trailing letter (5.4 does).
 func read_numeral(ls *LexState, seminfo *SemInfo) int {
-	var obj Value
 	expo := "Ee"
 	first := ls.current
-	/* lua_assert(lisdigit(ls->current)) */
 	ls.saveAndNext()
 	if first == '0' && ls.checkNext2("xX") { /* hexadecimal? */
 		expo = "Pp"
 	}
+	/* 5.3.4: after optional expo/sign, separate digit/'.' check in same iteration
+	   (not 5.4 else-if). Second expo that is not a digit → break without consume. */
 	for {
-		if ls.checkNext2(expo) { /* exponent mark? */
+		if ls.checkNext2(expo) { /* exponent part? */
 			ls.checkNext2("-+") /* optional exponent sign */
-		} else if lisxdigitChar(ls.current) || ls.current == '.' { /* '%x|%.' */
+		}
+		if lisxdigitInt(ls.current) {
+			ls.saveAndNext()
+		} else if ls.current == '.' {
 			ls.saveAndNext()
 		} else {
 			break
 		}
 	}
-	if lislalpha(ls.current) { /* is numeral touching a letter? */
-		ls.saveAndNext() /* force an error */
-	}
-	/* C: save(ls, '\0'); — Go []byte needs no NUL */
+	/* 5.3.4: no trailing lislalpha force-save (5.4 only). */
+	var obj Value
 	if !luaO_str2num(ls.buffer(), &obj) { /* format error? */
 		lexerror(ls, "malformed number", TK_FLT)
 	}
@@ -491,39 +405,33 @@ func read_numeral(ls *LexState, seminfo *SemInfo) int {
 		seminfo.i = ivalue(&obj)
 		return TK_INT
 	}
-	/* lua_assert(ttisfloat(&obj)) */
 	seminfo.r = fltvalue(&obj)
 	return TK_FLT
 }
 
-/*
-** read a sequence '[=*[' or ']=*]', leaving the last bracket. If
-** sequence is well formed, return its number of '='s + 2; otherwise,
-** return 1 if it is a single bracket (no '='s and no 2nd bracket);
-** otherwise (an unfinished '[==...') return 0.
- */
+// skipSep skips a sequence '[=*[' or ']=*]'. If well formed, return its
+// number of '='s; otherwise return a negative number (-1 iff there are no
+// '='s after the initial bracket) — llex.c 5.3.4 (not 5.4 count+2/1/0).
 func (ls *LexState) skipSep() int {
 	count := 0
 	s := ls.current
-	/* lua_assert(s == '[' || s == ']') */
 	ls.saveAndNext()
 	for ls.current == '=' {
 		ls.saveAndNext()
 		count++
 	}
 	if ls.current == s {
-		return count + 2
+		return count
 	}
-	if count == 0 {
-		return 1
-	}
-	return 0
+	return (-count) - 1
 }
 
+// read_long_string reads a long string or a long comment (llex.c).
 func read_long_string(ls *LexState, seminfo *SemInfo, sep int) {
-	line := ls.linenumber  /* initial line (for error message) */
-	ls.saveAndNext()       /* skip 2nd '[' */
-	if currIsNewline(ls) { /* string starts with a newline? */
+	line := ls.linenumber /* initial line (for error message) */
+	ls.saveAndNext()      /* skip 2nd '[' */
+	/* string starts with a newline? */
+	if currIsNewline(ls) {
 		ls.inclinenumber() /* skip it */
 	}
 endloop:
@@ -534,7 +442,6 @@ endloop:
 			if seminfo == nil {
 				what = "comment"
 			}
-			/* C: luaO_pushfstring(ls->L, "unfinished long %s (starting at line %d)", ...) */
 			msg := pushfString(ls.L, "unfinished long %s (starting at line %d)", what, line).val
 			lexerror(ls, msg, TK_EOS)
 		case ']':
@@ -557,10 +464,12 @@ endloop:
 		}
 	}
 	if seminfo != nil {
-		seminfo.ts = luaX_newstring(ls, string(ls.buff[sep:len(ls.buff)-sep]))
+		/* C: buffer+(2+sep), len-2*(2+sep) */
+		seminfo.ts = luaX_newstring(ls, string(ls.buff[(2+sep):len(ls.buff)-(2+sep)]))
 	}
 }
 
+// esccheck raises an error when c is false (llex.c).
 func esccheck(ls *LexState, c bool, msg string) {
 	if !c {
 		if ls.current != EOZ {
@@ -572,7 +481,7 @@ func esccheck(ls *LexState, c bool, msg string) {
 
 func gethexa(ls *LexState) int {
 	ls.saveAndNext()
-	esccheck(ls, lisxdigitChar(ls.current), "hexadecimal digit expected")
+	esccheck(ls, lisxdigitInt(ls.current), "hexadecimal digit expected")
 	return luaO_hexavalue(byte(ls.current))
 }
 
@@ -585,18 +494,19 @@ func readhexaesc(ls *LexState) int {
 
 func readutf8esc(ls *LexState) uint32 {
 	var r uint32
-	i := 4           /* chars to be removed: '\', 'u', '{', and first digit */
-	ls.saveAndNext() /* skip 'u' */
+	i := 4 /* chars to be removed: '\', 'u', '{', and first digit */
+	ls.saveAndNext()
 	esccheck(ls, ls.current == '{', "missing '{'")
 	r = uint32(gethexa(ls)) /* must have at least one digit */
 	for {
 		ls.saveAndNext()
-		if !lisxdigitChar(ls.current) {
+		if !lisxdigitInt(ls.current) {
 			break
 		}
 		i++
-		esccheck(ls, r <= (0x7FFFFFFF>>4), "UTF-8 value too large")
 		r = (r << 4) + uint32(luaO_hexavalue(byte(ls.current)))
+		/* 5.3.4: MAXUNICODE is 0x10FFFF (5.4 raised the ceiling). */
+		esccheck(ls, r <= 0x10FFFF, "UTF-8 value too large")
 	}
 	esccheck(ls, ls.current == '}', "missing '}'")
 	ls.next()        /* skip '}' */
@@ -613,13 +523,13 @@ func utf8esc(ls *LexState) {
 
 func readdecesc(ls *LexState) int {
 	i := 0
-	r := 0                                          /* result accumulator */
-	for i = 0; i < 3 && lisdigit(ls.current); i++ { /* read up to 3 digits */
+	r := 0 /* result accumulator */
+	for i = 0; i < 3 && lisdigit(ls.current); i++ {
 		r = 10*r + ls.current - '0'
 		ls.saveAndNext()
 	}
-	esccheck(ls, r <= 255, "decimal escape too large") /* UCHAR_MAX */
-	ls.buffRemove(i)                                   /* remove read digits from buffer */
+	esccheck(ls, r <= 255, "decimal escape too large")
+	ls.buffRemove(i) /* remove read digits from buffer */
 	return r
 }
 
@@ -634,7 +544,8 @@ func read_string(ls *LexState, del int, seminfo *SemInfo) {
 			lexerror(ls, "unfinished string", TK_STRING)
 		case '\\': /* escape sequences */
 			c := 0 /* final character to be saved */
-			/* Go has no goto read_save/only_save/no_save; mode mirrors them. */
+			/* noSave: nothing to save; readSave: read the escape char then
+			   save c; onlySave: the escape char was already consumed */
 			const (
 				noSave   = 0
 				readSave = 1
@@ -682,7 +593,7 @@ func read_string(ls *LexState, del int, seminfo *SemInfo) {
 			case 'z': /* zap following span of spaces */
 				ls.buffRemove(1) /* remove '\\' */
 				ls.next()        /* skip the 'z' */
-				for lisspaceChar(ls.current) {
+				for lisspaceByte(ls.current) {
 					if currIsNewline(ls) {
 						ls.inclinenumber()
 					} else {
@@ -729,8 +640,8 @@ func llex(ls *LexState, seminfo *SemInfo) int {
 			ls.next()
 			if ls.current == '[' { /* long comment? */
 				sep := ls.skipSep()
-				ls.resetbuffer() /* 'skip_sep' may dirty the buffer */
-				if sep >= 2 {
+				ls.resetbuffer() /* 'skipSep' may dirty the buffer */
+				if sep >= 0 {
 					read_long_string(ls, nil, sep) /* skip long comment */
 					ls.resetbuffer()               /* previous call may dirty the buffer */
 					continue
@@ -742,10 +653,10 @@ func llex(ls *LexState, seminfo *SemInfo) int {
 			}
 		case '[': /* long string or simply '[' */
 			sep := ls.skipSep()
-			if sep >= 2 {
+			if sep >= 0 {
 				read_long_string(ls, seminfo, sep)
 				return TK_STRING
-			} else if sep == 0 { /* '[=...' missing second bracket? */
+			} else if sep != -1 { /* '[=...' missing second bracket */
 				lexerror(ls, "invalid long string delimiter", TK_STRING)
 			}
 			return '['
@@ -817,7 +728,7 @@ func llex(ls *LexState, seminfo *SemInfo) int {
 				}
 				ts := luaX_newstring(ls, ls.buffer())
 				seminfo.ts = ts
-				if tk, ok := reservedToken(ts); ok { /* reserved word? */
+				if tk, ok := isreservedToken(ts); ok { /* reserved word? */
 					return tk
 				}
 				return TK_NAME
@@ -834,8 +745,8 @@ func llex(ls *LexState, seminfo *SemInfo) int {
 func luaX_next(ls *LexState) {
 	ls.lastline = ls.linenumber
 	if ls.lookahead.token != TK_EOS { /* is there a look-ahead token? */
-		ls.t = ls.lookahead         /* use this one */
-		ls.lookahead.token = TK_EOS /* and discharge it */
+		ls.t = ls.lookahead /* use this one */
+		ls.lookahead.token = TK_EOS
 	} else {
 		ls.t.token = llex(ls, &ls.t.seminfo) /* read next token */
 	}
@@ -844,7 +755,6 @@ func luaX_next(ls *LexState) {
 // luaX_lookahead reads one token ahead without consuming the current one
 // (llex.c).
 func luaX_lookahead(ls *LexState) int {
-	/* lua_assert(ls->lookahead.token == TK_EOS) */
 	ls.lookahead.token = llex(ls, &ls.lookahead.seminfo)
 	return ls.lookahead.token
 }

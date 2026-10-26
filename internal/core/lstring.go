@@ -1,4 +1,4 @@
-// Translation of lstring.h / lstring.c (PUC-Lua 5.4.9).
+// Translation of lstring.h / lstring.c (PUC-Lua 5.3.4).
 //
 // Short strings are interned in a strong map[string]*TString (Go stand-in
 // for C's stringtable hash + luaS_resize / internshrstr). A weak map made
@@ -7,56 +7,51 @@
 // dropped and later equal shorts become new objects. Equality compares
 // content, so a flushed entry still compares equal to a live one. While
 // cached, equal shorts stay the same object (what lua_topointer /
-// lua_rawsetp see). FLAG: Go intern map OK (BRIEF).
+// lua_rawsetp see). FLAG: Go intern map OK (BRIEF Go-GC).
 //
-// GC helpers luaS_resize / luaS_remove / luaS_clearcache, tablerehash,
-// growstrtab, and STRCACHE are omitted: Go GC + flush() replace them
-// (intentional; BRIEF Skip GC). 5.3 LUAI_HASHLIMIT step-hash purged —
-// 5.4.9 hashes every byte.
+// GC helpers luaS_resize / luaS_remove / luaS_clearcache and STRCACHE are
+// omitted: Go GC + flush() replace them (intentional; see NOTES.md).
+//
+// KEEP LUAI_HASHLIMIT step-hash (5.3.4). Do NOT replace with 5.4.9
+// every-byte hashing.
 package core
 
 import (
 	"strings"
-	"unsafe"
 )
-
-// ---------------------------------------------------------------------
-// Header (lstring.h) + limits used here
-// ---------------------------------------------------------------------
 
 const (
 	LUAI_MAXSHORTLEN = 40 /* llimits.h */
-	MEMERRMSG        = "not enough memory"
-	MINSTRTABSIZE    = 128     /* llimits.h; C initial stringtable size */
-	maxInternedShort = 1 << 20 /* Go-only intern map cap */
+	/*
+	** Lua will use at most ~(2^LUAI_HASHLIMIT) bytes from a string to
+	** compute its hash (lstring.c 5.3.4 default).
+	 */
+	LUAI_HASHLIMIT   = 5
+	MEMERRMSG        = "not enough memory" /* lstring.c */
+	maxInternedShort = 1 << 20             /* Go-only intern cap (FLAG) */
 )
 
-// sizelstring — N/A under Go string heap (C: offsetof + (l+1)*sizeof(char)).
-// isreserved — in llex.go (C macro: tt==LUA_VSHRSTR && extra>0).
-// eqshrstr → luaS_eqshrstr below (content fallback after flush).
-
-// luaS_newliteral is C #define luaS_newliteral(L,s) luaS_newlstr(L,"" s, sizeof(s)-1).
-func luaS_newliteral(L *State, s string) *TString {
-	return luaS_newlstr(L, s)
-}
-
-// stringTable replaces C stringtable { hash[], nuse, size }.
+/*
+** stringTable replaces C stringtable { TString **hash; int nuse; int size }.
+** Open-hash chains / luaS_resize are not ported; see FLAG in NOTES.md.
+ */
 type stringTable struct {
 	short map[string]*TString
 	nuse  int
 }
 
 func newStringTable() *stringTable {
-	/* C starts at MINSTRTABSIZE buckets; Go map hint is larger (perf FLAG). */
 	return &stringTable{short: make(map[string]*TString, 1024)}
 }
 
 func (tb *stringTable) get(s string) *TString { return tb.short[s] }
 
-// flush drops the intern cache (Go substitute for GC unlink via luaS_remove).
-// A full collection must free short strings that nothing else references;
-// the cache is an extra root. Reachable strings stay; equality does not
-// require the cache (luaS_eqshrstr content fallback).
+/*
+** flush drops the intern cache (Go substitute for GC unlink via luaS_remove).
+** A full collection must free short strings that nothing else references;
+** the cache is an extra root. Reachable strings stay; equality does not
+** require the cache (luaS_eqshrstr content fallback).
+ */
 func (tb *stringTable) flush() {
 	if tb == nil || tb.nuse == 0 {
 		return
@@ -65,8 +60,10 @@ func (tb *stringTable) flush() {
 	tb.nuse = 0
 }
 
-// put interns ts under s. Past the cap the cache is dropped so unbounded
-// short-string invention cannot pin every entry forever.
+/*
+** put interns ts under s. Past the cap the cache is dropped so unbounded
+** short-string invention cannot pin every entry forever.
+ */
 func (tb *stringTable) put(s string, ts *TString) {
 	if tb.nuse >= maxInternedShort {
 		tb.short = make(map[string]*TString, 1024)
@@ -76,28 +73,29 @@ func (tb *stringTable) put(s string, ts *TString) {
 	tb.nuse++
 }
 
-// ---------------------------------------------------------------------
-// lstring.c
-// ---------------------------------------------------------------------
-
 /*
 ** equality for long strings
+** lstring.c luaS_eqlngstr
  */
 func luaS_eqlngstr(a, b *TString) bool {
-	lena := len(a.val) /* C: a->u.lnglen */
-	return a == b ||   /* same instance or... */
-		(lena == len(b.val) && /* equal length and ... */
-			a.val == b.val) /* equal contents (C: memcmp) */
+	return a == b || /* same instance or... */
+		(len(a.val) == len(b.val) && a.val == b.val) /* equal length+contents */
 }
 
 /*
-** luaS_hash — lstring.c 5.4.9: seed ^ l, then every byte (no LUAI_HASHLIMIT).
-** C: unsigned int luaS_hash(const char *str, size_t l, unsigned int seed)
+** luaS_hash — lstring.c 5.3.4:
+**   h = seed ^ l;
+**   step = (l >> LUAI_HASHLIMIT) + 1;
+**   for (; l >= step; l -= step)
+**     h ^= ((h<<5) + (h>>2) + cast_byte(str[l - 1]));
+** Go uses a separate index i so len(str) stays intact; same samples.
  */
-func luaS_hash(str string, l int, seed uint32) uint32 {
+func luaS_hash(str string, seed uint32) uint32 {
+	l := len(str)
 	h := seed ^ uint32(l)
-	for ; l > 0; l-- {
-		h ^= (h << 5) + (h >> 2) + uint32(str[l-1]) /* cast_byte */
+	step := (l >> LUAI_HASHLIMIT) + 1
+	for i := l; i >= step; i -= step {
+		h ^= (h << 5) + (h >> 2) + uint32(str[i-1]) /* cast_byte */
 	}
 	return h
 }
@@ -106,13 +104,12 @@ func luaS_hash(str string, l int, seed uint32) uint32 {
 ** luaS_hashlongstr — lstring.c (extra==0 → compute and cache hash).
 ** Seed was stored in ts.hash at createstrobj (G(L)->seed). L is unused
 ** for the hash itself; kept so call sites (ltable) need no signature change.
-** C signature is luaS_hashlongstr(TString *ts) only.
  */
 func luaS_hashlongstr(L *State, ts *TString) uint32 {
 	_ = L
 	if ts.extra == 0 { /* no hash? */
-		ts.hash = luaS_hash(ts.val, len(ts.val), ts.hash) /* seed was stored in hash */
-		ts.extra = 1                                      /* now it has its hash */
+		ts.hash = luaS_hash(ts.val, ts.hash) /* seed was stored in hash */
+		ts.extra = 1                         /* now it has its hash */
 	}
 	return ts.hash
 }
@@ -127,108 +124,96 @@ func luaS_eqshrstr(a, b *TString) bool {
 }
 
 /*
-** luaS_resize / luaS_clearcache / luaS_remove / tablerehash / growstrtab:
-** omitted (C string-table GC). Go map + flush stand in; see file header.
+** omitted (FLAG Go-GC):
+**   void luaS_resize (lua_State *L, int newsize);
+**   void luaS_clearcache (global_State *g);
+**   void luaS_remove (lua_State *L, TString *ts);
+** C open-hash rehash / white-strcache scrub / unlink. Go: map + flush().
  */
 
 /*
-** Initialize the string table and the string cache
-** C also allocates MINSTRTABSIZE, fixes memerrmsg, fills strcache.
-** Go: ensure intern table; pre-create memerrmsg (luaC_fix / STRCACHE N/A).
+** luaS_init — lstring.c:
+**   luaS_resize(L, MINSTRTABSIZE);
+**   g->memerrmsg = luaS_newliteral(L, MEMERRMSG); luaC_fix(...);
+**   fill strcache with memerrmsg.
+** Go: ensure intern table; create memErrMsg if missing (lstate may have
+** already done so). No STRCACHE / no fix().
  */
 func luaS_init(L *State) {
-	g := L.g
-	if g.strt == nil {
-		g.strt = newStringTable()
+	if L.g.strt == nil {
+		L.g.strt = newStringTable() /* ≈ luaS_resize(L, MINSTRTABSIZE) */
 	}
-	/* pre-create memory-error message (C: luaS_newliteral + luaC_fix) */
-	g.memErrMsg = luaS_newliteral(L, MEMERRMSG)
-	/* STRCACHE fill omitted — no API strcache under Go GC */
+	if L.g.memErrMsg == nil {
+		L.g.memErrMsg = luaS_new(L, MEMERRMSG) /* no luaC_fix: Go GC */
+	}
 }
 
 /*
-** creates a new string object (C createstrobj; no luaC_newobj / trailing NUL)
+** createstrobj (static in C) is inlined at internShort / createlngstrobj:
+**   o = luaC_newobj(L, tag, sizelstring(l));
+**   ts->hash = h; ts->extra = 0; getstr(ts)[l] = '\0';
+** Go: &TString{tt, hash, val}; no trailing NUL (immutable Go string).
  */
-func createstrobj(L *State, s string, tag int, h uint32) *TString {
-	_ = L
-	return &TString{tt: tag, hash: h, extra: 0, val: s}
-}
 
 /*
-** luaS_createlngstrobj — C: createstrobj(..., LUA_VLNGSTR, G(L)->seed);
-** lnglen = l; shrlen = 0xFF. Go stores content in val (C memcpy's later);
-** length is len(val); no separate shrlen/lnglen fields on TString.
+** luaS_createlngstrobj — lstring.c:
+**   createstrobj(L, l, LUA_TLNGSTR, G(L)->seed); ts->u.lnglen = l;
+** Go stores content in val (C memcpy's later); length is len(val).
  */
 func luaS_createlngstrobj(L *State, s string) *TString {
-	ts := createstrobj(L, s, LUA_VLNGSTR, L.g.seed)
-	/* C: ts->u.lnglen = l; ts->shrlen = 0xFF — tag + len(val) suffice */
-	return ts
+	return &TString{tt: LUA_TLNGSTR, hash: L.g.seed, val: s} /* extra==0 */
 }
 
 /*
-** Checks whether short string exists and reuses it or creates a new one.
-** C: open-hash chain, may resurrect dead, growstrtab.
-** Go: map lookup; no dead-resurrect / open-hash; put cap replaces grow.
+** internShort — lstring.c internshrstr (map lookup; no dead-resurrect /
+** open-hash chain / size*2 grow; Go map + put cap replace those).
  */
-func internshrstr(L *State, str string) *TString {
-	g := L.g
-	tb := g.strt
-	if ts := tb.get(str); ts != nil {
-		/* found! (C may changewhite if dead — Go GC, no resurrect) */
+func (L *State) internShort(s string) *TString {
+	tb := L.g.strt
+	if ts := tb.get(s); ts != nil {
 		return ts
 	}
-	/* else must create a new string */
-	h := luaS_hash(str, len(str), g.seed)
-	ts := createstrobj(L, str, LUA_VSHRSTR, h)
-	tb.put(str, ts)
-	return ts
-}
-
-func internshrstrBytes(L *State, b []byte) *TString {
-	if len(b) == 0 {
-		return internshrstr(L, "")
-	}
-	g := L.g
-	tb := g.strt
-	tmp := unsafe.String(unsafe.SliceData(b), len(b))
-	if ts := tb.get(tmp); ts != nil {
-		return ts
-	}
-	s := string(b)
-	h := luaS_hash(s, len(s), g.seed)
-	ts := createstrobj(L, s, LUA_VSHRSTR, h)
+	/* createstrobj(L, l, LUA_TSHRSTR, h): extra zeroed by struct literal */
+	ts := &TString{tt: LUA_TSHRSTR, hash: luaS_hash(s, L.g.seed), val: s}
 	tb.put(s, ts)
 	return ts
 }
 
 /*
-** new string (with explicit length)
+** luaS_newlstr — lstring.c: short → internshrstr; long → createlngstrobj+memcpy.
 ** C MAX_SIZE toobig check omitted (Go string / allocation limits).
  */
 func luaS_newlstr(L *State, s string) *TString {
 	if len(s) <= LUAI_MAXSHORTLEN { /* short string? */
-		return internshrstr(L, s)
+		return L.internShort(s)
 	}
-	/* long string: C createlngstrobj + memcpy; Go passes content in s */
 	return luaS_createlngstrobj(L, s)
 }
 
+/*
+** luaS_newlstrBytes — luaS_newlstr from a byte slice (e.g. luaL_pushresult).
+** Checks the short-string intern table before allocating a Go string, matching
+** C's internshrstr lookup on (str, l) before createstrobj+memcpy.
+ */
 func luaS_newlstrBytes(L *State, b []byte) *TString {
-	if len(b) <= LUAI_MAXSHORTLEN {
-		return internshrstrBytes(L, b)
+	if len(b) <= LUAI_MAXSHORTLEN { /* short string? */
+		tb := L.g.strt
+		if ts := tb.short[string(b)]; ts != nil {
+			return ts
+		}
+		s := string(b)
+		ts := &TString{tt: LUA_TSHRSTR, hash: luaS_hash(s, L.g.seed), val: s}
+		tb.put(s, ts)
+		return ts
 	}
 	return luaS_createlngstrobj(L, string(b))
 }
 
 /*
-** Create or reuse a zero-terminated string.
-** C: STRCACHE by pointer address, then strlen + newlstr.
-** Go has no STRCACHE; equivalent to luaS_newlstr for a Go string
-** (use luaS_newCStr when C strlen / first-NUL semantics are required).
+** luaS_new — lstring.c routes through STRCACHE then strlen+newlstr.
+** Go has no STRCACHE; equivalent to luaS_newlstr for a Go string.
  */
-func luaS_new(L *State, s string) *TString {
-	return luaS_newlstr(L, s)
-}
+func luaS_new(L *State, s string) *TString { return luaS_newlstr(L, s) }
 
 /*
 ** luaS_newCStr — C luaS_new(const char*): strlen stops at first '\0'.
@@ -242,22 +227,23 @@ func luaS_newCStr(L *State, s string) *TString {
 }
 
 /*
-** luaS_newudata — lstring.c 5.4.9:
-**   Udata *luaS_newudata(lua_State *L, size_t s, int nuvalue);
-** allocates sizeudata(nuvalue,s), sets len/nuvalue, metatable=NULL, nil uvs.
+** luaS_newudata — lstring.c 5.3.4:
+**   Udata *luaS_newudata(lua_State *L, size_t s);
+** allocates sizeludata(s), sets len=s, metatable=NULL, one nil uservalue.
 ** Go: val any is the intentional port of the byte blob (and cgo blocks);
-** callers may set len / cblock elsewhere. nuvalue drives uv[].
-** Arg order kept as (L, nuvalue, val) — existing call sites.
+** always one uservalue slot (no 5.4 nuvalue / uv[]). Callers may set
+** len / cblock elsewhere. MAX_SIZE toobig omitted.
  */
-func luaS_newudata(L *State, nuvalue int, val any) *Udata {
+func luaS_newudata(L *State, val any) *Udata {
 	_ = L
-	/* C: luaM_toobig if s too large — omitted (Go heap) */
-	u := &Udata{nuvalue: uint16(nuvalue), val: val, metatable: nil}
-	if nuvalue > 0 {
-		u.uv = make([]Value, nuvalue)
-		for i := 0; i < nuvalue; i++ {
-			setnilvalue(&u.uv[i])
-		}
-	}
+	u := &Udata{val: val, metatable: nil}
+	setnilvalue(&u.user) /* setuservalue(L, u, luaO_nilobject) */
 	return u
 }
+
+/* Header macros (lstring.h) not separate Go symbols:
+**   sizelstring / sizeludata / sizeudata — Go GC / len(val); unused.
+**   luaS_newliteral(L, s) — callers use luaS_new / luaS_newlstr.
+**   isreserved(s) — llex isreservedToken map (no GC-pinned extra token id).
+**   eqshrstr(a,b) — luaS_eqshrstr (with flush-safe content fallback).
+ */

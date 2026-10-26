@@ -1,0 +1,4 @@
+gc	dropped
+gc	in a coroutine
+done
+gc	reachable

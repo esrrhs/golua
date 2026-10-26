@@ -1,0 +1,25 @@
+true	true	9223372036854775807	-9223372036854775808
+3	3.5	-9223372036854775808
+4	-3	3	-4
+3	3
+1	-1	1	1.5
+3	-3	3	0.0
+4.0	true
+1.0	true
+0.0	1.0
+3.0	2.0
+5	1
+1	1
+1.5	1
+false	bad argument #1 to 'math.max' (value expected)
+false	attempt to compare number with string
+3	3	3	nil
+integer
+true	false	false	false
+false
+true	true
+lua: 17_math.lua:22: bad argument #2 to 'fmod' (zero)
+stack traceback:
+	[C]: in function 'math.fmod'
+	17_math.lua:22: in main chunk
+	[C]: in ?

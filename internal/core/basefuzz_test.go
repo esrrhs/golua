@@ -288,61 +288,8 @@ func TestBaseFuzzDifferential(t *testing.T) {
 		return d
 	}
 
-	/* 1. warn.  It is first in the file because it is the only
-	   function in the library that writes to standard error, and
-	   every warning has to be written before the corpus is. */
-	warn := func(tag, control, args string) {
-		if args == "" {
-			emitStmt(`C(` + strconv.Quote(tag) + `, warn)`)
-			return
-		}
-		if control == "" {
-			emitStmt(`C(` + strconv.Quote(tag) + `, warn, ` + args + `)`)
-			return
-		}
-		emitStmt(`warn(` + strconv.Quote(control) + `) C(` +
-			strconv.Quote(tag) + `, warn, ` + args + `)`)
-	}
-	//  Each one sets the state it wants and then asks for a warning,
-	//  because what comes out on standard error — and whether
-	//  anything does — is the answer.  '@on' is not a control when
-	//  there is another piece after it, which is why the leading
-	//  'warn' here is a separate statement and not an argument.
-	for _, c := range []string{"@on", "@off", "@", "@nope", "@ON",
-		"@on ", "@@on", "@offx", "off"} {
-		warn("warn/ctl "+c, c, `"probe"`)
-	}
-	//  every kind, with the warnings on and with them off
-	for _, k := range baseKinds {
-		warn("warn/on "+k.tag, "@on", k.expr)
-		warn("warn/off "+k.tag, "@off", k.expr)
-	}
-	//  more than one piece, which is composed and not separated, and
-	//  which *not* being the last piece makes a control of nothing
-	warn("warn/2", "@on", `"a", "b"`)
-	warn("warn/3", "@on", `"a", "b", "c"`)
-	warn("warn/1num", "@on", `1`)
-	warn("warn/2num", "@on", `1, 2`)
-	warn("warn/empty", "@on", `""`)
-	warn("warn/nl", "@on", `"a\nb"`)
-	warn("warn/zero", "@on", `"a\0b"`)
-	warn("warn/2bad", "@on", `"a", {}`)
-	warn("warn/2bad2", "@on", `"a", true`)
-	warn("warn/2bad3", "@on", `"a", print`)
-	warn("warn/2bad4", "@on", `"a", nil`)
-	emitStmt(`warn("@on") C("warn/ctl-cont", warn, "@off", "x")`)
-	//  and whether the '@off' above was read at all: it was not,
-	//  because it was not the last piece, so this still warns
-	warn("warn/still-on", "", `"probe"`)
-	warn("warn/then-off", "@off", `"probe"`)
-	warn("warn/none", "", ``)
-	//  a control with a zero byte in it, which is still a control: the
-	//  comparison is a 'strcmp', which stops where the string does
-	for i, c := range []string{"@on\000x", "@off\000y", "@\000on",
-		"@o\000ff", "@on\000off"} {
-		warn("warn/ctlz "+strconv.Itoa(i), c, `"probe"`)
-	}
-	nWarn := took()
+	/* 1. warn — omitted on Lua 5.3.4 (no warn() in base lib). */
+	nWarn := 0
 
 	/* 2. assert: every kind as the thing being asserted, and then as
 	   the message, and at every level a level can be. */
@@ -619,13 +566,15 @@ end)`)
 
 	/* 12. collectgarbage.  Only collect/count are real here; other known
 	   names are no-ops that answer 0, so the differential grid asks only
-	   what still matches PUC (collect → 0, count's kind, unknown names).
-	   stop/isrunning/setpause/setstepmul/modes/step-with-bad-arg diverge
-	   and live in unit tests. */
+	   what still matches PUC (collect → 0, count's kind, unknown names)
+	   plus mode names which 5.3.4 rejects on both sides.  stop/isrunning/
+	   setpause/setstepmul/step-with-bad-arg diverge and live in unit tests. */
 	emitC("cg/collect", "collectgarbage", `"collect"`)
 	emitC("cg/collect/100", "collectgarbage", `"collect", 100`)
 	emitC("cg/stop", "collectgarbage", `"stop"`)
 	emitC("cg/restart", "collectgarbage", `"restart"`)
+	emitC("cg/mode/gen", "collectgarbage", `"generational"`)
+	emitC("cg/mode/inc", "collectgarbage", `"incremental"`)
 	emitStmt(`R("cg/count/type", function()
   return math.type(collectgarbage("count")),
     type(collectgarbage("count"))
@@ -716,7 +665,7 @@ end)`)
 	   then handed nothing at all.  'warn' is not in this: its wrong
 	   answers are in the group that owns the order of the warnings. */
 	for _, fn := range baseNames {
-		if fn == "warn" || fn == "dofile" || fn == "loadfile" {
+		if fn == "warn" || fn == "dofile" || fn == "loadfile" { /* warn absent on 5.3.4 */
 			continue /* asked in their own groups, against fixtures */
 		}
 		for _, k := range baseWrongs {
@@ -1083,14 +1032,12 @@ func baseProcessSrc(envFile, plainFile string) string {
 		  "step answers integer 0")
 		eq(select(2, pcall(collectgarbage, "isrunning")), 0,
 		  "isrunning is ignored and answers 0")
-		eq(select(2, pcall(collectgarbage, "generational")), 0,
-		  "generational is ignored and answers 0")
 		--    and asked from a place where it cannot be asked at all.
 		--    A finalizer runs with the collector stopped, so every
 		--    option answers nil rather than a number.
 		local seen
 		do
-		  local t <close> = nil
+		  -- (5.3.4: no <close>; bare block)
 		  local doomed = setmetatable({}, {__gc = function()
 		    seen = tostring(collectgarbage("count")) .. "," ..
 		           tostring(collectgarbage("collect"))

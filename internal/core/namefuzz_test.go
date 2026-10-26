@@ -681,7 +681,7 @@ assert(T(pcall(io.lines, "m\0n")) ==
 assert(T(loadfile("z\0z")) == "nil|cannot open z: No such file or directory")
 assert(T(pcall(dofile, "z\0z")) ==
   "false|cannot open z: No such file or directory")
-assert(T(package.searchpath("sp\0q", "?.lua")) == "nil|no file 'sp.lua'")
+assert(T(package.searchpath("sp\0q", "?.lua")) == "nil|\n\tno file 'sp.lua'")
 -- and the other way ioStrError is reached: EBADF, which a FILE
 -- answers on its own and which has no errno behind it to spell
 local ro = assert(io.open("q", "rb"))
@@ -690,7 +690,7 @@ local _, e = pcall(require, "zz\0qq")
 assert(e:find("module 'zz' not found", 1, true) == 1, e)
 assert(e:find("no field package.preload['zz']", 1, true), e)
 assert(e:find("no file './zz.lua'", 1, true), e)
-assert(T(pcall(require, "k")) == "true|7|./k.lua")
+assert(T(pcall(require, "k")) == "true|7")
 `)
 	b.WriteString(`-- 3. the two that are a shell.  'exec 2>/dev/null' is what keeps a
 --    truncated command from saying anything on the standard error.

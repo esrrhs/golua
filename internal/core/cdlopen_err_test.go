@@ -107,7 +107,7 @@ func TestCModuleErrorStress(t *testing.T) {
 		"1	false	bottom",
 		"10	false	bottom",
 		"50	false	bottom",
-		"alive	Lua 5.4",
+		"alive	Lua 5.3",
 	}
 	compareLines(t, got, want)
 }

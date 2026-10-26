@@ -3,7 +3,7 @@ package core
 import "testing"
 
 // Public/C lua_resume leaves results on the resumed thread and accepts a
-// nil from, matching PUC-Lua 5.4.
+// nil from, matching PUC-Lua 5.3.4.
 func TestResumeNilFromLeavesResultsOnCoroutine(t *testing.T) {
 	L := NewState()
 	t.Cleanup(L.Close)

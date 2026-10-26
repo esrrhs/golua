@@ -78,7 +78,7 @@ func TestThirdPartySuite(t *testing.T) {
 		got := diffRunCase(t, path)
 		w, g := diffNormalise(string(want)), diffNormalise(got)
 		if w != g {
-			t.Errorf("%s: output differs from PUC-Lua 5.4.9\n--- want ---\n%s\n--- got ---\n%s",
+			t.Errorf("%s: output differs from PUC-Lua 5.3.4\n--- want ---\n%s\n--- got ---\n%s",
 				filepath.Base(path), w, g)
 			continue
 		}

@@ -1,0 +1,19 @@
+1,2,3
+3,2,1
+0,3,2,1,99
+99	0	3,2,1
+1	2	3
+3
+100
+3	1	nil	3
+2,3,4,4,5
+
+a,b
+false	invalid value (table) at index 2 in table for 'concat'
+false	wrong number of arguments to 'insert'
+true	nil
+100	10000
+nil
+3	3
+42	0
+0.33333333333333

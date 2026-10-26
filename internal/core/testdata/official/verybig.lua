@@ -1,4 +1,4 @@
--- $Id: testes/verybig.lua $
+-- $Id: verybig.lua,v 1.25 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
 
 print "testing RK"
@@ -52,7 +52,7 @@ if _soft then return 10 end
 print "testing large programs (>64k)"
 
 -- template to create a very big test file
-local prog = [[$
+prog = [[$
 
 local a,b
 
@@ -83,9 +83,9 @@ assert(b["b"..30024] == -0xffffff)
 
 function b:xxx (a,b) return a+b end
 assert(b:xxx(10, 12) == 22)   -- pushself with non-constant index
-b["xxx"] = undef
+b.xxx = nil
 
-local s = 0; local n=0
+s = 0; n=0
 for a,b in pairs(b) do s=s+b; n=n+1 end
 -- with 32-bit floats, exact value of 's' depends on summation order
 assert(81800000.0 < s and s < 81860000 and n == 70001)
@@ -93,7 +93,7 @@ assert(81800000.0 < s and s < 81860000 and n == 70001)
 a = nil; b = nil
 print'+'
 
-local function f(x) b=x end
+function f(x) b=x end
 
 a = f{$3$} or 10
 
@@ -118,7 +118,7 @@ local function sig (x)
   return (x % 2 == 0) and '' or '-'
 end
 
-local F = {
+F = {
 function ()   -- $1$
   for i=10,50009 do
     io.write('a', i, ' = ', sig(i), 5+((i-10)/2), ',\n')
@@ -138,14 +138,14 @@ function ()   -- $3$
 end,
 }
 
-local file = os.tmpname()
+file = os.tmpname()
 io.output(file)
 for s in string.gmatch(prog, "$([^$]+)") do
   local n = tonumber(s)
   if not n then io.write(s) else F[n]() end
 end
 io.close()
-local result = dofile(file)
+result = dofile(file)
 assert(os.remove(file))
 print'OK'
 return result

@@ -1,7 +1,5 @@
--- $Id: testes/utf8.lua $
+-- $Id: utf8.lua,v 1.12 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
-
--- UTF-8 file
 
 print "testing UTF-8 library"
 
@@ -23,59 +21,62 @@ local justone = "^" .. utf8.charpattern .. "$"
 
 -- 't' is the list of codepoints of 's'
 local function checksyntax (s, t)
-  -- creates a string "return '\u{t[1]}...\u{t[n]}'"
   local ts = {"return '"}
   for i = 1, #t do ts[i + 1] = string.format("\\u{%x}", t[i]) end
   ts[#t + 2] = "'"
   ts = table.concat(ts)
-  -- its execution should result in 's'
   assert(assert(load(ts))() == s)
 end
 
-assert(not utf8.offset("alo", 5))
-assert(not utf8.offset("alo", -4))
+assert(utf8.offset("alo", 5) == nil)
+assert(utf8.offset("alo", -4) == nil)
 
--- 'check' makes several tests over the validity of string 's'.
--- 't' is the list of codepoints of 's'.
-local function check (s, t, nonstrict)
-  local l = utf8.len(s, 1, -1, nonstrict)
+-- 't' is the list of codepoints of 's'
+local function check (s, t)
+  local l = utf8.len(s) 
   assert(#t == l and len(s) == l)
-  assert(utf8.char(table.unpack(t)) == s)   -- 't' and 's' are equivalent
+  assert(utf8.char(table.unpack(t)) == s)
 
   assert(utf8.offset(s, 0) == 1)
 
   checksyntax(s, t)
 
-  -- creates new table with all codepoints of 's'
-  local t1 = {utf8.codepoint(s, 1, -1, nonstrict)}
+  local t1 = {utf8.codepoint(s, 1, -1)}
   assert(#t == #t1)
-  for i = 1, #t do assert(t[i] == t1[i]) end   -- 't' is equal to 't1'
+  for i = 1, #t do assert(t[i] == t1[i]) end
 
-  for i = 1, l do   -- for all codepoints
+  for i = 1, l do
     local pi = utf8.offset(s, i)        -- position of i-th char
     local pi1 = utf8.offset(s, 2, pi)   -- position of next char
     assert(string.find(string.sub(s, pi, pi1 - 1), justone))
     assert(utf8.offset(s, -1, pi1) == pi)
     assert(utf8.offset(s, i - l - 1) == pi)
-    assert(pi1 - pi == #utf8.char(utf8.codepoint(s, pi, pi, nonstrict)))
-    for j = pi, pi1 - 1 do
+    assert(pi1 - pi == #utf8.char(utf8.codepoint(s, pi)))
+    for j = pi, pi1 - 1 do 
       assert(utf8.offset(s, 0, j) == pi)
     end
     for j = pi + 1, pi1 - 1 do
       assert(not utf8.len(s, j))
     end
-   assert(utf8.len(s, pi, pi, nonstrict) == 1)
-   assert(utf8.len(s, pi, pi1 - 1, nonstrict) == 1)
-   assert(utf8.len(s, pi, -1, nonstrict) == l - i + 1)
-   assert(utf8.len(s, pi1, -1, nonstrict) == l - i)
-   assert(utf8.len(s, 1, pi, nonstrict) == i)
+   assert(utf8.len(s, pi, pi) == 1)
+   assert(utf8.len(s, pi, pi1 - 1) == 1)
+   assert(utf8.len(s, pi) == l - i + 1)
+   assert(utf8.len(s, pi1) == l - i)
+   assert(utf8.len(s, 1, pi) == i)
   end
 
   local i = 0
-  for p, c in utf8.codes(s, nonstrict) do
+  for p, c in utf8.codes(s) do
     i = i + 1
     assert(c == t[i] and p == utf8.offset(s, i))
-    assert(utf8.codepoint(s, p, p, nonstrict) == c)
+    assert(utf8.codepoint(s, p) == c)
+  end
+  assert(i == #t)
+
+  i = 0
+  for p, c in utf8.codes(s) do
+    i = i + 1
+    assert(c == t[i] and p == utf8.offset(s, i)) 
   end
   assert(i == #t)
 
@@ -99,51 +100,28 @@ do    -- error indication in utf8.len
     assert(not a and b == p)
   end
   check("abc\xE3def", 4)
+  check("汉字\x80", #("汉字") + 1)
   check("\xF4\x9F\xBF", 1)
   check("\xF4\x9F\xBF\xBF", 1)
-  -- spurious continuation bytes
-  check("汉字\x80", #("汉字") + 1)
-  check("\x80hello", 1)
-  check("hel\x80lo", 4)
-  check("汉字\xBF", #("汉字") + 1)
-  check("\xBFhello", 1)
-  check("hel\xBFlo", 4)
 end
 
--- errors in utf8.codes
-do
-  local function errorcodes (s)
-    checkerror("invalid UTF%-8 code",
-      function ()
-        for c in utf8.codes(s) do assert(c) end
-      end)
-  end
-  errorcodes("ab\xff")
-  errorcodes("\u{110000}")
-  errorcodes("in\x80valid")
-  errorcodes("\xbfinvalid")
-  errorcodes("αλφ\xBFα")
+-- error in utf8.codes
+checkerror("invalid UTF%-8 code",
+  function ()
+    local s = "ab\xff"
+    for c in utf8.codes(s) do assert(c) end
+  end)
 
-  -- calling interation function with invalid arguments
-  local f = utf8.codes("")
-  assert(f("", 2) == nil)
-  assert(f("", -1) == nil)
-  assert(f("", math.mininteger) == nil)
-
-end
 
 -- error in initial position for offset
-checkerror("position out of bounds", utf8.offset, "abc", 1, 5)
-checkerror("position out of bounds", utf8.offset, "abc", 1, -4)
-checkerror("position out of bounds", utf8.offset, "", 1, 2)
-checkerror("position out of bounds", utf8.offset, "", 1, -1)
+checkerror("position out of range", utf8.offset, "abc", 1, 5)
+checkerror("position out of range", utf8.offset, "abc", 1, -4)
+checkerror("position out of range", utf8.offset, "", 1, 2)
+checkerror("position out of range", utf8.offset, "", 1, -1)
 checkerror("continuation byte", utf8.offset, "𦧺", 1, 2)
 checkerror("continuation byte", utf8.offset, "𦧺", 1, 2)
 checkerror("continuation byte", utf8.offset, "\x80", 1)
 
--- error in indices for len
-checkerror("out of bounds", utf8.len, "abc", 0, 2)
-checkerror("out of bounds", utf8.len, "abc", 1, 4)
 
 
 local s = "hello World"
@@ -158,27 +136,19 @@ do
   local t = {utf8.codepoint(s,1,#s - 1)}
   assert(#t == 3 and t[1] == 225 and t[2] == 233 and t[3] == 237)
   checkerror("invalid UTF%-8 code", utf8.codepoint, s, 1, #s)
-  checkerror("out of bounds", utf8.codepoint, s, #s + 1)
+  checkerror("out of range", utf8.codepoint, s, #s + 1)
   t = {utf8.codepoint(s, 4, 3)}
   assert(#t == 0)
-  checkerror("out of bounds", utf8.codepoint, s, -(#s + 1), 1)
-  checkerror("out of bounds", utf8.codepoint, s, 1, #s + 1)
-  -- surrogates
-  assert(utf8.codepoint("\u{D7FF}") == 0xD800 - 1)
-  assert(utf8.codepoint("\u{E000}") == 0xDFFF + 1)
-  assert(utf8.codepoint("\u{D800}", 1, 1, true) == 0xD800)
-  assert(utf8.codepoint("\u{DFFF}", 1, 1, true) == 0xDFFF)
-  assert(utf8.codepoint("\u{7FFFFFFF}", 1, 1, true) == 0x7FFFFFFF)
+  checkerror("out of range", utf8.codepoint, s, -(#s + 1), 1)
+  checkerror("out of range", utf8.codepoint, s, 1, #s + 1)
 end
 
 assert(utf8.char() == "")
-assert(utf8.char(0, 97, 98, 99, 1) == "\0abc\1")
+assert(utf8.char(97, 98, 99) == "abc")
 
 assert(utf8.codepoint(utf8.char(0x10FFFF)) == 0x10FFFF)
-assert(utf8.codepoint(utf8.char(0x7FFFFFFF), 1, 1, true) == (1<<31) - 1)
 
-checkerror("value out of range", utf8.char, 0x7FFFFFFF + 1)
-checkerror("value out of range", utf8.char, -1)
+checkerror("value out of range", utf8.char, 0x10FFFF + 1)
 
 local function invalid (s)
   checkerror("invalid UTF%-8 code", utf8.codepoint, s)
@@ -187,10 +157,6 @@ end
 
 -- UTF-8 representation for 0x11ffff (value out of valid range)
 invalid("\xF4\x9F\xBF\xBF")
-
--- surrogates
-invalid("\u{D800}")
-invalid("\u{DFFF}")
 
 -- overlong sequences
 invalid("\xC0\x80")          -- zero
@@ -217,22 +183,7 @@ s = "\0 \x7F\z
 s = string.gsub(s, " ", "")
 check(s, {0,0x7F, 0x80,0x7FF, 0x800,0xFFFF, 0x10000,0x10FFFF})
 
-do
-  -- original UTF-8 values
-  local s = "\u{4000000}\u{7FFFFFFF}"
-  assert(#s == 12)
-  check(s, {0x4000000, 0x7FFFFFFF}, true)
-
-  s = "\u{200000}\u{3FFFFFF}"
-  assert(#s == 10)
-  check(s, {0x200000, 0x3FFFFFF}, true)
-
-  s = "\u{10000}\u{1fffff}"
-  assert(#s == 8)
-  check(s, {0x10000, 0x1FFFFF}, true)
-end
-
-local x = "日本語a-4\0éó"
+x = "日本語a-4\0éó"
 check(x, {26085, 26412, 35486, 97, 45, 52, 0, 233, 243})
 
 

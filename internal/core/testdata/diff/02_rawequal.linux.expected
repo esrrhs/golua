@@ -1,0 +1,11 @@
+true	true	true
+true	false	true
+false	true
+int	int	nil
+flt	flt
+a	b
+false
+true
+true	true	true	true
+nil	str
+1	x

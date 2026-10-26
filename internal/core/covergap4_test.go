@@ -7,308 +7,314 @@ import (
 	"testing"
 )
 
-func TestCoverGap4PCallKYieldable(t *testing.T) {
+func TestFormatHexFloatFlags(t *testing.T) {
 	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local co = coroutine.create(function()
-  local ok, a, b = pcall(function()
-    return coroutine.yield(10), 20
-  end)
-  say(ok)
-  say(a)
-  return b
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+say(string.format("%a", 1.0))
+say(string.format("%A", 1.0))
+say(string.format("%+a", 1.0))
+say(string.format("% a", 1.0))
+say(string.format("%#a", 1.0))
+say(string.format("%20a", 1.0))
+say(string.format("%-20a", 1.0))
+say(string.format("%020a", 1.0))
+say(string.format("%.0a", 1.0))
+say(string.format("%.4a", 1.0))
+say(string.format("%+20.4a", -1.5))
+say(string.format("%a", 0/0))
+say(string.format("%a", 1/0))
+say(string.format("%a", -1/0))
+say(string.format("%05d", -3))
+say(string.format("%+05d", 3))
+say(string.format("% 5d", 3))
+say(string.format("%#o", 8))
+say(string.format("%#x", 15))
+say(string.format("%#X", 15))
+say(string.format("%.0f", 1.5))
+say(string.format("%q", "\n\t\\\""))
+say(string.format("%s", true))
+local ok = pcall(string.format, "%d")
+say(string.byte("abc", -1))
+say(string.byte("abc", 2, 1) == nil or select("#", string.byte("abc", 2, 1)) == 0 or true)
+say(string.match("abc", "a(b)c"))
+say(string.match("abc", "x") == nil)
+say(string.find("abc", "b", 1, true))
+say(string.find("abc", "%d") == nil)
+return table.concat(o, ",")
+`)
+	if !strings.Contains(got, "0x") && !strings.Contains(strings.ToLower(got), "0x") {
+		// %a may produce 0x1p+0
+		if !strings.Contains(got, "p+") && !strings.Contains(got, "P+") {
+			t.Fatalf("%q", got)
+		}
+	}
+}
+
+func TestIOReadNumberVariants(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "nums.txt")
+	content := "  42  -3.5  0x10  1e2  0X1.8p1  notnum  \n"
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CG4", path)
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local f=assert(io.open(os.getenv("CG4")))
+say(f:read("*n"))
+say(f:read("*n"))
+say(f:read("*n"))
+say(f:read("*n"))
+say(f:read("*n"))
+local x = f:read("*n")
+say(x == nil)
+f:close()
+-- write-only can't read number
+local p = os.getenv("CG4")..".w"
+local w=assert(io.open(p,"w"))
+say(w:read("*n") == nil)
+w:close()
+-- setvbuf modes
+local r=assert(io.open(p,"w"))
+say(r:setvbuf("no"))
+say(r:setvbuf("full", 64))
+say(r:setvbuf("line"))
+r:close()
+-- lines iterator with open file
+local f2=assert(io.open(os.getenv("CG4")))
+local n=0
+for line in f2:lines() do n=n+1 end
+say(n>=1)
+f2:close()
+return table.concat(o, ",")
+`)
+	if !strings.Contains(got, "42") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestForceCloseAsyncCoroutine(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.OpenLibs()
+	if err := L.DoString(`
+co = coroutine.create(function()
+  -- force promote to async by calling a Go/C boundary: io.tmpfile then yield
+  local f = io.tmpfile()
+  coroutine.yield(1)
+  f:close()
 end)
-local ok, v = coroutine.resume(co)
-say(ok)
-say(v)
-ok, v = coroutine.resume(co, 11)
-say(ok)
-say(v)
--- xpcall with msgh
-local ok2, err = xpcall(function() error("z") end, function(e) return "H:"..tostring(e) end)
-say(ok2)
-say(tostring(err):find("H:") ~= nil)
-return table.concat(out, "\n")
-`)
-	_ = got
-}
-
-func TestCoverGap4DoFileError(t *testing.T) {
-	dir := t.TempDir()
-	bad := filepath.Join(dir, "bad.lua")
-	if err := os.WriteFile(bad, []byte("error('fromfile')\n"), 0o644); err != nil {
+assert(coroutine.resume(co))
+`); err != nil {
 		t.Fatal(err)
 	}
+	// Closing L should force-close child threads
+	L.Close()
+	// New state after
+	L2 := NewState()
+	defer L2.Close()
+}
+
+func TestRotateXMoveUpvalueJoin(t *testing.T) {
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()
-	err := L.DoFile(bad)
-	if err == nil || !strings.Contains(err.Error(), "fromfile") {
-		t.Fatalf("DoFile err %v", err)
-	}
-	syntax := filepath.Join(dir, "syn.lua")
-	if err := os.WriteFile(syntax, []byte("((((\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if L.DoFile(syntax) == nil {
-		t.Fatal("expected syntax error")
-	}
-}
-
-func TestCoverGap4MoreLuaEdges(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("C4", dir)
-	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-
--- load with mode binary text
-local f = string.dump(function() return 1 end)
-boom(function() assert(load(f, nil, "t"))() end)
-say(assert(load(f, nil, "b"))())
-
--- getinfo transfer fields via hook
-local hit = false
-debug.sethook(function(ev)
-  if hit then return end
-  hit = true
-  local i = debug.getinfo(2, "tr")
-  say(i ~= nil)
-end, "c")
-local function g() return 1 end
-g()
-debug.sethook()
-
--- close vararg locals naming
-local function va(a, ...)
-  say(select("#", ...))
-  local n = debug.getlocal(1, -1)
-  say(n ~= nil or n == nil)
-end
-va(1, 2, 3)
-
--- table.new style via constructor with hash
-local t = {a=1,b=2,c=3,d=4,e=5,f=6,g=7,h=8,i=9,j=10,k=11,l=12}
-say(t.a)
-
--- setmetatable nil
-say(setmetatable({}, nil) ~= nil)
-
--- rawset/rawget
-local r = {}
-rawset(r, "x", 1)
-say(rawget(r, "x"))
-
--- next
-say(next({1}) ~= nil)
-
--- select negative
-say(select(-1, 10, 20, 30))
-
--- load empty
-say(load("") == nil)
-
--- string.format more
-say(string.format("%+g", 1.5))
-say(string.format("%#f", 1.0))
-say(string.format("% 8d", 3))
-say(string.format("%.0s", "abcdef"))
-
--- match empty pattern
-say(string.find("abc", ""))
-say(string.gsub("abc", "", "X", 2))
-
--- io lines close autocloses
-local name = os.getenv("C4") .. "/z.txt"
-local wz = assert(io.open(name, "w"))
-wz:write("1\n2\n")
-wz:close()
-local n = 0
-for line in io.lines(name, "*l") do n = n + 1 end
-say(n)
-
--- append mode seek
-local af = assert(io.open(name, "a+"))
-af:write("3\n")
-af:seek("set", 0)
-say(#(af:read("*a") or ""))
-af:close()
-
--- os.setlocale
-if os.setlocale then
-  say(type(os.setlocale(nil, "all")))
-  say(type(os.setlocale("C", "numeric")))
-  os.setlocale("C", "all")
-end
-
--- math
-say(math.tointeger(3.0))
-say(math.tointeger(3.5) == nil)
-say(math.type(1/0))
-say(math.atan(1, 2))
-say(math.deg(math.pi) > 100)
-say(math.rad(180) > 3)
-say(math.abs(math.mininteger) < 0 or true)
-
-return table.concat(out, "\n")
-`)
-	if len(strings.Split(got, "\n")) < 10 {
-		t.Fatalf("edges:\n%s", got)
-	}
-}
-
-func TestCoverGap4APIInternals(t *testing.T) {
-	L := NewState()
-	defer L.Close()
-	L.OpenLibs()
-
-	// indexToStack
 	L.PushInteger(1)
-	_ = L.indexToStack(1)
-	_ = L.indexToStack(-1)
-	func() {
-		defer func() { _ = recover() }()
-		_ = L.indexToStack(0)
-	}()
-	L.Pop(1)
-
-	// TypeName package + method
-	_ = TypeName(LUA_TNIL)
-	_ = TypeName(LUA_TNONE)
-	_ = TypeName(99)
-	L.PushNil()
-	_ = L.TypeName(-1)
-	L.Pop(1)
-
-	// gettable / settable via API
-	L.CreateTable(0, 1)
-	L.PushString("k")
-	L.PushInteger(1)
-	L.SetTable(-3)
-	L.PushString("k")
-	_ = L.GetTable(-2)
-	L.Pop(2)
-
-	// rawGetRegistryGlobals
-	_ = L.rawGetRegistryGlobals()
-
-	// Compare ops
-	L.PushNumber(1)
-	L.PushInteger(1)
-	_ = L.Compare(-2, -1, LUA_OPEQ)
 	L.PushInteger(2)
-	_ = L.Compare(-3, -1, LUA_OPLT)
-	_ = L.Compare(-3, -1, LUA_OPLE)
-	L.SetTop(0)
-
-	// CheckUserData fail
-	L.PushInteger(1)
-	func() {
-		defer func() { _ = recover() }()
-		L.CheckUserData(1, "nope")
-	}()
-	L.SetTop(0)
-
-	// ArgError with function name on stack
-	if err := L.LoadString("local function f(x) end; return f", "=a"); err != nil {
-		t.Fatal(err)
-	}
-	if L.PCall(0, 1, 0) != LUA_OK {
-		t.Fatal("f")
-	}
-	L.PushValue(-1)
-	L.PushInteger(1)
-	func() {
-		defer func() { _ = recover() }()
-		L.ArgError(1, "need more")
-	}()
-	L.SetTop(0)
-
-	// Ref freelist
-	L.PushInteger(1)
-	r1 := L.Ref(LUA_REGISTRYINDEX)
-	L.PushInteger(2)
-	r2 := L.Ref(LUA_REGISTRYINDEX)
-	L.Unref(LUA_REGISTRYINDEX, r1)
 	L.PushInteger(3)
-	r3 := L.Ref(LUA_REGISTRYINDEX) // reuse
-	_ = r2
-	_ = r3
-	L.Unref(LUA_REGISTRYINDEX, r2)
-	L.Unref(LUA_REGISTRYINDEX, r3)
-	L.Unref(LUA_REGISTRYINDEX, LUA_REFNIL)
-	L.PushNil()
-	_ = L.Ref(LUA_REGISTRYINDEX)
-
-	// pushFuncName / Traceback depth
-	L.Traceback(L, "msg", true, 1)
-	L.Pop(1)
-
-	// NewMetaTable already covered; CheckStack2 only success
-	L.CheckStack2(4, "x")
-
-	// removevalues / fixjump via weird code? skip — hard
-
-	// CloseThread on a fresh thread
-	th := L.NewThread()
-	_ = th.CloseThread(L)
-
-	// recoverCo paths via dead coroutine close
-	got := runChunk(t, `
-local co = coroutine.create(function()
-  error("boom")
-end)
-coroutine.resume(co)
-return tostring(coroutine.close(co))
-`)
-	_ = got
-
-	// ensureAsync: coroutine that calls a Go function
-	L.PushGoFunc(func(L *State) int {
-		L.PushInteger(1)
-		return 1
-	})
-	L.SetGlobal("gofn")
-	if err := L.LoadString(`
-local co = coroutine.create(function()
-  return gofn()
-end)
-local ok, v = coroutine.resume(co)
-assert(ok and v == 1)
-`, "=async"); err != nil {
+	L.Rotate(-3, 1)
+	L.Rotate(-3, -1)
+	co := L.NewThread()
+	L.PushInteger(9)
+	co.XMove(L, 1)
+	if co.GetTop() != 1 {
+		t.Fatal("xmove")
+	}
+	if err := L.DoString(`
+local x=1
+local function a() return x end
+local function b() return x end
+debug.upvaluejoin(a,1,b,1)
+assert(debug.upvalueid(a,1)==debug.upvalueid(b,1))
+`); err != nil {
 		t.Fatal(err)
 	}
-	if L.PCall(0, 0, 0) != LUA_OK {
-		msg, _ := L.ToString(-1)
-		t.Fatal(msg)
+	// UpvalueJoin Go API
+	if err := L.LoadString(`local x=1; return function() return x end, function() return x end`, "=u"); err != nil {
+		t.Fatal(err)
+	}
+	if L.PCall(0, 2, 0) != LUA_OK {
+		t.Fatal(L.ToString(-1))
+	}
+	L.UpvalueJoin(-2, 1, -1, 1)
+}
+
+func TestUserValueAPI(t *testing.T) {
+	L := NewState()
+	defer L.Close()
+	L.NewUserData("ud", 1)
+	L.PushString("uv")
+	L.SetUserValue(-2, 1)
+	L.GetUserValue(-1, 1)
+	s, _ := L.ToString(-1)
+	if s != "uv" {
+		t.Fatalf("uservalue %q", s)
 	}
 }
 
-func TestCoverGap4GCAndWeak(t *testing.T) {
+func TestPCallMsgHandler(t *testing.T) {
 	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-collectgarbage("collect")
-local t = {}
-setmetatable(t, {__mode = "k"})
-local k = {}
-t[k] = 1
-k = nil
-collectgarbage("collect")
-collectgarbage("collect")
-say(true)
-local t2 = {}
-setmetatable(t2, {__mode = "v"})
-t2[1] = {}
-collectgarbage("collect")
-say(true)
-local t3 = setmetatable({}, {__gc = function() end})
-t3 = nil
-collectgarbage("collect")
-say(true)
-return table.concat(out, "\n")
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local function handler(err)
+  return "H:" .. tostring(err)
+end
+local ok, err = xpcall(function() error("boom") end, handler)
+say(tostring(err):find("H:", 1, true) ~= nil)
+ok, err = pcall(error, "x", 0)
+local co = coroutine.create(function() error("c") end)
+ok, err = coroutine.resume(co)
+return table.concat(o, ",")
 `)
-	_ = got
+	if !strings.Contains(got, "true") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestBitwiseAndShiftEdges(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+say(1<<63)
+say((-1)>>1)
+say(1<<100) -- large shift
+say(1>>100)
+say(~0)
+say(3&1)
+say(1|2)
+say(3~1)
+-- div/mod edge
+say(5//2)
+say((-5)//2)
+say(5%2)
+say((-5)%2)
+say(1/0)
+say(0/0 ~= 0/0)
+return table.concat(o, ",")
+`)
+	if !strings.Contains(got, "true") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestLuacCombineAndStdin(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.lua")
+	b := filepath.Join(dir, "b.lua")
+	if err := os.WriteFile(a, []byte("return 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(b, []byte("return 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(dir, "c.out")
+	var out, errb strings.Builder
+	// combine multiple files
+	code := Luac([]string{"luac", "-o", outPath, a, b}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("combine %d %s", code, errb.String())
+	}
+	out.Reset()
+	errb.Reset()
+	code = Luac([]string{"luac", "-l", "-l", outPath}, &out, &errb)
+	if code != 0 {
+		t.Fatalf("list %d %s", code, errb.String())
+	}
+	// constants in listing
+	if !strings.Contains(out.String(), "main") {
+		t.Fatalf("%s", out.String())
+	}
+}
+
+func TestFuncNameFromCodeErrors(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local ok, err = pcall(function() local t={}; return t.nope() end)
+say(not ok)
+ok, err = pcall(function() return (nil)() end)
+say(not ok)
+ok, err = pcall(function() local t={}; return t[1]() end)
+say(not ok)
+ok, err = pcall(function() local t=setmetatable({},{__index=function() return nil end}); return t.x() end)
+say(not ok)
+return table.concat(o, ",")
+`)
+	if strings.Count(got, "true") < 3 {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestOpcodeNameCoverage(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+-- exercise many opcodes so listing / getinfo name paths fire
+local a,b,c = 1,2,3
+a = a + b - c * 2 / 3 % 2
+a = a // 1
+a = a & 7 | 1 ~ 2
+a = a << 1 >> 1
+a = -a; a = ~a
+local t = {1,2,3,x=4}
+t[1] = t[2]
+t.x = t.y or 5
+local s = "a" .. "b"
+local f = function(x, ...) return x, ... end
+say(select(1, f(10, 20)))
+for i=1,3 do a=a+i end
+for k,v in pairs(t) do a=a+1 end
+for i,v in ipairs(t) do a=a+1 end
+if a then a=a else a=0 end
+while false do end
+repeat break until true
+local ok, err = pcall(function()
+  local u = {}
+  setmetatable(u, {__index=function(self,k) return function() return k end end})
+  return u.hello()
+end)
+say(ok)
+return table.concat(o, ",")
+`)
+	if !strings.Contains(got, "10") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestLuacFullOpcodeListing(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "ops.lua")
+	body := `
+local up = 0
+local function f(a, b, ...)
+  local t = {a, b, ..., x=1}
+  t[1] = t[2] + up
+  up = up + 1
+  if a then return t[1] << 1 else return a // b, a % b end
+end
+return f(2, 3, 4)
+`
+	if err := os.WriteFile(src, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errb strings.Builder
+	if code := Luac([]string{"luac", "-l", "-l", src}, &out, &errb); code != 0 {
+		t.Fatalf("%d %s", code, errb.String())
+	}
+	text := out.String()
+	if !strings.Contains(text, "MOVE") && !strings.Contains(text, "LOADK") {
+		t.Fatalf("listing missing opcodes:\n%s", text)
+	}
 }

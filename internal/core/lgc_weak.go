@@ -7,8 +7,8 @@ import (
 	"weak"
 )
 
-// Weak tables (lgc.c's clearbykeys/clearbyvalues), delegated directly to
-// the Go runtime via weak.Pointer.
+// Weak tables (lgc.c's 'cleartable' and 'luaC_checkfinalizer' for
+// '__mode'), delegated directly to the Go runtime via weak.Pointer.
 //
 // Weak keys and weak values of collectable object types (Table, Udata,
 // LClosure, CClosure, State) are stored inside Table nodes and array
@@ -172,8 +172,8 @@ func cleanNodeKey(n *node) bool {
 		return true
 	}
 	if n.keytt&BIT_WEAK != 0 && weakPtrDead(n.kp) {
-		setempty(&n.val)
-		setdeadkey(n)
+		setnilvalue(&n.val)
+		setdeadkey(n, nil)
 		return true
 	}
 	return false
@@ -183,8 +183,8 @@ func cleanNodeKey(n *node) bool {
 func getnodekeyWeak(dst *Value, n *node) {
 	p := resolveWeakPtr(n.keytt, n.kp)
 	if p == nil {
-		setempty(&n.val)
-		setdeadkey(n)
+		setnilvalue(&n.val)
+		setdeadkey(n, nil)
 		*dst = Value{tt: LUA_TDEADKEY}
 		return
 	}
@@ -204,7 +204,7 @@ func checkSlot(v *Value) *Value {
 
 func checkSlotSlow(v *Value) *Value {
 	if weakPtrDead(v.p) {
-		setempty(v)
+		setnilvalue(v)
 	}
 	return v
 }
@@ -221,8 +221,8 @@ func slotVal(v *Value) Value {
 func slotValSlow(v *Value) Value {
 	p := resolveWeakPtr(v.tt, v.p)
 	if p == nil {
-		setempty(v)
-		return Value{tt: LUA_VNIL}
+		setnilvalue(v)
+		return luaO_nilobject
 	}
 	return Value{tt: v.tt &^ BIT_WEAK, p: p, i: v.i}
 }
@@ -230,7 +230,7 @@ func slotValSlow(v *Value) Value {
 func weakenVal(v *Value) {
 	if v.tt&BIT_WEAK != 0 {
 		if weakPtrDead(v.p) {
-			setempty(v)
+			setnilvalue(v)
 		}
 		return
 	}
@@ -246,7 +246,7 @@ func strengthenVal(v *Value) {
 	}
 	p := resolveWeakPtr(v.tt, v.p)
 	if p == nil {
-		setempty(v)
+		setnilvalue(v)
 		return
 	}
 	v.p = p
@@ -256,8 +256,8 @@ func strengthenVal(v *Value) {
 func weakenNodeKey(n *node) {
 	if n.keytt&BIT_WEAK != 0 {
 		if weakPtrDead(n.kp) {
-			setempty(&n.val)
-			setdeadkey(n)
+			setnilvalue(&n.val)
+			setdeadkey(n, nil)
 		}
 		return
 	}
@@ -273,8 +273,8 @@ func strengthenNodeKey(n *node) {
 	}
 	p := resolveWeakPtr(n.keytt, n.kp)
 	if p == nil {
-		setempty(&n.val)
-		setdeadkey(n)
+		setnilvalue(&n.val)
+		setdeadkey(n, nil)
 		return
 	}
 	n.kp = p
@@ -328,7 +328,7 @@ func parseWeakModeTable(mt *Table) byte {
 			break
 		}
 	}
-	if tm == nil || isempty(tm) {
+	if tm == nil || ttisnil(tm) {
 		mt.flags |= byte(1 << uint(TM_MODE))
 		mt.cachedMode = 0
 		mt.modeCached = true
@@ -349,6 +349,13 @@ func parseWeakModeTable(mt *Table) byte {
 	mt.cachedMode = mode
 	mt.modeCached = true
 	return mode
+}
+
+// parseWeakMode reads TM_MODE from mt the way traversetable does each mark.
+// Returns 0 for nil mt, non-string __mode, or a mode without 'k'/'v'.
+func parseWeakMode(L *State, mt *Table) byte {
+	_ = L
+	return parseWeakModeTable(mt)
 }
 
 func gcTrackWeakTable(t *Table) {
@@ -411,7 +418,7 @@ func (t *Table) applyWeakMode(mode byte) {
 	for i := range t.array {
 		v := &t.array[i]
 		if v.tt&BIT_WEAK != 0 && weakPtrDead(v.p) {
-			setempty(v)
+			setnilvalue(v)
 			continue
 		}
 		if mode&weakVal != 0 {
@@ -424,7 +431,7 @@ func (t *Table) applyWeakMode(mode byte) {
 		nd := &t.nodes[i]
 		kdead := cleanNodeKey(nd)
 		v := checkSlot(&nd.val)
-		if isempty(v) {
+		if ttisnil(v) {
 			if !kdead {
 				weakenNodeKey(nd)
 			}
@@ -443,8 +450,8 @@ func (t *Table) applyWeakMode(mode byte) {
 	}
 }
 
-// luaC_checkWeakMode registers a table for weak sweeping when its
-// metatable has a '__mode' string.
+// luaC_checkWeakMode is the '__mode' half of setmetatable: a table whose
+// metatable has a weak '__mode' stores its weak keys/values as weak.Pointer.
 func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
 	mode := parseWeakModeTable(mt)
 	if mode != 0 && L != nil && L.g != nil {
@@ -516,7 +523,10 @@ func (L *State) gcSweepWeak() {
 	}
 }
 
-// setdeadkey marks a node's key as dead: lgc.c's 'clearkey' leaves one
-// behind so that 'next' can step over the hole while the collision chain
-// stays intact.
-func setdeadkey(n *node) { n.keytt = LUA_TDEADKEY; n.kp = nil; n.ki = 0 }
+// setdeadkey is C's setdeadvalue on gkey after removeentry: mark the key
+// dead.
+func setdeadkey(n *node, gc unsafe.Pointer) {
+	n.keytt = LUA_TDEADKEY
+	n.kp = gc
+	n.ki = 0
+}

@@ -1,6 +1,6 @@
-// Translation of lcorolib.c (PUC-Lua 5.4.9): the coroutine library.
+// Translation of lcorolib.c (PUC-Lua 5.3.4): the coroutine library.
 //
-// Intentional Go specialization (goroutine coroutines; see lstate.go):
+// FLAG intentional (goroutine coroutines — see lstate.go / BRIEF KEEP):
 //
 //  1. (*State).Yield is a blocking channel handshake instead of a longjmp.
 //     C throws out of the coroutine and lua_resume picks it up again
@@ -9,51 +9,31 @@
 //     instead hands the yielded values to the resumer and then waits
 //     for the next resume request, which keeps the goroutine (and
 //     therefore the Lua stack and the saved program counter) alive at
-//     the yield point — exactly the "a metamethod that yields simply
-//     blocks the coroutine's goroutine" behaviour described at the top
-//     of lvm.go. It is also what makes a C continuation possible: the
-//     C frame that asked for one is still there when the resume comes.
+//     the yield point.
 //
-//  2. luaB_yield (coYield) may take a sync fast-path (prepareFastYield /
-//     fastYieldNow) when the coroutine is still on the resumer's
-//     goroutine; otherwise it parks via Yield. Visible Lua yield/resume
-//     value protocol is unchanged (yield args become resume results and
-//     vice versa).
+//  2. coYield may take a sync fast-path (prepareFastYield / fastYieldNow)
+//     when the coroutine is still on the resumer's goroutine; otherwise
+//     it parks via Yield. Visible Lua yield/resume value protocol is
+//     unchanged (yield args become resume results and vice versa).
 //
-//  3. lua_closethread (lstate.c) is coCloseThread here: it asks the
-//     coroutine goroutine to unwind itself through the same request
-//     channel (or runs resetThreadStatus when the goroutine is already
-//     gone). Used by luaB_close and by auxwrap's to-be-closed path (5.4).
+//  3. coCreate clears co.top and records prevFunc so coRun finds the body
+//     in slot 0 (NewThread leaves a base-CI dummy at top=1; C's xmove alone
+//     is enough because C starts threads at LUA_OK with the function as
+//     the sole stack element above the base frame).
+//
+//  4. auxresume error salvage when co has no object: Go panic/recover can
+//     leave Resume without luaD_seterrorobj; C always lua_xmove(co, L, 1).
+//
+// Deliberately absent vs Lua 5.4 (purge): coroutine.close, lua_closethread
+// / to-be-closed handling in wrap, and isyieldable's optional thread arg.
 package core
 
-// coGetCo is getco (lcorolib.c).
+// coGetCo gets the coroutine in the first argument (lcorolib.c getco).
 func coGetCo(L *State) *State {
 	co := L.ToThread(1)
-	L.ArgExpected(co != nil, 1, "thread") /* luaL_argexpected */
+	/* 5.3.4: luaL_argcheck(L, co, 1, "thread expected") — no ", got TYPE". */
+	L.ArgCheck(co != nil, 1, "thread expected")
 	return co
-}
-
-// coCanResume reports whether 'co' can be resumed. Go-only preflight:
-// C's auxresume always lua_xmove's args then lets lua_resume /
-// resume_error scrub them; Go's resumeError (lstate.go) does not take
-// narg and must not destroy pending to-be-closed slots, so it leaves
-// args on co. Preflighting with the same PUC messages keeps a refused
-// resume from depositing args onto a running or dead coroutine.
-func coCanResume(co *State) (bool, string) {
-	if co == nil || co.isMain {
-		return false, "cannot resume non-suspended coroutine"
-	}
-	switch co.Status() {
-	case LUA_YIELD:
-		return true, ""
-	case LUA_OK:
-		if co.dead {
-			return false, "cannot resume dead coroutine"
-		}
-		return false, "cannot resume non-suspended coroutine" /* it is running */
-	default: /* some error occurred */
-		return false, "cannot resume dead coroutine"
-	}
 }
 
 /*
@@ -62,46 +42,47 @@ func coCanResume(co *State) (bool, string) {
 ** (lcorolib.c auxresume)
  */
 func coAuxResume(L *State, co *State, narg int) int {
-	/* Go: coCanResume — see comment on that helper. C has no preflight. */
-	if ok, msg := coCanResume(co); !ok {
-		L.SetTop(L.GetTop() - narg) /* remove the arguments */
-		L.PushString(msg)
-		return -1 /* error flag */
-	}
+	var status int
 	if !co.CheckStack(narg) {
-		/* C leaves args on L; return count still hides them from Lua. */
 		L.PushString("too many arguments to resume")
 		return -1 /* error flag */
 	}
+	if co.Status() == LUA_OK && co.GetTop() == 0 {
+		L.PushString("cannot resume dead coroutine")
+		return -1 /* error flag */
+	}
 	co.XMove(L, narg) /* C: lua_xmove(L, co, narg) */
-	status := co.Resume(L, narg)
+	status = co.Resume(L, narg)
 	if status == LUA_OK || status == LUA_YIELD {
-		/* C: lua_resume(..., &nres). Go Resume has no out-param; the
-		   C export uses len(co.co.vals) for the same count (GetTop can
-		   include the base CI slot after an OK return). */
-		nres := len(co.co.vals)
+		nres := co.GetTop() /* C: lua_gettop(co) */
 		if !L.CheckStack(nres + 1) {
 			co.Pop(nres) /* remove results anyway */
 			L.PushString("too many results to resume")
 			return -1 /* error flag */
 		}
-		L.XMove(co, nres) /* C: lua_xmove(co, L, nres) — move yielded values */
+		L.XMove(co, nres) /* move yielded values */
 		return nres
 	}
-	/* error: C's lua_resume does luaD_seterrorobj(L, status, L->top),
-	   which leaves an extra copy on co; auxresume then lua_xmove(co, L, 1)
-	   so one copy remains for lua_closethread. Go Resume leaves a single
-	   copy — duplicate before xmove. When Resume left nothing on the stack
-	   and no error object in co.vals (async empty-vals error), report dead. */
-	if co.top <= 0 {
+	/* error: C always lua_xmove(co, L, 1). FLAG panic/recover: salvage
+	   when Resume left no object (no luaD_seterrorobj). */
+	if co.GetTop() > 0 {
+		L.XMove(co, 1) /* move error message */
+	} else if co.co != nil && len(co.co.vals) > 0 {
+		L.checkStack(1)
+		L.stack[L.top] = co.co.vals[0]
+		L.top++
+	} else {
 		L.PushString("cannot resume dead coroutine")
-		return -1 /* error flag */
 	}
-	co.checkStack(1)
-	co.stack[co.top] = co.stack[co.top-1]
-	co.top++
-	L.XMove(co, 1) /* C: lua_xmove(co, L, 1) — move error message */
-	return -1      /* error flag */
+	if ttisnil(&L.stack[L.top-1]) {
+		/* ldo.go's luaD_throw panics without carrying the error object,
+		   so the message may be nil here while still sitting on the
+		   coroutine stack. C's lua_resume uses luaD_seterrorobj. */
+		if co.top > 0 {
+			L.stack[L.top-1] = co.stack[co.top-1]
+		}
+	}
+	return -1 /* error flag */
 }
 
 // coResume is luaB_coresume (lcorolib.c).
@@ -118,29 +99,13 @@ func coResume(L *State) int {
 	return r + 1 /* return true + 'resume' returns */
 }
 
-// coAuxWrap is luaB_auxwrap (lcorolib.c 5.4): on error, close tbc vars.
+// coAuxWrap is luaB_auxwrap (lcorolib.c 5.3.4): no lua_closethread / to-be-closed.
 func coAuxWrap(L *State) int {
 	co := L.ToThread(UpvalueIndex(1))
 	r := coAuxResume(L, co, L.GetTop())
-	if r < 0 { /* error? */
-		stat := co.Status()
-		if stat != LUA_OK && stat != LUA_YIELD { /* error in the coroutine? */
-			/* C: stat = lua_closethread(co, L); lua_xmove(co, L, 1).
-			   auxresume left a copy of the error on co (see above).
-			   resetThreadStatus is luaE_resetthread; nCcalls like
-			   lua_closethread. Preserve returned status for ERRMEM. */
-			co.nCcalls = uint32(getCcalls(L))
-			stat = co.resetThreadStatus(stat)
-			/* C asserts stat != LUA_OK after closethread on an erroring
-			   coroutine; resetThreadStatus preserves a non-OK status when
-			   __close does not replace it, so the OK→ERRRUN guard is omitted. */
-			if co.top > 0 {
-				L.XMove(co, 1) /* move error message to the caller */
-			}
-		}
-		if stat != LUA_ERRMEM && /* not a memory error and ... */
-			L.Type(-1) == LUA_TSTRING { /* ... error object is a string? */
-			L.Where2(1) /* add extra info, if available */
+	if r < 0 {
+		if L.Type(-1) == LUA_TSTRING { /* error object is a string? */
+			L.Where2(1) /* add extra info */
 			L.Insert(-2)
 			L.Concat(2)
 		}
@@ -152,22 +117,25 @@ func coAuxWrap(L *State) int {
 // coCreate is luaB_cocreate (lcorolib.c).
 func coCreate(L *State) int {
 	L.CheckType(1, LUA_TFUNCTION)
-	NL := L.NewThread() /* pushes the new thread on L */
+	co := L.NewThread() /* pushes the new thread on L */
 	L.PushValue(1)      /* move function to top */
-	NL.XMove(L, 1)      /* move function from L to NL */
+	/* FLAG (goroutine / coRun): body in slot 0; survive reset. C only xmoves. */
+	co.top = 0
+	co.XMove(L, 1) /* move function from L to co */
+	co.prevFunc = co.stack[0]
 	return 1
 }
 
 // coWrap is luaB_cowrap (lcorolib.c).
 func coWrap(L *State) int {
 	coCreate(L)
-	L.PushGoClosure(coAuxWrap, 1) /* lua_pushcclosure(L, luaB_auxwrap, 1) */
+	L.PushGoClosure(coAuxWrap, 1)
 	return 1
 }
 
 /*
 ** coYield is luaB_yield (lcorolib.c). C: return lua_yield(L, lua_gettop(L)).
-** Sync fast-path is intentional goroutine adaptation (see package comment).
+** Sync fast-path is FLAG intentional goroutine adaptation (see package comment).
  */
 func coYield(L *State) int {
 	/* A pure Lua yield on a synchronous coroutine unwinds to Resume.
@@ -186,57 +154,35 @@ func coYield(L *State) int {
 	return L.Yield(L.GetTop())
 }
 
-/* status name indices — lcorolib.c COS_RUN / COS_DEAD / COS_YIELD / COS_NORM */
-const (
-	cosRun   = iota /* COS_RUN */
-	cosDead         /* COS_DEAD */
-	cosYield        /* COS_YIELD */
-	cosNorm         /* COS_NORM */
-)
-
-/* statname[] (lcorolib.c) */
-var coStatNames = []string{"running", "dead", "suspended", "normal"}
-
-// coAuxStatus is auxstatus (lcorolib.c).
-func coAuxStatus(L *State, co *State) int {
-	if L == co {
-		return cosRun
-	}
-	switch co.Status() {
-	case LUA_YIELD:
-		return cosYield
-	case LUA_OK:
-		var ar dbAr
-		if co.dead { /* Go-only bookkeeping; finished OK agrees with C dead */
-			return cosDead
-		}
-		if co.GetStack(0, &ar) { /* does it have frames? */
-			return cosNorm /* it is running */
-		} else if co.GetTop() == 0 {
-			return cosDead
-		}
-		return cosYield /* initial state */
-	default: /* some error occurred */
-		return cosDead
-	}
-}
-
 // coStatus is luaB_costatus (lcorolib.c).
 func coStatus(L *State) int {
 	co := coGetCo(L)
-	L.PushString(coStatNames[coAuxStatus(L, co)])
+	if L == co {
+		L.PushString("running")
+	} else {
+		switch co.Status() {
+		case LUA_YIELD:
+			L.PushString("suspended")
+		case LUA_OK:
+			var ar dbAr
+			if co.GetStack(0, &ar) { /* does it have frames? */
+				L.PushString("normal") /* it is running */
+			} else if co.GetTop() == 0 {
+				L.PushString("dead")
+			} else {
+				L.PushString("suspended") /* initial state */
+			}
+		default: /* some error occurred */
+			L.PushString("dead")
+		}
+	}
 	return 1
 }
 
-// coYieldable is luaB_yieldable (lcorolib.c 5.4): with no argument it
-// asks about the running thread, otherwise about the given thread.
-// Answer is lua_isyieldable (upper 16 bits of nCcalls clear).
+// coYieldable is luaB_yieldable (lcorolib.c 5.3.4): no argument; asks
+// whether the running thread is yieldable (lua_isyieldable).
 func coYieldable(L *State) int {
-	co := L
-	if !L.IsNone(1) {
-		co = coGetCo(L)
-	}
-	L.PushBoolean(co.IsYieldable())
+	L.PushBoolean(L.IsYieldable())
 	return 1
 }
 
@@ -247,122 +193,6 @@ func coRunning(L *State) int {
 	return 2
 }
 
-// coPushValue pushes a raw Value (no lua_pushvalue for *Value in this port).
-func coPushValue(L *State, v Value) {
-	L.checkStack(1)
-	L.stack[L.top] = v
-	L.top++
-}
-
-// coCloseThread is the port's lua_closethread(co, from) (lstate.c): it
-// asks the coroutine goroutine to unwind itself. A coroutine that has
-// already finished has no goroutine left to talk to, and is simply
-// reported as closed (which is what C does too via luaE_resetthread).
-//
-// Like C, the thread being closed inherits the C-call depth of the
-// closer (getCcalls(from)), so that a chain of 'coroutine.close' calls
-// is reported as a C stack overflow instead of recursing forever.
-//
-// Returns (ok, errval): ok means status LUA_OK; otherwise errval is the
-// error object (C leaves it on co for lua_xmove).
-func coCloseThread(co, from *State) (bool, Value) {
-	if co.isMain {
-		return false, strValue(co, "cannot close a running coroutine")
-	}
-	if from != nil {
-		co.nCcalls = uint32(getCcalls(from))
-	} else {
-		co.nCcalls = 0
-	}
-	if co.co != nil && co.co.sync && !co.co.live && !co.dead {
-		st := co.unwindForClose()
-		co.dead = true
-		if st == LUA_OK {
-			return true, Value{}
-		}
-		/* unwindForClose always leaves the error in co.vals on failure. */
-		if len(co.co.vals) > 0 {
-			return false, co.co.vals[0]
-		}
-		return false, strValue(co, "error closing coroutine")
-	}
-	if co.dead || co.co == nil {
-		/* The coroutine already terminated, so there is no goroutine
-		   left to unwind. C runs luaE_resetthread(co, co->status), which
-		   closes any pending variable and reports the thread's status:
-		   a coroutine that ended with an error reports that error once
-		   again (false + message), and the report is then consumed —
-		   the second close returns true.
-
-		   Put lastErr back on the stack first so seterrorobj / __close
-		   see the body error (with its source:line). A raising __close
-		   still replaces it. */
-		if co.hasErr && !ttisnil(&co.lastErr) {
-			co.checkStack(1)
-			if co.top < 1 {
-				setnilvalue(&co.stack[0])
-				co.top = 1
-			}
-			co.stack[co.top] = co.lastErr
-			co.top++
-		}
-		st := co.resetThreadStatus(int(co.status))
-		if st != LUA_OK {
-			co.hasErr = false
-			if co.top > 1 && !ttisnil(&co.stack[1]) {
-				return false, co.stack[1]
-			}
-			if !ttisnil(&co.lastErr) {
-				return false, co.lastErr
-			}
-			return false, strValue(co, "error closing coroutine")
-		}
-		co.hasErr = false
-		return true, Value{} /* already closed */
-	}
-	var resp resumeResp
-	select {
-	case <-co.co.done:
-		co.dead = true
-		return true, Value{}
-	case co.co.req <- resumeReq{kind: reqClose}:
-		select {
-		case resp = <-co.co.resp:
-		case <-co.co.done:
-			co.dead = true
-			return true, Value{}
-		}
-	}
-	co.dead = true
-	if resp.status == LUA_OK {
-		return true, Value{}
-	}
-	if len(resp.vals) > 0 {
-		return false, resp.vals[0]
-	}
-	return false, strValue(co, "error closing coroutine")
-}
-
-// coClose is luaB_close (lcorolib.c) — coroutine.close (5.4).
-func coClose(L *State) int {
-	co := coGetCo(L)
-	status := coAuxStatus(L, co)
-	switch status {
-	case cosDead, cosYield:
-		ok, errval := coCloseThread(co, L) /* lua_closethread(co, L) */
-		if ok {
-			L.PushBoolean(true)
-			return 1
-		}
-		L.PushBoolean(false)
-		coPushValue(L, errval) /* C: lua_xmove(co, L, 1) */
-		return 2
-	default: /* normal or running coroutine */
-		return L.Error2("cannot close a %s coroutine", coStatNames[status])
-	}
-}
-
-/* co_funcs[] (lcorolib.c) */
 var coFuncs = []Reg{
 	{Name: "create", Func: coCreate},
 	{Name: "resume", Func: coResume},
@@ -371,7 +201,6 @@ var coFuncs = []Reg{
 	{Name: "wrap", Func: coWrap},
 	{Name: "yield", Func: coYield},
 	{Name: "isyieldable", Func: coYieldable},
-	{Name: "close", Func: coClose},
 }
 
 // OpenCoroutine opens the coroutine library (luaopen_coroutine).

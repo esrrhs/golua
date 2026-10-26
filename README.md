@@ -1,10 +1,10 @@
-# golua — Lua 5.4 in pure Go
+# golua — Lua 5.3.4 in pure Go
 
 [![License](https://img.shields.io/github/license/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Release](https://img.shields.io/github/v/release/esrrhs/golua)](https://github.com/esrrhs/golua/releases)
 
-`golua` is a **line-by-line Go translation of PUC-Lua 5.4.9**. The lexer,
+`golua` is a **line-by-line Go translation of PUC-Lua 5.3.4**. The lexer,
 parser, code generator, VM, standard library, C API and the `lua`/`luac`
 command-line tools all follow the C sources file by file, and their
 behaviour is checked against a reference interpreter built from the same
@@ -17,14 +17,14 @@ The one subsystem that is not translated is the garbage collector:
 
 ## Highlights
 
-- **Complete Lua 5.4** — integer/float subtypes, `//`, bitwise operators,
-  `goto`, `<const>`/`<close>`, varargs, coroutines, metatables, weak
-  tables, and the full standard library.
+- **Complete Lua 5.3.4** — integer/float subtypes, `//`, bitwise operators,
+  `goto`, `bit32`, varargs, coroutines, metatables, weak tables, and the
+  full standard library (no 5.4 `<const>`/`<close>`).
 - **Go API shaped like the C API** — `NewState`, `PushInteger`, `PCall`,
   `GetGlobal`, … The root package re-exports the API with type aliases;
   all implementation lives in `internal/core`.
 - **Bytecode compatibility** — the same binary chunk format as PUC-Lua
-  5.4.9: `string.dump` output loads both ways, and `luac -l -l` prints
+  5.3.4: `string.dump` output loads both ways, and `luac -l -l` prints
   the same listings.
 - **Optional C modules** — built with cgo, `package.loadlib`/`require`
   load real C extensions on Linux and macOS. With `CGO_ENABLED=0` the
@@ -107,9 +107,9 @@ constants and functions from `internal/core`, so the import path is
   `lvm.go`, and so on. Function names, control flow and error messages
   follow the C source, which makes review a line-by-line exercise.
 - **The collector is the exception.** Lua objects are ordinary Go
-  values. Weak tables use Go weak pointers, and `__gc`/weak-entry
-  clearing run at cycle boundaries: `Close()`, `collectgarbage`, or an
-  allocation crossing a threshold.
+  values owned by Go's concurrent GC. Weak tables use Go weak pointers
+  (`weak.Pointer`), and `__gc` finalizers are queued by `runtime.AddCleanup`
+  and drained on the VM execution path or at `Close()` / `collectgarbage`.
 - **The C API is re-exported, not reimplemented.** Methods on `State`
   are the implementation; the root package aliases the types and
   forwards the package-level functions.
@@ -126,13 +126,13 @@ gofmt -l .        # must print nothing
 
 The tests are the specification:
 
-- **Official suite** — all 33 files of PUC-Lua 5.4.9's `testes/` run
-  through both interpreters and are compared byte for byte. On a cgo
-  build 30 match exactly; `gc` and `all` are documented differences (the
-  collector itself, and four environment lines), and `heavy` is not run
-  because it times out on both sides. `api.lua` matches but asserts
-  nothing: its body needs Lua's private `T` module, which is built
-  against the C internals.
+- **Official suite** — all 28 files of PUC-Lua 5.3.4's `testes/` are
+  compared byte for byte against a reference interpreter. On a cgo build
+  **26** match exactly; `gc` and `all` are documented differences (Go GC;
+  `all` runs with `_port=true` plus a few environment lines). `main.lua`'s
+  Ctrl-C harness runs via stand-alone SIGINT (`laction`/`lstop` equivalent).
+  `api.lua` matches but asserts nothing: its body needs Lua's private `T`
+  module, which is built against the C internals.
 - **Differential suite** — 83 hand-written cases in
   `internal/core/testdata/diff`, each with a golden answer.
 - **Real extensions** — LPeg, Lua CJSON, LuaSocket, LuaFileSystem and
@@ -151,39 +151,36 @@ LUA_REF=/path/to/lua go test -run TestDifferentialSuite ./internal/core/
 ```
 
 CI runs three jobs across Linux, macOS and Windows. The `PUC-Lua suites`
-job downloads and builds Lua 5.4.9, then runs the official,
+job downloads and builds Lua **5.3.4**, then runs the official,
 differential, third-party and fuzz suites with `LUA_REF` pointing at it.
 
 ## Performance
 
-One run on Linux x86_64 (Intel Xeon, kernel 6.12.94+): PUC-Lua 5.4.9 against a cgo build (Go 1.27.3). The ratio is golua / PUC-Lua; below 1 is faster. Timing and what each row measures are in [bench/README.md](bench/README.md).
+One run on an Intel Xeon (8 cores), PUC-Lua **5.3.4** against a cgo build of this tree (Go 1.27). `MIN_MS=600 REPS=7`; every row had `p < 0.01`. The ratio is golua / PUC-Lua; below 1 is faster. Timing details are in [bench/README.md](bench/README.md).
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 2.38× | fib | 2.27× |
-| nop | 2.11× | concat | 2.24× |
-| hash | 2.01× | yield | 1.31× |
-| intloop | 2.32× | pcall | 2.42× |
-| floatloop | 2.33× | upvalue | 2.11× |
-| bitwise | 2.61× | global | 2.25× |
-| array | 2.99× | ipairs | 2.30× |
-| strings | 1.25× | tailcall | 1.89× |
-| sort | 1.55× | metaindex | 1.78× |
-|  |  | method | 1.86× |
-|  |  | call3 | 2.14× |
-|  |  | alloc | 2.13× |
+| startup | 2.44× | global | 2.29× |
+| nop | 1.80× | array | 2.39× |
+| intloop | 2.27× | hash | 1.73× |
+| floatloop | 2.55× | metaindex | 1.96× |
+| bitwise | 2.60× | ipairs | 1.99× |
+| fib | 1.57× | concat | 2.10× |
+| tailcall | 1.77× | strings | 1.30× |
+| call3 | 1.75× | sort | 1.76× |
+| upvalue | 1.71× | yield | 1.43× |
+| method | 2.09× | alloc | 1.94× |
+| pcall | 2.24× |  |  |
 
-Every listed workload is slower on this run. The interpreter stays line-faithful to PUC-Lua 5.4.9 (no Go-only specialized shortcuts), and the checksum is the same.
+Most bytecode-heavy rows sit around 1.3–2.5×. `strings` (1.30×) and `yield` (1.43×) are closest to C: `string.format` formats directly into a non-escaping stack-local `luaL_Buffer` via `PrepBuffSize` + `strconv.AppendInt` and checks the short-string intern table before allocating. `startup` pays for the Go runtime.
 
 ## Known differences
 
-- **No collector of its own.** Memory management is delegated completely to
-  Go's runtime garbage collector (no artificial `runtime.GC()` cycles).
-  `collectgarbage` only implements `"collect"` and `"count"` (other known
-  option names are accepted but ignored and push `0`; unknown names still
-  error). `"collect"` drains pending `__gc` finalizers and cleans dead
-  weak-table slots already reclaimed by Go's GC; `"count"` reports the Go
-  heap. Weak table entries use Go's `weak.Pointer` directly.
+- **No collector of its own.** Object lifetime is managed entirely by
+  Go's concurrent GC (`collectgarbage("collect")` triggers a cycle across
+  the process; `collectgarbage("count")` reports the Go heap). Weak entries
+  clear automatically via `weak.Pointer` and finalizers are queued by
+  `runtime.AddCleanup`.
 - **C modules need cgo.** Without cgo there is no `dlopen` and no C
   `setlocale` (a built-in table supplies the decimal point); Windows has
   no dynamic-loader backend at all.
@@ -195,9 +192,9 @@ Every listed workload is slower on this run. The interpreter stays line-faithful
 - **A few API edges.** There is no `_UBOX*` registry key; `file:read(n)`
   with `n` above 2 GiB reads as end of file; a negative `setvbuf` size
   succeeds; `math.randomseed()`'s second seed is a Go heap address.
-- **Performance.** See above. A recognised shape returns the same checksum.
+- **Performance.** See above. Same checksums as PUC on every bench workload.
 
 ## License
 
-MIT, the same as Lua itself. The Lua 5.4.9 test suite and the bundled
+MIT, the same as Lua itself. The Lua **5.3.4** `testes/` suite and the bundled
 third-party libraries keep their original licences.

@@ -218,11 +218,11 @@ func TestLibrariesInProcess(t *testing.T) {
 		"1",
 		"1970-01-01",
 		"number",
-		"7",
-		"1",
+		"7.0",
+		"1.0",
 		"true",
 		"2.5",
-		"-3",
+		"-3.0",
 		"b",
 		"bac",
 		"1",
@@ -474,7 +474,7 @@ func TestMathApproximationsAndSmallAPI(t *testing.T) {
 		t.Fatal("long string")
 	}
 	setabstkey(&v)
-	if v.tt != LUA_VABSTKEY {
+	if !ttisnil(&v) { /* 5.3.4: absent sentinel is nilobject copy / nil tag */
 		t.Fatal("abstkey")
 	}
 	if makevariant(4, 1) != 4|1<<4 {
@@ -490,7 +490,7 @@ func TestMathApproximationsAndSmallAPI(t *testing.T) {
 	if !short.isShort() {
 		t.Fatal("isShort")
 	}
-	if sBx(0) != -OFFSET_sBx || !math2IsNaN(math.NaN()) || math2IsNaN(0) {
+	if sBx(0) != -OFFSET_sBx || !numIsNaN(math.NaN()) || numIsNaN(0) {
 		t.Fatal("sBx / nan")
 	}
 	if n, err := ioWriteString(nil, "a"); n != 0 || err == nil {

@@ -1,6 +1,5 @@
-// Translation of liolib.c (PUC-Lua 5.4.9): the standard I/O (and popen)
-// library. Line-faithful to PUC 5.4.9 including __close and io.lines
-// to-be-closed multi-return.
+// Translation of liolib.c (PUC-Lua 5.3.4): the standard I/O (and popen)
+// library. Re-reviewed vs PUC 5.3.4 (no 5.4 __close / multi-return lines).
 //
 // A file handle is a full userdata wrapping a *ioStream (the Go
 // counterpart of luaL_Stream); its metatable is registered in the
@@ -33,20 +32,9 @@ import (
 // closed handle the way PUC-Lua shows it one.  It is nil without cgo.
 var ioStreamClosed func(s *ioStream)
 
-// ioIsWindowsFn is the GOOS check for Windows-specific I/O rules.
-// Tests may override it temporarily; production always uses runtime.GOOS.
-var ioIsWindowsFn = func() bool { return runtime.GOOS == "windows" }
-
 // ioIsWindows tells whether the host runs Windows (the shell used by
 // io.popen and os.execute depends on it).
-func ioIsWindows() bool { return ioIsWindowsFn() }
-
-// Test hooks for fail paths (production defaults).
-var ioCreateTempFn = os.CreateTemp
-var ioFileSeekFn = func(f *os.File, offset int64, whence int) (int64, error) {
-	return f.Seek(offset, whence)
-}
-var ioCmdStartFn = func(cmd *exec.Cmd) error { return cmd.Start() }
+func ioIsWindows() bool { return runtime.GOOS == "windows" }
 
 const (
 	ioPrefix     = "_IO_"
@@ -313,6 +301,9 @@ func (e ioCErrno) Error() string { return e.msg }
 // for, and 'strerror' spells it the same way too.
 var ioErrBadFd = ioCErrno{en: 9, msg: "bad file descriptor"}
 
+/* EINVAL: glibc popen rejects modes other than r/w(/e). */
+var errPopenMode = ioCErrno{en: 22, msg: "invalid argument"}
+
 func ioErrno(err error) int64 {
 	var en syscall.Errno
 	if errors.As(err, &en) {
@@ -392,7 +383,7 @@ func ioStrError(err error) string {
 // two do about a rename onto a directory is not a difference in a
 // number, it is a difference in whether the file moved.
 func ioRename(oldpath, newpath string) error {
-	if ioIsWindows() {
+	if runtime.GOOS == "windows" {
 		/* no rename(2) there: MoveFileEx is what a move is, and this
 		   port keeps Go's, which does replace the target. */
 		return os.Rename(oldpath, newpath)
@@ -615,7 +606,7 @@ func ioNewPreFile(L *State) *ioStream {
 	   was opened for is not ours to guess. */
 	s := &ioStream{canR: true, canW: true}
 	ioTrackStream(s)
-	L.NewUserData(s, 0) /* 5.4.9: lua_newuserdatauv(L, sizeof(LStream), 0) */
+	L.NewUserData(s, 1) /* 5.3.4: single uservalue slot */
 	/* weak: see the note on the field */
 	s.uw = weak.Make(uvalue(&L.stack[L.top-1])) /* the handle C is handed */
 	ioSetMetaTableByName(L, ioFileHandle)
@@ -671,25 +662,6 @@ func ioSetDirection(s *ioStream, flag int) {
 	s.canW = flag&(os.O_RDWR|os.O_WRONLY) != 0
 }
 
-// ioCheckModeP is l_checkmodep. Default (POSIX / ISO) accepts only "r"
-// or "w". Under LUA_USE_WINDOWS, C also accepts "[rw][bt]?".
-func ioCheckModeP(mode string) bool {
-	if len(mode) == 0 {
-		return false
-	}
-	if mode[0] != 'r' && mode[0] != 'w' {
-		return false
-	}
-	if ioIsWindows() {
-		/* Windows: (m[0]=='r'||m[0]=='w') && (m[1]=='\0' || ((m[1]=='b'||m[1]=='t') && m[2]=='\0')) */
-		if len(mode) == 1 {
-			return true
-		}
-		return len(mode) == 2 && (mode[1] == 'b' || mode[1] == 't')
-	}
-	return len(mode) == 1
-}
-
 // ioFlags translates a Lua open mode into os.OpenFile flags.
 func ioFlags(mode string) int {
 	var flag int
@@ -724,7 +696,7 @@ func ioOpenFile(fname, mode string) (*os.File, error) {
 	   library's business, and it is not the same for the two of them:
 	   see ioAppendAtEnd. */
 	if ioAppendAtEnd(mode) {
-		if _, err := ioFileSeekFn(f, 0, io.SeekEnd); err != nil {
+		if _, err := f.Seek(0, io.SeekEnd); err != nil {
 			f.Close()
 			return nil, err
 		}
@@ -801,7 +773,6 @@ func (rn *ioNumReader) next() bool {
 		return false
 	}
 	rn.buff = append(rn.buff, byte(rn.c))
-	rn.n++ /* C: rn->buff[rn->n++] = rn->c */
 	b, err := rn.r.ReadByte()
 	if err != nil {
 		rn.c = -1
@@ -953,8 +924,8 @@ func ioReadChars(L *State, s *ioStream, n int64) bool {
 	if n < 0 {
 		/* C hands 'n' to the allocator as a 'size_t', so a negative
 		   count asks for SIZE_MAX bytes and no allocator has those:
-		   'file:read(-1)' reports "not enough memory". */
-		luaG_runerror(L, "not enough memory")
+		   'file:read(-1)' reports "not enough memory for buffer allocation". */
+		luaG_runerror(L, "not enough memory for buffer allocation")
 	}
 	if s.reader() == nil {
 		L.PushString("")
@@ -962,13 +933,8 @@ func ioReadChars(L *State, s *ioStream, n int64) bool {
 	}
 	/* C: luaL_prepbuffsize(&b, n) then fread of n. Counts too large to
 	   allocate fail with the same OOM message (closer than empty+fail). */
-	if n > int64(1)<<31 {
-		luaG_runerror(L, "not enough memory")
-	}
-	if n > 1<<20 {
-		b, _ := io.ReadAll(io.LimitReader(s.bufferedReader(), n))
-		L.PushString(string(b))
-		return len(b) > 0
+	if n > int64(1)<<30 {
+		luaG_runerror(L, "not enough memory for buffer allocation")
 	}
 	buf := make([]byte, n)
 	nr, _ := io.ReadFull(s.bufferedReader(), buf)
@@ -1056,7 +1022,8 @@ func ioGWrite(L *State, s *ioStream, arg int) int {
 				str = fmt.Sprintf(LUA_INTEGER_FMT, v)
 			} else {
 				v, _ := L.ToNumber(arg)
-				str = fmtFloat(v)
+				/* C fprintf(LUA_NUMBER_FMT) uses the C locale decimal point */
+				str = num2strLocale(fmtFloat(v))
 			}
 		} else {
 			str = L.CheckString(arg)
@@ -1100,13 +1067,11 @@ func ioFWrite(L *State) int {
 // ioGetIOFile pushes the default file registered under findex and
 // returns its stream (getiofile). The pushed value is left on the stack,
 // which is what the callers expect (see ioWrite/ioRead).
-// C uses lua_touserdata (no metatable check); registry entries are ours.
 func ioGetIOFile(L *State, findex string) *ioStream {
 	L.GetField(LUA_REGISTRYINDEX, findex)
-	s := L.ToUserData(-1).(*ioStream) /* C: (LStream *)lua_touserdata(L, -1) */
+	s := ioToLStreamAt(L, L.AbsIndex(-1))
 	if s.isClosed() {
-		/* findex + IOPREF_LEN → "input" / "output" */
-		L.Error2("default %s file is closed", findex[len(ioPrefix):])
+		L.Error2("standard %s file is closed", findex[len(ioPrefix):])
 	}
 	return s
 }
@@ -1137,7 +1102,7 @@ func ioType(L *State) int {
 	L.CheckAny(1)
 	p := ioTestUData(L, 1, ioFileHandle)
 	if p == nil {
-		L.PushNil() /* not a file; luaL_pushfail ≡ nil by default */
+		L.PushNil() /* not a file */
 	} else if p.(*ioStream).isClosed() {
 		L.PushString("closed file")
 	} else {
@@ -1151,17 +1116,7 @@ func ioFToString(L *State) int {
 	if s.isClosed() {
 		L.PushString("file (closed)")
 	} else {
-		/* C: lua_pushfstring(L, "file (%p)", p->f) */
-		var p any
-		switch {
-		case s.f != nil:
-			p = s.f
-		case s.cfp != nil:
-			p = s.cfp
-		default:
-			p = s /* popen / incomplete: no FILE* */
-		}
-		L.PushString(fmt.Sprintf("file (%p)", p))
+		L.PushString(fmt.Sprintf("file (%p)", s))
 	}
 	return 1
 }
@@ -1169,13 +1124,12 @@ func ioFToString(L *State) int {
 // ioAuxClose calls the close function of a file handle (aux_close).
 func ioAuxClose(L *State) int {
 	s := ioToLStream(L)
-	cf := s.closef /* C: volatile lua_CFunction cf = p->closef */
+	cf := s.closef
 	s.closef = nil /* mark stream as closed */
 	if cf == nil {
-		/* C would call NULL; callers (f_close/f_gc) reject closed handles */
 		return 0
 	}
-	return cf(L) /* close it */
+	return cf(L)
 }
 
 func ioFClose2(L *State) int {
@@ -1193,10 +1147,8 @@ func ioClose(L *State) int {
 func ioFGc(L *State) int {
 	s := ioToLStream(L)
 	/* C: !isclosed(p) && p->f != NULL — ignore closed and incompletely
-	   open files (closef set, f still NULL). Go popen has no FILE* f;
-	   rd/wr are the open-stream stand-in (not cmd alone: a failed
-	   Start before pipes would otherwise GC-close unlike C). */
-	if !s.isClosed() && (s.f != nil || s.rd != nil || s.wr != nil) {
+	   open files. Popen uses cmd/rd/wr instead of f. */
+	if !s.isClosed() && (s.f != nil || s.cmd != nil || s.rd != nil || s.wr != nil) {
 		ioAuxClose(L)
 	}
 	return 0
@@ -1231,9 +1183,8 @@ func ioNoClose(L *State) int {
 func ioOpen(L *State) int {
 	filename := ioCStr(L.CheckString(1))
 	mode := ioCStr(L.OptString(2, "r"))
+	L.ArgCheck(ioCheckMode(mode), 2, "invalid mode")
 	s := ioNewFile(L)
-	md := mode /* to traverse/check mode */
-	L.ArgCheck(ioCheckMode(md), 2, "invalid mode")
 	f, err := ioOpenFile(filename, mode)
 	if err != nil {
 		return ioFileResult(L, false, &filename, err)
@@ -1247,36 +1198,36 @@ func ioPOpen(L *State) int {
 	/* 'popen' takes a C string, so it is the bytes before the first
 	   zero that are handed to the shell. */
 	filename := luaCStr(L.CheckString(1))
-	mode := ioCStr(L.OptString(2, "r"))
-	/* C: newprefile then l_checkmodep then l_popen then closef=io_pclose */
+	/* C: luaL_optstring(L, 2, "r") — coerces number, typeerrors otherwise */
+	mode := luaCStr(L.OptString(2, "r"))
+	/* glibc popen accepts only "r"/"w" (+optional e); others → EINVAL. */
 	s := ioNewPreFile(L)
-	L.ArgCheck(ioCheckModeP(mode), 2, "invalid mode")
 	cmd := ioShellCommand(filename)
 	var err error
-	/* Direction from mode[0]: Windows may pass "rb"/"rt"/"wb"/"wt". */
-	if mode[0] == 'r' {
+	switch {
+	case mode == "r" || mode == "re":
 		s.rd, err = cmd.StdoutPipe()
 		cmd.Stderr = os.Stderr
 		s.canW = false /* a pipe to the child's output: read only */
-	} else { /* 'w' — ArgCheck already rejected other modes */
+	case mode == "w" || mode == "we":
 		s.wr, err = cmd.StdinPipe()
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		s.canR = false /* a pipe to the child's input: write only */
+	default:
+		err = errPopenMode
 	}
 	if err == nil {
 		/* POSIX l_popen: (fflush(NULL), popen(...)) — flush every open
-		   stdio write buffer before the child inherits descriptors.
-		   Windows _popen has no fflush(NULL); harmless extra flush. */
+		   stdio write buffer before the child inherits descriptors. */
 		ioFlushAll()
-		err = ioCmdStartFn(cmd)
+		err = cmd.Start()
 	}
-	/* C sets closef even when l_popen returns NULL; f_gc skips f==NULL. */
-	s.cmd = cmd
-	s.closef = ioPClose
 	if err != nil {
 		return ioFileResult(L, false, &filename, err)
 	}
+	s.cmd = cmd
+	s.closef = ioPClose
 	return 1
 }
 
@@ -1290,7 +1241,7 @@ func ioShellCommand(command string) *exec.Cmd {
 
 func ioTmpFile(L *State) int {
 	s := ioNewFile(L)
-	f, err := ioCreateTempFn("", "lua_")
+	f, err := os.CreateTemp("", "lua_")
 	if err != nil {
 		return ioFileResult(L, false, nil, err)
 	}
@@ -1351,13 +1302,7 @@ func ioLines(L *State) int {
 		toclose = true /* close it after iteration */
 	}
 	ioAuxLines(L, toclose) /* push iteration function */
-	if toclose {
-		L.PushNil()    /* state */
-		L.PushNil()    /* control */
-		L.PushValue(1) /* file is the to-be-closed variable (4th result) */
-		return 4
-	}
-	return 1
+	return 1               /* 5.3.4: only the iterator (closing is via upvalue) */
 }
 
 // ioReadline is the iteration function of 'lines'.
@@ -1397,9 +1342,7 @@ func ioFSeek(L *State) int {
 	modenames := []string{"set", "cur", "end"}
 	s := ioToFile(L)
 	op := L.CheckOption(2, "cur", modenames)
-	p3 := L.OptInteger(3, 0)
-	offset := p3 /* l_seeknum: int64 here (POSIX off_t / MSVC __int64) */
-	L.ArgCheck(offset == p3, 3, "not an integer in proper range")
+	offset := L.OptInteger(3, 0)
 	if s.f == nil {
 		/* A pipe: 'fseek' asks the descriptor, which answers ESPIPE
 		   ("Illegal seek", 29) -- the same on every platform. */
@@ -1505,35 +1448,32 @@ var ioLib = []Reg{
 	{"write", ioWrite},
 }
 
-// ioMeth is meth[] in liolib.c (5.4.9): methods for file handles.
-var ioMeth = []Reg{
-	{"read", ioFRead},
-	{"write", ioFWrite},
-	{"lines", ioFLines},
-	{"flush", ioFFlush},
-	{"seek", ioFSeek},
+// ioFlib is flib in liolib.c: file methods + __gc / __tostring on the metatable.
+var ioFlib = []Reg{
 	{"close", ioFClose2},
+	{"flush", ioFFlush},
+	{"lines", ioFLines},
+	{"read", ioFRead},
+	{"seek", ioFSeek},
 	{"setvbuf", ioFSetVBuf},
-}
-
-// ioMetaMeth is metameth[] in liolib.c (5.4.9): __index placeholder
-// overwritten below; __gc and __close both call f_gc.
-var ioMetaMeth = []Reg{
-	{"__index", nil}, /* placeholder */
+	{"write", ioFWrite},
 	{"__gc", ioFGc},
-	{"__close", ioFGc},
 	{"__tostring", ioFToString},
 }
 
-// ioCreateMeta creates the metatable of file handles (createmeta, Lua 5.4.9).
-// Metamethods on the metatable; methods on a separate table as __index.
+// ioCreateMeta creates the metatable of file handles (createmeta, Lua 5.3.4).
+// Methods live on the metatable itself; __index = metatable. No __close.
 func ioCreateMeta(L *State) {
-	ioNewMetaTable(L, ioFileHandle) /* metatable for file handles */
-	L.SetFuncs(ioMetaMeth, 0)       /* add metamethods to new metatable */
-	L.CreateTable(0, len(ioMeth))   /* create method table */
-	L.SetFuncs(ioMeth, 0)           /* add file methods to method table */
-	L.SetField(-2, "__index")       /* metatable.__index = method table */
-	L.Pop(1)                        /* pop metatable */
+	ioNewMetaTable(L, ioFileHandle) /* create metatable for file handles */
+	L.PushValue(-1)                 /* push metatable */
+	L.SetField(-2, "__index")       /* metatable.__index = metatable */
+	L.SetFuncs(ioFlib, 0)           /* add file methods to new metatable */
+	/* C shares the same io_close function pointer between iolib and flib,
+	   so pushglobalfuncname finds "io.close" for file:close errors.
+	   Reuse the module's close closure (module is under the metatable). */
+	L.GetField(-2, "close")
+	L.SetField(-2, "close")
+	L.Pop(1) /* pop metatable */
 }
 
 // ioCreateStdFile adds a standard file to the module and, when k is not

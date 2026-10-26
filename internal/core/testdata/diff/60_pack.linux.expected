@@ -1,0 +1,334 @@
+== packsize ==
+"b"	true|1
+"B"	true|1
+"h"	true|2
+"H"	true|2
+"l"	true|8
+"L"	true|8
+"j"	true|8
+"J"	true|8
+"T"	true|8
+"f"	true|4
+"d"	true|8
+"n"	true|8
+"z"	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+"x"	true|1
+"Xi"	true|0
+"Xo"	false|"invalid format option 'o'"
+"s"	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+"s1"	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+"s4"	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+"c0"	true|0
+"c1"	true|1
+"c3"	true|3
+"c8"	true|8
+"i"	true|4
+"i1"	true|1
+"i2"	true|2
+"i3"	true|3
+"i4"	true|4
+"i5"	true|5
+"i7"	true|7
+"i8"	true|8
+"i16"	true|16
+"i17"	false|"integral size (17) out of limits [1,16]"
+"I"	true|4
+"I1"	true|1
+"I3"	true|3
+"I8"	true|8
+"I16"	true|16
+"I17"	false|"integral size (17) out of limits [1,16]"
+"i0"	false|"integral size (0) out of limits [1,16]"
+"I0"	false|"integral size (0) out of limits [1,16]"
+"b0"	false|"invalid format option '0'"
+"b1"	false|"invalid format option '1'"
+"b9"	false|"invalid format option '9'"
+"h3"	false|"invalid format option '3'"
+"l-1"	false|"invalid format option '-'"
+"!!"	true|0
+"<"	true|0
+">"	true|0
+"="	true|0
+"!"	true|0
+== packsize of a whole format ==
+""	true|0
+"i4i4"	true|8
+"<i4>i4"	true|8
+"!8i1"	true|1
+"!8 b"	true|1
+"!4 d"	true|8
+"!8Xi"	true|0
+"!8 s4"	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+"!8 c3"	true|3
+"j"	true|8
+"T"	true|8
+"z"	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+"s"	false|"bad argument #1 to 'string.packsize' (variable-length format)"
+"c0"	true|0
+== pack and unpack, one value ==
+b   	00 01 ff 7f 80 E E E E E E E E E E E E
+B   	00 01 E 7f E ff E E E E E E E E E E E
+h   	0000 0100 ffff 7f00 80ff ff00 ff7f 0080 E E E E E E E E E
+H   	0000 0100 E 7f00 E ff00 ff7f E ffff E E E E E E E E
+l   	0000000000000000 0100000000000000 ffffffffffffffff 7f00000000000000 80ffffffffffffff ff00000000000000 ff7f000000000000 0080ffffffffffff ffff000000000000 ffffff7f00000000 00000080ffffffff ffffffffffffff7f 0000000000000080 E E E E
+L   	0000000000000000 0100000000000000 ffffffffffffffff 7f00000000000000 80ffffffffffffff ff00000000000000 ff7f000000000000 0080ffffffffffff ffff000000000000 ffffff7f00000000 00000080ffffffff ffffffffffffff7f 0000000000000080 E E E E
+j   	0000000000000000 0100000000000000 ffffffffffffffff 7f00000000000000 80ffffffffffffff ff00000000000000 ff7f000000000000 0080ffffffffffff ffff000000000000 ffffff7f00000000 00000080ffffffff ffffffffffffff7f 0000000000000080 E E E E
+J   	0000000000000000 0100000000000000 ffffffffffffffff 7f00000000000000 80ffffffffffffff ff00000000000000 ff7f000000000000 0080ffffffffffff ffff000000000000 ffffff7f00000000 00000080ffffffff ffffffffffffff7f 0000000000000080 E E E E
+T   	0000000000000000 0100000000000000 ffffffffffffffff 7f00000000000000 80ffffffffffffff ff00000000000000 ff7f000000000000 0080ffffffffffff ffff000000000000 ffffff7f00000000 00000080ffffffff ffffffffffffff7f 0000000000000080 E E E E
+f   	00000000 0000803f 000080bf 0000fe42 000000c3 00007f43 00feff46 000000c7 00ff7f47 0000004f 000000cf 0000005f 000000df 0000c03f 0000c0bf 0000807f 0000c0ff
+d   	0000000000000000 000000000000f03f 000000000000f0bf 0000000000c05f40 00000000000060c0 0000000000e06f40 00000000c0ffdf40 000000000000e0c0 00000000e0ffef40 0000c0ffffffdf41 000000000000e0c1 000000000000e043 000000000000e0c3 000000000000f83f 000000000000f8bf 000000000000f07f 000000000000f8ff
+n   	0000000000000000 000000000000f03f 000000000000f0bf 0000000000c05f40 00000000000060c0 0000000000e06f40 00000000c0ffdf40 000000000000e0c0 00000000e0ffef40 0000c0ffffffdf41 000000000000e0c1 000000000000e043 000000000000e0c3 000000000000f83f 000000000000f8bf 000000000000f07f 000000000000f8ff
+i1  	00 01 ff 7f 80 E E E E E E E E E E E E
+i2  	0000 0100 ffff 7f00 80ff ff00 ff7f 0080 E E E E E E E E E
+i3  	000000 010000 ffffff 7f0000 80ffff ff0000 ff7f00 0080ff ffff00 E E E E E E E E
+i4  	00000000 01000000 ffffffff 7f000000 80ffffff ff000000 ff7f0000 0080ffff ffff0000 ffffff7f 00000080 E E E E E E
+i8  	0000000000000000 0100000000000000 ffffffffffffffff 7f00000000000000 80ffffffffffffff ff00000000000000 ff7f000000000000 0080ffffffffffff ffff000000000000 ffffff7f00000000 00000080ffffffff ffffffffffffff7f 0000000000000080 E E E E
+I1  	00 01 E 7f E ff E E E E E E E E E E E
+I3  	000000 010000 E 7f0000 E ff0000 ff7f00 E ffff00 E E E E E E E E
+I8  	0000000000000000 0100000000000000 ffffffffffffffff 7f00000000000000 80ffffffffffffff ff00000000000000 ff7f000000000000 0080ffffffffffff ffff000000000000 ffffff7f00000000 00000080ffffffff ffffffffffffff7f 0000000000000080 E E E E
+i   	00000000 01000000 ffffffff 7f000000 80ffffff ff000000 ff7f0000 0080ffff ffff0000 ffffff7f 00000080 E E E E E E
+I   	00000000 01000000 E 7f000000 E ff000000 ff7f0000 E ffff0000 ffffff7f E E E E E E E
+== pack and unpack round trip ==
+i4     0                      00000000 0@5
+i4     1                      01000000 1@5
+i4     -1                     ffffffff -1@5
+i4     1000000                40420f00 1000000@5
+i4     -1000000               c0bdf0ff -1000000@5
+i4     9.2233720368547758e+18 E E
+i4     -9.2233720368547758e+18 E E
+i4     3.25                   E E
+I4     0                      00000000 0@5
+I4     1                      01000000 1@5
+I4     -1                     E E
+I4     1000000                40420f00 1000000@5
+I4     -1000000               E E
+I4     9.2233720368547758e+18 E E
+I4     -9.2233720368547758e+18 E E
+I4     3.25                   E E
+i8     0                      0000000000000000 0@9
+i8     1                      0100000000000000 1@9
+i8     -1                     ffffffffffffffff -1@9
+i8     1000000                40420f0000000000 1000000@9
+i8     -1000000               c0bdf0ffffffffff -1000000@9
+i8     9.2233720368547758e+18 ffffffffffffff7f 9223372036854775807@9
+i8     -9.2233720368547758e+18 0000000000000080 -9223372036854775808@9
+i8     3.25                   E E
+<i4    0                      00000000 0@5
+<i4    1                      01000000 1@5
+<i4    -1                     ffffffff -1@5
+<i4    1000000                40420f00 1000000@5
+<i4    -1000000               c0bdf0ff -1000000@5
+<i4    9.2233720368547758e+18 E E
+<i4    -9.2233720368547758e+18 E E
+<i4    3.25                   E E
+>i4    0                      00000000 0@5
+>i4    1                      00000001 1@5
+>i4    -1                     ffffffff -1@5
+>i4    1000000                000f4240 1000000@5
+>i4    -1000000               fff0bdc0 -1000000@5
+>i4    9.2233720368547758e+18 E E
+>i4    -9.2233720368547758e+18 E E
+>i4    3.25                   E E
+=i4    0                      00000000 0@5
+=i4    1                      01000000 1@5
+=i4    -1                     ffffffff -1@5
+=i4    1000000                40420f00 1000000@5
+=i4    -1000000               c0bdf0ff -1000000@5
+=i4    9.2233720368547758e+18 E E
+=i4    -9.2233720368547758e+18 E E
+=i4    3.25                   E E
+!4i4   0                      00000000 0@5
+!4i4   1                      01000000 1@5
+!4i4   -1                     ffffffff -1@5
+!4i4   1000000                40420f00 1000000@5
+!4i4   -1000000               c0bdf0ff -1000000@5
+!4i4   9.2233720368547758e+18 E E
+!4i4   -9.2233720368547758e+18 E E
+!4i4   3.25                   E E
+!8i8   0                      0000000000000000 0@9
+!8i8   1                      0100000000000000 1@9
+!8i8   -1                     ffffffffffffffff -1@9
+!8i8   1000000                40420f0000000000 1000000@9
+!8i8   -1000000               c0bdf0ffffffffff -1000000@9
+!8i8   9.2233720368547758e+18 ffffffffffffff7f 9223372036854775807@9
+!8i8   -9.2233720368547758e+18 0000000000000080 -9223372036854775808@9
+!8i8   3.25                   E E
+d      0                      0000000000000000 0.0@9
+d      1                      000000000000f03f 1.0@9
+d      -1                     000000000000f0bf -1.0@9
+d      1000000                0000000080842e41 1000000.0@9
+d      -1000000               0000000080842ec1 -1000000.0@9
+d      9.2233720368547758e+18 000000000000e043 9.2233720368548e+18@9
+d      -9.2233720368547758e+18 000000000000e0c3 -9.2233720368548e+18@9
+d      3.25                   0000000000000a40 3.25@9
+n      0                      0000000000000000 0.0@9
+n      1                      000000000000f03f 1.0@9
+n      -1                     000000000000f0bf -1.0@9
+n      1000000                0000000080842e41 1000000.0@9
+n      -1000000               0000000080842ec1 -1000000.0@9
+n      9.2233720368547758e+18 000000000000e043 9.2233720368548e+18@9
+n      -9.2233720368547758e+18 000000000000e0c3 -9.2233720368548e+18@9
+n      3.25                   0000000000000a40 3.25@9
+f      0                      00000000 0.0@5
+f      1                      0000803f 1.0@5
+f      -1                     000080bf -1.0@5
+f      1000000                00247449 1000000.0@5
+f      -1000000               002474c9 -1000000.0@5
+f      9.2233720368547758e+18 0000005f 9.2233720368548e+18@5
+f      -9.2233720368547758e+18 000000df -9.2233720368548e+18@5
+f      3.25                   00005040 3.25@5
+j      0                      0000000000000000 0@9
+j      1                      0100000000000000 1@9
+j      -1                     ffffffffffffffff -1@9
+j      1000000                40420f0000000000 1000000@9
+j      -1000000               c0bdf0ffffffffff -1000000@9
+j      9.2233720368547758e+18 ffffffffffffff7f 9223372036854775807@9
+j      -9.2233720368547758e+18 0000000000000080 -9223372036854775808@9
+j      3.25                   E E
+T      0                      0000000000000000 0@9
+T      1                      0100000000000000 1@9
+T      -1                     ffffffffffffffff -1@9
+T      1000000                40420f0000000000 1000000@9
+T      -1000000               c0bdf0ffffffffff -1000000@9
+T      9.2233720368547758e+18 ffffffffffffff7f 9223372036854775807@9
+T      -9.2233720368547758e+18 0000000000000080 -9223372036854775808@9
+T      3.25                   E E
+b      0                      00 0@2
+b      1                      01 1@2
+b      -1                     ff -1@2
+b      1000000                E E
+b      -1000000               E E
+b      9.2233720368547758e+18 E E
+b      -9.2233720368547758e+18 E E
+b      3.25                   E E
+B      0                      00 0@2
+B      1                      01 1@2
+B      -1                     E E
+B      1000000                E E
+B      -1000000               E E
+B      9.2233720368547758e+18 E E
+B      -9.2233720368547758e+18 E E
+B      3.25                   E E
+h      0                      0000 0@3
+h      1                      0100 1@3
+h      -1                     ffff -1@3
+h      1000000                E E
+h      -1000000               E E
+h      9.2233720368547758e+18 E E
+h      -9.2233720368547758e+18 E E
+h      3.25                   E E
+H      0                      0000 0@3
+H      1                      0100 1@3
+H      -1                     E E
+H      1000000                E E
+H      -1000000               E E
+H      9.2233720368547758e+18 E E
+H      -9.2233720368547758e+18 E E
+H      3.25                   E E
+l      0                      0000000000000000 0@9
+l      1                      0100000000000000 1@9
+l      -1                     ffffffffffffffff -1@9
+l      1000000                40420f0000000000 1000000@9
+l      -1000000               c0bdf0ffffffffff -1000000@9
+l      9.2233720368547758e+18 ffffffffffffff7f 9223372036854775807@9
+l      -9.2233720368547758e+18 0000000000000080 -9223372036854775808@9
+l      3.25                   E E
+L      0                      0000000000000000 0@9
+L      1                      0100000000000000 1@9
+L      -1                     ffffffffffffffff -1@9
+L      1000000                40420f0000000000 1000000@9
+L      -1000000               c0bdf0ffffffffff -1000000@9
+L      9.2233720368547758e+18 ffffffffffffff7f 9223372036854775807@9
+L      -9.2233720368547758e+18 0000000000000080 -9223372036854775808@9
+L      3.25                   E E
+== strings: z, s, sN, cN ==
+z     	00->""@2 6100->"a"@3 61626300->"abc"@5 7878787878787878787800->"xxxxxxxxxx"@12
+s     	0000000000000000->""@9 010000000000000061->"a"@10 0300000000000000616263->"abc"@12 0a0000000000000078787878787878787878->"xxxxxxxxxx"@19
+s1    	00->""@2 0161->"a"@3 03616263->"abc"@5 0a78787878787878787878->"xxxxxxxxxx"@12
+s2    	0000->""@3 010061->"a"@4 0300616263->"abc"@6 0a0078787878787878787878->"xxxxxxxxxx"@13
+s4    	00000000->""@5 0100000061->"a"@6 03000000616263->"abc"@8 0a00000078787878787878787878->"xxxxxxxxxx"@15
+s8    	0000000000000000->""@9 010000000000000061->"a"@10 0300000000000000616263->"abc"@12 0a0000000000000078787878787878787878->"xxxxxxxxxx"@19
+c0    	->""@1 E E E
+c1    	00->"\0"@2 61->"a"@2 E E
+c3    	000000->"\0\0\0"@4 610000->"a\0\0"@4 616263->"abc"@4 E
+c8    	0000000000000000->"\0\0\0\0\0\0\0\0"@9 6100000000000000->"a\0\0\0\0\0\0\0"@9 6162630000000000->"abc\0\0\0\0\0"@9 E
+c100  	00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000->"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"@101 61000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000->"a\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"@101 61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000->"abc\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"@101 78787878787878787878000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000->"xxxxxxxxxx\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"@101
+== several values at once ==
+010000000200000003000000	1|2|3|13
+7|"ab"|9|12
+1|5
+1|2|9
+== unpack with a position ==
+0	false|"bad argument #3 to 'string.unpack' (initial position out of string)"
+1	true|1|5
+5	true|2|9
+9	true|3|13
+12	false|"bad argument #2 to 'string.unpack' (data string too short)"
+13	false|"bad argument #2 to 'string.unpack' (data string too short)"
+-1	false|"bad argument #2 to 'string.unpack' (data string too short)"
+-4	true|3|13
+-5	true|768|12
+-12	true|1|5
+-13	false|"bad argument #3 to 'string.unpack' (initial position out of string)"
+== a big fixed-size field ==
+1000000	1000000
+1000000	true	1000001
+1000008	1	4
+1|98|10
+== what has to be refused ==
+""	true|0	true|0
+"i"	true|4	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"I"	true|4	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"i9"	true|9	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"i-1"	false|"invalid format option '-'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"i17"	false|"integral size (17) out of limits [1,16]"	false|"integral size (17) out of limits [1,16]"
+"I0"	false|"integral size (0) out of limits [1,16]"	false|"integral size (0) out of limits [1,16]"
+"i0"	false|"integral size (0) out of limits [1,16]"	false|"integral size (0) out of limits [1,16]"
+"y"	false|"invalid format option 'y'"	false|"invalid format option 'y'"
+"!"	true|0	true|0
+"!!"	true|0	true|0
+"!1"	true|0	true|0
+"!17"	false|"integral size (17) out of limits [1,16]"	false|"integral size (17) out of limits [1,16]"
+"!7i4"	true|4	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"!!8i4"	true|4	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"!8"	true|0	true|0
+"Xi8"	true|0	true|0
+"Xl"	true|0	true|0
+"b0"	false|"invalid format option '0'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"b9"	false|"invalid format option '9'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"h0"	false|"invalid format option '0'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"h9"	false|"invalid format option '9'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"l0"	false|"invalid format option '0'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"l17"	false|"invalid format option '1'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"s0"	false|"integral size (0) out of limits [1,16]"	false|"integral size (0) out of limits [1,16]"
+"c"	false|"missing size for format option 'c'"	false|"missing size for format option 'c'"
+"c-1"	false|"missing size for format option 'c'"	false|"missing size for format option 'c'"
+"z1"	false|"bad argument #1 to 'string.packsize' (variable-length format)"	false|"bad argument #2 to 'string.pack' (string expected, got nil)"
+"x1"	false|"invalid format option '1'"	false|"invalid format option '1'"
+"f1"	false|"invalid format option '1'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"d9"	false|"invalid format option '9'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"n9"	false|"invalid format option '9'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"j9"	false|"invalid format option '9'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"T9"	false|"invalid format option '9'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"i4.5"	false|"invalid format option '.'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"%"	false|"invalid format option '%'"	false|"invalid format option '%'"
+"i 4"	false|"invalid format option '4'"	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+" i4"	true|4	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"i4 "	true|4	false|"bad argument #2 to 'string.pack' (number expected, got nil)"
+"s-1"	false|"bad argument #1 to 'string.packsize' (variable-length format)"	false|"bad argument #2 to 'string.pack' (string expected, got nil)"
+"c2147483647"	false|"invalid format option '7'"	false|"bad argument #2 to 'string.pack' (string expected, got nil)"
+"c1000000000000"	false|"invalid format option '0'"	false|"bad argument #2 to 'string.pack' (string expected, got nil)"
+"c99999999999"	false|"invalid format option '9'"	false|"bad argument #2 to 'string.pack' (string expected, got nil)"
+"c2000000000"	true|2000000000	SKIP(2000000000)
+== argument counts and types ==
+false|"bad argument #2 to 'string.pack' (number expected, got nil)"	true|"\1\0\0\0"
+false|"bad argument #1 to 'string.pack' (string expected, got no value)"	false|"invalid format option '5'"
+false|"bad argument #2 to 'string.pack' (number expected, got string)"	false|"bad argument #2 to 'string.pack' (number expected, got table)"
+false|"bad argument #2 to 'string.pack' (number expected, got nil)"	false|"bad argument #2 to 'string.pack' (number expected, got boolean)"
+false|"bad argument #2 to 'string.pack' (number has no integer representation)"	false|"bad argument #2 to 'string.pack' (number has no integer representation)"
+true|"5\0"
+false|"bad argument #2 to 'string.unpack' (data string too short)"	false|"bad argument #2 to 'string.unpack' (data string too short)"
+false|"bad argument #2 to 'string.unpack' (string expected, got no value)"	false|"bad argument #1 to 'string.unpack' (string expected, got no value)"
+false|"invalid format option '5'"
+false|"bad argument #1 to 'string.packsize' (string expected, got no value)"	false|"invalid format option '5'"
+done

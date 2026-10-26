@@ -1,22 +1,16 @@
-// Translation of lmathlib.c (PUC-Lua 5.4.9): the mathematical library.
+// Translation of lmathlib.c (PUC-Lua 5.3.4): the mathematical library.
 //
-// Every lua_CFunction becomes a func(*State) int; the xoshiro256**
-// pseudo-random generator uses uint64 (the port always has 64-bit
-// integers), so only the "standard implementation" / Rand64 branch of
-// the C source is needed (no 32-bit Rand64 struct path).
+// math.random uses POSIX random()/srandom() (l_rand/l_srand), not the
+// 5.4 xoshiro256** generator — sort.lua comparison counts and any
+// seeded sequence must match PUC.
 //
-// FLAG (platform, keep): libm_cgo.go / libm_nocgo.go, lmathutil.go —
-// transcendental calls go through libm_* when cgo; !haveLibm uses Go
-// math + scaled salvage below. Do not delete those companions.
-//
-// FLAG (Go-only salvage): mathExpScaled / mathLog*Scaled and
-// sinh/cosh half-exp paths run only when !haveLibm.
+// FLAG (Go-only): when !haveLibm, mathExpScaled / mathLog*Scaled and
+// sinh/cosh salvage approximate host libm on amd64 Go math edges.
+// With cgo (haveLibm), those paths are unused — same as PUC.
 package core
 
 import (
 	"math"
-	"time"
-	"unsafe"
 )
 
 const mathPI = 3.141592653589793238462643383279502884
@@ -30,7 +24,7 @@ func mathAbs(L *State) int {
 		}
 		L.PushInteger(n)
 	} else {
-		L.PushNumber(math2Abs(L.CheckNumber(1))) /* C: l_mathop(fabs) */
+		L.PushNumber(math.Abs(L.CheckNumber(1))) /* C fabs; platform OK */
 	}
 	return 1
 }
@@ -68,11 +62,11 @@ func mathAtan(L *State) int {
 }
 
 func mathToInt(L *State) int {
-	if n, valid := L.ToInteger(1); valid { /* l_likely(valid) */
+	if n, valid := L.ToInteger(1); valid {
 		L.PushInteger(n)
 	} else {
 		L.CheckAny(1)
-		L.PushNil() /* luaL_pushfail — value is not convertible to integer */
+		L.PushNil() /* value is not convertible to integer */
 	}
 	return 1
 }
@@ -102,8 +96,7 @@ func mathLibFloor(L *State) int {
 	if L.IsInteger(1) {
 		L.SetTop(1) /* integer is its own floor */
 	} else {
-		d := math2Floor(L.CheckNumber(1)) /* C: l_mathop(floor) */
-		mathPushNumInt(L, d)
+		mathPushNumInt(L, mathFloor(L.CheckNumber(1)))
 	}
 	return 1
 }
@@ -112,8 +105,7 @@ func mathLibCeil(L *State) int {
 	if L.IsInteger(1) {
 		L.SetTop(1) /* integer is its own ceil */
 	} else {
-		d := math2Ceil(L.CheckNumber(1)) /* C: l_mathop(ceil) */
-		mathPushNumInt(L, d)
+		mathPushNumInt(L, mathCeil(L.CheckNumber(1)))
 	}
 	return 1
 }
@@ -129,14 +121,15 @@ func mathFmod(L *State) int {
 			L.PushInteger(n % d)
 		}
 	} else {
-		L.PushNumber(math2Fmod(L.CheckNumber(1), L.CheckNumber(2))) /* C: l_mathop(fmod) */
+		L.PushNumber(libmFmod(L.CheckNumber(1), L.CheckNumber(2)))
 	}
 	return 1
 }
 
 /*
-** This function does not use 'modf', avoiding problems with 'float64'
-** (the equivalent of the C remark about 'double*').
+** next function does not use 'modf', avoiding problems with 'double*'
+** (which is not compatible with 'float*') when lua_Number is not
+** 'double'.
  */
 func mathModf(L *State) int {
 	if L.IsInteger(1) {
@@ -144,26 +137,28 @@ func mathModf(L *State) int {
 		L.PushNumber(0) /* no fractional part */
 	} else {
 		n := L.CheckNumber(1)
-		/* integer part (rounds toward zero) — C: l_mathop(ceil)/floor */
+		/* integer part (rounds toward zero) */
 		var ip float64
 		if n < 0 {
-			ip = math2Ceil(n) /* C: l_mathop(ceil) */
+			ip = mathCeil(n)
 		} else {
-			ip = math2Floor(n) /* C: l_mathop(floor) */
+			ip = mathFloor(n)
 		}
 		mathPushNumInt(L, ip)
 		/* fractional part (test needed for inf/-inf) */
+		var f float64
 		if n == ip {
-			L.PushNumber(0.0) /* l_mathop(0.0) */
+			f = 0
 		} else {
-			L.PushNumber(n - ip)
+			f = n - ip
 		}
+		L.PushNumber(f)
 	}
 	return 2
 }
 
 func mathSqrt(L *State) int {
-	L.PushNumber(math2Sqrt(L.CheckNumber(1))) /* C: l_mathop(sqrt) */
+	L.PushNumber(libmSqrt(L.CheckNumber(1)))
 	return 1
 }
 
@@ -181,6 +176,7 @@ func mathLog(L *State) int {
 		res = mathLogOf(x)
 	} else {
 		base := L.CheckNumber(2)
+		/* C: #if !defined(LUA_USE_C89) — default PUC is !C89, so log2 path is on */
 		if base == 2.0 {
 			res = mathLog2Of(x)
 		} else if base == 10.0 {
@@ -220,7 +216,7 @@ func mathMin(L *State) int {
 	imin := 1       /* index of current minimum value */
 	L.ArgCheck(n >= 1, 1, "value expected")
 	for i := 2; i <= n; i++ {
-		if L.LessThan(i, imin) { /* lua_compare(..., LUA_OPLT) */
+		if L.Compare(i, imin, LUA_OPLT) {
 			imin = i
 		}
 	}
@@ -233,12 +229,49 @@ func mathMax(L *State) int {
 	imax := 1       /* index of current maximum value */
 	L.ArgCheck(n >= 1, 1, "value expected")
 	for i := 2; i <= n; i++ {
-		if L.LessThan(imax, i) { /* lua_compare(..., LUA_OPLT) */
+		if L.Compare(imax, i, LUA_OPLT) {
 			imax = i
 		}
 	}
 	L.PushValue(imax)
 	return 1
+}
+
+/*
+** This function uses 'double' (instead of 'lua_Number') to ensure that
+** all bits from 'l_rand' can be represented, and that 'RANDMAX + 1.0'
+** will keep full precision (ensuring that 'r' is always less than 1.0.)
+ */
+func mathRandom(L *State) int {
+	var low, up int64
+	r := float64(lRand()) * (1.0 / (float64(lRandMax) + 1.0))
+	switch L.GetTop() { /* check number of arguments */
+	case 0: /* no arguments */
+		L.PushNumber(r) /* Number between 0 and 1 */
+		return 1
+	case 1: /* only upper limit */
+		low = 1
+		up = L.CheckInteger(1)
+	case 2: /* lower and upper limits */
+		low = L.CheckInteger(1)
+		up = L.CheckInteger(2)
+	default:
+		return L.Error2("wrong number of arguments")
+	}
+	/* random integer in the interval [low, up] */
+	L.ArgCheck(low <= up, 1, "interval is empty")
+	L.ArgCheck(low >= 0 || up <= LUA_MAXINTEGER+low, 1, "interval too large")
+	r *= float64(up-low) + 1.0
+	L.PushInteger(int64(r) + low)
+	return 1
+}
+
+func mathRandomSeed(L *State) int {
+	/* C: l_srand((unsigned int)(lua_Integer)luaL_checknumber(L, 1)); */
+	seed := L.CheckNumber(1)
+	lSrand(uint(int64(seed)))
+	_ = lRand() /* discard first value to avoid undesirable correlations */
+	return 0
 }
 
 func mathType(L *State) int {
@@ -250,181 +283,10 @@ func mathType(L *State) int {
 		}
 	} else {
 		L.CheckAny(1)
-		L.PushNil() /* luaL_pushfail */
+		L.PushNil()
 	}
 	return 1
 }
-
-/*
-** {==================================================================
-** Pseudo-Random Number Generator based on 'xoshiro256**'.
-** ===================================================================
- */
-
-// figs is the number of binary digits in the mantissa of a float64.
-const mathFigs = 53
-
-// mathRanState is the state of the generator: four 64-bit words
-// (RanState in lmathlib.c).
-type mathRanState struct {
-	s [4]uint64
-}
-
-// mathRotl rotates left 'x' by 'n' bits (the trim64 of the C code is
-// implicit: uint64 already has exactly 64 bits).
-func mathRotl(x uint64, n int) uint64 {
-	return (x << n) | (x >> (64 - n))
-}
-
-func mathNextRand(state *[4]uint64) uint64 {
-	state0 := state[0]
-	state1 := state[1]
-	state2 := state[2] ^ state0
-	state3 := state[3] ^ state1
-	res := mathRotl(state1*5, 7) * 9
-	state[0] = state0 ^ state3
-	state[1] = state1 ^ state2
-	state[2] = state2 ^ (state1 << 17)
-	state[3] = mathRotl(state3, 45)
-	return res
-}
-
-/*
-** Convert bits from a random integer into a float in the interval
-** [0,1), getting the higher 'mathFigs' bits from the random unsigned
-** integer and converting that to a float.
-**
-** The correction below is for a 'lua_Number' wider than 64 bits, which
-** is the case the C source wrote it for: with FIGS == 64 the shift
-** moves nothing and 'sx' can be negative.  Here FIGS is 53, so
-** 'x >> 11' has 53 bits and 'sx' is never negative -- as the C says,
-** "a good compiler will remove the correction".  It is kept because it
-** is a line of lmathlib.c and not a line of this file's own, and it is
-** the one statement of this library that 'go test -cover' will never
-** report as covered.
- */
-func mathI2d(x uint64) float64 {
-	sx := int64(x >> (64 - mathFigs))
-	res := float64(sx) * (0.5 / float64(uint64(1)<<(mathFigs-1)))
-	if sx < 0 {
-		res += 1.0 /* correct the two's complement if negative */
-	}
-	/* C: lua_assert(0 <= res && res < 1); release assert omitted */
-	return res
-}
-
-/*
-** Project the random integer 'ran' into the interval [0, n].
-** Because 'ran' has 2^B possible values, the projection can only be
-** uniform when the size of the interval is a power of 2 (exact
-** division). Otherwise, to get a uniform projection into [0, n], we
-** first compute 'lim', the smallest Mersenne number not smaller than
-** 'n'. We then project 'ran' into the interval [0, lim].  If the result
-** is inside [0, n], we are done. Otherwise, we try with another 'ran',
-** until we have a result inside the interval.
- */
-func mathProject(ran, n uint64, state *mathRanState) uint64 {
-	if (n & (n + 1)) == 0 { /* is 'n + 1' a power of 2? */
-		return ran & n /* no bias */
-	}
-	lim := n
-	/* compute the smallest (2^b - 1) not smaller than 'n' */
-	lim |= lim >> 1
-	lim |= lim >> 2
-	lim |= lim >> 4
-	lim |= lim >> 8
-	lim |= lim >> 16
-	lim |= lim >> 32 /* integer type has more than 32 bits */
-	/* C: lua_assert((lim&(lim+1))==0 && lim>=n && (lim>>1)<n); omitted */
-	for {
-		ran &= lim /* project 'ran' into [0..lim] */
-		if ran <= n {
-			return ran
-		}
-		ran = mathNextRand(&state.s) /* not inside [0..n]? try again */
-	}
-}
-
-func mathRandom(L *State) int {
-	var low, up int64
-	state, _ := L.ToUserData(UpvalueIndex(1)).(*mathRanState)
-	rv := mathNextRand(&state.s) /* next pseudo-random value */
-	switch L.GetTop() {          /* check number of arguments */
-	case 0: /* no arguments */
-		L.PushNumber(mathI2d(rv)) /* float between 0 and 1 */
-		return 1
-	case 1: /* only upper limit */
-		low = 1
-		up = L.CheckInteger(1)
-		if up == 0 { /* single 0 as argument? */
-			L.PushInteger(int64(rv)) /* full random integer */
-			return 1
-		}
-	case 2: /* lower and upper limits */
-		low = L.CheckInteger(1)
-		up = L.CheckInteger(2)
-	default:
-		return L.Error2("wrong number of arguments")
-	}
-	/* random integer in the interval [low, up] */
-	L.ArgCheck(low <= up, 1, "interval is empty")
-	/* project random integer into the interval [0, up - low] */
-	p := mathProject(rv, uint64(up)-uint64(low), state)
-	L.PushInteger(int64(p + uint64(low)))
-	return 1
-}
-
-func mathSetSeed(L *State, state *[4]uint64, n1, n2 uint64) {
-	state[0] = n1
-	state[1] = 0xff /* avoid a zero state */
-	state[2] = n2
-	state[3] = 0
-	for i := 0; i < 16; i++ {
-		mathNextRand(state) /* discard initial values to "spread" seed */
-	}
-	L.PushInteger(int64(n1))
-	L.PushInteger(int64(n2))
-}
-
-/*
-** Set a "random" seed. To get some randomness, use the current time
-** and the address of 'L' (here, the identity of the state object).
- */
-func mathRandSeed(L *State, state *mathRanState) {
-	seed1 := uint64(time.Now().Unix())
-	seed2 := uint64(ptrID(unsafe.Pointer(L)))
-	mathSetSeed(L, &state.s, seed1, seed2)
-}
-
-func mathRandomSeed(L *State) int {
-	state, _ := L.ToUserData(UpvalueIndex(1)).(*mathRanState)
-	if L.IsNone(1) {
-		mathRandSeed(L, state)
-	} else {
-		n1 := L.CheckInteger(1)
-		n2 := L.OptInteger(2, 0)
-		mathSetSeed(L, &state.s, uint64(n1), uint64(n2))
-	}
-	return 2 /* return seeds */
-}
-
-var mathRandFuncs = []Reg{
-	{Name: "random", Func: mathRandom},
-	{Name: "randomseed", Func: mathRandomSeed},
-}
-
-/*
-** Register the random functions and initialize their state.
- */
-func mathSetRandFunc(L *State) {
-	state := &mathRanState{}
-	L.NewUserData(state, 0)
-	mathRandSeed(L, state) /* initialize with a "random" seed */
-	L.Pop(2)               /* remove pushed seeds */
-	L.SetFuncs(mathRandFuncs, 1)
-}
-
-/* }================================================================== */
 
 /*
 ** {==================================================================
@@ -435,19 +297,21 @@ func mathSetRandFunc(L *State) {
 // luaconf.h defines 'LUA_COMPAT_MATHLIB' and the reference build does
 // not turn it off, so 'math.sinh', 'math.cosh', 'math.tanh', 'math.pow',
 // 'math.frexp', 'math.ldexp', 'math.log10' and 'math.atan2' are all
-// there even though Lua 5.4 dropped them from the manual.  A program
-// that calls them cannot be run by a port that leaves them out, so
-// they are all here (always compiled — FLAG: C gates with #if).
+// there (always compiled in Go; C gates on #if LUA_COMPAT_MATHLIB).
+//
+// FLAG (Go-only scaled helpers below): mathExpScaled / mathHalfExp /
+// mathLogScaled / mathLog2Scaled / mathLog10Scaled and the !haveLibm
+// branches of mathExp / mathSinh / mathCosh. Not in C lmathlib.c.
+// When haveLibm (cgo), those paths are never taken.
 
 // mathLn2Hi and mathLn2Lo are ln 2 split in two, so that 'n * ln 2'
-// keeps the low bits that a single float64 would drop. Used only by the
-// !haveLibm salvage path (mathExpScaled); not present in lmathlib.c.
+// keeps the low bits that a single float64 would drop.
 const (
 	mathLn2Hi = 6.93147180369123816490e-01
 	mathLn2Lo = 1.90821492927058770002e-10
 )
 
-// mathExpScaled is exp(x) * 2^shift, worked out so that nothing
+// FLAG (Go-only): mathExpScaled is exp(x) * 2^shift, worked out so that nothing
 // overflows before the answer itself has to.
 //
 // It cannot simply ask math.Exp, because Go's math.Exp is not one
@@ -486,7 +350,7 @@ func mathExpScaled(x float64, shift int) float64 {
 // scaling by 2^-1 overflows and the answer is +Inf, which is right.
 func mathHalfExp(x float64) float64 { return mathExpScaled(x, -1) }
 
-// mathLogScaled is C's 'log'.  It cannot simply ask math.Log, for the
+// FLAG (Go-only): mathLogScaled is C's 'log'.  It cannot simply ask math.Log, for the
 // same reason mathExpScaled cannot ask math.Exp: Go's math.Log is an
 // assembly routine on amd64 and s390x, and that routine loses several
 // digits on a subnormal argument.  1e-308 is one -- the smallest normal
@@ -544,7 +408,7 @@ func mathLog10Of(x float64) float64 {
 	return mathLog10Scaled(x)
 }
 
-// mathLog2Scaled is C's 'log2', which is what math.log(x, 2) asks for --
+// FLAG (Go-only): mathLog2Scaled is C's 'log2', which is what math.log(x, 2) asks for --
 // not math.log(x)/math.log(2), which is what every other base gets.
 //
 // It cannot simply ask math.Log2.  Go's Log2 splits the argument with
@@ -577,24 +441,6 @@ func mathLog2Scaled(x float64) float64 {
 	return math.Log2(x)
 }
 
-func mathCosh(L *State) int {
-	x := L.CheckNumber(1)
-	if haveLibm {
-		L.PushNumber(libmCosh(x))
-		return 1
-	}
-	s := math.Cosh(x)
-	if math.IsInf(s, 0) && !math.IsInf(x, 0) {
-		/* 'cosh' tends to the same value as 'sinh', and is never negative */
-		if y := mathHalfExp(math.Abs(x)); !math.IsInf(y, 1) {
-			L.PushNumber(y)
-			return 1
-		}
-	}
-	L.PushNumber(s)
-	return 1
-}
-
 func mathSinh(L *State) int {
 	x := L.CheckNumber(1)
 	if haveLibm {
@@ -611,6 +457,24 @@ func mathSinh(L *State) int {
 			} else {
 				L.PushNumber(y)
 			}
+			return 1
+		}
+	}
+	L.PushNumber(s)
+	return 1
+}
+
+func mathCosh(L *State) int {
+	x := L.CheckNumber(1)
+	if haveLibm {
+		L.PushNumber(libmCosh(x))
+		return 1
+	}
+	s := math.Cosh(x)
+	if math.IsInf(s, 0) && !math.IsInf(x, 0) {
+		/* 'cosh' tends to the same value as 'sinh', and is never negative */
+		if y := mathHalfExp(math.Abs(x)); !math.IsInf(y, 1) {
+			L.PushNumber(y)
 			return 1
 		}
 	}
@@ -655,7 +519,7 @@ func mathLog10(L *State) int {
 /* }================================================================== */
 
 // ---------------------------------------------------------------------
-// library registration (mathlib[] + luaopen_math)
+// library registration
 // ---------------------------------------------------------------------
 
 var mathLib = []Reg{
@@ -676,11 +540,13 @@ var mathLib = []Reg{
 	{Name: "min", Func: mathMin},
 	{Name: "modf", Func: mathModf},
 	{Name: "rad", Func: mathRad},
+	{Name: "random", Func: mathRandom},
+	{Name: "randomseed", Func: mathRandomSeed},
 	{Name: "sin", Func: mathSin},
 	{Name: "sqrt", Func: mathSqrt},
 	{Name: "tan", Func: mathTan},
 	{Name: "type", Func: mathType},
-	/* LUA_COMPAT_MATHLIB (always on in this port — FLAG: C gates with #if) */
+	/* LUA_COMPAT_MATHLIB (always on; default luaconf) */
 	{Name: "atan2", Func: mathAtan},
 	{Name: "cosh", Func: mathCosh},
 	{Name: "sinh", Func: mathSinh},
@@ -689,26 +555,23 @@ var mathLib = []Reg{
 	{Name: "frexp", Func: mathFrexp},
 	{Name: "ldexp", Func: mathLdexp},
 	{Name: "log10", Func: mathLog10},
-	/* placeholders — overwritten in OpenMath / mathSetRandFunc */
-	{Name: "random", Func: nil},
-	{Name: "randomseed", Func: nil},
+	/* placeholders — overwritten in OpenMath (C mathlib[] NULL funcs) */
 	{Name: "pi", Func: nil},
 	{Name: "huge", Func: nil},
 	{Name: "maxinteger", Func: nil},
 	{Name: "mininteger", Func: nil},
 }
 
-// OpenMath opens the math library (luaopen_math in lmathlib.c).
+// OpenMath opens the math library (luaopen_math).
 func OpenMath(L *State) int {
 	L.NewLib(mathLib)
 	L.PushNumber(mathPI)
 	L.SetField(-2, "pi")
-	L.PushNumber(math.Inf(1)) /* (lua_Number)HUGE_VAL */
+	L.PushNumber(math.Inf(1)) /* HUGE_VAL */
 	L.SetField(-2, "huge")
 	L.PushInteger(LUA_MAXINTEGER)
 	L.SetField(-2, "maxinteger")
 	L.PushInteger(LUA_MININTEGER)
 	L.SetField(-2, "mininteger")
-	mathSetRandFunc(L)
 	return 1
 }

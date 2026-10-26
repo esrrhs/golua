@@ -2,7 +2,7 @@
 //
 // Every testdata/diff/*.lua case is run through this port and its output is
 // compared byte for byte against a golden file captured from the reference
-// interpreter (PUC-Lua 5.4.9, built from source).  The cases cover the
+// interpreter (PUC-Lua 5.3.4, built from source).  The cases cover the
 // virtual machine, the standard libraries, error messages and their
 // positions -- the things a "drop-in Lua" has to get exactly right.
 //
@@ -21,6 +21,7 @@
 package core
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,6 +31,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // Heap addresses differ between the two implementations and cannot be
@@ -42,7 +44,7 @@ var diffAddrRe = regexp.MustCompile(`0x[0-9a-f]+`)
 // per-GOOS golden names cannot sort out: the reference and this port run
 // on the same machine and still disagree.
 func diffNormalise(s string) string {
-	s = diffAddrRe.ReplaceAllString(s, "0xADDR")
+	s = diffAddrRe.ReplaceAllString(s, "<ADDR>")
 	/* The sign of a NaN.  C asks printf, which on glibc writes "-nan"
 	   when the sign bit is set and "nan" when it is not, while Go's
 	   strconv writes neither and fmtNaN (lobject.go) has to guess the
@@ -151,13 +153,16 @@ func diffEnv() []string { return append(os.Environ(), "TZ=UTC") }
 func diffRunCase(t *testing.T, path string) string {
 	t.Helper()
 	bin := diffBuild(t)
-	cmd := &exec.Cmd{
-		Path: bin,
-		Args: []string{"lua", filepath.Base(path)}, /* argv[0] decides the message prefix */
-		Dir:  filepath.Dir(path),
-		Env:  diffEnv(),
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, filepath.Base(path))
+	cmd.Args[0] = "lua" /* argv[0] decides the message prefix */
+	cmd.Dir = filepath.Dir(path)
+	cmd.Env = diffEnv()
 	out, _ := cmd.CombinedOutput() /* the exit status is not part of the golden output */
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Errorf("%s: timed out after 15s (possible infinite loop)", filepath.Base(path))
+	}
 	return string(out)
 }
 
@@ -280,7 +285,7 @@ func TestDifferentialSuite(t *testing.T) {
 		}
 		/* normalised on the way out as well: a heap address in the
 		   message reads as a difference that is not one */
-		t.Errorf("%s: output differs from PUC-Lua 5.4.9\n--- want ---\n%s\n--- got ---\n%s",
+		t.Errorf("%s: output differs from PUC-Lua 5.3.4\n--- want ---\n%s\n--- got ---\n%s",
 			filepath.Base(path), w, g)
 	}
 	t.Logf("differential suite: %d identical, %d known difference, of %d", same, differ, len(files))
@@ -353,6 +358,7 @@ func TestLoadMode(t *testing.T) {
 // TestCloseDeadCoroutine checks 'coroutine.close' on a coroutine that ended
 // with an error: it reports that error once again, and only once.
 func TestCloseDeadCoroutine(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := NewState()
 	defer L.Close()
 	L.OpenLibs()

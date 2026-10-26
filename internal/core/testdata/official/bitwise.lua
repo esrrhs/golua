@@ -1,9 +1,7 @@
--- $Id: testes/bitwise.lua $
+-- $Id: bitwise.lua,v 1.26 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
 
 print("testing bitwise operations")
-
-require "bwcoercion"
 
 local numbits = string.packsize('j') * 8
 
@@ -38,29 +36,12 @@ d = d << 32
 assert(a | b ~ c & d == 0xF4000000 << 32)
 assert(~~a == a and ~a == -1 ~ a and -d == ~d + 1)
 
-
-do   -- constant folding
-  local code = string.format("return -1 >> %d", math.maxinteger)
-  assert(load(code)() == 0)
-  local code = string.format("return -1 >> %d", math.mininteger)
-  assert(load(code)() == 0)
-  local code = string.format("return -1 << %d", math.maxinteger)
-  assert(load(code)() == 0)
-  local code = string.format("return -1 << %d", math.mininteger)
-  assert(load(code)() == 0)
-end
-
 assert(-1 >> 1 == (1 << (numbits - 1)) - 1 and 1 << 31 == 0x80000000)
 assert(-1 >> (numbits - 1) == 1)
 assert(-1 >> numbits == 0 and
        -1 >> -numbits == 0 and
        -1 << numbits == 0 and
        -1 << -numbits == 0)
-
-assert(1 >> math.mininteger == 0)
-assert(1 >> math.maxinteger == 0)
-assert(1 << math.mininteger == 0)
-assert(1 << math.maxinteger == 0)
 
 assert((2^30 - 1) << 2^30 == 0)
 assert((2^30 - 1) >> 2^30 == 0)
@@ -73,22 +54,6 @@ assert("0xffffffffffffffff" | 0 == -1)
 assert("0xfffffffffffffffe" & "-1" == -2)
 assert(" \t-0xfffffffffffffffe\n\t" & "-1" == 2)
 assert("   \n  -45  \t " >> "  -2  " == -45 * 4)
-assert("1234.0" << "5.0" == 1234 * 32)
-assert("0xffff.0" ~ "0xAAAA" == 0x5555)
-assert(~"0x0.000p4" == -1)
-
-assert(("7" .. 3) << 1 == 146)
-assert(0xffffffff >> (1 .. "9") == 0x1fff)
-assert(10 | (1 .. "9") == 27)
-
-do
-  local st, msg = pcall(function () return 4 & "a" end)
-  assert(string.find(msg, "'band'"))
-
-  local st, msg = pcall(function () return ~"a" end)
-  assert(string.find(msg, "'bnot'"))
-end
-
 
 -- out of range number
 assert(not pcall(function () return "0xffffffffffffffff.0" | 0 end))

@@ -1,20 +1,9 @@
-// Translation of ldump.c (PUC-Lua 5.4.9): save precompiled Lua chunks.
+// Translation of ldump.c (PUC-Lua 5.3.4 v 2.37): save precompiled chunks.
 //
-// Format matches PUC-Lua 5.4.9 on little-endian hosts: 7-bit size encoding,
-// header without sizeof(int)/sizeof(size_t), upvalue 'kind', ttypetag
-// constants, and debug lineinfo as signed-byte deltas + abslineinfo.
-//
-// Intentional Go specializations (FLAG):
-//  1. No lua_lock / lua_unlock (Go has no VM locks).
-//  2. lua_Writer void* data closed over by dumpWriter (no DumpState.data).
-//  3. dumpInteger / dumpNumber / dumpCode write fixed little-endian
-//     (C dumpVar uses host endianness via dumpVector).
-//  4. Instruction is a struct — packInstruction before writing (see lopcodes).
-//  5. Proto.lineinfo holds absolute lines (lobject.go FLAG); dumpDebug
-//     converts to on-disk deltas + abslineinfo (C dumps those fields as-is).
-//     When undump retained abslineinfo, deltas are reconstructed from it for
-//     bit-identical round-trip; otherwise savelineinfo rules regenerate both.
-//  6. luaDump (lua_dump from lapi.c) colocated as a thin wrapper.
+// Format matches PUC-Lua 5.3.4 byte-for-byte on little-endian hosts with
+// fixed widths 4/8/4/8/8 (int / size_t / Instruction / lua_Integer /
+// lua_Number): 5.3 string encoding, 5.3 constant tags (float=3 / int=19),
+// upvalues without 'kind', absolute int lineinfo.
 package core
 
 import (
@@ -22,240 +11,169 @@ import (
 	"math"
 )
 
-/*
-** All high-level dumps go through dumpVector; you can change it to
-** change the endianness of the result
- */
-/* FLAG: Go has no dumpVector macro; dumpBlock + explicit LE packers. */
-
-// dumpWriter is the Go counterpart of lua_Writer: it returns 0 on
-// success and anything else to stop the dump. C also passes a void*
-// data pointer; Go closes over that in the func value.
+// dumpWriter is C lua_Writer with ud folded into the closure (FLAG).
 type dumpWriter func(L *State, b []byte) int
 
-// DumpState is the Go counterpart of the C struct of the same name
-// (no 'data' field; carried by dumpWriter).
+// DumpState is C DumpState {L, writer, data, strip, status}; data folded
+// into writer (FLAG).
 type DumpState struct {
 	L      *State
 	writer dumpWriter
-	strip  bool /* C: int */
+	strip  bool /* C: int strip */
 	status int
 }
 
-// dumpBlock writes raw bytes (dumpBlock).
+/*
+** All high-level dumps go through dumpBlock of a prepared buffer; LE
+** fixed widths replace C DumpVector/DumpVar host endianness (FLAG).
+ */
+
 func (D *DumpState) dumpBlock(b []byte) {
 	if D.status == 0 && len(b) > 0 {
-		/* FLAG: no lua_unlock / lua_lock around the writer call */
+		/* C: lua_unlock(D->L); ...; lua_lock(D->L); locks N/A (FLAG) */
 		D.status = D.writer(D.L, b)
 	}
 }
 
-// dumpByte writes a single byte (dumpByte).
 func (D *DumpState) dumpByte(y int) {
-	x := byte(y) /* lu_byte */
+	x := byte(y) /* C: lu_byte x = (lu_byte)y; DumpVar(x, D) */
 	D.dumpBlock([]byte{x})
 }
 
-/*
-** 'dumpSize' buffer size: each byte can store up to 7 bits. (The "+6"
-** rounds up the division.)
-** DIBS = ((sizeof(size_t) * CHAR_BIT + 6) / 7) = ((8*8+6)/7) = 10
- */
-const dmpDibs = 10
-
-// dumpSize writes a size_t in 7-bits-per-byte form (dumpSize).
-func (D *DumpState) dumpSize(x uint64) {
-	var buff [dmpDibs]byte
-	n := 0
-	for {
-		buff[dmpDibs-(n+1)] = byte(x & 0x7f) /* fill buffer in reverse order */
-		n++
-		x >>= 7
-		if x == 0 {
-			break
-		}
-	}
-	buff[dmpDibs-1] |= 0x80 /* mark last byte */
-	D.dumpBlock(buff[dmpDibs-n : dmpDibs])
-}
-
-// dumpInt writes an int via dumpSize (dumpInt).
+// dumpInt writes a fixed-size int (4 bytes LE) — C DumpInt / DumpVar(int).
 func (D *DumpState) dumpInt(x int) {
-	D.dumpSize(uint64(x))
-}
-
-// dumpNumber writes a lua_Number (dumpNumber) — fixed little-endian.
-func (D *DumpState) dumpNumber(x float64) {
-	var b [8]byte
-	binary.LittleEndian.PutUint64(b[:], math.Float64bits(x))
+	var b [4]byte
+	binary.LittleEndian.PutUint32(b[:], uint32(int32(x)))
 	D.dumpBlock(b[:])
 }
 
-// dumpInteger writes a lua_Integer (dumpInteger) — fixed little-endian.
+// dumpSizeT writes a size_t (8 bytes LE) — C DumpVar(size) in DumpString.
+func (D *DumpState) dumpSizeT(x uint64) {
+	var b [8]byte
+	binary.LittleEndian.PutUint64(b[:], x)
+	D.dumpBlock(b[:])
+}
+
 func (D *DumpState) dumpInteger(x int64) {
 	var b [8]byte
 	binary.LittleEndian.PutUint64(b[:], uint64(x))
 	D.dumpBlock(b[:])
 }
 
-// dumpString writes a nullable string (dumpString): size 0 means NULL;
-// otherwise size+1 then the bytes (no trailing NUL on disk).
-func (D *DumpState) dumpString(s *TString) {
-	if s == nil {
-		D.dumpSize(0)
-	} else {
-		size := uint64(tsslen(s))
-		str := getstr(s)
-		D.dumpSize(size + 1)
-		D.dumpBlock([]byte(str))
-	}
+func (D *DumpState) dumpNumber(x float64) {
+	var b [8]byte
+	binary.LittleEndian.PutUint64(b[:], math.Float64bits(x))
+	D.dumpBlock(b[:])
 }
 
-// dumpCode writes the bytecode of a function (dumpCode).
+// dumpString is C DumpString: size byte, optional 0xFF+size_t; size
+// includes trailing NUL that is not written.
+func (D *DumpState) dumpString(s *TString) {
+	if s == nil {
+		D.dumpByte(0)
+		return
+	}
+	size := uint64(len(s.val)) + 1 /* include trailing '\0' */
+	str := s.val                   /* C: getstr(s) */
+	if size < 0xFF {
+		D.dumpByte(int(size)) /* C: DumpByte(cast_int(size), D) */
+	} else {
+		D.dumpByte(0xFF)
+		D.dumpSizeT(size) /* C: DumpVar(size, D) */
+	}
+	D.dumpBlock([]byte(str)) /* no need to save '\0' — DumpVector(str, size-1) */
+}
+
 func (D *DumpState) dumpCode(f *Proto) {
-	n := f.sizecode /* C: f->sizecode */
-	D.dumpInt(n)
-	/* FLAG: pack Instruction structs into 32-bit LE words (C dumpVector). */
+	D.dumpInt(f.sizecode) /* C: DumpInt(f->sizecode, D) */
+	n := f.sizecode
+	/* C: DumpVector(f->code, f->sizecode, D); size 0 is DumpBlock no-op */
 	if n <= 0 {
 		return
 	}
 	b := make([]byte, 4*n)
 	for i := 0; i < n; i++ {
+		/* FLAG: pack Instruction struct → uint32 (C: raw Instruction vector) */
 		binary.LittleEndian.PutUint32(b[4*i:], packInstruction(f.code[i]))
 	}
 	D.dumpBlock(b)
 }
 
-// dumpFunction is forward-declared in C; Go methods need no forward decl.
+// On-disk constant tags (lobject.h) — aliases shared with lundump.go.
+const (
+	dumpTagNil     = LUA_TNIL
+	dumpTagBoolean = LUA_TBOOLEAN
+	dumpTagNumFlt  = LUA_TNUMFLT /* 3 */
+	dumpTagNumInt  = LUA_TNUMINT /* 19 */
+	dumpTagShrStr  = LUA_TSHRSTR
+	dumpTagLngStr  = LUA_TLNGSTR
+)
 
-// dumpConstants writes the constant table (dumpConstants).
 func (D *DumpState) dumpConstants(f *Proto) {
 	n := f.sizek /* C: f->sizek */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
 		o := &f.k[i]
-		tt := ttypetag(o)
-		D.dumpByte(tt)
-		switch tt {
-		case LUA_VNUMFLT:
+		/* C: DumpByte(ttype(o), D); switch (ttype(o)) —
+		   ttypetag is C 5.3.4 ttype (bits 0-5). */
+		D.dumpByte(ttypetag(o))
+		switch ttypetag(o) {
+		case LUA_TNIL:
+			/* nothing */
+		case LUA_TBOOLEAN:
+			if bvalue(o) {
+				D.dumpByte(1) /* C: DumpByte(bvalue(o), D) */
+			} else {
+				D.dumpByte(0)
+			}
+		case LUA_TNUMFLT:
 			D.dumpNumber(fltvalue(o))
-		case LUA_VNUMINT:
+		case LUA_TNUMINT:
 			D.dumpInteger(ivalue(o))
-		case LUA_VSHRSTR, LUA_VLNGSTR:
+		case LUA_TSHRSTR, LUA_TLNGSTR:
 			D.dumpString(tsvalue(o))
 		default:
-			/* C: lua_assert(tt == LUA_VNIL || tt == LUA_VFALSE || tt == LUA_VTRUE); */
+			/* C: lua_assert(0). Do not emit a fake nil tag (prior Go did). */
+			panic("dumpConstants: unexpected constant type")
 		}
 	}
 }
 
-// dumpProtos writes nested prototypes (dumpProtos).
 func (D *DumpState) dumpProtos(f *Proto) {
 	n := f.sizep /* C: f->sizep */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
-		D.dumpFunction(f.p[i], f.source)
+		D.dumpFunction(f.p[i], f.source) /* C: DumpFunction(f->p[i], f->source, D) */
 	}
 }
 
-// dumpUpvalues writes upvalue descriptions (dumpUpvalues), including
-// the 5.4 'kind' byte.
 func (D *DumpState) dumpUpvalues(f *Proto) {
 	n := f.sizeupvalues /* C: f->sizeupvalues */
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
 		D.dumpByte(int(f.upvalues[i].instack))
 		D.dumpByte(int(f.upvalues[i].idx))
-		D.dumpByte(int(f.upvalues[i].kind))
+		/* 5.3 has no 'kind' byte (5.4) */
 	}
 }
 
-/*
-** encodeLineInfo converts Proto.lineinfo (absolute lines; see lobject.go /
-** lcode.go) into the on-disk form C stores natively: signed-byte deltas
-** plus AbsLineInfo entries — same algorithm as lcode.c savelineinfo.
-** Used when Proto has no retained abslineinfo (compiled functions).
- */
-func encodeLineInfo(f *Proto, n int) (deltas []byte, abs []AbsLineInfo) {
-	deltas = make([]byte, n)
-	previousline := f.linedefined
-	iwthabs := 0
-	for pc := 0; pc < n; pc++ {
-		line := int(f.lineinfo[pc])
-		linedif := line - previousline
-		/* C savelineinfo: abs(linedif) >= LIMLINEDIFF || iwthabs++ >= MAXIWTHABS */
-		if linedif >= limLineDiff || linedif <= -limLineDiff ||
-			iwthabs >= maxIwthAbs {
-			abs = append(abs, AbsLineInfo{pc: pc, line: line})
-			linedif = absLineInfo /* signal that there is absolute info */
-			iwthabs = 1           /* restart counter */
-		} else {
-			iwthabs++
-		}
-		deltas[pc] = byte(int8(linedif))
-		previousline = line
-	}
-	return deltas, abs
-}
-
-/*
-** deltasFromAbsolute rebuilds on-disk signed-byte deltas so they match a
-** retained abslineinfo table (from lundump). C dumpDebug dumps f->lineinfo
-** (already deltas) and f->abslineinfo as-is; Go only keeps absolute lines
-** in lineinfo, so this is the undump round-trip path.
- */
-func deltasFromAbsolute(f *Proto, n int, abs []AbsLineInfo) []byte {
-	deltas := make([]byte, n)
-	previousline := f.linedefined
-	ai := 0
-	for pc := 0; pc < n; pc++ {
-		line := int(f.lineinfo[pc])
-		if ai < len(abs) && abs[ai].pc == pc {
-			dif := absLineInfo /* ABSLINEINFO; via int to avoid const→byte overflow */
-			deltas[pc] = byte(int8(dif))
-			ai++
-		} else {
-			deltas[pc] = byte(int8(line - previousline))
-		}
-		previousline = line
-	}
-	return deltas
-}
-
-// lineInfoForDump returns on-disk deltas + abslineinfo for dumpDebug.
-// Prefer retained abslineinfo (lundump round-trip); else savelineinfo regen.
-func lineInfoForDump(f *Proto, n int) (deltas []byte, abs []AbsLineInfo) {
-	if n <= 0 {
-		return nil, nil
-	}
-	if f.sizeabslineinfo > 0 && len(f.abslineinfo) >= f.sizeabslineinfo {
-		abs = f.abslineinfo[:f.sizeabslineinfo]
-		return deltasFromAbsolute(f, n, abs), abs
-	}
-	return encodeLineInfo(f, n)
-}
-
-// dumpDebug writes debug information (dumpDebug).
 func (D *DumpState) dumpDebug(f *Proto) {
 	n := 0
 	if !D.strip {
 		n = f.sizelineinfo /* C: n = (D->strip) ? 0 : f->sizelineinfo */
 	}
-	deltas, abs := lineInfoForDump(f, n)
 	D.dumpInt(n)
-	D.dumpBlock(deltas) /* C: dumpVector(D, f->lineinfo, n) */
-	n = 0
-	if !D.strip {
-		n = len(abs) /* C: f->sizeabslineinfo */
-	}
-	D.dumpInt(n)
-	for i := 0; i < n; i++ {
-		D.dumpInt(abs[i].pc)
-		D.dumpInt(abs[i].line)
+	/* C: DumpVector(f->lineinfo, n, D); n==0 is no-op */
+	if n > 0 {
+		b := make([]byte, 4*n)
+		for i := 0; i < n; i++ {
+			binary.LittleEndian.PutUint32(b[4*i:], uint32(f.lineinfo[i]))
+		}
+		D.dumpBlock(b)
 	}
 	n = 0
 	if !D.strip {
-		n = f.sizelocvars /* C: f->sizelocvars */
+		n = f.sizelocvars /* C: n = (D->strip) ? 0 : f->sizelocvars */
 	}
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
@@ -265,7 +183,7 @@ func (D *DumpState) dumpDebug(f *Proto) {
 	}
 	n = 0
 	if !D.strip {
-		n = f.sizeupvalues /* C: f->sizeupvalues */
+		n = f.sizeupvalues /* C: n = (D->strip) ? 0 : f->sizeupvalues */
 	}
 	D.dumpInt(n)
 	for i := 0; i < n; i++ {
@@ -273,8 +191,6 @@ func (D *DumpState) dumpDebug(f *Proto) {
 	}
 }
 
-// dumpFunction writes one prototype (dumpFunction); psource is the
-// parent's source so a child with the same source omits it.
 func (D *DumpState) dumpFunction(f *Proto, psource *TString) {
 	if D.strip || f.source == psource {
 		D.dumpString(nil) /* no debug info or same source as its parent */
@@ -293,24 +209,23 @@ func (D *DumpState) dumpFunction(f *Proto, psource *TString) {
 	D.dumpDebug(f)
 }
 
-// dumpHeader writes the chunk header (dumpHeader). 5.4 omits
-// sizeof(int) and sizeof(size_t) that 5.3 wrote.
 func (D *DumpState) dumpHeader() {
-	D.dumpBlock([]byte(dmpSignature)) /* LUA_SIGNATURE — C: dumpLiteral */
+	D.dumpBlock([]byte(dmpSignature)) /* C: DumpLiteral(LUA_SIGNATURE, D) */
 	D.dumpByte(dmpVersion)            /* LUAC_VERSION */
 	D.dumpByte(dmpFormat)             /* LUAC_FORMAT */
-	D.dumpBlock([]byte(dmpData))      /* LUAC_DATA — C: dumpLiteral */
-	D.dumpByte(4)                     /* sizeof(Instruction) */
-	D.dumpByte(8)                     /* sizeof(lua_Integer) */
-	D.dumpByte(8)                     /* sizeof(lua_Number) */
-	D.dumpInteger(dmpInt)             /* LUAC_INT */
-	D.dumpNumber(dmpNum)              /* LUAC_NUM */
+	D.dumpBlock([]byte(dmpData))      /* DumpLiteral(LUAC_DATA, D) */
+	/* C: sizeof(int/size_t/Instruction/lua_Integer/lua_Number) — FLAG fixed LE */
+	D.dumpByte(4)         /* sizeof(int) */
+	D.dumpByte(8)         /* sizeof(size_t) */
+	D.dumpByte(4)         /* sizeof(Instruction) */
+	D.dumpByte(8)         /* sizeof(lua_Integer) */
+	D.dumpByte(8)         /* sizeof(lua_Number) */
+	D.dumpInteger(dmpInt) /* LUAC_INT */
+	D.dumpNumber(dmpNum)  /* LUAC_NUM */
 }
 
-/*
-** dump Lua function as precompiled chunk (luaU_dump).
-** No writer 'data' arg — closed over by dumpWriter.
- */
+// luaU_dump is C luaU_dump — dump Lua function as precompiled chunk.
+// writer closes over C's void *data (FLAG).
 func luaU_dump(L *State, f *Proto, w dumpWriter, strip bool) int {
 	var D DumpState
 	D.L = L
@@ -318,17 +233,18 @@ func luaU_dump(L *State, f *Proto, w dumpWriter, strip bool) int {
 	D.strip = strip
 	D.status = 0
 	D.dumpHeader()
-	D.dumpByte(f.sizeupvalues) /* C: DumpByte(f->sizeupvalues) */
+	D.dumpByte(f.sizeupvalues) /* C: DumpByte(f->sizeupvalues, &D) */
 	D.dumpFunction(f, nil)
 	return D.status
 }
 
-// luaDump is lua_dump (lapi.c), colocated here as a thin wrapper.
-// Non-L-function → 1. No api_checknelems / locks (FLAG).
+/* lua_dump (lapi.c) colocated here — thin API wrapper. */
 func luaDump(L *State, w dumpWriter, strip bool) int {
-	o := index2value(L, -1) /* C: s2v(L->top.p - 1) */
-	if !isLfunction(o) {    /* C: isLfunction(o) */
+	/* C: lua_lock(L); api_checknelems(L, 1); ...; lua_unlock(L).
+	   Locks / api_checknelems soft (FLAG — no lua_lock; empty stack panics). */
+	o := &L.stack[L.top-1] /* C: L->top - 1 */
+	if !ttisLclosure(o) {  /* C: isLfunction(o) */
 		return 1
 	}
-	return luaU_dump(L, getproto(o), w, strip) /* C: getproto(o) */
+	return luaU_dump(L, clLvalue(o).p, w, strip) /* C: getproto(o) */
 }

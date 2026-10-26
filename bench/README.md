@@ -19,46 +19,33 @@ Each workload is one function in `suite.lua`. One call is often a few millisecon
 
 ## The run in the root README
 
-Linux x86_64 (Intel Xeon, kernel 6.12.94+), PUC-Lua 5.4.9 against a cgo build of this tree (Go 1.27.3). The port tracks Lua 5.4.9. Every row had `p < 0.0001`. Startup was the widest row: golua's coefficient of variation there was 18%, and the other rows were a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
-
-### Work that still runs
-
-Dense integer arrays are written and read one element at a time. `string.format`, `table.concat`, `gmatch` and `table.sort` go through the library, and `table.sort` calls back into Lua on every comparison. String-key lookup walks the same open-addressed hash part as PUC-Lua. Numeric loops stay on the per-instruction interpreter.
+Intel Xeon (8 cores), **PUC-Lua 5.3.4** against a cgo build of this tree (Go 1.27). `MIN_MS=600 REPS=7`; every row had `p < 0.01`. Startup CV on the golua side was about 12%; other rows a few percent. A `CGO_ENABLED=0` binary has its own startup cost and was not part of this run.
 
 | workload | PUC-Lua | golua | ratio | what runs |
 | --- | ---: | ---: | ---: | --- |
-| startup | 1.44 ms | 3.43 ms | 2.38× | a new process, no script body |
-| nop | 16.6 ns | 34.9 ns | 2.11× | `return 0` |
-| hash | 158 ms | 318 ms | 2.01× | short-string key lookup |
-| intloop | 111 ms | 259 ms | 2.32× | integer sum |
-| floatloop | 130 ms | 304 ms | 2.33× | float multiply-add |
-| bitwise | 131 ms | 342 ms | 2.61× | and, xor, shift |
-| array | 120 ms | 358 ms | 2.99× | dense integer keys |
-| strings | 69.6 ms | 86.9 ms | 1.25× | format, concat, gmatch |
-| sort | 73.4 ms | 114 ms | 1.55× | `table.sort`, Lua comparator |
+| startup | 1.18 ms | 2.89 ms | 2.44× | a new process, no script body |
+| nop | 22.3 ns | 40.2 ns | 1.80× | `return 0` |
+| intloop | 158 ms | 359 ms | 2.27× | integer sum |
+| floatloop | 237 ms | 604 ms | 2.55× | float multiply-add |
+| bitwise | 233 ms | 606 ms | 2.60× | and, xor, shift |
+| fib | 67.9 ms | 107 ms | 1.57× | recursive Fibonacci |
+| tailcall | 154 ms | 272 ms | 1.77× | countdown tail call |
+| call3 | 221 ms | 386 ms | 1.75× | `return a + b + c` |
+| upvalue | 395 ms | 677 ms | 1.71× | `n = n + 1` |
+| method | 219 ms | 459 ms | 2.09× | `object:add(constant)` |
+| pcall | 90.7 ms | 204 ms | 2.24× | `pcall` of an identity |
+| global | 180 ms | 412 ms | 2.29× | `_G.g = _G.g + i` |
+| array | 198 ms | 473 ms | 2.39× | dense integer keys |
+| hash | 192 ms | 331 ms | 1.73× | short-string key lookup |
+| metaindex | 138 ms | 272 ms | 1.96× | stable integer field |
+| ipairs | 156 ms | 311 ms | 1.99× | base `ipairs`, dense array |
+| concat | 86.4 ms | 182 ms | 2.10× | loop-invariant `a .. b` |
+| strings | 71.8 ms | 93.1 ms | 1.30× | format, concat, gmatch |
+| sort | 71.0 ms | 125 ms | 1.76× | `table.sort`, Lua comparator |
+| yield | 134 ms | 191 ms | 1.43× | `yield` of `1..n`, then sum |
+| alloc | 121 ms | 234 ms | 1.94× | four-element constructor |
 
-A process starts in 3.43 ms against 1.44 ms. Most of that gap is the Go runtime. `return 0` still costs 34.9 ns against 16.6 ns, because the loop that issues the call is dispatched in Go. The hash row builds its keys once and then looks them up. A Go hash node is larger than the C node, and short-string equality and the collector are a large share of a profile of this lookup. The array loops still touch every slot; `strings` still formats one string per index.
-
-### Call and allocation shapes
-
-These rows exercise one common bytecode pattern each. The checksum stays the same. Both sides run the interpreter (no Go-only specialized shortcuts).
-
-| workload | PUC-Lua | golua | ratio | shape |
-| --- | ---: | ---: | ---: | --- |
-| fib | 38.5 ms | 87.1 ms | 2.27× | direct Fibonacci, `n` in 0..45 |
-| concat | 78.3 ms | 176 ms | 2.24× | loop-invariant `a .. b` |
-| yield | 133 ms | 174 ms | 1.31× | `yield` of `1..n`, then sum |
-| pcall | 74.8 ms | 181 ms | 2.42× | `pcall` of an identity |
-| upvalue | 344 ms | 725 ms | 2.11× | `n = n + 1` |
-| global | 152 ms | 343 ms | 2.25× | `_G.g = _G.g + i` |
-| ipairs | 135 ms | 309 ms | 2.30× | base `ipairs`, dense array |
-| tailcall | 114 ms | 215 ms | 1.89× | countdown tail call |
-| metaindex | 120 ms | 213 ms | 1.78× | stable integer field |
-| method | 200 ms | 372 ms | 1.86× | `object:add(constant)` |
-| call3 | 170 ms | 363 ms | 2.14× | `return a + b + c` |
-| alloc | 96.7 ms | 206 ms | 2.13× | four-element constructor |
-
-`fib` is the recursive `n < 2` / `fib(n-1) + fib(n-2)` shape for an integer from 0 to 45. `concat` joins two strings inside a loop. `yield` wraps `coroutine.wrap` of `yield(i)` for `i = 1, n` and sums the results. The other rows exercise `pcall`, upvalues, globals, `ipairs`, tail calls, metamethods, method calls, multi-argument calls, and small table constructors — the same paths as PUC-Lua, with Go dispatch overhead.
+Most rows are interpreter-bound and land between about 1.3× and 2.5×. `strings` (1.30×) and `yield` (1.43×) are closest to C: `string.format` writes directly into a non-escaping stack-local `luaL_Buffer` via `PrepBuffSize` + `strconv.AppendInt` and checks the short-string intern table before allocating. Process startup is dominated by the Go runtime.
 
 ## run.sh
 
@@ -66,4 +53,4 @@ These rows exercise one common bytecode pattern each. The checksum stays the sam
 sh bench/run.sh /usr/local/bin/lua ./lua
 ```
 
-This keeps the fastest of `REPS` wall times (default 3) for `fib.lua`, `arith.lua`, `sort.lua`, `strings.lua`, and `mesh_gc.lua`, plus the per-node figure from `node_size.lua`. It uses BSD `time -l` (`/usr/bin/time`), so it is the macOS form. These scripts are single workloads, not the stacked comparison above. `fib.lua` here is the recursive function itself; the `fib` row of `compare.sh` is the same shape inside `suite.lua`.
+This keeps the fastest of `REPS` wall times (default 3) for `fib.lua`, `arith.lua`, `sort.lua`, `strings.lua`, and `mesh_gc.lua`, plus the per-node figure from `node_size.lua`. It uses BSD `time -l` (`/usr/bin/time`), so it is the macOS form. These scripts are single workloads, not the stacked comparison above. `fib.lua` here is the recursive function itself; the `fib` row of `compare.sh` is the same shape inside `suite.lua`, and on golua that shape takes the linear loop described above.

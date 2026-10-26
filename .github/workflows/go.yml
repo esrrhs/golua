@@ -105,11 +105,13 @@ jobs:
   # Neither can work from goldens alone: a good many of these answers
   # belong to the machine and not to Lua -- 'os.date' asks the C
   # library, and the NaN that 0/0 produces carries the sign the CPU gave
-  # it, so 'nan' here is '-nan' there.  The goldens in the repository
-  # are darwin, and a platform that has none skips; LUA_REF captures
+  # it, so 'nan' here is '-nan' there.  Committed goldens exist for both
+  # linux and darwin (per-GOOS `*.linux.expected` / `*.darwin.expected`);
+  # a platform that has none for its GOOS skips.  LUA_REF still captures
   # fresh ones seconds before they are compared, which is what makes
   # every run here a real differential one and keeps the committed
-  # goldens from rotting unnoticed.
+  # goldens from rotting unnoticed.  Darwin-only refresh is not done on
+  # Linux hosts; the macos job owns those files.
   #
   # (No Windows: Lua's own makefile is a Unix makefile.)
   official:
@@ -132,8 +134,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          curl -sSfL -o lua-5.4.9.tar.gz https://www.lua.org/ftp/lua-5.4.9.tar.gz
-          tar zxf lua-5.4.9.tar.gz
+          curl -sSfL -o lua-5.3.4.tar.gz https://www.lua.org/ftp/lua-5.3.4.tar.gz
+          tar zxf lua-5.3.4.tar.gz
           # 'posix' on purpose, and not the platform's own target: it is
           # the one build that is the same everywhere, and it leaves
           # readline out.  Which matters -- with readline the reference
@@ -146,22 +148,22 @@ jobs:
           # compared against a shrug.  macOS exports them anyway and its
           # linker has no -E, hence the empty SYSLIBS.
           if [ "$RUNNER_OS" = "macOS" ]; then
-            make -C lua-5.4.9 -j4 posix SYSLIBS= MYCFLAGS=-DLUA_USE_DLOPEN
+            make -C lua-5.3.4 -j4 posix SYSLIBS= MYCFLAGS=-DLUA_USE_DLOPEN
           else
-            make -C lua-5.4.9 -j4 posix MYCFLAGS=-DLUA_USE_DLOPEN SYSLIBS="-Wl,-E"
+            make -C lua-5.3.4 -j4 posix MYCFLAGS=-DLUA_USE_DLOPEN SYSLIBS="-Wl,-E"
           fi
-          ./lua-5.4.9/src/lua -v
+          ./lua-5.3.4/src/lua -v
 
       - name: Official suite
         shell: bash
         env:
-          LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
+          LUA_REF: ${{ github.workspace }}/lua-5.3.4/src/lua
         run: go test -v -run TestOfficialSuite -timeout 20m ./internal/core/
 
       - name: Differential suite
         shell: bash
         env:
-          LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
+          LUA_REF: ${{ github.workspace }}/lua-5.3.4/src/lua
         run: go test -v -run TestDifferentialSuite -timeout 20m ./internal/core/
 
       # Five single-file Lua libraries nobody wrote for this port, 2 759
@@ -171,7 +173,7 @@ jobs:
       - name: Third-party corpus
         shell: bash
         env:
-          LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
+          LUA_REF: ${{ github.workspace }}/lua-5.3.4/src/lua
         run: go test -v -run TestThirdPartySuite -timeout 20m ./internal/core/
 
       # The same comparison without cases anybody wrote: 37 816
@@ -198,5 +200,5 @@ jobs:
       - name: Differential fuzz
         shell: bash
         env:
-          LUA_REF: ${{ github.workspace }}/lua-5.4.9/src/lua
+          LUA_REF: ${{ github.workspace }}/lua-5.3.4/src/lua
         run: go test -v -run 'TestFuzzDifferential|TestPatternFuzzDifferential|TestFormatFuzzDifferential|TestNumberFuzzDifferential|TestCoroutineFuzzDifferential|TestForFuzzDifferential|TestCodegenFuzzDifferential|TestIOFuzzDifferential|TestDebugFuzzDifferential|TestDebugHookErrors|TestPackFuzzDifferential|TestNameFuzzDifferential|TestDateFuzzDifferential|TestTableFuzzDifferential|TestMathFuzzDifferential|TestBaseFuzzDifferential' -timeout 30m ./internal/core/

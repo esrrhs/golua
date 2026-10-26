@@ -14,7 +14,7 @@ import (
 // not to reach -- the stack shuffles, lua_arith, every get/set pair,
 // luaL_ref, the buffer API, lua_toclose, a C hook, the debug API,
 // coroutines driven from C and luaL_Stream -- and compares each line
-// with what PUC-Lua 5.4.9 answered for the same extension.
+// with what PUC-Lua 5.3.4 answered for the same extension.
 //
 // It is the same arrangement as the other extension tests: the C file is
 // compiled against include/, and the driver is loaded under the chunk

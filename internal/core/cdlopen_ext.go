@@ -42,10 +42,9 @@ const (
 	luaGCSetPause   = 6
 	luaGCSetStepMul = 7
 	luaGCIsRunning  = 9
-	luaGCGen        = 10
-	luaGCInc        = 11
+	/* 5.3.4: no LUA_GCGEN / LUA_GCINC (those are 5.4). */
 
-	luaVersionNum = 504
+	luaVersionNum = 503
 )
 
 // ---------------------------------------------------------------------
@@ -57,30 +56,6 @@ func lua_close(p *C.lua_State) { stateOf(p).Close() }
 
 //export lua_newthread
 func lua_newthread(p *C.lua_State) *C.lua_State { return stateOf(p).NewThread().statePtr() }
-
-//export lua_resetthread
-func lua_resetthread(p *C.lua_State) C.int { return C.int(stateOf(p).ResetThread()) }
-
-//export lua_closethread
-func lua_closethread(p *C.lua_State, from *C.lua_State) C.int {
-	L := stateOf(p)
-	var f *State
-	if from != nil {
-		f = stateOf(from)
-	}
-	/* PUC-Lua's lua_closethread always resets the thread. A suspended
-	   one used to be left alone here, which leaked its goroutine and —
-	   after a C yield — left an entry in cgoParked that permanently
-	   suppressed cgoOnQuiet. */
-	ok, errVal := coCloseThread(L, f)
-	if !ok {
-		L.checkStack(1)
-		L.stack[L.top] = errVal
-		L.top++
-		return C.int(LUA_ERRRUN)
-	}
-	return C.int(LUA_OK)
-}
 
 //export lua_atpanic
 func lua_atpanic(p *C.lua_State, f C.lua_CFunction) C.lua_CFunction {
@@ -108,10 +83,14 @@ var (
 	panicCPtr = map[*globalState]unsafe.Pointer{}
 )
 
+// luaVersionNumStorage is what lua_version returns a pointer to (lua.h 5.3.4:
+// const lua_Number *lua_version). Kept immortal so C may keep the pointer.
+var luaVersionNumStorage = C.lua_Number(luaVersionNum)
+
 //export lua_version
-func lua_version(p *C.lua_State) C.lua_Number {
+func lua_version(p *C.lua_State) *C.lua_Number {
 	/* the version is a constant in PUC-Lua too; the state is not asked */
-	return C.lua_Number(luaVersionNum)
+	return &luaVersionNumStorage
 }
 
 //export lua_newstate
@@ -170,14 +149,14 @@ func lua_rawsetp(p *C.lua_State, idx C.int, k unsafe.Pointer) {
 	stateOf(p).RawSetP(idxInt(idx), k)
 }
 
-//export lua_getiuservalue
-func lua_getiuservalue(p *C.lua_State, idx, n C.int) C.int {
-	return C.int(stateOf(p).GetUserValue(idxInt(idx), int(n)))
+//export lua_getuservalue
+func lua_getuservalue(p *C.lua_State, idx C.int) C.int {
+	return C.int(stateOf(p).GetUserValue(idxInt(idx), 1))
 }
 
-//export lua_setiuservalue
-func lua_setiuservalue(p *C.lua_State, idx, n C.int) C.int {
-	return C.int(stateOf(p).SetUserValue(idxInt(idx), int(n)))
+//export lua_setuservalue
+func lua_setuservalue(p *C.lua_State, idx C.int) {
+	stateOf(p).SetUserValue(idxInt(idx), 1)
 }
 
 //export lua_pushthread
@@ -234,9 +213,10 @@ func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 		ci.ypcall = true
 		status := LUA_OK
 		n0 := L.nYields
-		oldNCcalls := L.nCcalls
 		func() {
+			L.errorJmp++ /* C: resume's errorJmp covers this unprotected call */
 			defer func() {
+				L.errorJmp--
 				r := recover()
 				if r == nil {
 					return
@@ -245,7 +225,6 @@ func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 				if !ok {
 					panic(r) /* not a Lua error: let it out */
 				}
-				L.nCcalls = oldNCcalls
 				status = e.status
 			}()
 			luaD_call(L, funcIdx, int(nresults))
@@ -259,12 +238,10 @@ func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 			status = LUA_YIELD
 		}
 		if status != LUA_OK && status != LUA_YIELD {
-			/* ldo.c's finishpcallk: unwind to this frame, close the
-			   to-be-closed variables the call opened, and leave the
-			   error object where the callee's results would have been,
-			   so that the continuation sees it. */
+			/* ldo.c finishpcall: unwind to this frame, close upvalues,
+			   leave the error object where results would have been. */
 			L.ci = ci
-			status = luaD_closeprotected(L, funcIdx, status, true)
+			luaF_close(L, funcIdx)
 			luaD_seterrorobj(L, status, funcIdx)
 			L.shrinkStack()
 		} else {
@@ -332,26 +309,14 @@ func init() {
 }
 
 //export lua_resume
-func lua_resume(p *C.lua_State, from *C.lua_State, nargs C.int, nres *C.int) C.int {
+func lua_resume(p *C.lua_State, from *C.lua_State, nargs C.int) C.int {
 	L := stateOf(p)
 	var f *State
 	if from != nil {
 		f = stateOf(from)
 	}
-	stat := L.Resume(f, int(nargs))
-	/* Results (and the error object) are already on L: Resume matches
-	   C's lua_resume, including the from == nil case. The main thread
-	   has no coRuntime, so fall back to GetTop for nresults. */
-	n := 0
-	if L.co != nil {
-		n = len(L.co.vals)
-	} else {
-		n = L.GetTop()
-	}
-	if nres != nil {
-		*nres = C.int(n)
-	}
-	return C.int(stat)
+	/* Lua 5.3.4: results stay on L; callers use lua_gettop. No nresults out-param. */
+	return C.int(L.Resume(f, int(nargs)))
 }
 
 //export lua_status
@@ -396,32 +361,7 @@ func lua_dump(p *C.lua_State, writer C.lua_Writer, data unsafe.Pointer, strip C.
 	return C.int(status)
 }
 
-// ---------------------------------------------------------------------
-// warnings
-// ---------------------------------------------------------------------
-
-//export lua_warning
-func lua_warning(p *C.lua_State, msg *C.char, tocont C.int) {
-	stateOf(p).Warning(C.GoString(msg), tocont != 0)
-}
-
-//export lua_setwarnf
-func lua_setwarnf(p *C.lua_State, f C.lua_WarnFunction, ud unsafe.Pointer) {
-	L := stateOf(p)
-	if f == nil {
-		L.SetWarnFunction(nil, nil)
-		return
-	}
-	L.SetWarnFunction(func(L *State, msg string, tocont bool) {
-		cs := C.CString(msg)
-		defer C.free(unsafe.Pointer(cs))
-		cgoEnter()
-		defer cgoLeave()
-		C.cdl_call_warnf(f, cs, cBool(tocont), ud)
-	}, nil)
-}
-
-// ---------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // hooks and the debug API
 // ---------------------------------------------------------------------
 
@@ -493,7 +433,6 @@ func fillDebug(c *C.lua_Debug, ar *dbAr) {
 	c.namewhat = keepCStr(ar.namewhat)
 	c.what = keepCStr(ar.what)
 	c.source = keepCStr(ar.source)
-	c.srclen = C.size_t(len(ar.source))
 	c.currentline = C.int(ar.currentline)
 	c.linedefined = C.int(ar.linedefined)
 	c.lastlinedefined = C.int(ar.lastlinedefined)
@@ -501,8 +440,6 @@ func fillDebug(c *C.lua_Debug, ar *dbAr) {
 	c.nparams = C.uchar(ar.nparams)
 	c.isvararg = boolChar(ar.isvararg)
 	c.istailcall = boolChar(ar.istailcall)
-	c.ftransfer = C.ushort(ar.ftransfer)
-	c.ntransfer = C.ushort(ar.ntransfer)
 	copyCStr(&c.short_src[0], ar.shortSrc, CDL_IDSIZE)
 	/* i_ci is private to the host. The activation record is found from
 	   the address of the lua_Debug C passed in, not from a handle that
@@ -826,25 +763,21 @@ func cdl_gc_cb(p *C.lua_State, what, a1, a2, a3 C.int) C.int {
 		return C.int(prev)
 	case luaGCSetStepMul:
 		prev := L.g.gcStepMul
-		L.g.gcStepMul = int(a1)
+		v := int(a1)
+		if v < 40 {
+			v = 40
+		}
+		L.g.gcStepMul = v
 		return C.int(prev)
 	case luaGCIsRunning:
 		return cBool(!L.g.gcStopped)
-	case luaGCGen:
-		/* C answers the previous mode; 0 is "incremental", 1 "generational" */
-		prev := cBool(L.g.gcMode != gcModeGen)
-		L.g.gcMode = gcModeGen
-		return prev
-	case luaGCInc:
-		prev := cBool(L.g.gcMode == gcModeGen)
-		L.g.gcMode = gcModeInc
-		return prev
+	default:
+		return -1 /* invalid option (lua_gc 5.3.4) */
 	}
-	return 0
 }
 
 // ---------------------------------------------------------------------
-// the rest of lua.h: allocator, upvalues, to-be-closed slots
+// the rest of lua.h: allocator, upvalues
 // ---------------------------------------------------------------------
 
 //export lua_getallocf
@@ -869,16 +802,6 @@ func lua_setallocf(p *C.lua_State, f C.lua_Alloc, ud unsafe.Pointer) {
 	L.callocF = unsafe.Pointer(f)
 	L.callocUD = ud
 }
-
-//export lua_setcstacklimit
-func lua_setcstacklimit(p *C.lua_State, limit C.uint) C.int {
-	/* the C stack is the Go stack here, and its limit is not ours to
-	   set; PUC-Lua answers the previous limit */
-	return C.int(LUAI_MAXCCALLS)
-}
-
-//export lua_toclose
-func lua_toclose(p *C.lua_State, idx C.int) { stateOf(p).CloseSlotAt(idxInt(idx)) }
 
 //export lua_getupvalue
 func lua_getupvalue(p *C.lua_State, funcindex, n C.int) *C.char {

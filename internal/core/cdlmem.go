@@ -549,12 +549,12 @@ func testCgoParkedCount() int {
 }
 
 // testLuaResume is lua_resume for tests that cannot import "C".
+// nres is lua_gettop(L) after resume (5.3 has no out-param).
 func testLuaResume(L, from *State, nargs int) (status, nres int) {
 	var f *C.lua_State
 	if from != nil {
 		f = from.statePtr()
 	}
-	var n C.int
-	st := lua_resume(L.statePtr(), f, C.int(nargs), &n)
-	return int(st), int(n)
+	st := lua_resume(L.statePtr(), f, C.int(nargs))
+	return int(st), L.GetTop()
 }

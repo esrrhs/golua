@@ -1,4 +1,4 @@
--- $Id: testes/tpack.lua $
+-- $Id: tpack.lua,v 1.13 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
 
 local pack = string.pack
@@ -35,7 +35,7 @@ print("\talignment: " .. align)
 
 
 -- check errors in arguments
-local function checkerror (msg, f, ...)
+function checkerror (msg, f, ...)
   local status, err = pcall(f, ...)
   -- print(status, err, msg)
   assert(not status and string.find(err, msg))
@@ -204,8 +204,6 @@ do
 
   checkerror("contains zeros", pack, "z", "alo\0");
 
-  checkerror("unfinished string", unpack, "zc10000000", "alo")
-
   for i = 2, NB do
     local s1 = pack("s" .. i, s)
     assert(unpack("s" .. i, s1) == s and #s1 == #s + i)
@@ -314,7 +312,9 @@ do    -- testing initial position
   for i = 1, #x + 1 do
     assert(unpack("c0", x, i) == "")
   end
+  checkerror("out of string", unpack, "c0", x, 0)
   checkerror("out of string", unpack, "c0", x, #x + 2)
+  checkerror("out of string", unpack, "c0", x, -(#x + 1))
  
 end
 

@@ -377,15 +377,7 @@ func TestDebugMisc(t *testing.T) {
 	}
 	L.Pop(1)
 
-	/* setcstacklimit accepts a limit and answers with the current one */
-	if err := L.DoString("lim = debug.setcstacklimit(100)"); err != nil {
-		t.Fatalf("DoString: %v", err)
-	}
-	L.GetGlobal("lim")
-	if _, ok := L.ToInteger(-1); !ok {
-		t.Fatal("debug.setcstacklimit did not return a number")
-	}
-	L.Pop(1)
+	/* Lua 5.3.4: no debug.setcstacklimit */
 
 	/* debug.debug is not interactive here: it returns nothing */
 	if err := L.DoString("cnt = select('#', debug.debug())"); err != nil {
@@ -400,10 +392,16 @@ func TestDebugMisc(t *testing.T) {
 
 func TestDebugGetInfoBadOptions(t *testing.T) {
 	L := newDebugState(t)
-	/* '>' is not allowed as a user option */
-	if err := L.DoString("debug.getinfo(1, '>S')"); err == nil {
-		t.Fatal("debug.getinfo with '>' did not raise an error")
+	/* 5.3.4: leading '>' is not rejected in db_getinfo (5.4 added that check).
+	   For a stack level, options ">S" are passed to lua_getinfo and succeed. */
+	if err := L.DoString("out = debug.getinfo(1, '>S')"); err != nil {
+		t.Fatalf("debug.getinfo(1, '>S'): %v", err)
 	}
+	L.GetGlobal("out")
+	if L.Type(-1) != LUA_TTABLE {
+		t.Fatalf("debug.getinfo(1, '>S') = %v, want table", L.Type(-1))
+	}
+	L.Pop(1)
 	L.SetTop(0)
 	/* an unknown option is invalid */
 	err := L.DoString("debug.getinfo(1, 'Z')")
