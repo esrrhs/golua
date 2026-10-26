@@ -1097,6 +1097,10 @@ func baseProcessSrc(envFile, plainFile string) string {
 		  end})
 		  doomed = nil
 		end
+		for i = 1, 2000000 do
+		  local a = {}
+		  if seen ~= nil then break end
+		end
 		collectgarbage("collect")
 		eq(seen, "nil,nil", "every option is nil inside a finalizer")
 

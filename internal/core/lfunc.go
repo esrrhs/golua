@@ -140,10 +140,10 @@ func callclosemethod(L *State, obj *Value, err *Value, yy bool) {
 	top := L.top
 	tm := luaT_gettmbyobj(L, obj, TM_CLOSE)
 	L.checkStack(3)
-	L.stack[top] = *tm    /* will call metamethod... */
-	L.stack[top+1] = *obj /* with 'self' as the 1st argument */
-	L.stack[top+2] = *err /* and error msg. as 2nd argument */
-	L.top = top + 3       /* add function and arguments */
+	L.stack[top] = slotVal(tm)    /* will call metamethod... */
+	L.stack[top+1] = slotVal(obj) /* with 'self' as the 1st argument */
+	L.stack[top+2] = slotVal(err) /* and error msg. as 2nd argument */
+	L.top = top + 3               /* add function and arguments */
 	if yy {
 		luaD_call(L, top, 0)
 	} else {
@@ -221,7 +221,10 @@ func luaF_newtbcupval(L *State, level int) {
 func luaF_unlinkupval(L *State, uv *UpVal) {
 	for i, u := range L.openupval {
 		if u == uv {
-			L.openupval = append(L.openupval[:i], L.openupval[i+1:]...)
+			last := len(L.openupval) - 1
+			copy(L.openupval[i:], L.openupval[i+1:])
+			L.openupval[last] = nil
+			L.openupval = L.openupval[:last]
 			return
 		}
 	}

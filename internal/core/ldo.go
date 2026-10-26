@@ -362,6 +362,9 @@ func decodeNresults(n int) int   { return -n - 3 }
 func moveresults(L *State, res, nres, wanted int) {
 	switch wanted { /* handle typical cases separately */
 	case 0: /* no values needed */
+		if nres > 0 {
+			setnilvalue(&L.stack[L.top-nres])
+		}
 		L.top = res
 		return
 	case 1: /* one value needed */
@@ -587,9 +590,15 @@ func ccall(L *State, funcIdx, nresults int, inc int) {
 		L.checkStack(0)
 		luaE_checkcstack(L)
 	}
+	callerCI := L.ci
 	if ci := luaD_precall(L, funcIdx, nresults); ci != nil {
 		ci.callstatus = CIST_FRESH /* mark that it is a "fresh" execute */
 		luaV_execute(L, ci)
+		if callerCI != nil && !isLua(callerCI) && L.ci == callerCI && L.top < callerCI.top {
+			for i := L.top; i < callerCI.top && i < len(L.stack); i++ {
+				setnilvalue(&L.stack[i])
+			}
+		}
 	}
 	L.nCcalls -= uint32(inc)
 }

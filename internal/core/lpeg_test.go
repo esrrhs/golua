@@ -136,7 +136,7 @@ func lpegAskForACycle(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 	const ask = "    collectgarbage();\n"
-	const cycle = "    for i = 1, 200000 do local a = {} end   -- a cycle: see lgc.go\n"
+	const cycle = "    for i = 1, 5000000 do local a = {} if i % 10000 == 0 and next(t) == nil then break end end   -- a cycle: see lgc.go\n"
 	if !strings.Contains(string(b), ask) {
 		t.Fatal("lpeg's test.lua no longer asks for a collection where it did")
 	}

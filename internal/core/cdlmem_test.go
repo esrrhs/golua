@@ -304,8 +304,8 @@ func TestCloseDoesNotFinalizeOtherState(t *testing.T) {
 	}
 }
 
-// Objects kept only by gcHold must survive another state's Close.
-// A global gcRelease would let Go finalize them immediately.
+// Unreachable userdata with a pending __gc on L2 must keep its C block
+// until L2 runs its __gc metamethod, even when L1 closes and Go GC runs.
 func TestCloseDoesNotReleaseOtherStateHold(t *testing.T) {
 	L1 := NewState()
 	L2 := NewState()
@@ -317,7 +317,7 @@ func TestCloseDoesNotReleaseOtherStateHold(t *testing.T) {
 	L2.PushGoFunc(func(L *State) int { return 0 })
 	L2.SetField(-2, "__gc")
 	L2.SetMetaTable(-2)
-	L2.Pop(1) /* only gcHold keeps the userdata */
+	L2.Pop(1) /* unreachable on L2, but __gc has not run yet */
 
 	before := cdlUserFrees.Load()
 	L1.Close()

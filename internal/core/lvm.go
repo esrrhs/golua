@@ -199,7 +199,7 @@ func luaV_finishget(L *State, t, key *Value, val int, slot *Value) {
 		t = tm /* else try to access 'tm[key]' */
 		slot = vmFastGet(L, t, key)
 		if slot != nil && !isempty(slot) {
-			L.stack[val] = *slot
+			L.stack[val] = slotVal(slot)
 			return
 		}
 	}
@@ -233,7 +233,7 @@ func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 		t = tm /* else repeat assignment over 'tm' */
 		slot = vmFastGet(L, t, key)
 		if slot != nil && !isempty(slot) {
-			*slot = *val
+			luaH_setSlotVal(hvalue(t), slot, val)
 			return
 		}
 	}
@@ -243,30 +243,22 @@ func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 // vmFastGet does a raw table access, returning the slot (nil when 't' is
 // not a table).
 func vmFastGet(L *State, t, key *Value) *Value {
-	if !ttistable(t) {
+	if t.tt != ctb(LUA_VTABLE) {
 		return nil
 	}
-	h := hvalue(t)
-	switch ttypetag(key) {
-	case LUA_VSHRSTR:
-		return luaH_getshortstr(h, tsvalue(key))
-	case LUA_VNUMINT:
-		return luaH_getint(h, ivalue(key))
-	case LUA_VNUMFLT:
-		if k, ok := floatToIntEq(fltvalue(key)); ok {
-			return luaH_getint(h, k)
-		}
-	}
-	return luaH_get(L, h, key)
+	return luaH_get(L, (*Table)(t.p), key)
 }
 
 // vmFastGeti is the integer specialization of vmFastGet (luaV_fastgeti).
 func vmFastGeti(t *Value, key int64) *Value {
-	if !ttistable(t) {
+	if t.tt != ctb(LUA_VTABLE) {
 		return nil
 	}
-	h := hvalue(t)
+	h := (*Table)(t.p)
 	if uint64(key)-1 < uint64(h.alimit) {
+		if h.metatable != nil && h.syncWeakMode()&weakVal != 0 {
+			return checkSlot(&h.array[key-1])
+		}
 		return &h.array[key-1]
 	}
 	return luaH_getint(h, key)
@@ -274,18 +266,18 @@ func vmFastGeti(t *Value, key int64) *Value {
 
 // vmFastGetShortStr mirrors luaV_fastget(..., luaH_getshortstr).
 func vmFastGetShortStr(t *Value, key *TString) *Value {
-	if !ttistable(t) {
+	if t.tt != ctb(LUA_VTABLE) {
 		return nil
 	}
-	return luaH_getshortstr(hvalue(t), key)
+	return luaH_getshortstr((*Table)(t.p), key)
 }
 
 // vmFastGetStr mirrors luaV_fastget(..., luaH_getstr) for OP_SELF.
 func vmFastGetStr(L *State, t *Value, key *TString) *Value {
-	if !ttistable(t) {
+	if t.tt != ctb(LUA_VTABLE) {
 		return nil
 	}
-	return luaH_getstr(L, hvalue(t), key)
+	return luaH_getstr(L, (*Table)(t.p), key)
 }
 
 // pushclosure creates a new Lua closure and initializes its upvalues.
@@ -511,7 +503,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				key := &k[i.C]
 				slot := vmFastGetShortStr(upval, tsvalue(key)) /* luaH_getshortstr */
 				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
+					L.stack[ra] = slotVal(slot)
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, upval, key, ra, slot)
@@ -526,7 +518,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					slot = vmFastGet(L, rb, rc)
 				}
 				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
+					L.stack[ra] = slotVal(slot)
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, rc, ra, slot)
@@ -535,7 +527,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				rb := &L.stack[base+i.B]
 				slot := vmFastGeti(rb, int64(i.C))
 				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
+					L.stack[ra] = slotVal(slot)
 				} else {
 					var key Value
 					setivalue(&key, int64(i.C))
@@ -547,7 +539,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				key := &k[i.C]
 				slot := vmFastGetShortStr(rb, tsvalue(key)) /* luaH_getshortstr */
 				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
+					L.stack[ra] = slotVal(slot)
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, key, ra, slot)
@@ -563,7 +555,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				slot := vmFastGetShortStr(upval, tsvalue(key)) /* luaH_getshortstr */
 				if slot != nil && !isempty(slot) {
-					*slot = *rc /* luaV_finishfastset (barrier skipped: Go GC) */
+					luaH_setSlotVal(hvalue(upval), slot, rc) /* luaV_finishfastset (barrier skipped: Go GC) */
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, upval, key, rc, slot)
@@ -584,7 +576,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					slot = vmFastGet(L, rt, rb)
 				}
 				if slot != nil && !isempty(slot) {
-					*slot = *rc /* luaV_finishfastset (barrier skipped: Go GC) */
+					luaH_setSlotVal(hvalue(rt), slot, rc) /* luaV_finishfastset (barrier skipped: Go GC) */
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, rt, rb, rc, slot)
@@ -599,7 +591,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				slot := vmFastGeti(rt, int64(i.B))
 				if slot != nil && !isempty(slot) {
-					*slot = *rc
+					luaH_setSlotVal(hvalue(rt), slot, rc)
 				} else {
 					var key Value
 					setivalue(&key, int64(i.B))
@@ -617,7 +609,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 				slot := vmFastGetShortStr(rt, tsvalue(key)) /* luaH_getshortstr */
 				if slot != nil && !isempty(slot) {
-					*slot = *rc /* luaV_finishfastset (barrier skipped: Go GC) */
+					luaH_setSlotVal(hvalue(rt), slot, rc) /* luaV_finishfastset (barrier skipped: Go GC) */
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, rt, key, rc, slot)
@@ -639,6 +631,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					luaH_resize(L, t, uint32(c), uint32(b)) /* idem */
 				}
 				/* checkGC → gcAfterAlloc (Go GC); Protect-style restart */
+				ci.savedpc = pc
 				if L.gcAfterAlloc() {
 					continue
 				}
@@ -653,7 +646,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				L.stack[ra+1] = *rb
 				slot := vmFastGetStr(L, rb, tsvalue(rc)) /* luaH_getstr; key is a string */
 				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
+					L.stack[ra] = slotVal(slot)
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, rc, ra, slot)
@@ -1194,12 +1187,18 @@ func luaV_execute(L *State, ci *CallInfo) {
 				if uint64(last) > uint64(luaH_realasize(h)) {
 					luaH_resizearray(L, h, last)
 				}
+				mode := h.syncWeakMode()
 				for ; n > 0; n-- {
-					h.array[last-1] = L.stack[ra+n]
+					if mode&weakVal != 0 {
+						storeValMode(&h.array[last-1], &L.stack[ra+n], mode)
+					} else {
+						h.array[last-1] = L.stack[ra+n]
+					}
 					last--
 				}
 			case OP_CLOSURE:
 				pushclosure(L, p.p[i.B], cl.upvals, base, ra)
+				ci.savedpc = pc
 				if L.gcAfterAlloc() { /* checkGC(L, ra + 1) */
 					continue
 				}

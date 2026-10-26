@@ -15,6 +15,7 @@ import (
 	"strings"
 	"unicode/utf8"
 	"unsafe"
+	"weak"
 )
 
 // Basic type tags (lua.h).
@@ -72,6 +73,7 @@ func UpvalueIndex(i int) int { return LUA_REGISTRYINDEX - i }
 // Bits in a value tag (lobject.h).
 const (
 	BIT_ISCOLLECTABLE = 1 << 6
+	BIT_WEAK          = 1 << 7 // Go-GC weak-table slot marker
 )
 
 // makevariant / ctb / novariant / withvariant, exactly as lobject.h.
@@ -80,8 +82,8 @@ func makevariant(t, v int) int        { return t | (v << 4) }
 func ctb(t int) uint8                 { return uint8(t) | BIT_ISCOLLECTABLE }
 func novariant(t int) int             { return t & 0x0F }
 func withvariant(t int) int           { return t & 0x3F }
-func rawtt(o *Value) uint8            { return o.tt }
-func checktag(o *Value, t uint8) bool { return o.tt == t }
+func rawtt(o *Value) uint8            { return o.tt &^ BIT_WEAK }
+func checktag(o *Value, t uint8) bool { return o.tt&^BIT_WEAK == t }
 func checktype(o *Value, t int) bool  { return ttype(o) == t }
 
 // Variant tags (lobject.h). The values are 'makevariant(t, v)', written
@@ -211,6 +213,7 @@ func ttiscfunction(v *Value) bool { return ttislcf(v) || ttisCclosure(v) }
 func ttisfulluserdata(v *Value) bool  { return v.tt == ctb(LUA_VUSERDATA) }
 func ttislightuserdata(v *Value) bool { return v.tt == LUA_VLIGHTUSERDATA }
 func ttisthread(v *Value) bool        { return v.tt == ctb(LUA_VTHREAD) }
+func ttisdeadkey(v *Value) bool       { return v.tt == LUA_TDEADKEY }
 
 // ---------------------------------------------------------------------
 // value accessors
@@ -323,9 +326,11 @@ func setnodekey(n *node, k *Value) {
 
 // getnodekey copies a value from a key (lobject.h).
 func getnodekey(dst *Value, n *node) {
-	dst.p = n.kp
-	dst.i = n.ki
-	dst.tt = n.keytt
+	if n.keytt < BIT_WEAK {
+		dst.p, dst.i, dst.tt = n.kp, n.ki, n.keytt
+	} else {
+		getnodekeyWeak(dst, n)
+	}
 }
 
 // setnilkey empties a node's key (lobject.h: keytt(node) = LUA_TNIL).
@@ -334,7 +339,7 @@ func setnilkey(n *node) { n.keytt = LUA_TNIL; n.kp = nil; n.ki = 0 }
 
 // Node key macros (lobject.h). setdeadkey/keyisdead live in lgc_weak.go /
 // ltable.go (call sites); not redeclared here.
-func keytt(n *node) uint8           { return n.keytt }
+func keytt(n *node) uint8           { return n.keytt &^ BIT_WEAK }
 func keyisnil(n *node) bool         { return n.keytt == LUA_TNIL }
 func keyisinteger(n *node) bool     { return n.keytt == LUA_VNUMINT }
 func keyival(n *node) int64         { return n.ki }
@@ -365,8 +370,11 @@ type Table struct {
 	lastfree  int // any free position is before this position
 	metatable *Table
 	// Go-GC bridge (not in C Table): weakMode / finalized replace gclist+colors.
-	weakMode  byte // 0 or "k"/"v"/"kv" bits
-	finalized bool // a Go finalizer has been set to run its '__gc'
+	weakMode    byte // 0 or "k"/"v"/"kv" bits
+	cachedMode  byte // cached __mode when this table is used as a metatable
+	modeCached  bool // whether cachedMode is valid
+	weakTracked bool // whether this table is in gcWeakTables
+	finalized   bool // a Go finalizer has been set to run its '__gc'
 }
 
 func isrealasize(t *Table) bool { return t.flags&BITRAS == 0 }
@@ -392,14 +400,14 @@ func lmod(s uint32, size int) int { return int(s) & (size - 1) }
 type Udata struct {
 	nuvalue   uint16 // number of user values (5.4 multi-UV)
 	metatable *Table
-	uv        []Value        // user values (length == nuvalue)
-	val       any            // the Go value carried by this userdata
-	finalized bool           // being watched: its '__gc' is to run
-	finSet    bool           // the Go finalizer has been set, which happens once
-	cblock    unsafe.Pointer // the C block behind it, if it has one
-	len       int            // its size in bytes: what lua_rawlen answers
-	finL      *State         // its state, which the finalizer needs
-	bufID     int            // luaL_Buffer slot, freed with the userdata
+	uv        []Value             // user values (length == nuvalue)
+	val       any                 // the Go value carried by this userdata
+	finalized bool                // being watched: its '__gc' is to run
+	finSet    bool                // the Go finalizer has been set, which happens once
+	cblock    unsafe.Pointer      // the C block behind it, if it has one
+	len       int                 // its size in bytes: what lua_rawlen answers
+	finL      weak.Pointer[State] // its state, held weakly so finalizer never pins State
+	bufID     int                 // luaL_Buffer slot, freed with the userdata
 }
 
 // ---------------------------------------------------------------------

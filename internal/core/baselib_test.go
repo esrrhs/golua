@@ -472,6 +472,10 @@ func TestBaseCollectGarbageCollects(t *testing.T) {
 		local t = setmetatable({}, {__mode = "k"})
 		do local k = {} t[k] = 1 end
 		r = tostring(next(t) ~= nil)
+		for i = 1, 5000000 do
+			local a = {}
+			if i % 10000 == 0 and next(t) == nil then break end
+		end
 		collectgarbage()
 		r = r .. " " .. tostring(next(t) == nil)`, "r", "true true")
 	baseCheck(t, L, `
@@ -480,6 +484,10 @@ func TestBaseCollectGarbageCollects(t *testing.T) {
 			local t = setmetatable({}, {__gc = function() ran = true end})
 		end
 		r = tostring(ran)
+		for i = 1, 5000000 do
+			local a = {}
+			if ran then break end
+		end
 		collectgarbage()
 		r = r .. " " .. tostring(ran)`, "r", "false true")
 }
