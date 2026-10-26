@@ -216,7 +216,7 @@ func (th *State) gcClearThreadStack() {
 					}
 				}
 			}
-		} else if curCallee != nil && ci.callstatus&CIST_HOOKED == 0 {
+		} else if curCallee != nil && ci.callstatus&CIST_HOOKED == 0 && op != OP_RETURN {
 			end := used
 			if ra := base + cl.p.code[pc].A; ra+1 > end {
 				end = ra + 1
@@ -400,11 +400,6 @@ func (L *State) gcStep() bool {
 		if gcWeakCount.Load() != 0 {
 			L.gcClearThreadStack()
 		}
-		L.gcAwaitPending()
-		if L.hasPending() {
-			L.runFinalizers()
-			return true
-		}
 	}
 	if L.g.gcDebt < gcStepDebt {
 		return false
@@ -430,7 +425,7 @@ func (L *State) gcAfterAlloc() bool {
 	if L.g.gcInFinalizer || L.g.closing {
 		return false
 	}
-	if L.hasPending() {
+	if L.g.gcDebt == 0 && L.hasPending() {
 		L.runFinalizers()
 		return true
 	}
@@ -587,6 +582,9 @@ func (L *State) takeCloseObject() (Value, bool) {
 
 // gcIsWatched says whether an object still waits for its '__gc'.
 func gcIsWatched(v *Value) bool {
+	if v.p == nil {
+		return false
+	}
 	switch ttypetag(v) {
 	case LUA_VTABLE:
 		return hvalue(v).finalized

@@ -184,6 +184,7 @@ func luaV_concat(L *State, total int) {
 // luaV_finishget finishes a table access 'val = t[key]' (lvm.c).
 func luaV_finishget(L *State, t, key *Value, val int, slot *Value) {
 	L.migrateNested()
+	var tv Value
 	for loop := 0; loop < MAXTAGLOOP; loop++ {
 		var tm *Value
 		if slot == nil { /* 't' is not a table? */
@@ -203,7 +204,8 @@ func luaV_finishget(L *State, t, key *Value, val int, slot *Value) {
 			luaT_callTMres(L, tm, t, key, val)
 			return
 		}
-		t = tm /* else try to access 'tm[key]' */
+		tv = slotVal(tm)
+		t = &tv /* else try to access 'tm[key]' */
 		slot = vmFastGet(L, t, key)
 		if slot != nil && !isempty(slot) {
 			L.stack[val] = slotVal(slot)
@@ -216,6 +218,7 @@ func luaV_finishget(L *State, t, key *Value, val int, slot *Value) {
 // luaV_finishset finishes a table assignment 't[key] = val' (lvm.c).
 func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 	L.migrateNested()
+	var tv Value
 	for loop := 0; loop < MAXTAGLOOP; loop++ {
 		var tm *Value
 		if slot != nil { /* is 't' a table? */
@@ -237,7 +240,8 @@ func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 			luaT_callTM(L, tm, t, key, val)
 			return
 		}
-		t = tm /* else repeat assignment over 'tm' */
+		tv = slotVal(tm)
+		t = &tv /* else repeat assignment over 'tm' */
 		slot = vmFastGet(L, t, key)
 		if slot != nil && !isempty(slot) {
 			luaH_setSlotVal(hvalue(t), slot, val)
@@ -1298,6 +1302,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 				L.top = ra3 + 7
 				ci.savedpc = pc
 				luaD_call(L, ra3+4, i.C)
+				if L.fastYield {
+					return
+				}
+				trap = ci.trap
 				/* go to the next instruction (OP_TFORLOOP) */
 				i = code[pc]
 				pc++
@@ -1313,6 +1321,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 				L.top = ra3 + 7
 				ci.savedpc = pc
 				luaD_call(L, ra3+4, i.C)
+				if L.fastYield {
+					return
+				}
+				trap = ci.trap
 				/* fall into OP_TFORLOOP */
 				i3 := code[pc]
 				pc++
@@ -1322,10 +1334,10 @@ func luaV_execute(L *State, ci *CallInfo) {
 					pc -= i3.B
 				}
 			case OP_TFORLOOP:
-				/* Unreachable on valid bytecode: OP_TFORCALL / OP_TFORPREP
-				   already consume the following OP_TFORLOOP (C fallthrough).
-				   Kept as an empty case so an accidental lone OP_TFORLOOP is
-				   a no-op rather than an unknown-opcode panic. */
+				if !ttisnil(&L.stack[ra+4]) {
+					L.stack[ra+2] = L.stack[ra+4]
+					pc -= i.B
+				}
 			case OP_SETLIST:
 				n := i.B
 				last := uint32(i.C)

@@ -425,7 +425,7 @@ func luaU_undump(L *State, data []byte, name string) *LClosure {
 ** C: if (mode && strchr(mode, x[0]) == NULL). Empty mode ≈ NULL (skip).
  */
 func checkLoadMode(L *State, mode, x string) {
-	if mode != "" && !strings.ContainsRune(mode, rune(x[0])) {
+	if !strings.ContainsRune(mode, rune(x[0])) {
 		ts := pushfString(L, "attempt to load a %s chunk (mode is '%s')", x, mode)
 		L.checkStack(1)
 		setsvalue(&L.stack[L.top], ts)

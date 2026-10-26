@@ -50,7 +50,6 @@ func baseWriteString(s string, l int) {
 // baseWriteLine is lua_writeline: newline + fflush(stdout).
 func baseWriteLine() {
 	baseWriteString("\n", 1)
-	os.Stdout.Sync() /* fflush(stdout) */
 }
 
 func basePrint(L *State) int {

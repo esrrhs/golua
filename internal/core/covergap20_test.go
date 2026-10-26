@@ -122,7 +122,8 @@ return ok, true
 
 	// cfp arm of tostring
 	L.SetTop(0)
-	st := &ioStream{cfp: unsafe.Pointer(uintptr(1)), closef: func(*State) int { return 0 }}
+	var dummy byte
+	st := &ioStream{cfp: unsafe.Pointer(&dummy), closef: func(*State) int { return 0 }}
 	L.NewUserData(st, 1)
 	L.GetField(LUA_REGISTRYINDEX, "FILE*")
 	if !L.IsNil(-1) {
