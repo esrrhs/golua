@@ -3,11 +3,12 @@
 package core
 
 import (
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"unsafe"
 	"weak"
+
+	"github.com/esrrhs/golua/internal/goid"
 )
 
 /*
@@ -47,18 +48,7 @@ var (
 var cgoOnQuiet func()
 
 func cgoGoid() int64 {
-	var buf [32]byte
-	n := runtime.Stack(buf[:], false)
-	// "goroutine N ["
-	const p = len("goroutine ")
-	if n <= p {
-		return 0
-	}
-	id := int64(0)
-	for i := p; i < n && buf[i] >= '0' && buf[i] <= '9'; i++ {
-		id = id*10 + int64(buf[i]-'0')
-	}
-	return id
+	return int64(goid.Get())
 }
 
 func cgoBusyLocked() bool { return len(cgoByG) > 0 }
