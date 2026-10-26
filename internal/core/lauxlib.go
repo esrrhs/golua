@@ -1,13 +1,11 @@
-// Translation of lauxlib.h / lauxlib.c (PUC-Lua 5.4.9).
+// Translation of lauxlib.h / lauxlib.c (PUC-Lua 5.3.4).
 package core
 
 import (
+	"fmt"
 	"strings"
 	"unsafe"
 )
-
-// LUA_GNAME is the global table name (lauxlib.h).
-const LUA_GNAME = "_G"
 
 // Reg is the Go counterpart of luaL_Reg.
 type Reg struct {
@@ -15,12 +13,8 @@ type Reg struct {
 	Func GoFunc
 }
 
-// PushFail pushes the value used to represent failure (luaL_pushfail).
-// In 5.4 the default is nil.
-func (L *State) PushFail() { L.PushNil() }
-
 // ArgError raises an error for a bad argument (luaL_argerror,
-// lauxlib.c).
+// lauxlib.c:176).
 //
 // The function name in "bad argument #%d to '%s'" comes from
 // 'lua_getinfo(L, "n", &ar)' -- which digs the name out of the calling
@@ -34,20 +28,21 @@ func (L *State) ArgError(arg int, extramsg string) int {
 	}
 	dbGetInfo(L, "n", &ar)
 	if ar.namewhat == "method" {
-		arg--         /* do not count 'self' */
-		if arg == 0 { /* error is in the self argument itself? */
+		arg-- /* do not count 'self' */
+		if arg == 0 {
 			return L.Error2("calling '%s' on bad self (%s)", ar.name, extramsg)
 		}
 	}
-	if ar.name == "" {
+	name := ar.name
+	if name == "" {
 		/* ar.name == NULL: try a global name for the function */
-		if L.pushGlobalFuncName(&ar) {
-			ar.name = L.ToStringX(-1)
+		if fn, ok := L.globalFuncName(&L.stack[ar.ci.funcIdx]); ok {
+			name = fn
 		} else {
-			ar.name = "?"
+			name = "?"
 		}
 	}
-	return L.Error2("bad argument #%d to '%s' (%s)", arg, ar.name, extramsg)
+	return L.Error2("bad argument #%d to '%s' (%s)", arg, name, extramsg)
 }
 
 // Error2 raises an error with a formatted message (luaL_error).
@@ -60,7 +55,7 @@ func (L *State) ArgError(arg int, extramsg string) int {
 // 'isLua(ci)' is false for it.
 func (L *State) Error2(format string, args ...any) int {
 	L.Where2(1)
-	L.PushFString(format, args...) /* lua_pushvfstring */
+	L.PushString(pushfString(L, format, args...).val)
 	L.Concat(2)
 	return L.Error()
 }
@@ -70,28 +65,27 @@ func (L *State) Error2(format string, args ...any) int {
 // include/lua.h.
 const luaLNumSizes = unsafe.Sizeof(int64(0))*16 + unsafe.Sizeof(float64(0))
 
-// luaVersionNumGo is LUA_VERSION_NUM (5.4 → 504). Kept here so non-cgo builds
+// luaVersionNumGo is LUA_VERSION_NUM (5.3 → 503). Kept here so non-cgo builds
 // can check versions the same way as the C export in cdlopen.go.
-const luaVersionNumGo = 504
+const luaVersionNumGo = 503
 
 // CheckVersion_ checks that the running core matches the version and
 // numeric type sizes the caller was compiled against (luaL_checkversion_,
-// lauxlib.c 5.4.9). A mismatch raises via Error2 — it must not be a silent
-// no-op. 5.4.9 no longer compares lua_version(L) against lua_version(NULL)
-// for multi-VM detection (that check existed in 5.3).
+// lauxlib.c). A mismatch raises via Error2 — it must not be a silent no-op.
+//
+// C also compares lua_version(L) != lua_version(NULL) to detect multiple
+// VMs in one process. This port keeps one immortal version number, so that
+// pointer-identity check cannot fire; see NOTES.md.
 func (L *State) CheckVersion_(ver float64, sz uintptr) {
-	v := Version(L)         /* C: lua_version(L) */
 	if sz != luaLNumSizes { /* check numeric types */
 		L.Error2("core and library have incompatible numeric types")
-	} else if v != ver {
-		L.Error2("version mismatch: app. needs %f, Lua core provides %f",
-			ver, v)
 	}
-}
-
-// CheckVersion is luaL_checkversion: verify core version and numeric sizes.
-func (L *State) CheckVersion() {
-	L.CheckVersion_(float64(luaVersionNumGo), luaLNumSizes)
+	/* C: if (v != lua_version(NULL)) → "multiple Lua VMs detected"
+	   Go: single version constant; no multi-VM pointer split. */
+	if float64(luaVersionNumGo) != ver {
+		L.Error2("version mismatch: app. needs %f, Lua core provides %f",
+			ver, float64(luaVersionNumGo))
+	}
 }
 
 // CheckAny raises an error when the argument is absent (luaL_checkany).
@@ -175,7 +169,7 @@ func (L *State) CheckOption(arg int, def string, lst []string) int {
 			return i
 		}
 	}
-	return L.ArgError(arg, L.PushFString("invalid option '%s'", name))
+	return L.ArgError(arg, fmt.Sprintf("invalid option '%s'", name))
 }
 
 func (L *State) intError(arg int) {
@@ -190,19 +184,21 @@ func (L *State) tagError(arg, tag int) {
 	L.typeError(arg, TypeName(tag))
 }
 
-func (L *State) typeError(arg int, tname string) int {
-	/* luaL_typeerror (lauxlib.c). Public TypeError in cdlopen_aux is the
-	   C-export twin (same algorithm + luaCStr); prefer consolidating later. */
+func (L *State) typeError(arg int, tname string) {
+	/* use a description of the actual value for a better message
+	   (static typeerror in lauxlib.c). C leaves __name on the stack;
+	   ArgError never returns. */
 	var typearg string
 	if L.GetMetaField(arg, "__name") == LUA_TSTRING {
-		typearg = luaCStr(L.ToStringX(-1)) /* %s cuts at a zero byte */
+		/* lua_tostring / %s cuts a __name that contains a zero byte. */
+		typearg = luaCStr(L.ToStringX(-1))
 	} else if L.Type(arg) == LUA_TLIGHTUSERDATA {
-		typearg = "light userdata" /* special name for messages */
+		typearg = "light userdata"
 	} else {
-		typearg = L.TypeName(arg) /* standard name */
+		typearg = TypeName(L.Type(arg))
 	}
-	msg := L.PushFString("%s expected, got %s", tname, typearg)
-	return L.ArgError(arg, msg)
+	msg := fmt.Sprintf("%s expected, got %s", tname, typearg)
+	L.ArgError(arg, msg)
 }
 
 // GetMetaField pushes obj[name] where obj is the value at idx and name a
@@ -214,16 +210,16 @@ func (L *State) GetMetaField(obj int, name string) int {
 	L.PushString(name)
 	tt := L.RawGet(-2)
 	if tt == LUA_TNIL {
-		L.Pop(2) /* remove metatable and metafield */
+		L.Pop(2)
 	} else {
-		L.Remove(-2) /* remove only metatable */
+		L.Remove(-2)
 	}
-	return tt /* return metafield type */
+	return tt
 }
 
 // CallMeta calls a metamethod of the value at obj (luaL_callmeta).
 func (L *State) CallMeta(obj int, name string) bool {
-	obj = L.AbsIndex(obj)
+	obj = L.AbsIndex(obj)                      /* getmetafield may grow the stack */
 	if L.GetMetaField(obj, name) == LUA_TNIL { /* no metafield? */
 		return false
 	}
@@ -234,23 +230,13 @@ func (L *State) CallMeta(obj int, name string) bool {
 
 // ToLString converts the value at idx the way luaL_tolstring does
 // (__tostring, then the default formatting) and leaves that string on
-// the stack. Implementation lives with the string library helpers
-// (strToLString) so formatting stays in one place.
+// the stack.
 func (L *State) ToLString(idx int) string { return strToLString(L, idx) }
 
 // ArgCheck raises an error when cond is false (luaL_argcheck).
 func (L *State) ArgCheck(cond bool, arg int, extramsg string) {
 	if !cond {
 		L.ArgError(arg, extramsg)
-	}
-}
-
-// ArgExpected raises an error when cond is false, naming the type that
-// was expected (luaL_argexpected). 5.4 API used by setmetatable and
-// friends for a second argument that may be one of two types.
-func (L *State) ArgExpected(cond bool, arg int, tname string) {
-	if !cond {
-		L.typeError(arg, tname)
 	}
 }
 
@@ -261,11 +247,11 @@ func (L *State) Where2(level int) {
 	if dbGetStack(L, level, &ar) { /* check function at level */
 		dbGetInfo(L, "Sl", &ar) /* get info about it */
 		if ar.currentline > 0 { /* is there info? */
-			L.PushFString("%s:%d: ", ar.shortSrc, ar.currentline)
+			L.PushString(fmt.Sprintf("%s:%d: ", ar.shortSrc, ar.currentline))
 			return
 		}
 	}
-	L.PushFString("") /* else, no information available... */
+	L.PushString("") /* else, no information available... */
 }
 
 // Len2 returns the length of the value at idx as an integer (luaL_len).
@@ -275,20 +261,17 @@ func (L *State) Len2(idx int) int64 {
 	if !ok {
 		L.Error2("object length is not an integer")
 	}
-	L.Pop(1) /* remove object */
+	L.Pop(1)
 	return l
 }
 
 // ---------------------------------------------------------------------
-// references (lauxlib.c — freelist = LUA_RIDX_LAST + 1 in 5.4)
+// references
 // ---------------------------------------------------------------------
 
-// luaLFreeList is the slot luaL_ref keeps its free list in: 'freelist'
-// in lauxlib.c 5.4.9, which is LUA_RIDX_LAST + 1 — not 0, which is where
-// 5.3 kept it. It is a plain key of the table the caller handed in, so an
-// extension that looks at that table sees the difference, and so does
-// one that unrefs a reference and then reads the slot.
-const luaLFreeList = 3 /* LUA_RIDX_LAST + 1 */
+// luaLFreeList is the freelist header slot for luaL_ref (lauxlib.c 5.3.4:
+// #define freelist 0). Slot 0 of the caller's table holds the free list.
+const luaLFreeList = 0
 
 // LUA_REFNIL and LUA_NOREF are the two predefined references (lauxlib.h).
 const (
@@ -304,17 +287,11 @@ func (L *State) Ref(t int) int {
 		return LUA_REFNIL /* 'nil' has a unique fixed reference */
 	}
 	t = L.AbsIndex(t)
-	var ref int64
-	if L.RawGetI(t, luaLFreeList) == LUA_TNIL { /* first access? */
-		ref = 0 /* list is empty */
-		L.PushInteger(0)
-		L.RawSetI(t, luaLFreeList) /* t[freelist] = 0 */
-	} else { /* already initialized */
-		ref, _ = L.ToInteger(-1) /* ref = t[freelist] */
-	}
-	L.Pop(1)      /* remove the element lua_rawgeti pushed */
-	if ref != 0 { /* any free element? */
-		L.RawGetI(t, ref)          /* remove it from the list */
+	L.RawGetI(t, luaLFreeList) /* get first free element */
+	ref, _ := L.ToInteger(-1)  /* ref = t[freelist] */
+	L.Pop(1)                   /* remove it from stack */
+	if ref != 0 {              /* any free element? */
+		L.RawGetI(t, ref)          /* remove it from list */
 		L.RawSetI(t, luaLFreeList) /* (t[freelist] = t[ref]) */
 	} else { /* no free elements */
 		ref = int64(L.RawLen(t)) + 1 /* get a new reference */
@@ -339,19 +316,14 @@ func (L *State) Unref(t, ref int) {
 // ---------------------------------------------------------------------
 
 // SetFuncs registers all functions in l into the table on top of the
-// stack (luaL_setfuncs). A Reg with Func == nil is a 5.4 placeholder:
-// C pushes boolean false instead of a closure (see string.__index).
+// stack (luaL_setfuncs).
 func (L *State) SetFuncs(l []Reg, nup int) {
 	L.CheckStack2(nup, "too many upvalues")
 	for _, r := range l {
-		if r.Func == nil { /* placeholder? */
-			L.PushBoolean(false)
-		} else {
-			for i := 0; i < nup; i++ { /* copy upvalues to the top */
-				L.PushValue(-nup)
-			}
-			L.PushGoClosure(r.Func, nup) /* closure with those upvalues */
+		for i := 0; i < nup; i++ { /* copy upvalues to the top */
+			L.PushValue(-nup)
 		}
+		L.PushGoClosure(r.Func, nup)
 		L.SetField(-(nup + 2), r.Name)
 	}
 	L.Pop(nup) /* remove upvalues */
@@ -371,57 +343,70 @@ func (L *State) GetSubTable(idx int, fname string) bool {
 	return false           /* false, because did not find table there */
 }
 
+// CheckVersion is luaL_checkversion: verify core version and numeric sizes.
+func (L *State) CheckVersion() {
+	L.CheckVersion_(float64(luaVersionNumGo), luaLNumSizes)
+}
+
 // NewLib creates a new table and registers the functions of l into it
 // (luaL_newlib). C's macro always runs luaL_checkversion first.
 func (L *State) NewLib(l []Reg) {
 	L.CheckVersion()
-	L.CreateTable(0, len(l)) /* luaL_newlibtable: sizeof(l)/sizeof(l[0])-1 ≈ len */
+	L.CreateTable(0, len(l))
 	L.SetFuncs(l, 0)
 }
 
 // ---------------------------------------------------------------------
-// string buffer (lauxlib.c luaL_Buffer — 5.4 UBox / placeholder model)
+// string buffer (lauxlib.c luaL_Buffer / lauxlib.h)
 // ---------------------------------------------------------------------
 
-// Buffer is the Go counterpart of luaL_Buffer (lauxlib.h / lauxlib.c 5.4.9).
-//
-// Content lives in one block: 'b' is its address, 'n' how much is used,
-// 'size' how much it holds. luaL_addchar / luaL_addsize / luaL_buffsub are
-// macros over those fields in C; the methods here mirror them.
-//
-// C 5.4 buffinit always pushes a lightuserdata placeholder ((void*)B);
-// on growth it replaces that with a UBox userdata marked to-be-closed.
-// This port pushes the same placeholder. UBox __gc/__close + toclose are
-// replaced by a Go finalizer when cblock allocates C memory (FLAG / Go GC).
-// bufStackSize is the stack-embedded initial scratch size in Buffer (>= strMaxItem).
-// Buffers <= bufStackSize stay 100% on the Go stack without zeroing a full 1 KiB
-// array per call; sizes up to bufInitSize grow lazily without pushing a UBox,
-// and sizes > bufInitSize push a UBox exactly as PUC-Lua 5.4.9 does.
+// LUAL_BUFFERSIZE is the initial buffer size (luaconf.h).
+// Non-longdouble formula: (int)(0x80 * sizeof(void*) * sizeof(lua_Integer)).
+// On this port (64-bit pointers, int64 Integer) that is 8192, matching
+// include/lauxlib.h and the longdouble branch's literal 8192.
+const LUAL_BUFFERSIZE = 8192
+
+// bufInitSize is an alias kept for older call sites / cgo comments.
+const bufInitSize = LUAL_BUFFERSIZE
+
+// bufStackSize is the stack-embedded initial scratch size in Buffer (>= MAX_ITEM).
+// Buffers <= bufStackSize stay 100% on the Go stack without zeroing a full 8 KiB
+// array per call; sizes up to LUAL_BUFFERSIZE grow lazily without pushing a UBox,
+// and sizes > LUAL_BUFFERSIZE push a UBox exactly as PUC-Lua 5.3.4 does.
 const bufStackSize = 512
 
+// Buffer is luaL_Buffer (lauxlib.h):
+//
+//	typedef struct luaL_Buffer {
+//	  char *b;  size_t size;  size_t n;  lua_State *L;
+//	  char initb[LUAL_BUFFERSIZE];
+//	} luaL_Buffer;
+//
+// buffinit points b at initb; a userdata "box" appears only when
+// prepbuffsize outgrows initb (buffonstack). Pure-Go hot paths should
+// prefer a stack-local Buffer + BuffInit, like C's luaL_Buffer b on the
+// C stack — NewBuffer heap-allocates for convenience of existing callers.
 type Buffer struct {
-	L *State
+	b     []byte // B->b (aliases initb or grown box storage)
+	size  int    // B->size
+	n     int    // B->n
+	L     *State
+	initb [bufStackSize]byte // B->initb (stack-local fast scratch)
 
-	initb [bufStackSize]byte // B->init.b — initial on-stack (embedded) area
-	b     []byte             // B->b (nil while on initb, non-nil when grown)
-	size  int                // B->size (bufStackSize on initb, -1 when on B.b)
-	n     int                // B->n
-
-	boxPtr  uintptr // non-zero ⇒ UBox on the Lua stack (buffonstack)
-	onStack bool    // placeholder or box was pushed by BuffInit
-
-	scratch unsafe.Pointer // C-addressable block when cblock
+	// When buffonstack (b no longer aliases initb): UBox on the Lua stack
+	// plus grown storage. boxBuf is the pure-Go block; scratch/slen are the
+	// C-addressable block when cblock is set (cgo luaL_buffinit).
+	boxPtr  uintptr
+	boxBuf  []byte
+	scratch unsafe.Pointer
 	slen    int
-	boxBuf  []byte // grown pure-Go storage when leaving initb without cblock
 
-	// cblock: cgo luaL_buffinit needs memory C may hold. Pure-Go buffers
-	// (table.concat, utf8.char, …) never set this.
+	// cblock: cgo path needs memory C may hold across calls (FLAG:
+	// platform/cgo companion). Pure-Go buffers never set this — they use
+	// initb then a Go []byte box, matching C's initb→UBox choreography
+	// without a C allocator. Not a "fast path" that skips initb.
 	cblock bool
 }
-
-// bufInitSize is LUAL_BUFFERSIZE for 5.4.9:
-// ((int)(16 * sizeof(void*) * sizeof(lua_Number))) → 1024 on LP64.
-const bufInitSize = int(16 * unsafe.Sizeof(uintptr(0)) * unsafe.Sizeof(float64(0)))
 
 // reallocBlock replaces a buffer's C block with one of 'sz' bytes, copying
 // the content across; 'old' is nil on the first call. Set by the cgo layer.
@@ -436,7 +421,9 @@ func bufFinalize(b *Buffer) {
 	}
 }
 
-// buffonstack is C's '#define buffonstack(B) ((B)->b != (B)->init.b)'.
+// buffonstack is C's '#define buffonstack(B) ((B)->b != (B)->initb)'.
+// While using initb, B.b is nil and B.boxPtr is 0 (avoiding a self-pointer
+// B.b = B.initb[:] that would force stack-local Buffers to the Go heap).
 func (B *Buffer) buffonstack() bool {
 	return B.boxPtr != 0
 }
@@ -450,177 +437,164 @@ func (B *Buffer) bytes() []byte {
 	return B.initb[:B.n]
 }
 
-// BuffInit is luaL_buffinit: start on embedded initb and push the placeholder.
-// Avoids storing unsafe.Pointer(B) or B.initb[:] so stack-local Buffers do not
-// escape to the Go heap.
+// BuffInit is luaL_buffinit: B starts on embedded initb, nothing on the
+// Lua stack. Prefer this with a stack-local Buffer for hot callers.
 func (L *State) BuffInit(B *Buffer) {
 	B.L = L
 	B.b = nil
 	B.n = 0
 	B.size = bufStackSize
 	B.boxPtr = 0
-	B.onStack = false
 	B.boxBuf = nil
+	/* scratch/cblock left for the cgo export to configure after BuffInit */
 }
 
 // NewBuffer heap-allocates a Buffer and runs BuffInit (luaL_buffinit).
+// Equivalent to C's 'luaL_Buffer b; luaL_buffinit(L, &b);' when the
+// Buffer must outlive the current frame; hot stdlib sites may switch to
+// stack-local Buffer + BuffInit (Apply debt).
 func (L *State) NewBuffer() *Buffer {
 	B := &Buffer{}
 	L.BuffInit(B)
 	return B
 }
 
-// newbox pushes the UBox userdata C creates in newbox().
-func (B *Buffer) newbox() {
+// ensureBox pushes the UBox userdata C creates in newbox(), and records
+// its address so PushResult / AddValue can find it under the top.
+func (B *Buffer) ensureBox() {
+	if B.boxPtr != 0 {
+		return
+	}
 	L := B.L
 	L.checkStack(1)
-	u := luaS_newudata(L, 0, nil)
+	u := luaS_newudata(L, nil)
 	setuvalue(&L.stack[L.top], u)
 	L.top++
 	B.boxPtr = uintptr(unsafe.Pointer(u))
-	B.onStack = true
 }
 
-// replacePlaceholderWithBox pushes the UBox userdata at boxidx when leaving initb.
-func (B *Buffer) replacePlaceholderWithBox(boxidx int) {
-	L := B.L
-	if B.onStack {
-		L.Remove(boxidx) /* remove placeholder */
-	}
-	B.newbox()
-	if boxidx < -1 {
-		L.Insert(boxidx) /* move box to its intended position */
-	}
-}
-
-func (B *Buffer) cursize() int {
-	if B.b != nil {
-		return len(B.b)
-	}
-	if B.size > 0 {
-		return B.size
-	}
-	return bufInitSize
-}
-
-// newbuffsize is C newbuffsize: size*1.5, at least n+sz.
-func (B *Buffer) newbuffsize(sz int) int {
-	/* C: if (MAX_SIZET - sz < B->n) → "buffer too large" */
-	if sz < 0 || B.n+sz < B.n {
-		B.L.Error2("buffer too large")
-	}
-	newsize := (B.cursize() / 2) * 3 /* buffer size * 1.5 */
-	if newsize < B.n+sz {
-		newsize = B.n + sz
-	}
-	return newsize
-}
-
-// resizebox grows storage for an existing box (C resizebox + content).
-func (B *Buffer) resizebox(newsize int) {
-	L := B.L
+// newBox is C newbox + memcpy of current content (leaving initb).
+func (B *Buffer) newBox(newsize int) {
+	B.ensureBox()
 	if B.cblock && reallocBlock != nil {
-		p := reallocBlock(B.scratch, newsize)
+		p := reallocBlock(nil, newsize)
 		if p == nil && newsize > 0 {
-			L.Error2("not enough memory")
+			B.L.Error2("not enough memory for buffer allocation")
+		}
+		if p != nil && B.n > 0 {
+			copy(unsafe.Slice((*byte)(p), newsize)[:B.n], B.bytes())
 		}
 		B.scratch = p
 		B.slen = newsize
-		B.b = unsafe.Slice((*byte)(p), newsize)
-		B.size = -1
+		if p != nil {
+			B.b = unsafe.Slice((*byte)(p), newsize)
+		} else {
+			B.b = nil
+		}
 		return
 	}
 	grown := make([]byte, newsize)
 	copy(grown, B.bytes())
 	B.boxBuf = grown
 	B.b = grown
-	B.size = -1
 }
 
-// prepbuffsize is the static helper in lauxlib.c: free area of 'sz' bytes;
-// boxidx is the relative stack slot of the placeholder/box.
-func (B *Buffer) prepbuffsize(sz, boxidx int) []byte {
-	/* cblock without scratch must leave initb for a C-addressable block,
-	   even when sz==0 (cgo luaL_buffinit calls room(0) immediately). */
-	force := B.cblock && B.scratch == nil && reallocBlock != nil
-	if !force {
-		if B.b != nil {
-			if len(B.b)-B.n >= sz {
-				return B.b[B.n : B.n+sz]
-			}
-		} else if B.size-B.n >= sz {
-			return B.initb[B.n : B.n+sz]
+// resizeBox is C resizebox(L, -1, newsize) for an existing on-stack box.
+func (B *Buffer) resizeBox(newsize int) {
+	if B.cblock && reallocBlock != nil {
+		p := reallocBlock(B.scratch, newsize)
+		if p == nil && newsize > 0 {
+			reallocBlock(B.scratch, 0) /* free buffer, like C */
+			B.scratch = nil
+			B.slen = 0
+			B.b = nil
+			B.L.Error2("not enough memory for buffer allocation")
 		}
+		B.scratch = p
+		B.slen = newsize
+		if p != nil {
+			B.b = unsafe.Slice((*byte)(p), newsize)
+		} else {
+			B.b = nil
+		}
+		return
 	}
-	if !force && B.b == nil && sz >= 0 && B.n+sz >= B.n && B.n+sz <= bufInitSize {
-		grown := make([]byte, bufInitSize)
-		copy(grown, B.initb[:B.n])
-		B.boxBuf = grown
-		B.b = grown
-		B.size = -1
+	grown := make([]byte, newsize)
+	copy(grown, B.bytes())
+	B.boxBuf = grown
+	B.b = grown
+}
+
+// growTo expands the live block to newsize (newbox or resizebox).
+func (B *Buffer) growTo(newsize int) {
+	if B.buffonstack() {
+		B.resizeBox(newsize)
+	} else {
+		B.newBox(newsize)
+	}
+	B.size = -1 /* box capacity is len(B.b); negative disables initb fast path */
+}
+
+// freeBox is resizebox(L, idx, 0): drop grown storage after pushresult.
+func (B *Buffer) freeBox() {
+	if B.cblock && reallocBlock != nil && B.scratch != nil {
+		reallocBlock(B.scratch, 0)
+		B.scratch = nil
+		B.slen = 0
+	}
+	B.boxBuf = nil
+	B.b = nil
+	B.size = 0
+}
+
+// growRoom handles the slow path of room when space is insufficient or cblock
+// needs initial C allocation, keeping room small enough to inline on hot paths.
+func (B *Buffer) growRoom(sz int) []byte {
+	/* cgo: Go initb is not stable for C to hold; leave initb on first prep
+	   so buffonstack becomes true and scratch is C memory (cdlopen room(0)). */
+	if B.cblock && !B.buffonstack() && reallocBlock != nil {
+		B.growTo(LUAL_BUFFERSIZE)
+	}
+	cursize := len(B.b)
+	if B.b == nil {
+		if !B.cblock && sz <= LUAL_BUFFERSIZE-B.n {
+			grown := make([]byte, LUAL_BUFFERSIZE)
+			copy(grown, B.initb[:B.n])
+			B.b = grown
+			B.size = -1
+			return B.b[B.n : B.n+sz]
+		}
+		cursize = LUAL_BUFFERSIZE
+	}
+	if cursize-B.n < sz { /* not enough space? */
+		newsize := cursize * 2 /* double buffer size */
+		if newsize-B.n < sz {  /* not big enough? */
+			newsize = B.n + sz
+		}
+		if newsize < B.n || newsize-B.n < sz {
+			B.L.Error2("buffer too large")
+		}
+		B.growTo(newsize)
+	}
+	if B.b != nil {
 		return B.b[B.n : B.n+sz]
 	}
-	newsize := B.newbuffsize(sz)
-	if force && newsize < bufInitSize {
-		newsize = bufInitSize
-	}
-	if B.buffonstack() {
-		B.resizebox(newsize)
-	} else {
-		oldn := B.n
-		var old []byte
-		if oldn > 0 {
-			old = make([]byte, oldn)
-			copy(old, B.bytes())
-		}
-		B.replacePlaceholderWithBox(boxidx)
-		B.resizebox(newsize)
-		if oldn > 0 {
-			copy(B.b, old)
-		}
-		B.n = oldn
-	}
-	return B.b[B.n : B.n+sz]
+	return B.initb[B.n : B.n+sz]
 }
 
-// roomSlow handles the slow path when initb space is insufficient.
-//
-//go:noinline
-func (B *Buffer) roomSlow(sz int) []byte {
-	return B.prepbuffsize(sz, -1)
-}
-
-// room is prepbuffsize with boxidx -1 (normal prep; box/placeholder on top).
+// room is luaL_prepbuffsize: returns a slice of at least sz free bytes
+// at &B.b[B.n], growing via size*2 / n+sz like C.
 func (B *Buffer) room(sz int) []byte {
 	if !B.cblock && sz <= B.size-B.n {
 		return B.initb[B.n:]
 	}
-	return B.roomSlow(sz)
-}
-
-func (B *Buffer) prepbuffsizeNoStack(sz int) []byte {
-	need := B.n + sz
-	if sz < 0 || need < B.n {
-		B.L.Error2("buffer too large")
-	}
-	if B.b != nil && len(B.b) >= need {
-		return B.b[B.n:need]
-	}
-	newsize := B.newbuffsize(sz)
-	if newsize < bufInitSize {
-		newsize = bufInitSize
-	}
-	grown := make([]byte, newsize)
-	copy(grown, B.bytes())
-	B.b = grown
-	B.size = -1
-	return B.b[B.n:need]
+	return B.growRoom(sz)
 }
 
 //go:noinline
 func (B *Buffer) addStringSlow(s string) {
 	if len(s) > 0 {
-		copy(B.roomSlow(len(s)), s)
+		copy(B.growRoom(len(s)), s)
 		B.n += len(s)
 	}
 }
@@ -637,7 +611,7 @@ func (B *Buffer) AddString(s string) {
 //go:noinline
 func (B *Buffer) addBytesSlow(p []byte) {
 	if len(p) > 0 {
-		copy(B.roomSlow(len(p)), p)
+		copy(B.growRoom(len(p)), p)
 		B.n += len(p)
 	}
 }
@@ -653,7 +627,7 @@ func (B *Buffer) AddBytes(p []byte) {
 
 //go:noinline
 func (B *Buffer) addCharSlow(c byte) {
-	B.roomSlow(1)[0] = c
+	B.growRoom(1)[0] = c
 	B.n++
 }
 
@@ -668,26 +642,26 @@ func (B *Buffer) AddChar(c byte) {
 }
 
 // AddValue adds the value on top of the stack, converted to a string
-// (luaL_addvalue). C uses prepbuffsize(..., -2) so the box/placeholder
-// stays under the string while growth may replace the placeholder.
+// (luaL_addvalue). Matches C: lua_tolstring then addlstring; a
+// non-coercible value contributes zero bytes (no Go-only error).
+// buffonstack is checked before insert and again after addlstring
+// (growth may push a box mid-call) — same as C.
 func (B *Buffer) AddValue() {
 	L := B.L
 	s, _ := L.ToString(-1)
-	if len(s) <= B.size-B.n {
-		B.n += copy(B.initb[B.n:], s)
-	} else {
-		dst := B.prepbuffsize(len(s), -2)
-		copy(dst, s)
-		B.n += len(s)
+	if B.buffonstack() {
+		L.Insert(-2) /* put value below buffer */
 	}
-	L.Pop(1) /* pop string */
+	B.AddString(s)
+	if B.buffonstack() {
+		L.Remove(-2) /* remove value */
+	} else {
+		L.Pop(1) /* remove value */
+	}
 }
 
-// Len is luaL_bufflen.
+// Len is luaL_bufflen (macro over n).
 func (B *Buffer) Len() int { return B.n }
-
-// BuffSub shrinks the used length (luaL_buffsub macro: B->n -= s).
-func (B *Buffer) BuffSub(s int) { B.n -= s }
 
 // String answers what the buffer holds, without touching it.
 func (B *Buffer) String() string {
@@ -698,17 +672,23 @@ func (B *Buffer) String() string {
 }
 
 // PushResult finishes the buffer and pushes the resulting string
-// (luaL_pushresult). Always removes the placeholder or box under the
-// new string, matching C's lua_remove(-2).
+// (luaL_pushresult). When buffonstack, free the box storage and remove
+// the UBox — one value out where the box was.
 func (B *Buffer) PushResult() {
 	L := B.L
 	L.checkStack(1)
 	setsvalue(&L.stack[L.top], luaS_newlstrBytes(L, B.bytes()))
 	L.top++
-	if B.onStack {
-		L.Remove(-2) /* remove box or placeholder from the stack */
-		B.onStack = false
+	if B.buffonstack() {
+		B.freeBox() /* resizebox(L, -2, 0) */
+		if B.boxPtr != 0 && L.GetTop() >= 2 {
+			v := &L.stack[L.top-2]
+			if ttisfulluserdata(v) && uintptr(unsafe.Pointer(uvalue(v))) == B.boxPtr {
+				L.Remove(-2) /* remove its header from the stack */
+			}
+		}
 	}
+	B.n = 0
 	B.boxPtr = 0
 }
 
@@ -723,94 +703,33 @@ func (B *Buffer) PrepBuffSize(sz int) []byte {
 	if sz <= B.size-B.n {
 		return B.initb[B.n:]
 	}
-	return B.roomSlow(sz)
+	return B.growRoom(sz)
 }
 
 // BuffInitSize is luaL_buffinitsize: buffinit then prepbuffsize.
+// Heap form for callers that need a *Buffer; stack-local sites can
+// BuffInit(&B) then B.PrepBuffSize(sz).
 func (L *State) BuffInitSize(sz int) (*Buffer, []byte) {
-	b := L.NewBuffer()
-	return b, b.PrepBuffSize(sz)
+	B := L.NewBuffer()
+	return B, B.PrepBuffSize(sz)
 }
 
-// AddSize says that 'n' more bytes were written into the room
-// PrepBuffSize handed out (luaL_addsize macro: B->n += s).
-func (B *Buffer) AddSize(n int) { B.n += n }
-
-// AddGSub replaces every occurrence of p in s with r into the buffer
-// (luaL_addgsub — new in 5.4).
-func (B *Buffer) AddGSub(s, p, r string) {
-	for {
-		i := strings.Index(s, p)
-		if i < 0 {
-			break
-		}
-		B.AddString(s[:i]) /* push prefix */
-		B.AddString(r)     /* push replacement in place of pattern */
-		s = s[i+len(p):]   /* continue after p */
-	}
-	B.AddString(s) /* push last suffix */
-}
-
-// GSub replaces every occurrence of p in s with r, pushes the result,
-// and returns it (luaL_gsub).
-func (L *State) GSub(s, p, r string) string {
-	var b Buffer
-	L.BuffInit(&b)
-	b.AddGSub(s, p, r)
-	b.PushResult()
-	out, _ := L.ToString(-1)
-	return out
+// AddSize is luaL_addsize: n more bytes were written into the prep room.
+func (B *Buffer) AddSize(n int) {
+	B.n += n
 }
 
 // ---------------------------------------------------------------------
 // traceback (lauxlib.c)
 // ---------------------------------------------------------------------
 
-// Traceback pushes a traceback of the call stack of L1 onto L
-// (luaL_traceback). 'hasMsg' is C's 'msg != NULL': when a message is
-// given it is written first, followed by a newline — even for the empty
+// Traceback pushes a traceback of the current stack (luaL_traceback).
+// 'hasMsg' is C's 'msg != NULL': when a message is given it is written
+// first, followed by a newline -- and that happens even for the empty
 // string, which is why 'debug.traceback("", 1)' starts with a newline
 // while 'debug.traceback(nil, 1)' does not.
 func (L *State) Traceback(L1 *State, msg string, hasMsg bool, level int) {
-	var b Buffer
-	L.BuffInit(&b)
-	last := L1.lastLevel()
-	limit2show := -1
-	if last-level > tracebackLevels1+tracebackLevels2 {
-		limit2show = tracebackLevels1
-	}
-	if hasMsg {
-		b.AddString(msg)
-		b.AddChar('\n')
-	}
-	b.AddString("stack traceback:")
-	var ar dbAr
-	for dbGetStack(L1, level, &ar) {
-		level++
-		if limit2show == 0 { /* too many levels? */
-			n := last - level - tracebackLevels2 + 1 /* levels to skip */
-			L.PushFString("\n\t...\t(skipping %d levels)", n)
-			b.AddValue() /* add warning about skip */
-			level += n   /* and skip to last levels */
-		} else {
-			fv := &L1.stack[ar.ci.funcIdx]
-			/* C: lua_getinfo(L1, "Slnt", &ar) */
-			dbAuxGetInfo(L1, "Slnt", &ar, fv, ar.ci)
-			if ar.currentline <= 0 {
-				L.PushFString("\n\t%s: in ", ar.shortSrc)
-			} else {
-				L.PushFString("\n\t%s:%d: in ", ar.shortSrc, ar.currentline)
-			}
-			b.AddValue()
-			L.pushFuncName(&ar, fv)
-			b.AddValue()
-			if ar.istailcall {
-				b.AddString("\n\t(...tail calls...)")
-			}
-		}
-		limit2show--
-	}
-	b.PushResult()
+	L.PushString(L.stackTraceback(L1, msg, hasMsg, level))
 }
 
 // tracebackLevels1 / tracebackLevels2 are LEVELS1 / LEVELS2 of lauxlib.c.
@@ -819,96 +738,74 @@ const (
 	tracebackLevels2 = 11 /* size of the second part of the stack */
 )
 
-// findField is 'findfield' (lauxlib.c 5.4.9): search objidx in the table
-// on top of the stack, recursively up to 'level' levels. On success leaves
-// the name on the stack and returns true. Uses the 5.4 choreography:
-// push "." / replace(-3) / concat(3).
-func (L *State) findField(objidx, level int) bool {
+// findField is 'findfield' (lauxlib.c): it searches 'obj' in the table on
+// top of the stack, recursively up to 'level' levels. On success it
+// returns the name, which is left pushed on the stack.
+func (L *State) findField(obj *Value, level int) (string, bool) {
 	if level == 0 || !L.IsTable(-1) {
-		return false /* not found */
+		return "", false /* not found */
 	}
 	L.PushNil()      /* start 'next' loop */
 	for L.Next(-2) { /* for each pair in table */
 		if L.Type(-2) == LUA_TSTRING { /* ignore non-string keys */
-			if L.RawEqual(objidx, -1) { /* found object? */
+			if luaV_rawequalobj(obj, &L.stack[L.top-1]) { /* found object? */
 				L.Pop(1) /* remove value (but keep name) */
-				return true
-			} else if L.findField(objidx, level-1) { /* try recursively */
-				/* stack: lib_name, lib_table, field_name (top) */
+				s, _ := L.ToString(-1)
+				return s, true
+			}
+			if _, ok := L.findField(obj, level-1); ok { /* try recursively */
+				/* stack: lib_name, lib_table, field_name (top) — C: */
+				L.Remove(-2)      /* remove table (but keep name) */
 				L.PushString(".") /* place '.' between the two names */
-				L.Replace(-3)     /* (in the slot occupied by the table) */
-				L.Concat(3)       /* lib_name.field_name */
-				return true
+				L.Insert(-2)
+				L.Concat(3) /* lib_name.field_name */
+				s, _ := L.ToString(-1)
+				return s, true
 			}
 		}
 		L.Pop(1) /* remove value */
 	}
-	return false /* not found */
+	return "", false /* not found */
 }
 
-// pushGlobalFuncName is 'pushglobalfuncname' (lauxlib.c): search a name
-// for the function of 'ar' among all loaded modules. On success leaves
-// the name on the stack and returns true.
-func (L *State) pushGlobalFuncName(ar *dbAr) bool {
-	top := L.GetTop()
-	dbGetInfo(L, "f", ar) /* push function */
-	L.GetField(LUA_REGISTRYINDEX, pkLoadedTable)
-	L.CheckStack2(6, "not enough stack") /* slots for 'findField' */
-	if L.findField(top+1, 2) {
-		name := L.ToStringX(-1)
-		if strings.HasPrefix(name, LUA_GNAME+".") { /* name start with '_G.'? */
-			L.PushString(name[len(LUA_GNAME)+1:]) /* push name without prefix */
-			L.Remove(-2)                          /* remove original name */
-		}
-		L.Copy(-1, top+1) /* copy name to proper place */
-		L.SetTop(top + 1) /* remove table "loaded" and name copy */
-		return true
-	}
-	L.SetTop(top) /* remove function and loaded table */
-	return false
-}
-
-// globalFuncName searches a name for 'obj' among loaded modules (used by
-// traceback when L != L1, so getinfo("f") on L would read the wrong stack —
-// dbGetInfo indexes L.stack[ci.funcIdx], not ci's foreign StkId).
+// globalFuncName is 'pushglobalfuncname' (lauxlib.c): it searches a name
+// for 'obj' among all loaded modules.
 func (L *State) globalFuncName(obj *Value) (string, bool) {
+	/* 'obj' points into the stack, and 'findField' pushes values while
+	   it searches -- which can reallocate the stack and leave the
+	   pointer dangling. C passes a stack index (so 'lua_rawequal' always
+	   re-reads it); copy the value to get the same safety. */
+	objCopy := *obj
 	top := L.GetTop()
-	L.checkStack(1)
-	setobj(&L.stack[L.top], obj) /* push a copy of the function */
-	L.top++
 	L.GetField(LUA_REGISTRYINDEX, pkLoadedTable)
-	L.CheckStack2(6, "not enough stack")
-	funcIdx := top + 1
-	if L.findField(funcIdx, 2) {
-		name := L.ToStringX(-1)
-		if strings.HasPrefix(name, LUA_GNAME+".") {
-			name = name[len(LUA_GNAME)+1:]
+	L.CheckStack(6) /* slots for 'findField' */
+	if name, ok := L.findField(&objCopy, 2); ok {
+		if strings.HasPrefix(name, "_G.") { /* name starts with '_G.'? */
+			name = name[3:] /* use the name without the prefix */
 		}
 		L.SetTop(top)
 		return name, true
 	}
-	L.SetTop(top)
+	L.SetTop(top) /* remove the loaded table */
 	return "", false
 }
 
-// pushFuncName is 'pushfuncname' (lauxlib.c): push a description of the
-// function of 'ar'. 'fv' is the function value when L may differ from the
-// state that filled 'ar' (traceback).
-func (L *State) pushFuncName(ar *dbAr, fv *Value) {
-	/* pushfuncname (lauxlib.c). Cross-state traceback cannot use
-	   pushglobalfuncname/getinfo("f") on L (dbGetInfo indexes L.stack),
-	   so search via fv with globalFuncName instead. */
-	if name, ok := L.globalFuncName(fv); ok { /* try first a global name */
-		L.PushFString("function '%s'", name)
-	} else if ar.namewhat != "" { /* is there a name from code? */
-		L.PushFString("%s '%s'", ar.namewhat, ar.name) /* use it */
-	} else if len(ar.what) > 0 && ar.what[0] == 'm' { /* main? */
-		L.PushString("main chunk")
-	} else if ar.what != "C" { /* for Lua functions, use <file:line> */
-		L.PushFString("function <%s:%d>", ar.shortSrc, ar.linedefined)
-	} else { /* nothing left... */
-		L.PushString("?")
+// funcName is 'pushfuncname' (lauxlib.c): it describes the function of
+// 'ar' the way a traceback line does.
+func (L *State) funcName(ar *dbAr, obj *Value) string {
+	if name, ok := L.globalFuncName(obj); ok { /* try a global name first */
+		return fmt.Sprintf("function '%s'", name)
 	}
+	if ar.namewhat != "" { /* is there a name from the code? */
+		return fmt.Sprintf("%s '%s'", ar.namewhat, ar.name)
+	}
+	switch ar.what {
+	case "main":
+		return "main chunk"
+	case "C": /* nothing left... */
+		return "?"
+	}
+	return fmt.Sprintf("function <%s:%d>", ar.shortSrc, ar.linedefined)
 }
 
 // lastLevel is 'lastlevel' (lauxlib.c): the deepest level of the stack.
@@ -928,6 +825,49 @@ func (L *State) lastLevel() int {
 		}
 	}
 	return le - 1
+}
+
+// stackTraceback is 'luaL_traceback' (lauxlib.c). 'L' is the state that
+// receives the message, 'L1' the one whose stack is walked.
+func (L *State) stackTraceback(L1 *State, msg string, hasMsg bool, level int) string {
+	var sb strings.Builder
+	last := L1.lastLevel()
+	limit2show := -1
+	if last-level > tracebackLevels1+tracebackLevels2 {
+		limit2show = tracebackLevels1
+	}
+	if hasMsg { /* 'if (msg)' in C: a NULL pointer, not an empty string */
+		sb.WriteString(msg)
+		sb.WriteByte('\n')
+	}
+	sb.WriteString("stack traceback:")
+	var ar dbAr
+	for dbGetStack(L1, level, &ar) {
+		level++
+		skip := limit2show == 0 /* too many levels? */
+		limit2show--
+		if skip {
+			n := last - level - tracebackLevels2 + 1 /* levels to skip */
+			sb.WriteString("\n\t...")                /* 5.3.4: no level count */
+			level += n                               /* and skip to the last levels */
+			continue
+		}
+		fv := &L1.stack[ar.ci.funcIdx]
+		/* C does 'lua_getinfo(L1, "Slnt", &ar)': the information is
+		   collected on the thread being traced, which is not
+		   necessarily the one building the message. */
+		dbAuxGetInfo(L1, "Slnt", &ar, fv, ar.ci)
+		if ar.currentline <= 0 {
+			fmt.Fprintf(&sb, "\n\t%s: in ", ar.shortSrc)
+		} else {
+			fmt.Fprintf(&sb, "\n\t%s:%d: in ", ar.shortSrc, ar.currentline)
+		}
+		sb.WriteString(L.funcName(&ar, fv))
+		if ar.istailcall {
+			sb.WriteString("\n\t(...tail calls...)")
+		}
+	}
+	return sb.String()
 }
 
 // ---------------------------------------------------------------------
@@ -978,9 +918,106 @@ func (L *State) TestUserData(ud int, tname string) any {
 func (L *State) CheckUserData(ud int, tname string) any {
 	p := L.TestUserData(ud, tname)
 	if p == nil {
-		L.ArgExpected(false, ud, tname)
+		L.typeError(ud, tname)
 	}
 	return p
+}
+
+// ---------------------------------------------------------------------
+// LUA_COMPAT_MODULE (enabled in PUC 5.3.4 luaconf.h)
+// ---------------------------------------------------------------------
+
+// FindTable finds or creates a dotted table path starting at idx
+// (luaL_findtable). On success it leaves the table on top and returns "".
+// On conflict it returns the problematic name fragment.
+func (L *State) FindTable(idx int, fname string, szhint int) string {
+	if idx != 0 {
+		L.PushValue(idx)
+	}
+	for {
+		e := len(fname)
+		for i := 0; i < len(fname); i++ {
+			if fname[i] == '.' {
+				e = i
+				break
+			}
+		}
+		L.PushString(fname[:e])
+		if L.RawGet(-2) == LUA_TNIL { /* no such field? */
+			L.Pop(1) /* remove this nil */
+			hint := szhint
+			if e < len(fname) && fname[e] == '.' {
+				hint = 1
+			}
+			L.CreateTable(0, hint) /* new table for field */
+			L.PushString(fname[:e])
+			L.PushValue(-2)
+			L.SetTable(-4) /* set new table into field */
+		} else if !L.IsTable(-1) { /* field has a non-table value? */
+			L.Pop(2)     /* remove table and value */
+			return fname /* return problematic part of the name */
+		}
+		L.Remove(-2) /* remove previous table */
+		if e >= len(fname) || fname[e] != '.' {
+			return ""
+		}
+		fname = fname[e+1:]
+	}
+}
+
+// PushModule finds or creates a module table with the given name
+// (luaL_pushmodule). Leaves the module table on the stack.
+func (L *State) PushModule(modname string, sizehint int) {
+	L.FindTable(LUA_REGISTRYINDEX, pkLoadedTable, 1)
+	if L.GetField(-1, modname) != LUA_TTABLE { /* no LOADED[modname]? */
+		L.Pop(1) /* remove previous result */
+		/* try global variable (and create one if it does not exist) */
+		L.PushGlobalTable()
+		if L.FindTable(0, modname, sizehint) != "" {
+			L.Error2("name conflict for module '%s'", modname)
+		}
+		L.PushValue(-1)
+		L.SetField(-3, modname) /* LOADED[modname] = new table */
+	}
+	L.Remove(-2) /* remove LOADED table */
+}
+
+// OpenLib opens a library (luaL_openlib / luaL_register).
+func (L *State) OpenLib(libname string, l []Reg, nup int) {
+	L.CheckVersion()
+	if libname != "" {
+		L.PushModule(libname, len(l)) /* get/create library table */
+		L.Insert(-(nup + 1))          /* move library table below upvalues */
+	}
+	if l != nil {
+		L.SetFuncs(l, nup)
+	} else {
+		L.Pop(nup) /* remove upvalues */
+	}
+}
+
+// ---------------------------------------------------------------------
+// GSub (luaL_gsub)
+// ---------------------------------------------------------------------
+
+// GSub replaces every occurrence of p in s with r, pushes the result,
+// and returns it (luaL_gsub).
+func (L *State) GSub(s, p, r string) string {
+	var b Buffer
+	L.BuffInit(&b)
+	for {
+		i := strings.Index(s, p)
+		if i < 0 {
+			break
+		}
+		b.AddString(s[:i]) /* push prefix */
+		b.AddString(r)     /* push replacement in place of pattern */
+		s = s[i+len(p):]   /* continue after p */
+	}
+	b.AddString(s) /* push last suffix */
+	b.PushResult()
+	out, _ := L.ToString(-1)
+	return out
 }
 
 // ---------------------------------------------------------------------

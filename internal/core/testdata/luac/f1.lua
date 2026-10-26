@@ -19,9 +19,6 @@ local mt = setmetatable({}, {__index = function(_, k) return k end, __add = func
   __newindex = function() end, __mod = add, __pow = add, __div = add, __idiv = add,
   __band = add, __bor = add, __bxor = add, __shl = add, __shr = add, __bnot = add})
 print(mt.x, mt + 1, mt(4), tostring(mt), #mt, mt == mt, mt < mt, mt <= mt, mt .. "", -mt)
-local x <close> = setmetatable({}, {__close = function() print("closed") end})
-local y <const> = 42
-do local inner = y end
 print(table.unpack{1, 2, 3})
 local f = function(...) return select('#', ...), ... end
 print(f(1, nil, 3))

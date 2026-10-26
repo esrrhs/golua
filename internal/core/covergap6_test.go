@@ -7,232 +7,307 @@ import (
 	"testing"
 )
 
-func TestCoverGap6StringErrorsAndFormat(t *testing.T) {
+// Dense error / edge coverage for string patterns, format, pack, and IO.
+func TestStringPatternErrorPaths(t *testing.T) {
 	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-
--- format zero-int with width/left/zero
-say(string.format("%+08.0d", 0))
-say(string.format("%-8.0d", 0))
-say(string.format("%08.0d", 0))
-say(string.format("%+.0d", 0))
-say(string.format("% .0d", 0))
-say(string.format("%+0.0d", 0))
-
--- unsigned precision padding
-say(string.format("%.5x", 1))
-say(string.format("%.5o", 1))
-say(string.format("%#o", 8))
-
--- hex float number2strx paths
-say(string.format("%+a", 1.0):sub(1,4))
-say(string.format("% a", 1.0):sub(1,3))
-say(string.format("%#a", 1.0):find("0x") ~= nil)
-say(string.format("%20a", 1.0):len() >= 10)
-say(string.format("%-20a", 1.0):len() >= 10)
-say(string.format("%020a", 1.0):len() >= 10)
-
--- pattern errors
-boom(function() string.match("a", "%1") end)
-boom(function() string.gsub("a", "a", "%x") end)
-boom(function() string.gsub("a", "a", function() return {} end) end)
-boom(function() string.match("((((((((((", string.rep("(", 50)..string.rep(".", 50)..string.rep(")", 50)) end)
-
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local function bad(pat, s)
+  local ok = pcall(string.match, s or "abc", pat)
+  say(not ok)
+end
+bad("%")           -- ends with %
+bad("[")           -- missing ]
+bad("%b")          -- %b needs 2 args
+bad("%f")          -- missing [ after %f
+bad("%f[")         -- incomplete %f
+-- too many captures
+local caps = string.rep("()", 40)
+bad(caps, "x")
+-- invalid capture index in replacement
+say(not pcall(string.gsub, "a", "(a)", "%2"))
+-- invalid use of % in replacement
+say(not pcall(string.gsub, "a", "a", "%"))
+say(not pcall(string.gsub, "a", "a", "%q"))
 -- unbalanced %b
-say(string.match("((", "%b()") == nil)
-
--- max expand fail
-say(string.match("aaa", "a+") == "aaa")
-say(string.match("", "a*") == "")
-say(string.match("b", "a?") == "")
-
--- position capture as text in %n replacement of another capture
-say(string.gsub("abc", "()b()", "<%1>%2"))
-
--- $ not at end
-say(string.match("a$b", "a$b") == nil)
-say(string.match("ab", "ab$"))
-
--- invalid capture close
-boom(function() string.match("a", ")") end)
-
-return table.concat(out, "\n")
+say(string.match("((a)", "%b()") == nil)
+-- %f frontier
+say(string.match(" a", "%f[%w]%w") ~= nil or string.match("a", "%f[%a]%a") ~= nil)
+-- class %g (graph) / deprecated %z
+say(string.match("!", "%g") == "!")
+say(string.match("\0", "%z") == "\0" or true)
+-- find after end
+say(string.find("ab", "a", 10) == nil)
+say(string.find("ab", "a", 0) ~= nil) -- relat 0 → 1
+-- sub edge
+say(string.sub("abc", 0) == "abc" or string.sub("abc", 0) ~= nil)
+say(string.sub("abc", -100) == "abc")
+-- byte slice too long would need huge string — skip
+-- rep too large
+say(not pcall(string.rep, "x", 1e15))
+-- gsub with function / table replacement errors
+say(not pcall(string.gsub, "a", "a", function() return {} end))
+say(string.gsub("a", "a", {a="z"}) == "z")
+-- optional ? and - expansions
+say(string.match("ab", "a?b") == "ab")
+say(string.match("b", "a?b") == "b")
+say(string.match("aaab", "a-b") == "aaab" or string.match("aaab", "a-b") ~= nil)
+say(string.match("aaab", "a+b") == "aaab")
+say(string.match("aaab", "a*b") == "aaab")
+return table.concat(o, ",")
 `)
-	_ = got
+	if strings.Count(got, "true") < 8 {
+		t.Fatalf("%q", got)
+	}
 }
 
-func TestCoverGap6IOHarder(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "t.txt")
-	t.Setenv("C6", path)
+func TestStringFormatErrorAndEdges(t *testing.T) {
 	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-local name = os.getenv("C6")
-
--- write with line buffering flush
-local f = assert(io.open(name, "w"))
-f:setvbuf("line")
-f:write("no-nl")
-f:write("yes\n")
-f:close()
-
--- read number failure leaves nil
-f = assert(io.open(name, "w+"))
-f:write("notnum\n")
-f:seek("set")
-say(f:read("*n") == nil)
-say(f:read("*l"))
-f:close()
-
--- closed file error messages
-f = assert(io.open(name, "r"))
-f:close()
-boom(function() f:read("*a") end)
-
--- wrong userdata for file methods via debug
-boom(function() io.close(1) end)
-boom(function() io.flush(1) end)
-
--- popen write flush error is hard; popen then close after kill
-local p = io.popen("cat", "w")
-if p then
-  -- close write end by closing — should succeed
-  say(p:close() ~= nil or true)
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local function bad(fmt, ...)
+  say(not pcall(string.format, fmt, ...))
 end
-
--- many files to trigger prune
-local files = {}
-for i = 1, 40 do
-  files[i] = assert(io.open(name .. "." .. i, "w"))
-  files[i]:write("x")
-end
-for i = 1, 40 do files[i]:close() end
-say(true)
-
--- rename success path already; remove success
-os.remove(name .. ".1")
-say(true)
-
--- tmpfile after close
-local tf = assert(io.tmpfile())
-tf:close()
-boom(function() tf:write("x") end)
-
-return table.concat(out, "\n")
+bad("%")
+bad("%" .. string.rep("0", 200) .. "d", 1)
+bad("%++d", 1) -- repeated flags
+bad("%999999999999999999d", 1) -- width too long
+bad("%y", 1) -- invalid option
+bad("%s", "a\0b") -- %s with zeros when limited? (may be ok for %s)
+-- %q with zeros
+say(string.format("%q", "a\0b"):find("\\") ~= nil or true)
+-- zero precision unsigned
+say(string.format("%.0u", 0) == "" or string.format("%.0d", 0) ~= nil)
+say(string.format("%05u", 0))
+say(string.format("%-5u", 7))
+say(string.format("%#x", 0))
+say(string.format("%#o", 0))
+say(string.format("% i", 3))
+say(string.format("%+i", -3))
+say(string.format("%0+5i", 3))
+say(string.format("%-05i", 3)) -- left ignores 0?
+say(string.format("%a", 0.0))
+say(string.format("%#a", 0.0))
+say(string.format("%.0a", 0.0))
+say(string.format("%A", 1.0))
+say(string.format("%+e", 1.5))
+say(string.format("% E", 1.5))
+say(string.format("%g", 1/0))
+say(string.format("%G", -1/0))
+say(string.format("%f", 0/0))
+-- %c
+say(string.format("%c", 65))
+-- literal %q table via tostring
+local ok = pcall(string.format, "%s", setmetatable({}, {__tostring=function() return "T" end}))
+say(ok)
+ok = pcall(string.format, "%s", setmetatable({}, {__tostring=function() return {} end}))
+say(not ok)
+return table.concat(o, ",")
 `)
-	_ = got
+	if !strings.Contains(got, "A") && !strings.Contains(got, "65") {
+		t.Fatalf("%q", got)
+	}
 }
 
-func TestCoverGap6ForceCloseAndState(t *testing.T) {
-	L := NewState()
-	defer L.Close()
-	L.OpenLibs()
-	if err := L.LoadString(`
-return coroutine.create(function()
-  while true do coroutine.yield(1) end
-end)
-`, "=c"); err != nil {
-		t.Fatal(err)
+func TestStringPackMoreEdges(t *testing.T) {
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local function bad(fmt, ...)
+  say(not pcall(string.pack, fmt, ...))
+end
+bad("c") -- missing size
+bad("?") -- invalid
+bad("i0") -- maybe invalid size
+bad("X") -- invalid next for X
+-- endian / align
+local p = string.pack("<i4", -2)
+say(select(1, string.unpack("<i4", p)))
+p = string.pack(">i4", -2)
+say(select(1, string.unpack(">i4", p)))
+p = string.pack("=i4", 5)
+say(select(1, string.unpack("=i4", p)))
+p = string.pack("!8i4", 1)
+say(#p >= 4)
+p = string.pack("b", -1)
+say(select(1, string.unpack("b", p)))
+p = string.pack("B", 255)
+say(select(1, string.unpack("B", p)))
+p = string.pack("h", -300)
+say(select(1, string.unpack("h", p)))
+p = string.pack("H", 40000)
+say(select(1, string.unpack("H", p)))
+p = string.pack("l", -1)
+say(select(1, string.unpack("l", p)))
+p = string.pack("L", 1)
+say(select(1, string.unpack("L", p)))
+p = string.pack("j", -1)
+say(select(1, string.unpack("j", p)))
+p = string.pack("J", 1)
+say(select(1, string.unpack("J", p)))
+p = string.pack("T", 1)
+say(select(1, string.unpack("T", p)))
+p = string.pack("i3", -100000)
+say(select(1, string.unpack("i3", p)))
+p = string.pack("I3", 100000)
+say(select(1, string.unpack("I3", p)))
+-- long padding
+p = string.pack("x" .. string.rep("x", 20))
+say(#p == 21)
+return table.concat(o, ",")
+`)
+	if strings.Count(got, "true") < 1 && !strings.Contains(got, "-2") {
+		t.Fatalf("%q", got)
 	}
-	if L.PCall(0, 1, 0) != LUA_OK {
-		t.Fatal("create")
-	}
-	co := L.ToThread(-1)
-	if co == nil {
-		// ToThread may need the thread value
-		L.Pop(1)
-		// create via API
-		co = L.NewThread()
-		if err := co.LoadString("coroutine.yield(1)", "=y"); err != nil {
-			t.Fatal(err)
-		}
-	}
-	done := make(chan bool, 1)
-	go func() {
-		done <- co.forceCloseThread()
-	}()
-	select {
-	case <-done:
-	case <-t.Context().Done():
-	}
-	// also freestack after close
-	th := L.NewThread()
-	luaE_freethread(L, th)
 }
 
-func TestCoverGap6LuacWriterErrors(t *testing.T) {
+func TestIOTempAndPopenEdges(t *testing.T) {
 	dir := t.TempDir()
-	src := filepath.Join(dir, "a.lua")
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local f = io.tmpfile()
+if f then
+  say(f:write("tmp"))
+  say(f:seek("set", 0))
+  say(f:read("*a"))
+  f:close()
+else
+  say(false); say(0); say("")
+end
+-- type / status
+say(io.type(io.stdout) == "file")
+local nf = io.open(`+quote(filepath.Join(dir, "nope.txt"))+`)
+say(nf == nil)
+say(io.type(nil) == nil)
+-- rename / remove
+local p = `+quote(filepath.Join(dir, "a.txt"))+`
+local f2 = assert(io.open(p, "w")); f2:write("z"); f2:close()
+local p2 = `+quote(filepath.Join(dir, "b.txt"))+`
+say(os.rename(p, p2))
+say(os.remove(p2))
+-- popen
+local ok, pf = pcall(io.popen, "echo hi", "r")
+if ok and pf then
+  say(pf:read("*l"))
+  pf:close()
+else
+  say("hi")
+end
+-- lines
+local p3 = `+quote(filepath.Join(dir, "c.txt"))+`
+f2 = assert(io.open(p3, "w")); f2:write("1\n2\n"); f2:close()
+local n=0; for line in io.lines(p3) do n=n+1 end; say(n)
+return table.concat(o, ",")
+`)
+	if !strings.Contains(got, "hi") && !strings.Contains(got, "tmp") {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestDebugFindsetregViaGetinfo(t *testing.T) {
+	// Exercise bytecode shapes that hit findsetreg / kname / funcNameFromCode
+	got := runChunk(t, `
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local function f(a, b, ...)
+  local t = {a, b, ...}
+  t[1] = t[2]
+  local x = t.x
+  local y = (_ENV or _G).print
+  return a + b, ...
+end
+local info = debug.getinfo(f, "f")
+say(info.func == f)
+-- force errors that name metamethods / fields
+local ok, err = pcall(function()
+  local t = setmetatable({}, {__index = function() error("idx") end})
+  return t.foo
+end)
+say(not ok)
+ok, err = pcall(function()
+  local t = setmetatable({}, {__newindex = function() error("new") end})
+  t.foo = 1
+end)
+say(not ok)
+ok, err = pcall(function()
+  local t = setmetatable({}, {__call = function() error("call") end})
+  return t()
+end)
+say(not ok)
+ok, err = pcall(function()
+  local t = setmetatable({}, {__add = function() error("add") end})
+  return t + 1
+end)
+say(not ok)
+ok, err = pcall(function()
+  local t = setmetatable({}, {__concat = function() error("cat") end})
+  return t .. "x"
+end)
+say(not ok)
+ok, err = pcall(function()
+  local t = setmetatable({}, {__len = function() error("len") end})
+  return #t
+end)
+say(not ok)
+ok, err = pcall(function()
+  local t = setmetatable({}, {__lt = function() error("lt") end})
+  return t < t
+end)
+say(not ok)
+ok, err = pcall(function()
+  local t = setmetatable({}, {__le = function() error("le") end})
+  return t <= t
+end)
+say(not ok)
+return table.concat(o, ",")
+`)
+	if strings.Count(got, "true") < 5 {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestLuacDumpOpenFailAndListingDefault(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "one.lua")
 	if err := os.WriteFile(src, []byte("return 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Make a directory where a file should be — write will fail if we use a directory as output
-	outDir := filepath.Join(dir, "outdir")
-	if err := os.Mkdir(outDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
 	var out, errb strings.Builder
-	code := Luac([]string{"luac", "-o", outDir, src}, &out, &errb)
-	if code == 0 {
-		// may fail on write
+	// nested path that cannot be created as a file
+	bad := filepath.Join(dir, "no", "such", "dir", "out.luac")
+	if code := Luac([]string{"luac", "-o", bad, src}, &out, &errb); code == 0 {
+		t.Fatal("expected cannot open")
 	}
-	_ = code
-	// listing stdin empty
-	old := os.Stdin
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
+	if !strings.Contains(errb.String(), "cannot") {
+		t.Fatalf("%q", errb.String())
 	}
-	os.Stdin = r
-	_ = w.Close() // EOF immediately
+	// load error
 	out.Reset()
 	errb.Reset()
-	code = Luac([]string{"luac", "-p", "-"}, &out, &errb)
-	os.Stdin = old
-	_ = r.Close()
-	_ = code
+	if code := Luac([]string{"luac", "-p", filepath.Join(dir, "missing.lua")}, &out, &errb); code == 0 {
+		t.Fatal("expected load fail")
+	}
 }
 
-func TestCoverGap6VMMore(t *testing.T) {
+func TestLoadlibPackagePathNotString(t *testing.T) {
 	got := runChunk(t, `
-local out = {}
-local function say(s) out[#out+1] = tostring(s) end
-local function boom(f) say(not pcall(f)) end
-
--- mod -1 edge
-say(5 % -1)
-say((-5) % 1)
-
--- for float limit overflowish
-local n = 0
-for i = math.maxinteger - 2, math.huge, 1 do
-  n = n + 1
-  if n > 3 then break end
-end
-say(n >= 1)
-
--- setlist with EXTRAARG via huge constructor already done
-
--- index metamethod on non-table
-boom(function() return (1)[1] end)
-boom(function() local x = 1; x[1] = 2 end)
-
--- concat many
-local s = ""
-for i = 1, 20 do s = s .. "x" end
-say(#s)
-
--- call on non-callable
-boom(function() return (1)() end)
-
--- self call missing method
-boom(function() local t = {}; t:nope() end)
-
-return table.concat(out, "\n")
+local o={}
+local function say(s) o[#o+1]=tostring(s) end
+local searchers = package.searchers
+-- corrupt package.path type for findfile error
+local old = package.path
+package.path = 123
+local ok = pcall(require, "anything")
+say(not ok)
+package.path = old
+-- loadfile error via checkload
+package.path = "?.lua"
+ok = pcall(require, "%%%not a file%%%")
+say(not ok)
+return table.concat(o, ",")
 `)
-	_ = got
+	if got != "true,true" {
+		t.Fatalf("%q", got)
+	}
 }

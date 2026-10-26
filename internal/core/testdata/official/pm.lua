@@ -1,8 +1,5 @@
--- $Id: testes/pm.lua $
+-- $Id: pm.lua,v 1.48 2016/11/07 13:11:28 roberto Exp $
 -- See Copyright Notice in file all.lua
-
--- UTF-8 file
-
 
 print('testing pattern matching')
 
@@ -12,12 +9,12 @@ local function checkerror (msg, f, ...)
 end
 
 
-local function f (s, p)
+function f(s, p)
   local i,e = string.find(s, p)
   if i then return string.sub(s, i, e) end
 end
 
-local a,b = string.find('', '')    -- empty patterns are tricky
+a,b = string.find('', '')    -- empty patterns are tricky
 assert(a == 1 and b == 0);
 a,b = string.find('alo', '')
 assert(a == 1 and b == 0)
@@ -31,10 +28,10 @@ a,b = string.find('a\0a\0a\0a\0\0ab', '\0ab', 2);  -- finds at the end
 assert(a == 9 and b == 11);
 a,b = string.find('a\0a\0a\0a\0\0ab', 'b')    -- last position
 assert(a == 11 and b == 11)
-assert(not string.find('a\0a\0a\0a\0\0ab', 'b\0'))   -- check ending
-assert(not string.find('', '\0'))
+assert(string.find('a\0a\0a\0a\0\0ab', 'b\0') == nil)   -- check ending
+assert(string.find('', '\0') == nil)
 assert(string.find('alo123alo', '12') == 4)
-assert(not string.find('alo123alo', '^12'))
+assert(string.find('alo123alo', '^12') == nil)
 
 assert(string.match("aaab", ".*b") == "aaab")
 assert(string.match("aaa", ".*a") == "aaa")
@@ -53,20 +50,6 @@ assert(f('aLo_ALO', '%a*') == 'aLo')
 
 assert(f("  \n\r*&\n\r   xuxu  \n\n", "%g%g%g+") == "xuxu")
 
-
--- Adapt a pattern to UTF-8
-local function PU (p)
-  -- reapply '?' into each individual byte of a character.
-  -- (For instance, "Ã¡?" becomes "\195?\161?".)
-  p = string.gsub(p, "(" .. utf8.charpattern .. ")%?", function (c)
-    return string.gsub(c, ".", "%0?")
-  end)
-  -- change '.' to utf-8 character patterns
-  p = string.gsub(p, "%.", utf8.charpattern)
-  return p
-end
-
-
 assert(f('aaab', 'a*') == 'aaa');
 assert(f('aaa', '^.*$') == 'aaa');
 assert(f('aaa', 'b*') == '');
@@ -74,38 +57,38 @@ assert(f('aaa', 'ab*a') == 'aa')
 assert(f('aba', 'ab*a') == 'aba')
 assert(f('aaab', 'a+') == 'aaa')
 assert(f('aaa', '^.+$') == 'aaa')
-assert(not f('aaa', 'b+'))
-assert(not f('aaa', 'ab+a'))
+assert(f('aaa', 'b+') == nil)
+assert(f('aaa', 'ab+a') == nil)
 assert(f('aba', 'ab+a') == 'aba')
 assert(f('a$a', '.$') == 'a')
 assert(f('a$a', '.%$') == 'a$')
 assert(f('a$a', '.$.') == 'a$a')
-assert(not f('a$a', '$$'))
-assert(not f('a$b', 'a$'))
+assert(f('a$a', '$$') == nil)
+assert(f('a$b', 'a$') == nil)
 assert(f('a$a', '$') == '')
 assert(f('', 'b*') == '')
-assert(not f('aaa', 'bb*'))
+assert(f('aaa', 'bb*') == nil)
 assert(f('aaab', 'a-') == '')
 assert(f('aaa', '^.-$') == 'aaa')
 assert(f('aabaaabaaabaaaba', 'b.*b') == 'baaabaaabaaab')
 assert(f('aabaaabaaabaaaba', 'b.-b') == 'baaab')
 assert(f('alo xo', '.o$') == 'xo')
-assert(f(' \n isto Ã© assim', '%S%S*') == 'isto')
-assert(f(' \n isto Ã© assim', '%S*$') == 'assim')
-assert(f(' \n isto Ã© assim', '[a-z]*$') == 'assim')
+assert(f(' \n isto é assim', '%S%S*') == 'isto')
+assert(f(' \n isto é assim', '%S*$') == 'assim')
+assert(f(' \n isto é assim', '[a-z]*$') == 'assim')
 assert(f('um caracter ? extra', '[^%sa-z]') == '?')
 assert(f('', 'a?') == '')
-assert(f('Ã¡', PU'Ã¡?') == 'Ã¡')
-assert(f('Ã¡bl', PU'Ã¡?b?l?') == 'Ã¡bl')
-assert(f('  Ã¡bl', PU'Ã¡?b?l?') == '')
+assert(f('á', 'á?') == 'á')
+assert(f('ábl', 'á?b?l?') == 'ábl')
+assert(f('  ábl', 'á?b?l?') == '')
 assert(f('aa', '^aa?a?a') == 'aa')
-assert(f(']]]Ã¡b', '[^]]+') == 'Ã¡b')
+assert(f(']]]áb', '[^]]') == 'á')
 assert(f("0alo alo", "%x*") == "0a")
 assert(f("alo alo", "%C+") == "alo alo")
 print('+')
 
 
-local function f1 (s, p)
+function f1(s, p)
   p = string.gsub(p, "%%([0-9])", function (s)
         return "%" .. (tonumber(s)+1)
        end)
@@ -118,7 +101,7 @@ end
 assert(f1('alo alx 123 b\0o b\0o', '(..*) %1') == "b\0o b\0o")
 assert(f1('axz123= 4= 4 34', '(.+)=(.*)=%2 %1') == '3= 4= 4 3')
 assert(f1('=======', '^(=*)=%1$') == '=======')
-assert(not string.match('==========', '^([=]*)=%1$'))
+assert(string.match('==========', '^([=]*)=%1$') == nil)
 
 local function range (i, j)
   if i <= j then
@@ -126,11 +109,11 @@ local function range (i, j)
   end
 end
 
-local abc = string.char(range(0, 127)) .. string.char(range(128, 255));
+local abc = string.char(range(0, 255));
 
 assert(string.len(abc) == 256)
 
-local function strset (p)
+function strset (p)
   local res = {s=''}
   string.gsub(abc, p, function (c) res.s = res.s .. c end)
   return res.s
@@ -152,29 +135,29 @@ print('+');
 assert(string.match("alo xyzK", "(%w+)K") == "xyz")
 assert(string.match("254 K", "(%d*)K") == "")
 assert(string.match("alo ", "(%w*)$") == "")
-assert(not string.match("alo ", "(%w+)$"))
-assert(string.find("(Ã¡lo)", "%(Ã¡") == 1)
-local a, b, c, d, e = string.match("Ã¢lo alo", PU"^(((.).). (%w*))$")
-assert(a == 'Ã¢lo alo' and b == 'Ã¢l' and c == 'Ã¢' and d == 'alo' and e == nil)
+assert(string.match("alo ", "(%w+)$") == nil)
+assert(string.find("(álo)", "%(á") == 1)
+local a, b, c, d, e = string.match("âlo alo", "^(((.).).* (%w*))$")
+assert(a == 'âlo alo' and b == 'âl' and c == 'â' and d == 'alo' and e == nil)
 a, b, c, d  = string.match('0123456789', '(.+(.?)())')
 assert(a == '0123456789' and b == '' and c == 11 and d == nil)
 print('+')
 
-assert(string.gsub('Ã¼lo Ã¼lo', 'Ã¼', 'x') == 'xlo xlo')
-assert(string.gsub('alo Ãºlo  ', ' +$', '') == 'alo Ãºlo')  -- trim
+assert(string.gsub('ülo ülo', 'ü', 'x') == 'xlo xlo')
+assert(string.gsub('alo úlo  ', ' +$', '') == 'alo úlo')  -- trim
 assert(string.gsub('  alo alo  ', '^%s*(.-)%s*$', '%1') == 'alo alo')  -- double trim
 assert(string.gsub('alo  alo  \n 123\n ', '%s+', ' ') == 'alo alo 123 ')
-local t = "abÃ§ d"
-a, b = string.gsub(t, PU'(.)', '%1@')
-assert(a == "a@b@Ã§@ @d@" and b == 5)
-a, b = string.gsub('abÃ§d', PU'(.)', '%0@', 2)
-assert(a == 'a@b@Ã§d' and b == 2)
+t = "abç d"
+a, b = string.gsub(t, '(.)', '%1@')
+assert('@'..a == string.gsub(t, '', '@') and b == 5)
+a, b = string.gsub('abçd', '(.)', '%0@', 2)
+assert(a == 'a@b@çd' and b == 2)
 assert(string.gsub('alo alo', '()[al]', '%1') == '12o 56o')
 assert(string.gsub("abc=xyz", "(%w*)(%p)(%w+)", "%3%2%1-%0") ==
               "xyz=abc-abc=xyz")
 assert(string.gsub("abc", "%w", "%1%0") == "aabbcc")
 assert(string.gsub("abc", "%w+", "%0%1") == "abcabc")
-assert(string.gsub('Ã¡Ã©Ã­', '$', '\0Ã³Ãº') == 'Ã¡Ã©Ã­\0Ã³Ãº')
+assert(string.gsub('áéí', '$', '\0óú') == 'áéí\0óú')
 assert(string.gsub('', '^', 'r') == 'r')
 assert(string.gsub('', '$', 'r') == 'r')
 print('+')
@@ -201,34 +184,32 @@ do
   local function setglobal (n,v) rawset(_G, n, v) end
   string.gsub("a=roberto,roberto=a", "(%w+)=(%w%w*)", setglobal)
   assert(_G.a=="roberto" and _G.roberto=="a")
-  _G.a = nil; _G.roberto = nil
 end
 
 function f(a,b) return string.gsub(a,'.',b) end
-assert(string.gsub("trocar tudo em |teste|b| Ã© |beleza|al|", "|([^|]*)|([^|]*)|", f) ==
-            "trocar tudo em bbbbb Ã© alalalalalal")
+assert(string.gsub("trocar tudo em |teste|b| é |beleza|al|", "|([^|]*)|([^|]*)|", f) ==
+            "trocar tudo em bbbbb é alalalalalal")
 
 local function dostring (s) return load(s, "")() or "" end
 assert(string.gsub("alo $a='x'$ novamente $return a$",
                    "$([^$]*)%$",
                    dostring) == "alo  novamente x")
 
-local x = string.gsub("$x=string.gsub('alo', '.', string.upper)$ assim vai para $return x$",
+x = string.gsub("$x=string.gsub('alo', '.', string.upper)$ assim vai para $return x$",
          "$([^$]*)%$", dostring)
 assert(x == ' assim vai para ALO')
-_G.a, _G.x = nil
 
-local t = {}
-local s = 'a alo jose  joao'
-local r = string.gsub(s, '()(%w+)()', function (a,w,b)
-             assert(string.len(w) == b-a);
-             t[a] = b-a;
-           end)
+t = {}
+s = 'a alo jose  joao'
+r = string.gsub(s, '()(%w+)()', function (a,w,b)
+      assert(string.len(w) == b-a);
+      t[a] = b-a;
+    end)
 assert(s == r and t[1] == 1 and t[3] == 3 and t[7] == 4 and t[13] == 4)
 
 
-local function isbalanced (s)
-  return not string.find(string.gsub(s, "%b()", ""), "[()]")
+function isbalanced (s)
+  return string.find(string.gsub(s, "%b()", ""), "[()]") == nil
 end
 
 assert(isbalanced("(9 ((8))(\0) 7) \0\0 a b ()(c)() a"))
@@ -247,7 +228,7 @@ assert(t[1] == "first" and t[2] == "second" and t[3] == "word" and t.n == 3)
 t = {n=0}
 assert(string.gsub("first second word", "%w+",
          function (w) t.n=t.n+1; t[t.n] = w end, 2) == "first second word")
-assert(t[1] == "first" and t[2] == "second" and t[3] == undef)
+assert(t[1] == "first" and t[2] == "second" and t[3] == nil)
 
 checkerror("invalid replacement value %(a table%)",
             string.gsub, "alo", ".", {a = {}})
@@ -256,6 +237,18 @@ checkerror("invalid capture index %%0", string.gsub, "alo", "(%0)", "a")
 checkerror("invalid capture index %%1", string.gsub, "alo", "(%1)", "a")
 checkerror("invalid use of '%%'", string.gsub, "alo", ".", "%x")
 
+-- bug since 2.5 (C-stack overflow)
+do
+  local function f (size)
+    local s = string.rep("a", size)
+    local p = string.rep(".?", size)
+    return pcall(string.match, s, p)
+  end
+  local r, m = f(80)
+  assert(r and #m == 80)
+  r, m = f(200000)
+  assert(not r and string.find(m, "too complex"))
+end
 
 if not _soft then
   print("big strings")
@@ -270,7 +263,7 @@ if not _soft then
 end
 
 -- recursive nest of gsubs
-local function rev (s)
+function rev (s)
   return string.gsub(s, "(.)(.+)", function (c,s1) return rev(s1)..c end)
 end
 
@@ -314,35 +307,6 @@ end
 a = 0
 for k,v in pairs(t) do assert(k+1 == v+0); a=a+1 end
 assert(a == 3)
-
-
-do   -- init parameter in gmatch
-  local s = 0
-  for k in string.gmatch("10 20 30", "%d+", 3) do
-    s = s + tonumber(k)
-  end
-  assert(s == 50)
-
-  s = 0
-  for k in string.gmatch("11 21 31", "%d+", -4) do
-    s = s + tonumber(k)
-  end
-  assert(s == 32)
-
-  -- there is an empty string at the end of the subject
-  s = 0
-  for k in string.gmatch("11 21 31", "%w*", 9) do
-    s = s + 1
-  end
-  assert(s == 1)
-
-  -- there are no empty strings after the end of the subject
-  s = 0
-  for k in string.gmatch("11 21 31", "%w*", 10) do
-    s = s + 1
-  end
-  assert(s == 0)
-end
 
 
 -- tests for `%f' (`frontiers')
@@ -405,36 +369,6 @@ assert(string.match("abc\0\0\0", "%\0%\0?") == "\0\0")
 -- magic char after \0
 assert(string.find("abc\0\0","\0.") == 4)
 assert(string.find("abcx\0\0abc\0abc","x\0\0abc\0a.") == 4)
-
-
-do   -- test reuse of original string in gsub
-  local s = string.rep("a", 100)
-  local r = string.gsub(s, "b", "c")   -- no match
-  assert(string.format("%p", s) == string.format("%p", r))
-
-  r = string.gsub(s, ".", {x = "y"})   -- no substitutions
-  assert(string.format("%p", s) == string.format("%p", r))
-
-  local count = 0
-  r = string.gsub(s, ".", function (x)
-                            assert(x == "a")
-                            count = count + 1
-                            return nil    -- no substitution
-                          end)
-  r = string.gsub(r, ".", {b = 'x'})   -- "a" is not a key; no subst.
-  assert(count == 100)
-  assert(string.format("%p", s) == string.format("%p", r))
-
-  count = 0
-  r = string.gsub(s, ".", function (x)
-                            assert(x == "a")
-                            count = count + 1
-                            return x    -- substitution...
-                          end)
-  assert(count == 100)
-  -- no reuse in this case
-  assert(r == s and string.format("%p", s) ~= string.format("%p", r))
-end
 
 print('OK')
 

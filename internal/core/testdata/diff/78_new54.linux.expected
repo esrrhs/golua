@@ -1,0 +1,10 @@
+== warn ==
+false|"attempt to call a nil value"
+false|"attempt to call a nil value"
+false|"attempt to call a nil value"
+false|"attempt to call a nil value"
+false|"attempt to call a nil value"
+lua: 78_new54.lua:28: attempt to call a nil value (global 'warn')
+stack traceback:
+	78_new54.lua:28: in main chunk
+	[C]: in ?

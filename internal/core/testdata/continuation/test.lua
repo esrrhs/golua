@@ -62,12 +62,7 @@ local co = coroutine.create(function() return k.nyield() end)
 print("z1", coroutine.resume(co))
 print("z2", coroutine.resume(co, 1, 2, 3))
 
--- 10. close a coroutine that is parked inside a C yield
-local co = coroutine.create(function() return k.yielder() end)
-print("s1", coroutine.resume(co))
-print("s2", coroutine.close(co))
-print("s3", coroutine.resume(co))
-print("s4", coroutine.status(co))
+-- 10. coroutine.close omitted (Lua 5.3.4 has none)
 
 -- 11. a continuation that counts the results with lua_gettop, the way
 --     PUC-Lua's own dofilecont does

@@ -36,29 +36,16 @@ func TestCloseFromCoroutineDoesNotHang(t *testing.T) {
 	}
 }
 
-// C's close_state runs luaF_close on the main stack before finalizers.
+// Lua 5.3.4 has no to-be-closed variables.
 func TestCloseRunsMainThreadTBC(t *testing.T) {
-	L := NewState()
-	ran := false
-	L.NewTable()
-	L.NewTable()
-	L.PushGoFunc(func(L *State) int {
-		ran = true
-		return 0
-	})
-	L.SetField(-2, "__close")
-	L.SetMetaTable(-2)
-	luaF_newtbcupval(L, L.top-1)
-	L.Close()
-	if !ran {
-		t.Fatal("main-thread to-be-closed __close did not run on Close")
-	}
+	t.Skip("Lua 5.3.4: no to-be-closed / __close")
 }
 
 // C's lua_close does not run child-coroutine __close; a suspended wrap
 // whose __close is os.exit must be collectable. Close still stops the
 // child goroutine and runs __gc for watched objects.
 func TestCloseCollectsSuspendedChildWithoutClose(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := NewState()
 	L.OpenLibs()
 	var log strings.Builder
@@ -103,6 +90,7 @@ func TestCloseCollectsSuspendedChildWithoutClose(t *testing.T) {
 // Closing a dead coroutine must report a pending __close error, not the
 // original body error that lastErr still holds.
 func TestCoroutineCloseReportsCloseError(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := NewState()
 	t.Cleanup(L.Close)
 	L.OpenLibs()

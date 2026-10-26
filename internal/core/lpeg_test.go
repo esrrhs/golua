@@ -21,7 +21,7 @@ package core
 //   - userdata carrying a metatable, a user value, and a C block
 //
 // What it runs is LPeg's own test suite, and every line that suite prints
-// was captured from PUC-Lua 5.4.9 running the same extension, so this is
+// was captured from PUC-Lua 5.3.4 running the same extension, so this is
 // a comparison against the reference interpreter and not against what
 // this port happened to print one day.
 
@@ -136,7 +136,7 @@ func lpegAskForACycle(t *testing.T, path string) {
 		t.Fatal(err)
 	}
 	const ask = "    collectgarbage();\n"
-	const cycle = "    for i = 1, 5000000 do local a = {} if i % 10000 == 0 and next(t) == nil then break end end   -- a cycle: see lgc.go\n"
+	const cycle = "    for k = 1, 5000000 do local a = {} if (k == 1 or k % 50000 == 0) and next(t) == \"__mode\" and next(t, \"__mode\") == nil then break end end   -- a cycle: see lgc.go\n"
 	if !strings.Contains(string(b), ask) {
 		t.Fatal("lpeg's test.lua no longer asks for a collection where it did")
 	}

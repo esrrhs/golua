@@ -1,10 +1,10 @@
-# golua — 纯 Go 版 Lua 5.4
+# golua — 纯 Go 版 Lua 5.3.4
 
 [![License](https://img.shields.io/github/license/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Release](https://img.shields.io/github/v/release/esrrhs/golua)](https://github.com/esrrhs/golua/releases)
 
-`golua` 是 **PUC-Lua 5.4.9 的逐行 Go 直译**。词法分析、语法分析、代码生成、
+`golua` 是 **PUC-Lua 5.3.4 的逐行 Go 直译**。词法分析、语法分析、代码生成、
 虚拟机、标准库、C API 以及 `lua`/`luac` 两个命令行工具都按 C 源码逐文件对应，
 行为则与同一版本源码编译出的参考解释器逐项比对。
 
@@ -15,11 +15,12 @@
 
 ## 特性
 
-- **完整的 Lua 5.4** —— 整数/浮点子类型、`//`、位运算、`goto`、
-  `<const>`/`<close>`、变参、协程、元表、弱表，以及全部标准库。
+- **完整的 Lua 5.3.4** —— 整数/浮点子类型、`//`、位运算、`goto`、
+  `bit32`、变参、协程、元表、弱表，以及全部标准库（无 5.4 的
+  `<const>`/`<close>`）。
 - **沿用 C API 形状的 Go API** —— `NewState`、`PushInteger`、`PCall`、
   `GetGlobal`……根包用类型别名重导出 API，全部实现位于 `internal/core`。
-- **字节码兼容** —— 与 PUC-Lua 5.4.9 相同的二进制 chunk 格式：
+- **字节码兼容** —— 与 PUC-Lua 5.3.4 相同的二进制 chunk 格式：
   `string.dump` 的产物两边都能加载，`luac -l -l` 的 listing 也一致。
 - **可选的 C 模块** —— 带 cgo 构建时，`package.loadlib`/`require` 可以在
   Linux 与 macOS 上加载真实的 C 扩展；`CGO_ENABLED=0` 时是纯 Go 实现，
@@ -99,9 +100,9 @@ golua/
 
 - **直译，而非重写。** `llex.c` 对应 `llex.go`，`lvm.c` 对应 `lvm.go`，
   依此类推。函数名、控制流与错误信息都遵循 C 源码，审校可以逐行对照。
-- **收集器是唯一的例外。** Lua 对象就是普通的 Go 值。弱表使用 Go 的弱指针，
-  `__gc` 与弱表条目的清理发生在周期边界：`Close()`、`collectgarbage`，
-  或分配越过阈值时。
+- **收集器是唯一的例外。** Lua 对象就是普通的 Go 值，生命周期完全由 Go 并发 GC
+  管理。弱表使用 Go 标准库 `weak.Pointer`，`__gc` 终结器通过 `runtime.AddCleanup`
+  入队并在 VM 执行路径或 `Close()` / `collectgarbage` 时触发。
 - **C API 是重导出，不是重实现。** `State` 上的方法才是实现；根包只做类型
   别名与包级函数转发。
 
@@ -117,11 +118,12 @@ gofmt -l .        # 必须无输出
 
 测试就是规格说明：
 
-- **官方套件** —— PUC-Lua 5.4.9 `testes/` 的全部 33 个文件分别喂给两个
-  解释器，逐字节比对。在带 cgo 的构建上 30 个完全一致；`gc` 与 `all`
-  是记录在案的差异（前者测的是收集器本身，后者只差四行环境信息），
-  `heavy` 两边都会超时因此不跑。`api.lua` 能对上，但它一条断言也没执行：
-  正文依赖 Lua 私有的 `T` 模块，而 `T` 是直接操作 C 内部结构的。
+- **官方套件** —— PUC-Lua 5.3.4 `testes/` 的全部 **28** 个文件与参考解释器
+  逐字节比对。在带 cgo 的构建上 **26** 个完全一致；`gc` 与 `all` 是记录在案的
+  差异（Go GC；`all` 以 `_port=true` 跑并带几行环境输出）。`main.lua` 的
+  Ctrl-C harness 通过独立进程的 SIGINT（`laction`/`lstop` 等价物）运行。
+  `api.lua` 能对上，但一条断言也没执行：正文依赖 Lua 私有的 `T` 模块，而
+  `T` 是直接操作 C 内部结构的。
 - **差分套件** —— `internal/core/testdata/diff` 里 83 个手写用例，各带
   golden 答案。
 - **真实扩展** —— LPeg、Lua CJSON、LuaSocket、LuaFileSystem 与 luaposix
@@ -138,37 +140,35 @@ LUA_REF=/path/to/lua go test -run TestDifferentialSuite ./internal/core/
 ```
 
 CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业会下载
-并编译 Lua 5.4.9，然后用 `LUA_REF` 指向它，跑官方、差分、第三方与 fuzz
+并编译 Lua **5.3.4**，然后用 `LUA_REF` 指向它，跑官方、差分、第三方与 fuzz
 套件。
 
 ## 性能
 
-一次运行，机器是 Linux x86_64（Intel Xeon，内核 6.12.94+）：PUC-Lua 5.4.9 对比 cgo 构建（Go 1.27.3）。比值是 golua / PUC-Lua，小于 1 表示更快。计时方式以及每一行测量的是什么，见 [bench/README_CN.md](bench/README_CN.md)。
+一次运行，机器是 Intel Xeon（8 核），PUC-Lua **5.3.4** 对比这棵树的 cgo 构建（Go 1.27）。`MIN_MS=600 REPS=7`；每一行 `p < 0.01`。比值是 golua / PUC-Lua，小于 1 表示更快。细节见 [bench/README_CN.md](bench/README_CN.md)。
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 2.38× | fib | 2.27× |
-| nop | 2.11× | concat | 2.24× |
-| hash | 2.01× | yield | 1.31× |
-| intloop | 2.32× | pcall | 2.42× |
-| floatloop | 2.33× | upvalue | 2.11× |
-| bitwise | 2.61× | global | 2.25× |
-| array | 2.99× | ipairs | 2.30× |
-| strings | 1.25× | tailcall | 1.89× |
-| sort | 1.55× | metaindex | 1.78× |
-|  |  | method | 1.86× |
-|  |  | call3 | 2.14× |
-|  |  | alloc | 2.13× |
+| startup | 2.44× | global | 2.29× |
+| nop | 1.80× | array | 2.39× |
+| intloop | 2.27× | hash | 1.73× |
+| floatloop | 2.55× | metaindex | 1.96× |
+| bitwise | 2.60× | ipairs | 1.99× |
+| fib | 1.57× | concat | 2.10× |
+| tailcall | 1.77× | strings | 1.30× |
+| call3 | 1.75× | sort | 1.76× |
+| upvalue | 1.71× | yield | 1.43× |
+| method | 2.09× | alloc | 1.94× |
+| pcall | 2.24× |  |  |
 
-这次运行里列出的负载都更慢。解释器保持与 PUC-Lua 5.4.9 行级对齐（没有 Go 侧专用捷径），校验和相同。
+多数字节码密集行大约 1.3–2.5×。`strings`（1.30×）与 `yield`（1.43×）最接近 C：`string.format` 直接通过 `PrepBuffSize` + `strconv.AppendInt` 写入不逃逸的栈上 `luaL_Buffer`，并在分配前先查短串 intern 表。`startup` 付的是 Go 运行时的成本。
 
 ## 已知差异
 
-- **没有自己的收集器。** 内存回收完全交由 Go 运行时 GC 自动管理（不主动触发
-  `runtime.GC()`）。`collectgarbage` 只实现 `"collect"` 与 `"count"`
-  （其余已知选项名接受但忽略并返回 `0`；未知名仍报错）。`"collect"` 负责排空
-  已就绪的 `__gc` 终结器并清理已被 Go GC 回收的弱表槽位，`collectgarbage("count")`
-  报的是 Go 堆大小。弱表键值直接使用 Go 标准库 `weak.Pointer`。
+- **没有自己的收集器。** 对象生命周期完全由 Go 并发 GC 自动管理
+  （`collectgarbage("collect")` 触发进程级 GC，`collectgarbage("count")`
+  报 Go 堆大小）。弱表条目通过 `weak.Pointer` 自动失效，终结器通过
+  `runtime.AddCleanup` 入队并在 VM 执行路径处理。
 - **C 模块需要 cgo。** 没有 cgo 就没有 `dlopen`，也没有 C 的 `setlocale`
   （小数点由内置表提供）；Windows 目前没有动态加载后端。
 - **平台决定的部分。** 带 cgo 时数学库调用宿主 libm，和 PUC-Lua 用的是
@@ -178,9 +178,9 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 - **少量 API 边缘。** 注册表里没有 `_UBOX*` 键；`file:read(n)` 在 `n`
   超过 2 GiB 时按文件末尾处理；负的 `setvbuf` 大小会成功；
   `math.randomseed()` 的第二个种子是 Go 堆地址。
-- **性能。** 见上一节。对上的形状给出同一个校验和。
+- **性能。** 见上一节。每个 bench 负载与 PUC 校验和相同。
 
 ## 许可证
 
-MIT，与 Lua 本身一致。Lua 5.4.9 测试套件与随附的第三方库保留各自的原始
+MIT，与 Lua 本身一致。Lua **5.3.4** `testes/` 套件与随附的第三方库保留各自的原始
 许可证。

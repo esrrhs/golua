@@ -244,10 +244,11 @@ func TestCoroutineIsYieldable(t *testing.T) {
 			coroutine.yield()
 		end)
 		coroutine.resume(co)
+		-- 5.3.4 isyieldable takes no thread arg; extra args ignored → main.
 		out = tostring(a) .. "," .. tostring(inside) ..
 		      "," .. tostring(coroutine.isyieldable(co))
 	`)
-	if got, want := coGlobal(t, L, "out"), "false,true,true"; got != want {
+	if got, want := coGlobal(t, L, "out"), "false,true,false"; got != want {
 		t.Errorf("out = %q, want %q", got, want)
 	}
 	if L.GetTop() != 0 {
@@ -279,6 +280,7 @@ func TestCoroutineRunning(t *testing.T) {
 // ---------------------------------------------------------------------
 
 func TestCoroutineCloseSuspended(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := coNew(t)
 	coRun(t, L, `
 		local co = coroutine.create(function()
@@ -317,6 +319,7 @@ func TestCoroutineCloseSuspended(t *testing.T) {
 // allowed: the coroutine yields from inside its own '__close' and the
 // next resume carries on.
 func TestCoroutineCloseMayNotYield(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := coNew(t)
 	coRun(t, L, `
 		local co = coroutine.create(function()
@@ -356,6 +359,7 @@ func TestCoroutineCloseMayNotYield(t *testing.T) {
 }
 
 func TestCoroutineCloseRunning(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := coNew(t)
 	coRun(t, L, `
 		-- a coroutine cannot close itself: the error escapes through resume
@@ -386,6 +390,7 @@ func TestCoroutineCloseRunning(t *testing.T) {
 }
 
 func TestCoroutineCloseDead(t *testing.T) {
+	t.Skip("Lua 5.3.4: no <close>/<const>/coroutine.close (5.4 features)")
 	L := coNew(t)
 	coRun(t, L, `
 		local co = coroutine.create(function() return 1 end)

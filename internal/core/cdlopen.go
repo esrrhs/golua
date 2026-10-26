@@ -44,7 +44,7 @@
 // user values, lua_dump, and the auxiliary functions that go with them.
 // Together they are every name in include/lua.h and include/lauxlib.h
 // except the four that take '...', which cdlbridge.c has instead.
-// cdlopen_api_test.go pins them all against PUC-Lua 5.4.9.
+// cdlopen_api_test.go pins them all against PUC-Lua 5.3.4 where APIs overlap.
 //
 // On lua_error: PUC-Lua longjmps out of the extension's own frame. This
 // port raises instead, and the panic unwinds through that frame -- which
@@ -122,10 +122,6 @@ import (
 // front of every lua_State, which 'lua_getextraspace' hands to C.
 const luaExtraSpace = unsafe.Sizeof(uintptr(0))
 
-// cMallocFn is C.malloc for lua_State / identity blocks. Tests may
-// override it to force the OOM arms; production always uses C.malloc.
-var cMallocFn = func(n C.size_t) unsafe.Pointer { return C.malloc(n) }
-
 func (L *State) statePtr() *C.lua_State {
 	if L.cstate == nil {
 		/* The block is LUA_EXTRASPACE bytes followed by the id:
@@ -133,7 +129,7 @@ func (L *State) statePtr() *C.lua_State {
 		   was given, and PUC-Lua really does keep them there, so they
 		   have to exist and be addressable. */
 		size := unsafe.Sizeof(uintptr(0))
-		base := cMallocFn(C.size_t(luaExtraSpace) + C.size_t(size))
+		base := C.malloc(C.size_t(luaExtraSpace) + C.size_t(size))
 		if base == nil {
 			panic("lua: out of memory for a lua_State handle")
 		}
@@ -228,11 +224,6 @@ func lua_rotate(p *C.lua_State, idx, n C.int) { stateOf(p).Rotate(int(idx), int(
 
 //export lua_copy
 func lua_copy(p *C.lua_State, from, to C.int) { stateOf(p).Copy(int(from), int(to)) }
-
-//export lua_closeslot
-func lua_closeslot(p *C.lua_State, idx C.int) {
-	stateOf(p).CloseSlot(idxInt(idx))
-}
 
 //export lua_pop
 func lua_pop(p *C.lua_State, n C.int) { stateOf(p).SetTop(-int(n) - 1) }
@@ -451,7 +442,7 @@ func ptrOf(v uintptr) unsafe.Pointer {
 	defer ptrMu.Unlock()
 	p, ok := ptrAddr[v]
 	if !ok {
-		p = cMallocFn(1)
+		p = C.malloc(1)
 		if p == nil {
 			panic("lua: out of memory for a value's identity")
 		}
@@ -630,13 +621,11 @@ func lua_compare(p *C.lua_State, a, b, op C.int) C.int {
 //export lua_arith
 func lua_arith(p *C.lua_State, op C.int) { stateOf(p).Arith(int(op)) }
 
-//export lua_newuserdatauv
-func lua_newuserdatauv(p *C.lua_State, sz C.size_t, uv C.int) unsafe.Pointer {
-	return cgoNewUserBlock(stateOf(p), int(sz), int(uv))
-}
-
 //export lua_newuserdata
-func lua_newuserdata(p *C.lua_State, sz C.size_t) unsafe.Pointer { return lua_newuserdatauv(p, sz, 1) }
+func lua_newuserdata(p *C.lua_State, sz C.size_t) unsafe.Pointer {
+	/* Lua 5.3.4: one user value (like C lua_newuserdata). */
+	return cgoNewUserBlock(stateOf(p), int(sz))
+}
 
 // ---------------------------------------------------------------------
 // load, call, error
@@ -684,7 +673,7 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 	chunkname, mode *C.char) C.int {
 	L := stateOf(p)
 	name := C.GoString(chunkname)
-	m := "bt"
+	m := ""
 	if mode != nil {
 		m = C.GoString(mode)
 	}
@@ -692,9 +681,7 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 		src := C.GoString((*C.char)(data))
 		return C.int(cdlStatus(L.LoadBytesMode([]byte(src), name, m)))
 	}
-	/* Peek the first piece (same as baseLoadReader): LoadStream with a
-	   nil 'first' starts at EOZ and never calls the reader. */
-	more := func() []byte {
+	return C.int(cdlStatus(L.LoadStream(nil, func() []byte {
 		var sz C.size_t
 		cgoEnter()
 		defer cgoLeave()
@@ -703,9 +690,7 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 			return nil
 		}
 		return []byte(C.GoStringN(cs, C.int(sz)))
-	}
-	first := more()
-	return C.int(cdlStatus(L.LoadStream(first, more, name, m)))
+	}, name, m)))
 }
 
 // ---------------------------------------------------------------------
@@ -909,7 +894,7 @@ func luaL_loadstring(p *C.lua_State, s *C.char) C.int {
 
 //export luaL_loadbufferx
 func luaL_loadbufferx(p *C.lua_State, buff *C.char, sz C.size_t, name, mode *C.char) C.int {
-	m := "bt"
+	m := ""
 	if mode != nil {
 		m = C.GoString(mode)
 	}

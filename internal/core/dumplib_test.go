@@ -183,7 +183,7 @@ func TestDumpCorrupted(t *testing.T) {
 	baseCheck(t, L2, `
 		local bin = string.dump(load("return 1"))
 		local f, err = load("\27Lua\1" .. bin:sub(6))
-		r = tostring(err:find("bad binary format") ~= nil) .. "|" ..
+		r = tostring(err:find("version mismatch") ~= nil) .. "|" ..
 		    tostring(err:find("binary string") ~= nil)`, "r", "true|true")
 }
 
@@ -199,7 +199,7 @@ func TestDumpNamedChunk(t *testing.T) {
 		r = tostring(ok) .. "|" .. tostring(err)`,
 		"r", `false|[string "error('boom')"]:1: boom`)
 	/* with strip there is neither a source nor line information, so
-	   'error' adds no position at all (same as PUC-Lua 5.4 and 5.5) */
+	   'error' adds no position at all (same as PUC-Lua 5.3+) */
 	baseCheck(t, L, `
 		local bin = string.dump(load("error('boom')"), true)
 		local f = load(bin, "=mychunk")
@@ -211,7 +211,7 @@ func TestDumpNamedChunk(t *testing.T) {
 // only 'load') recognizes a precompiled chunk: loadfile, dofile and the
 // Go API LoadBytes. Skipped when PUC-Lua's luac is not installed.
 func TestDumpLoadFileBinary(t *testing.T) {
-	const luacPath = "/tmp/lua-5.4.9/src/luac"
+	const luacPath = "/tmp/lua-5.3.4/src/luac"
 	if _, err := os.Stat(luacPath); err != nil {
 		t.Skipf("no PUC-Lua at %s", luacPath)
 	}
@@ -261,8 +261,8 @@ func TestDumpLoadFileBinary(t *testing.T) {
 // PUC-Lua. Skipped when the binaries are not installed.
 func TestDumpOfficialCompat(t *testing.T) {
 	const (
-		luacPath = "/tmp/lua-5.4.9/src/luac"
-		luaPath  = "/tmp/lua-5.4.9/src/lua"
+		luacPath = "/tmp/lua-5.3.4/src/luac"
+		luaPath  = "/tmp/lua-5.3.4/src/lua"
 	)
 	if _, err := os.Stat(luacPath); err != nil {
 		t.Skipf("no PUC-Lua at %s", luacPath)

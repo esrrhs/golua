@@ -1,5 +1,5 @@
 // Translation of the parts of lgc.c that Go's collector cannot express
-// (PUC-Lua 5.4.9 bridge: __gc finalizers + weak tables in lgc_weak.go).
+// (PUC-Lua 5.3.4 bridge: __gc finalizers + weak tables in lgc_weak.go).
 // Full mark/sweep/colors/barriers/debt are INTENTIONAL omissions — Go GC.
 //
 // Memory management is delegated completely to the Go runtime garbage
@@ -100,13 +100,10 @@ func gcTrackWatch(w weakRef) {
 	gcWatchMu.Unlock()
 }
 
-// gcClearThreadStack clears dead stack slots on a single thread so stale
-// values cannot pin unreachable objects on the Go heap.
+// gcClearStacks empties the stack slots above the active frame of every
+// thread so stale values cannot pin unreachable objects on the Go heap.
+// gcClearThreadStack clears dead stack slots on a single thread.
 func (th *State) gcClearThreadStack() {
-	tbcFloor := 0
-	if len(th.tbclist) > 0 {
-		tbcFloor = th.tbclist[len(th.tbclist)-1] + 1
-	}
 	lim := th.top
 	if th.ci != nil && isLua(th.ci) && th.ci.top > lim {
 		lim = th.ci.top
@@ -118,22 +115,18 @@ func (th *State) gcClearThreadStack() {
 		if !isLua(ci) {
 			continue
 		}
-		base := ci.funcIdx + 1
+		base := ci.base
 		cl := clLvalue(&th.stack[ci.funcIdx])
 		if cl == nil || cl.p == nil || len(cl.p.code) == 0 {
 			continue
 		}
-		rawpc := ci.savedpc
-		pc := rawpc - 1
+		pc := ci.savedpc - 1
 		if pc < 0 || pc >= len(cl.p.code) {
 			continue
 		}
-		if cl.p.code[pc].Op == OP_EXTRAARG && pc > 0 {
-			pc--
-		}
 		used := base
 		for _, lv := range cl.p.locvars {
-			if lv.startpc <= rawpc && rawpc-1 < lv.endpc {
+			if lv.startpc <= pc+1 && pc < lv.endpc {
 				used++
 			}
 		}
@@ -144,9 +137,6 @@ func (th *State) gcClearThreadStack() {
 		if len(cl.p.locvars) == 0 && int(cl.p.maxstacksize) > 0 {
 			used = base + int(cl.p.maxstacksize)
 		}
-		if used < tbcFloor {
-			used = tbcFloor
-		}
 		op := cl.p.code[pc].Op
 		if ci == th.ci && op == OP_NEWTABLE {
 			ra := base + cl.p.code[pc].A
@@ -154,9 +144,6 @@ func (th *State) gcClearThreadStack() {
 				hasTemp := false
 				if pc > 0 {
 					iop := cl.p.code[pc-1].Op
-					if iop == OP_EXTRAARG && pc >= 2 {
-						iop = cl.p.code[pc-2].Op
-					}
 					if testAMode(iop) && iop != OP_FORLOOP && iop != OP_FORPREP && iop != OP_TFORLOOP && base+cl.p.code[pc-1].A >= used {
 						hasTemp = true
 					}
@@ -172,6 +159,8 @@ func (th *State) gcClearThreadStack() {
 				}
 			}
 		} else if curCallee == nil {
+			/* Active Lua frame at a non-NEWTABLE instruction: clear any
+			   dead slots above max(used, highest temporary in current insn). */
 			hasTemp := false
 			if pc > 0 {
 				iop := cl.p.code[pc-1].Op
@@ -185,8 +174,8 @@ func (th *State) gcClearThreadStack() {
 					end = ra + 1
 				}
 				if op == OP_CONCAT {
-					if rb := base + cl.p.code[pc].A + cl.p.code[pc].B; rb > end {
-						end = rb
+					if rb := base + cl.p.code[pc].C; rb+1 > end {
+						end = rb + 1
 					}
 				}
 				if end <= used+1 && end < lim {
@@ -196,6 +185,12 @@ func (th *State) gcClearThreadStack() {
 		} else if (op == OP_CALL || op == OP_TFORCALL) && curCallee != nil {
 			callRa := base + cl.p.code[pc].A
 			if callRa == curCallee.funcIdx && pc > 0 {
+				/* If the instruction immediately preceding this CALL loaded the
+				   callee into callRa (e.g. OP_GETTABUP callRa, _ENV, "collectgarbage"
+				   with 0 arguments), or loaded the sole argument into callRa+1 and
+				   the instruction before that loaded callRa, then callRa is the
+				   outermost expression in the statement and slots [used, callRa)
+				   are dead temporaries from earlier statements. */
 				prev := cl.p.code[pc-1]
 				isOuter := false
 				if testAMode(prev.Op) && base+prev.A == callRa {
@@ -207,6 +202,8 @@ func (th *State) gcClearThreadStack() {
 					}
 				}
 				if isOuter && callRa == used+1 && pc >= 2 {
+					/* Only clear slot `used` if it was just left over from a 0-result
+					   OP_CALL (e.g. setmetatable(o, mt) where C==1). */
 					k := pc - 2
 					if base+prev.A == callRa+1 && pc >= 3 {
 						k = pc - 3
@@ -216,14 +213,14 @@ func (th *State) gcClearThreadStack() {
 					}
 				}
 			}
-		} else if curCallee != nil && ci.callstatus&CIST_HOOKED == 0 && op != OP_RETURN {
+		} else if curCallee != nil && ci.callstatus&CIST_HOOKED == 0 {
 			end := used
 			if ra := base + cl.p.code[pc].A; ra+1 > end {
 				end = ra + 1
 			}
 			if op == OP_CONCAT {
-				if rb := base + cl.p.code[pc].A + cl.p.code[pc].B; rb > end {
-					end = rb
+				if rb := base + cl.p.code[pc].C; rb+1 > end {
+					end = rb + 1
 				}
 			}
 			if end <= used+1 {
@@ -232,9 +229,6 @@ func (th *State) gcClearThreadStack() {
 				}
 			}
 		}
-	}
-	if lim < tbcFloor {
-		lim = tbcFloor
 	}
 	for j := lim; j < len(th.stack); j++ {
 		setnilvalue(&th.stack[j])
@@ -400,6 +394,11 @@ func (L *State) gcStep() bool {
 		if gcWeakCount.Load() != 0 {
 			L.gcClearThreadStack()
 		}
+		L.gcAwaitPending()
+		if L.hasPending() {
+			L.runFinalizers()
+			return true
+		}
 	}
 	if L.g.gcDebt < gcStepDebt {
 		return false
@@ -425,7 +424,7 @@ func (L *State) gcAfterAlloc() bool {
 	if L.g.gcInFinalizer || L.g.closing {
 		return false
 	}
-	if L.g.gcDebt == 0 && L.hasPending() {
+	if L.hasPending() {
 		L.runFinalizers()
 		return true
 	}
@@ -582,9 +581,6 @@ func (L *State) takeCloseObject() (Value, bool) {
 
 // gcIsWatched says whether an object still waits for its '__gc'.
 func gcIsWatched(v *Value) bool {
-	if v.p == nil {
-		return false
-	}
 	switch ttypetag(v) {
 	case LUA_VTABLE:
 		return hvalue(v).finalized
@@ -609,11 +605,11 @@ func gcMetatable(v *Value) *Table {
 // gets a metatable with a '__gc' field starts to be watched, so that the
 // metamethod runs when the object becomes unreachable.
 func luaC_checkFinalizer(L *State, v *Value, mt *Table) {
-	if mt == nil || L.g.closing { /* 'g->gcstp & GCSTPCLS': closing state? */
+	if mt == nil || L.g.closing {
 		return
 	}
 	tm := luaH_getshortstr(mt, L.g.tmNames[TM_GC])
-	if !ttisfunction(tm) { /* no finalizer (or not callable) */
+	if ttisnil(tm) {
 		return
 	}
 	switch ttypetag(v) {
@@ -720,15 +716,14 @@ func (L *State) runFinalizers() {
 	}
 }
 
-// callFinalizer runs the '__gc' metamethod of one object. It is what
-// lgc.c's 'GCTM' does around 'luaD_pcall'.
+// callFinalizer runs the '__gc' metamethod of one object.
 func (L *State) callFinalizer(obj Value) {
 	mt := gcMetatable(&obj)
 	if mt == nil {
 		return
 	}
 	tm := luaH_getshortstr(mt, L.g.tmNames[TM_GC])
-	if !ttisfunction(tm) { /* the metatable has changed its mind */
+	if !ttisfunction(tm) {
 		return
 	}
 	savedTop := L.top
@@ -739,25 +734,31 @@ func (L *State) callFinalizer(obj Value) {
 			L.top = L.ci.top
 		}
 	}
-	L.CheckStack2(4, "finalizer")
+	L.checkStack(4)
+	if L.ci != nil && L.ci.top < L.top+4 {
+		L.ci.top = L.top + 4
+	}
 	top := L.GetTop()
-	L.pushValue(*tm) /* the finalizer... */
-	L.pushValue(obj) /* ... and its argument */
+	L.pushValue(*tm)
+	L.pushValue(obj)
 	L.ci.callstatus |= CIST_FIN
 	oldah := L.allowhook
 	L.allowhook = 0
 	oldIn := L.g.gcInFinalizer
 	L.g.gcInFinalizer = true
-	status := L.PCall(1, 0, 0)
+	funcIdx := L.top - 2
+	status := luaD_pcall(L, func() {
+		luaD_callnoyield(L, funcIdx, 0)
+	}, funcIdx, 0)
 	L.g.gcInFinalizer = oldIn
 	L.allowhook = oldah
 	L.ci.callstatus &= ^uint16(CIST_FIN)
 	if status != LUA_OK {
-		msg := "error object is not a string"
+		msg := "no message"
 		if s, ok := L.ToString(-1); ok {
 			msg = s
 		}
-		L.Warning("error in __gc ("+msg+")", false) /* luaE_warnerror */
+		L.Warning("error in __gc metamethod ("+msg+")", false)
 	}
 	L.SetTop(top)
 	L.top = savedTop

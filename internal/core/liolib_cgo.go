@@ -2,9 +2,8 @@
 
 package core
 
-// Platform OK (unix+cgo): extension ABI for luaL_Stream. Not a PUC 5.4.9
-// behavioral surface — see liolib.go (iolib algorithms) and cdlbridge.h/c
-// (FILE* layout helpers). Unchanged vs golua master / align round 1.
+// Platform OK (unix+cgo): extension ABI for luaL_Stream. Not a PUC 5.3.4
+// behavioral surface — see NOTES.md. Unchanged vs golua; no 5.4 bleed.
 //
 // The half of a file handle that only exists for C: see the note on
 // ioStream in liolib.go.

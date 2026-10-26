@@ -1,4 +1,4 @@
-// Translation of ltablib.c (PUC-Lua 5.4.9): the table manipulation
+// Translation of ltablib.c (PUC-Lua 5.3.4): the table manipulation
 // library, including the quicksort used by table.sort.
 package core
 
@@ -55,16 +55,14 @@ func tableIncr(n *int) int {
 }
 
 func tableInsert(L *State) int {
-	var pos int64 /* where to insert new element */
-	e := tableAuxGetn(L, 1, tabRW)
-	e = e + 1 /* first empty element (luaL_intop(+, e, 1)) */
+	e := tableAuxGetn(L, 1, tabRW) + 1 /* first empty element */
+	var pos int64                      /* where to insert new element */
 	switch L.GetTop() {
 	case 2: /* called with only 2 arguments */
 		pos = e /* insert new element at the end */
 	case 3:
 		pos = L.CheckInteger(2) /* 2nd argument is the position */
-		/* check whether 'pos' is in [1, e] */
-		L.ArgCheck(uint64(pos)-1 < uint64(e), 2, "position out of bounds")
+		L.ArgCheck(1 <= pos && pos <= e, 2, "position out of bounds")
 		for i := e; i > pos; i-- { /* move up elements */
 			L.GetI(1, i-1)
 			L.SetI(1, i) /* t[i] = t[i - 1] */
@@ -80,8 +78,8 @@ func tableRemove(L *State) int {
 	size := tableAuxGetn(L, 1, tabRW)
 	pos := L.OptInteger(2, size)
 	if pos != size { /* validate 'pos' if given */
-		/* check whether 'pos' is in [1, size + 1] */
-		L.ArgCheck(uint64(pos)-1 <= uint64(size), 2, "position out of bounds")
+		/* 5.3.4 tremove: luaL_argcheck(..., 1, ...) — arg index is 1, not 2. */
+		L.ArgCheck(1 <= pos && pos <= size+1, 1, "position out of bounds")
 	}
 	L.GetI(1, pos) /* result = t[pos] */
 	for ; pos < size; pos++ {
@@ -89,7 +87,7 @@ func tableRemove(L *State) int {
 		L.SetI(1, pos) /* t[pos] = t[pos + 1] */
 	}
 	L.PushNil()
-	L.SetI(1, pos) /* remove entry t[pos] */
+	L.SetI(1, pos) /* t[pos] = nil */
 	return 1
 }
 
@@ -135,22 +133,22 @@ func tableMove(L *State) int {
 func tableAddField(L *State, b *Buffer, i int64) {
 	L.GetI(1, i)
 	if !L.IsString(-1) {
-		L.Error2("invalid value (%s) at index %I in table for 'concat'",
+		L.Error2("invalid value (%s) at index %d in table for 'concat'",
 			L.TypeName(-1), i)
 	}
 	b.AddValue()
 }
 
 func tableConcat(L *State) int {
+	var b Buffer /* stack-local like C luaL_Buffer b */
 	last := tableAuxGetn(L, 1, tabR)
-	sep := L.OptString(2, "")
+	sep := L.OptString(2, "") /* ≡ luaL_optlstring(L, 2, "", &lsep) */
 	i := L.OptInteger(3, 1)
 	last = L.OptInteger(4, last)
-	var b Buffer
-	L.BuffInit(&b)
+	L.BuffInit(&b) /* luaL_buffinit(L, &b) — not NewBuffer heap */
 	for ; i < last; i++ {
 		tableAddField(L, &b, i)
-		b.AddString(sep)
+		b.AddString(sep) /* ≡ luaL_addlstring(&b, sep, lsep) */
 	}
 	if i == last { /* add last value (if interval was not empty) */
 		tableAddField(L, &b, i)
@@ -159,11 +157,9 @@ func tableConcat(L *State) int {
 	return 1
 }
 
-/*
-** {======================================================
-** Pack/unpack
-** =======================================================
- */
+// ---------------------------------------------------------------------
+// Pack/unpack
+// ---------------------------------------------------------------------
 
 func tablePack(L *State) int {
 	n := L.GetTop()           /* number of elements to pack */
@@ -211,27 +207,22 @@ func tableUnpack(L *State) int {
 	return int(n)
 }
 
-/* }====================================================== */
+// ---------------------------------------------------------------------
+// Quicksort
+// (based on 'Algorithms in MODULA-3', Robert Sedgewick;
+//  Addison-Wesley, 1993.)
+// ---------------------------------------------------------------------
 
 /*
-** {======================================================
-** Quicksort
-** (based on 'Algorithms in MODULA-3', Robert Sedgewick;
-**  Addison-Wesley, 1993.)
-** =======================================================
- */
-
-/*
-** Produce a "random" 'unsigned int' to randomize pivot choice. This
-** is used only when 'sort' detects a big imbalance in the result of
-** a partition. (C: clock()+time() into unsigned int buff[]; Go: UnixNano.)
+** Produce a "random" value to randomize pivot choice. It is used only
+** when 'sort' detects a big imbalance in the result of a partition.
  */
 func tableRandomizePivot() uint32 {
 	now := time.Now().UnixNano()
 	return uint32(now) ^ uint32(now>>32)
 }
 
-/* arrays larger than 'tabRanLimit' may use randomized pivots */
+// arrays larger than 'tabRanLimit' may use randomized pivots
 const tabRanLimit = 100
 
 // tableSet2 stores the two values on top of the stack into t[i] and
@@ -249,7 +240,6 @@ func tableSortComp(L *State, a, b int) bool {
 	if L.IsNil(2) { /* no function? */
 		return L.LessThan(a, b) /* a < b */
 	}
-	/* function */
 	L.PushValue(2)         /* push function */
 	L.PushValue(a - 1)     /* -1 to compensate function */
 	L.PushValue(b - 2)     /* -2 to compensate function and 'a' */
@@ -315,9 +305,7 @@ func tablePartition(L *State, lo, up uint32) uint32 {
  */
 func tableChoosePivot(lo, up, rnd uint32) uint32 {
 	r4 := (up - lo) / 4 /* range/4 */
-	p := rnd%(r4*2) + (lo + r4)
-	/* lua_assert(lo + r4 <= p && p <= up - r4) — C debug-only */
-	return p
+	return rnd%(r4*2) + (lo + r4)
 }
 
 /*
@@ -368,11 +356,11 @@ func tableAuxSort(L *State, lo, up, rnd uint32) {
 		if p-lo < up-p { /* lower interval is smaller? */
 			tableAuxSort(L, lo, p-1, rnd) /* call recursively for lower interval */
 			n = p - lo                    /* size of smaller interval */
-			lo = p + 1                    /* tail call for [p + 1 .. up] (upper interval) */
+			lo = p + 1                    /* tail call for [p + 1 .. up] */
 		} else {
 			tableAuxSort(L, p+1, up, rnd) /* call recursively for upper interval */
 			n = up - p                    /* size of smaller interval */
-			up = p - 1                    /* tail call for [lo .. p - 1]  (lower interval) */
+			up = p - 1                    /* tail call for [lo .. p - 1] */
 		}
 		if (up-lo)/128 > n { /* partition too imbalanced? */
 			rnd = tableRandomizePivot() /* try a new randomization */
@@ -393,7 +381,9 @@ func tableSort(L *State) int {
 	return 0
 }
 
-/* }====================================================== */
+// ---------------------------------------------------------------------
+// library registration
+// ---------------------------------------------------------------------
 
 var tableFuncs = []Reg{
 	{Name: "concat", Func: tableConcat},

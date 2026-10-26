@@ -33,13 +33,14 @@ import (
 // userdata can also have a '__gc' -- lpeg's patterns do. One finalizer
 // serves both, and when a '__gc' is waiting the block is freed after the
 // metamethod has run, so that a C '__gc' still sees its own memory.
-func cgoNewUserBlock(L *State, sz, uv int) unsafe.Pointer {
+func cgoNewUserBlock(L *State, sz int) unsafe.Pointer {
 	block := C.malloc(C.size_t(sz))
 	if block == nil {
 		return nil
 	}
 	C.memset(block, 0, C.size_t(sz))
-	u := luaS_newudata(L, uv, unsafe.Pointer(block))
+	/* 5.3.4: one uservalue; val holds the C block pointer for ToUserData. */
+	u := luaS_newudata(L, unsafe.Pointer(block))
 	u.cblock = block
 	u.len = sz /* lua_rawlen: the extension reads its size back */
 	L.checkStack(1)
@@ -107,33 +108,6 @@ func init() {
 		cgoFree(p)
 	}
 }
-
-// ---------------------------------------------------------------------
-// lua_arith
-// ---------------------------------------------------------------------
-
-// Arith performs the arithmetic operation 'op' (lua_arith, lapi.c:699).
-// Unary operations act on the top value alone; everything else consumes
-// two. luaO_arith already falls back to the metamethod, which is what
-// lua_arith does too.
-
-// ---------------------------------------------------------------------
-// lua_closeslot
-// ---------------------------------------------------------------------
-
-// CloseSlotAt marks the value at 'idx' as to-be-closed, so that its
-// '__close' metamethod runs when the C function that marked it returns
-// (lua_toclose, lapi.c:1274).
-//
-// The mark lives in the sign of the frame's 'nresults', the way it does
-// in C: PUC-Lua's 'hastocloseCfunc' looks for a count below
-// LUA_MULTRET, and luaD_poscall closes what is pending before it moves
-// the results.
-
-// CloseSlot closes the to-be-closed variable at 'idx' right now and
-// leaves nil in its slot (lua_closeslot, lapi.c:1320).  C insists the
-// slot was marked first; closing anything else is the same no-op here
-// that luaF_close is on a level with nothing pending above it.
 
 // ---------------------------------------------------------------------
 // luaL_typeerror

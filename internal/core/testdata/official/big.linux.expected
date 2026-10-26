@@ -1,0 +1,6 @@
+testing large tables
+/workspace/lua-sources/lua-5.3.4/src/lua: attempt to yield from outside a coroutine
+stack traceback:
+	[C]: in function 'coroutine.yield'
+	big.lua:56: in main chunk
+	[C]: in ?

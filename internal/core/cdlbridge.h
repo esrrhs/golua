@@ -96,6 +96,14 @@ int cdl_isupper(int c);
 int cdl_isalnum(int c);
 int cdl_isxdigit(int c);
 
+/* strftime for os.date.  Go has no LC_TIME-aware formatter; with cgo the
+   C library's is the one os.setlocale configures.  epoch is seconds since
+   the Unix epoch (time_t); utc nonzero selects gmtime_r, else localtime_r.
+   Returns the number of bytes written (strftime), or (size_t)-1 when
+   gmtime_r/localtime_r fails. */
+size_t cdl_strftime(char *buf, size_t maxsize, const char *fmt,
+                    long long epoch, int utc);
+
 #include <stdlib.h>
 
 /* LUA_IDSIZE is 60 in PUC-Lua; short_src below must be the same size */
@@ -111,7 +119,6 @@ struct lua_Debug {
   char *namewhat;
   char *what;
   char *source;
-  size_t srclen;
   int currentline;
   int linedefined;
   int lastlinedefined;
@@ -119,8 +126,6 @@ struct lua_Debug {
   unsigned char nparams;
   char isvararg;
   char istailcall;
-  unsigned short ftransfer;
-  unsigned short ntransfer;
   char short_src[CDL_IDSIZE];
   void *i_ci; /* private: what the port's own activation record is */
 };

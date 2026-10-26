@@ -19,10 +19,6 @@ t4	true	done
 t5	false	cannot resume dead coroutine
 z1	true
 z2	true	1	2	3
-s1	true	42
-s2	true
-s3	false	cannot resume dead coroutine
-s4	dead
 w1	true	skip
 w2	true	3
 v1	true	8	9

@@ -1,0 +1,63 @@
+== io.popen, reading ==
+userdata	file
+hello	nil	
+true	exit	0
+a
+b
+c
+	true	exit	0
+x	nil	true	exit	0
+	nil	exit	3
+nil	signal	15
+== io.popen, writing ==
+userdata	file
+file (<ADDR>)	file (<ADDR>)
+xyz123true	exit	0
+6
+true	exit	0
+true	exit	0
+stored
+== io.popen, refused ==
+true|file (<ADDR>)
+false|"bad argument #1 to 'io.popen' (string expected, got no value)"
+true|file (<ADDR>)
+true|nil|"echo hi: Invalid argument"|22
+true|nil|"echo hi: Invalid argument"|22
+true|file (<ADDR>)
+== io.tmpfile ==
+userdata	file
+file (<ADDR>)	0	abc
+3	3
+true	true
+true|true
+true|file (<ADDR>)
+== io.lines with a file name ==
+a,b,c
+a
+,b
+,c
+
+ab,cnil
+true|0
+true|""
+true|0
+false|"cannot open file '/no/such/file/xyz' (No such file or directory)"
+true|function: <ADDR>
+true|function: <ADDR>
+false|"cannot open file '5' (No such file or directory)"
+true|function: <ADDR>
+true
+== file methods on a real file ==
+file	0	0
+true	true	true	true
+false|"bad argument #2 to '?' (invalid option 'x')"
+false|"bad argument #2 to '?' (string expected, got no value)"
+file (<ADDR>)
+true
+6	0	nil	Bad file descriptor	9
+false|"bad argument #2 to '?' (invalid format)"
+true	closed file
+false|"attempt to use a closed file"
+false|"attempt to use a closed file"
+true
+done
