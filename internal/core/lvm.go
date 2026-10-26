@@ -102,6 +102,13 @@ func luaV_shiftl(x, y int64) int64 {
 	return int64(uint64(x) << uint64(y))
 }
 
+/*
+** Shift right is the same as shift left with a negative 'y' (lvm.h)
+ */
+func luaV_shiftr(x, y int64) int64 {
+	return luaV_shiftl(x, int64(uint64(0)-uint64(y)))
+}
+
 /* tostring: ensure element at 'o' is a string (lvm.c macro). */
 func tostringInPlace(L *State, o *Value) bool {
 	if ttisstring(o) {
@@ -663,41 +670,125 @@ func luaV_execute(L *State, ci *CallInfo) {
 					setfltvalue(&L.stack[ra], fltvalue(rb)+float64(imm))
 				}
 			case OP_ADDK:
-				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
-					func(_ *State, a, b int64) int64 { return a + b },
-					func(a, b float64) float64 { return a + b }, &pc)
+				/* op_arithK(L, l_addi, luai_numadd) */
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], ivalue(v1)+ivalue(v2))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], n1+n2)
+					}
+				}
 			case OP_SUBK:
-				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
-					func(_ *State, a, b int64) int64 { return a - b },
-					func(a, b float64) float64 { return a - b }, &pc)
+				/* op_arithK(L, l_subi, luai_numsub) */
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], ivalue(v1)-ivalue(v2))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], n1-n2)
+					}
+				}
 			case OP_MULK:
-				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
-					func(_ *State, a, b int64) int64 { return a * b },
-					func(a, b float64) float64 { return a * b }, &pc)
+				/* op_arithK(L, l_muli, luai_nummul) */
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], ivalue(v1)*ivalue(v2))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], n1*n2)
+					}
+				}
 			case OP_MODK:
+				/* op_arithK(L, luaV_mod, luaV_modf) */
 				savestate(L, ci, pc) /* in case of division by 0 */
-				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
-					luaV_mod, luaV_modfWrap, &pc)
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], luaV_mod(L, ivalue(v1), ivalue(v2)))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], luaV_modf(L, n1, n2))
+					}
+				}
 			case OP_POWK:
-				opArithfK(L, ra, &L.stack[base+i.B], &k[i.C],
-					func(a, b float64) float64 { return math2Pow(a, b) }, &pc)
+				/* op_arithfK(L, luai_numpow) */
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				var n1, n2 float64
+				if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+					pc++
+					setfltvalue(&L.stack[ra], math2Pow(n1, n2))
+				}
 			case OP_DIVK:
-				opArithfK(L, ra, &L.stack[base+i.B], &k[i.C],
-					func(a, b float64) float64 { return a / b }, &pc)
+				/* op_arithfK(L, luai_numdiv) */
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				var n1, n2 float64
+				if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+					pc++
+					setfltvalue(&L.stack[ra], n1/n2)
+				}
 			case OP_IDIVK:
+				/* op_arithK(L, luaV_idiv, luai_numidiv) */
 				savestate(L, ci, pc) /* in case of division by 0 */
-				opArithK(L, ra, &L.stack[base+i.B], &k[i.C],
-					luaV_idiv,
-					func(a, b float64) float64 { return math2Floor(a / b) }, &pc)
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], luaV_idiv(L, ivalue(v1), ivalue(v2)))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], math2Floor(n1/n2))
+					}
+				}
 			case OP_BANDK:
-				opBitwiseK(L, ra, &L.stack[base+i.B], &k[i.C],
-					func(a, b int64) int64 { return a & b }, &pc)
+				/* op_bitwiseK(L, l_band) */
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				var i1 int64
+				i2 := ivalue(v2)
+				if tointegerns(v1, &i1) {
+					pc++
+					setivalue(&L.stack[ra], i1&i2)
+				}
 			case OP_BORK:
-				opBitwiseK(L, ra, &L.stack[base+i.B], &k[i.C],
-					func(a, b int64) int64 { return a | b }, &pc)
+				/* op_bitwiseK(L, l_bor) */
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				var i1 int64
+				i2 := ivalue(v2)
+				if tointegerns(v1, &i1) {
+					pc++
+					setivalue(&L.stack[ra], i1|i2)
+				}
 			case OP_BXORK:
-				opBitwiseK(L, ra, &L.stack[base+i.B], &k[i.C],
-					func(a, b int64) int64 { return a ^ b }, &pc)
+				/* op_bitwiseK(L, l_bxor) */
+				v1 := &L.stack[base+i.B]
+				v2 := &k[i.C]
+				var i1 int64
+				i2 := ivalue(v2)
+				if tointegerns(v1, &i1) {
+					pc++
+					setivalue(&L.stack[ra], i1^i2)
+				}
 			case OP_SHRI:
 				rb := &L.stack[base+i.B]
 				ic := int64(i.C - OFFSET_sC)
@@ -715,47 +806,140 @@ func luaV_execute(L *State, ci *CallInfo) {
 					setivalue(&L.stack[ra], luaV_shiftl(ic, ib))
 				}
 			case OP_ADD:
-				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(_ *State, a, b int64) int64 { return a + b },
-					func(a, b float64) float64 { return a + b }, &pc)
+				/* op_arith(L, l_addi, luai_numadd) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], ivalue(v1)+ivalue(v2))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], n1+n2)
+					}
+				}
 			case OP_SUB:
-				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(_ *State, a, b int64) int64 { return a - b },
-					func(a, b float64) float64 { return a - b }, &pc)
+				/* op_arith(L, l_subi, luai_numsub) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], ivalue(v1)-ivalue(v2))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], n1-n2)
+					}
+				}
 			case OP_MUL:
-				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(_ *State, a, b int64) int64 { return a * b },
-					func(a, b float64) float64 { return a * b }, &pc)
+				/* op_arith(L, l_muli, luai_nummul) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], ivalue(v1)*ivalue(v2))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], n1*n2)
+					}
+				}
 			case OP_MOD:
+				/* op_arith(L, luaV_mod, luaV_modf) */
 				savestate(L, ci, pc) /* in case of division by 0 */
-				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					luaV_mod, luaV_modfWrap, &pc)
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], luaV_mod(L, ivalue(v1), ivalue(v2)))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], luaV_modf(L, n1, n2))
+					}
+				}
 			case OP_POW:
-				opArithf(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(a, b float64) float64 { return math2Pow(a, b) }, &pc)
+				/* op_arithf(L, luai_numpow) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				var n1, n2 float64
+				if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+					pc++
+					setfltvalue(&L.stack[ra], math2Pow(n1, n2))
+				}
 			case OP_DIV: /* float division (always with floats) */
-				opArithf(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(a, b float64) float64 { return a / b }, &pc)
+				/* op_arithf(L, luai_numdiv) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				var n1, n2 float64
+				if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+					pc++
+					setfltvalue(&L.stack[ra], n1/n2)
+				}
 			case OP_IDIV: /* floor division */
+				/* op_arith(L, luaV_idiv, luai_numidiv) */
 				savestate(L, ci, pc) /* in case of division by 0 */
-				opArith(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					luaV_idiv,
-					func(a, b float64) float64 { return math2Floor(a / b) }, &pc)
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				if ttisinteger(v1) && ttisinteger(v2) {
+					pc++
+					setivalue(&L.stack[ra], luaV_idiv(L, ivalue(v1), ivalue(v2)))
+				} else {
+					var n1, n2 float64
+					if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
+						pc++
+						setfltvalue(&L.stack[ra], math2Floor(n1/n2))
+					}
+				}
 			case OP_BAND:
-				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(a, b int64) int64 { return a & b }, &pc)
+				/* op_bitwise(L, l_band) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				var i1, i2 int64
+				if tointegerns(v1, &i1) && tointegerns(v2, &i2) {
+					pc++
+					setivalue(&L.stack[ra], i1&i2)
+				}
 			case OP_BOR:
-				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(a, b int64) int64 { return a | b }, &pc)
+				/* op_bitwise(L, l_bor) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				var i1, i2 int64
+				if tointegerns(v1, &i1) && tointegerns(v2, &i2) {
+					pc++
+					setivalue(&L.stack[ra], i1|i2)
+				}
 			case OP_BXOR:
-				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(a, b int64) int64 { return a ^ b }, &pc)
+				/* op_bitwise(L, l_bxor) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				var i1, i2 int64
+				if tointegerns(v1, &i1) && tointegerns(v2, &i2) {
+					pc++
+					setivalue(&L.stack[ra], i1^i2)
+				}
 			case OP_SHR:
-				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(a, b int64) int64 { return luaV_shiftl(a, -b) }, &pc)
+				/* op_bitwise(L, luaV_shiftr) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				var i1, i2 int64
+				if tointegerns(v1, &i1) && tointegerns(v2, &i2) {
+					pc++
+					setivalue(&L.stack[ra], luaV_shiftr(i1, i2))
+				}
 			case OP_SHL:
-				opBitwise(L, ra, &L.stack[base+i.B], &L.stack[base+i.C],
-					func(a, b int64) int64 { return luaV_shiftl(a, b) }, &pc)
+				/* op_bitwise(L, luaV_shiftl) */
+				v1 := &L.stack[base+i.B]
+				v2 := &L.stack[base+i.C]
+				var i1, i2 int64
+				if tointegerns(v1, &i1) && tointegerns(v2, &i2) {
+					pc++
+					setivalue(&L.stack[ra], luaV_shiftl(i1, i2))
+				}
 			case OP_MMBIN:
 				pi := code[pc-2]
 				rb := &L.stack[base+i.B]
@@ -828,11 +1012,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 			case OP_EQ:
 				savestate(L, ci, pc)
 				cond := luaV_equalobj(L, &L.stack[ra], &L.stack[base+i.B])
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				if cond != (i.K != 0) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
@@ -849,11 +1029,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					savestate(L, ci, pc)
 					cond = lessthanothers(L, &L.stack[ra], rb)
 				}
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				if cond != (i.K != 0) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
@@ -870,11 +1046,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					savestate(L, ci, pc)
 					cond = lessequalothers(L, &L.stack[ra], rb)
 				}
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				if cond != (i.K != 0) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
@@ -882,11 +1054,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 			case OP_EQK:
 				cond := luaV_rawequalobj(&L.stack[ra], &k[i.B])
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				if cond != (i.K != 0) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
@@ -901,11 +1069,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else if ttisfloat(a) {
 					cond = fltvalue(a) == float64(im)
 				} /* else other types cannot be equal to a number */
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				if cond != (i.K != 0) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
@@ -954,11 +1118,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 						cond = luaT_callorderiTM(L, a, im, true, isf, TM_LE)
 					}
 				}
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				if cond != (i.K != 0) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
@@ -966,11 +1126,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				}
 			case OP_TEST:
 				cond := !isFalse(&L.stack[ra])
-				condBool := 0
-				if cond {
-					condBool = 1
-				}
-				if condBool != i.K {
+				if cond != (i.K != 0) {
 					pc++
 				} else {
 					pc += code[pc].B - OFFSET_sJ + 1
@@ -1314,64 +1470,4 @@ func luaG_traceexec(L *State, ci *CallInfo, pc int) bool {
 	/* deviation: a hook cannot yield here, so the CIST_HOOKYIELD dance
 	   that ends luaG_traceexec is not needed. */
 	return true /* keep 'trap' on */
-}
-
-/*
-** Arithmetic helpers mirroring lvm.c op_arith* / op_bitwise* macros.
-** On success they skip the following MMBIN* instruction (pc++), as C does.
- */
-
-func luaV_modfWrap(a, b float64) float64 {
-	/* float mod used from op_arith; L is unused by luaV_modf body */
-	return luaV_modf(nil, a, b)
-}
-
-func opArithfAux(L *State, ra int, v1, v2 *Value, fop func(float64, float64) float64, pc *int) {
-	var n1, n2 float64
-	if tonumberns(v1, &n1) && tonumberns(v2, &n2) {
-		*pc++
-		setfltvalue(&L.stack[ra], fop(n1, n2))
-	}
-}
-
-func opArithf(L *State, ra int, v1, v2 *Value, fop func(float64, float64) float64, pc *int) {
-	opArithfAux(L, ra, v1, v2, fop, pc)
-}
-
-func opArithfK(L *State, ra int, v1, v2 *Value, fop func(float64, float64) float64, pc *int) {
-	opArithfAux(L, ra, v1, v2, fop, pc)
-}
-
-func opArithAux(L *State, ra int, v1, v2 *Value, iop func(*State, int64, int64) int64, fop func(float64, float64) float64, pc *int) {
-	if ttisinteger(v1) && ttisinteger(v2) {
-		*pc++
-		setivalue(&L.stack[ra], iop(L, ivalue(v1), ivalue(v2)))
-	} else {
-		opArithfAux(L, ra, v1, v2, fop, pc)
-	}
-}
-
-func opArith(L *State, ra int, v1, v2 *Value, iop func(*State, int64, int64) int64, fop func(float64, float64) float64, pc *int) {
-	opArithAux(L, ra, v1, v2, iop, fop, pc)
-}
-
-func opArithK(L *State, ra int, v1, v2 *Value, iop func(*State, int64, int64) int64, fop func(float64, float64) float64, pc *int) {
-	opArithAux(L, ra, v1, v2, iop, fop, pc)
-}
-
-func opBitwiseK(L *State, ra int, v1, v2 *Value, op func(int64, int64) int64, pc *int) {
-	var i1 int64
-	i2 := ivalue(v2)
-	if tointegerns(v1, &i1) {
-		*pc++
-		setivalue(&L.stack[ra], op(i1, i2))
-	}
-}
-
-func opBitwise(L *State, ra int, v1, v2 *Value, op func(int64, int64) int64, pc *int) {
-	var i1, i2 int64
-	if tointegerns(v1, &i1) && tointegerns(v2, &i2) {
-		*pc++
-		setivalue(&L.stack[ra], op(i1, i2))
-	}
 }

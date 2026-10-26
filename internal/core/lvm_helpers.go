@@ -150,7 +150,7 @@ const LUA_FLOORN2I = F2Ieq
 
 /* convert an object to a float (including string coercion) */
 func tonumber(o *Value, n *float64) bool {
-	if ttisfloat(o) {
+	if o.tt == LUA_VNUMFLT {
 		*n = fltvalue(o)
 		return true
 	}
@@ -159,12 +159,12 @@ func tonumber(o *Value, n *float64) bool {
 
 /* convert an object to a float (without string coercion) */
 func tonumberns(o *Value, n *float64) bool {
-	if ttisfloat(o) {
+	if o.tt == LUA_VNUMFLT {
 		*n = fltvalue(o)
 		return true
 	}
-	if ttisinteger(o) {
-		*n = float64(ivalue(o))
+	if o.tt == LUA_VNUMINT {
+		*n = float64(o.i)
 		return true
 	}
 	return false
@@ -172,8 +172,8 @@ func tonumberns(o *Value, n *float64) bool {
 
 /* convert an object to an integer (including string coercion) */
 func tointeger(L *State, o *Value, i *int64) bool {
-	if ttisinteger(o) { /* l_likely */
-		*i = ivalue(o)
+	if o.tt == LUA_VNUMINT { /* l_likely */
+		*i = o.i
 		return true
 	}
 	return luaV_tointeger(L, o, i, LUA_FLOORN2I)
@@ -181,8 +181,8 @@ func tointeger(L *State, o *Value, i *int64) bool {
 
 /* convert an object to an integer (without string coercion) */
 func tointegerns(o *Value, i *int64) bool {
-	if ttisinteger(o) { /* l_likely */
-		*i = ivalue(o)
+	if o.tt == LUA_VNUMINT { /* l_likely */
+		*i = o.i
 		return true
 	}
 	return luaV_tointegerns(o, i, LUA_FLOORN2I)

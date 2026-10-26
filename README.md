@@ -160,18 +160,18 @@ One run on Linux x86_64 (Intel Xeon, kernel 6.12.94+): PUC-Lua 5.4.9 against a c
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 2.35× | fib | 2.95× |
-| nop | 2.92× | concat | 2.24× |
-| hash | 2.01× | yield | 1.26× |
-| intloop | 2.48× | pcall | 2.65× |
-| floatloop | 2.78× | upvalue | 2.36× |
-| bitwise | 3.27× | global | 2.39× |
-| array | 2.99× | ipairs | 2.59× |
-| strings | 1.25× | tailcall | 2.65× |
+| startup | 2.38× | fib | 2.27× |
+| nop | 2.11× | concat | 2.24× |
+| hash | 2.01× | yield | 1.31× |
+| intloop | 2.32× | pcall | 2.42× |
+| floatloop | 2.33× | upvalue | 2.11× |
+| bitwise | 2.61× | global | 2.25× |
+| array | 2.99× | ipairs | 2.30× |
+| strings | 1.25× | tailcall | 1.89× |
 | sort | 1.55× | metaindex | 1.78× |
-|  |  | method | 2.50× |
-|  |  | call3 | 3.09× |
-|  |  | alloc | 2.17× |
+|  |  | method | 1.86× |
+|  |  | call3 | 2.14× |
+|  |  | alloc | 2.13× |
 
 Every listed workload is slower on this run. The interpreter stays line-faithful to PUC-Lua 5.4.9 (no Go-only specialized shortcuts), and the checksum is the same.
 
