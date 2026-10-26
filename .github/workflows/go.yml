@@ -14,9 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        # 'oldstable' keeps the package building on the previous release;
-        # go.mod requires 1.24, so anything older cannot compile it.
-        go-version: ['oldstable', 'stable']
+        go-version: ['stable']
 
     steps:
       - name: Checkout code
