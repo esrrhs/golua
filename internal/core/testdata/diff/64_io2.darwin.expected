@@ -13,7 +13,7 @@ nil	signal	15
 userdata	file
 file (<ADDR>)	file (<ADDR>)
 xyz123true	exit	0
-6
+       6
 true	exit	0
 true	exit	0
 stored

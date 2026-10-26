@@ -57,7 +57,7 @@ func TestPackageFields(t *testing.T) {
 	L.GetField(-1, "path")
 	path, _ := L.ToString(-1)
 	L.Pop(1)
-	if !strings.Contains(path, "./?.lua") {
+	if !strings.Contains(path, "./?.lua") && !strings.Contains(path, `.\?.lua`) {
 		t.Fatalf("package.path = %q", path)
 	}
 	/* 'require' is a global function */
@@ -256,7 +256,15 @@ func TestPackageSetPath(t *testing.T) {
 	/* ';;' in the environment means "put the default path here" */
 	t.Setenv(pkPathVar+pkVerSuffix, "a"+pkPathSep+pkPathSep+"b")
 	L := newPkgState(t)
-	if got := pkgFieldString(t, L, "path"); got != "a"+pkPathSep+pkPathDefault+pkPathSep+"b" {
+	wantDefault := pkPathDefault
+	if exe, err := os.Executable(); err == nil {
+		if dir := filepath.Dir(exe); dir != "" && dir != "." {
+			if strings.Contains(wantDefault, `\`) {
+				wantDefault = strings.ReplaceAll(wantDefault, pkExecDir, dir)
+			}
+		}
+	}
+	if got := pkgFieldString(t, L, "path"); got != "a"+pkPathSep+wantDefault+pkPathSep+"b" {
 		t.Fatalf("package.path = %q", got)
 	}
 

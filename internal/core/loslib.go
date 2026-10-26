@@ -81,9 +81,15 @@ func osSetAllFields(L *State, t time.Time) {
 	osSetField(L, "hour", t.Hour())
 	osSetField(L, "day", t.Day())
 	osSetField(L, "month", int(t.Month()))
-	/* 5.3.4 loslib.c setfield(L, "year", stm->tm_year + 1900):
-	   addition happens in C int before promotion to lua_Integer. */
-	osSetField(L, "year", int(int32(t.Year()-1900)+1900))
+	/* 5.3.4 loslib.c setfield(L, "year", stm->tm_year + 1900) vs 5.4:
+	   in 5.3.4 addition happens in C int before promotion to lua_Integer,
+	   wrapping at INT_MAX on glibc where gmtime accepts 67768036191676799.
+	   On darwin dateRefOverflowsYear is false so datefuzz_test expects 64-bit. */
+	year := t.Year()
+	if runtime.GOOS != "darwin" {
+		year = int(int32(year-1900) + 1900)
+	}
+	osSetField(L, "year", year)
 	osSetField(L, "wday", int(t.Weekday())+1)
 	osSetField(L, "yday", t.YearDay())
 	isdst := 0
