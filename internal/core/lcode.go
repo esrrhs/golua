@@ -325,7 +325,7 @@ func addk(fs *FuncState, key, v *Value) int {
 	L := fs.ls.L
 	f := fs.f
 	idx := luaH_set(L, fs.ls.h, key) /* index scanner table */
-	if ttisinteger(idx) { /* is there an index there? */
+	if ttisinteger(idx) {            /* is there an index there? */
 		k := int(ivalue(idx))
 		/* correct value? (warning: must distinguish floats from integers!) */
 		if k < fs.nk && ttype(&f.k[k]) == ttype(v) && luaV_rawequalobj(&f.k[k], v) {
@@ -355,9 +355,10 @@ func luaK_stringK(fs *FuncState, s *TString) int {
 
 func luaK_intK(fs *FuncState, n int64) int {
 	/* Integers use lightuserdata as keys to avoid collision with floats
-	   of the same numeric value (lcode.c luaK_intK, Lua 5.3.4). */
+	   of the same numeric value (lcode.c luaK_intK, Lua 5.3.4:
+	   setpvalue(&k, cast(void*, cast(size_t, n)))). */
 	var k, o Value
-	setpvalue(&k, unsafe.Pointer(uintptr(n)))
+	setpvalue(&k, *(*unsafe.Pointer)(unsafe.Pointer(&n)))
 	setivalue(&o, n)
 	return addk(fs, &k, &o)
 }

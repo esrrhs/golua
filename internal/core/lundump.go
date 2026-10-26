@@ -258,6 +258,7 @@ func (S *LoadState) checkHeader() {
 // Differences vs C body alone (FLAG / composition — see NOTES):
 //   - ZIO → []byte; re-checks signature[0] (C: caller peeked it via zgetc)
 //   - no lua_assert(nupvalues==sizeupvalues) / luai_verifycode (C default empty)
+//
 // Stack: matches C — setclLvalue + inctop before LoadFunction.
 func luaU_undump(L *State, data []byte, name string) *LClosure {
 	var S LoadState

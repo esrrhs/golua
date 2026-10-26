@@ -185,7 +185,7 @@ func TestCLIWarningsOn(t *testing.T) {
 	path := cliScript(t, "warn('hi', ' there')")
 	out, errb, code := cliRun(t, "-W", path)
 	if code != 0 {
-	t.Skip("Lua 5.3.4: no warn()")
+		t.Skip("Lua 5.3.4: no warn()")
 
 		t.Fatalf("-W exited %d: %s%s", code, out, errb)
 	}

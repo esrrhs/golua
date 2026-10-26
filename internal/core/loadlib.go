@@ -343,7 +343,7 @@ func pkSearchPath(L *State, name, path, sep, dirsep string) (string, bool) {
 			break
 		}
 		filename := L.GSub(L.ToStringX(-1), pkPathMark, name)
-		L.Remove(-2)          /* remove path template */
+		L.Remove(-2)              /* remove path template */
 		if pkReadable(filename) { /* does file exist and is readable? */
 			return filename, true /* return that file name (on stack) */
 		}
@@ -471,7 +471,7 @@ func pkFindLoader(L *State, name string) {
 	/* iterate over available searchers to find a loader */
 	for i := 1; ; i++ {
 		if L.RawGetI(3, int64(i)) == LUA_TNIL { /* no more searchers? */
-			L.Pop(1) /* remove nil */
+			L.Pop(1)         /* remove nil */
 			msg.PushResult() /* create error message */
 			L.Error2("module '%s' not found:%s", name, L.ToStringX(-1))
 		}
@@ -602,7 +602,7 @@ func OpenPackage(L *State) int {
 	L.GetSubTable(LUA_REGISTRYINDEX, pkPreloadTable)
 	L.SetField(-2, "preload")
 	L.PushGlobalTable()
-	L.PushValue(-2) /* set 'package' as upvalue for next lib */
+	L.PushValue(-2)          /* set 'package' as upvalue for next lib */
 	L.SetFuncs(pkLLFuncs, 1) /* open lib into global table */
 	L.Pop(1)                 /* pop global table */
 	return 1                 /* return 'package' table */

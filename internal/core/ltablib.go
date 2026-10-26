@@ -56,7 +56,7 @@ func tableIncr(n *int) int {
 
 func tableInsert(L *State) int {
 	e := tableAuxGetn(L, 1, tabRW) + 1 /* first empty element */
-	var pos int64                       /* where to insert new element */
+	var pos int64                      /* where to insert new element */
 	switch L.GetTop() {
 	case 2: /* called with only 2 arguments */
 		pos = e /* insert new element at the end */
@@ -162,9 +162,9 @@ func tableConcat(L *State) int {
 // ---------------------------------------------------------------------
 
 func tablePack(L *State) int {
-	n := L.GetTop()     /* number of elements to pack */
-	L.CreateTable(n, 1) /* create result table */
-	L.Insert(1)         /* put it at index 1 */
+	n := L.GetTop()           /* number of elements to pack */
+	L.CreateTable(n, 1)       /* create result table */
+	L.Insert(1)               /* put it at index 1 */
 	for i := n; i >= 1; i-- { /* assign elements */
 		L.SetI(1, int64(i))
 	}

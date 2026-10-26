@@ -742,7 +742,7 @@ func dbGetHook(L *State) int {
 	arg := 0
 	L1 := dbGetThread(L, &arg)
 	mask := int(L1.hookmask) /* lua_gethookmask(L1) */
-	if L1.hook == nil { /* no hook? */
+	if L1.hook == nil {      /* no hook? */
 		L.PushNil()
 	} else if L1.hookExternal { /* external hook (C: hook != hookf) */
 		L.PushString("external hook")
@@ -756,7 +756,7 @@ func dbGetHook(L *State) int {
 	}
 	L.PushString(dbUnmakeMask(mask))       /* 2nd result = mask */
 	L.PushInteger(int64(L1.basehookcount)) /* 3rd result = count */
-	return 3 /* always three results (ldblib.c) */
+	return 3                               /* always three results (ldblib.c) */
 }
 
 // dbDebugFunc is 'db_debug': a prompt on stderr, one command per line

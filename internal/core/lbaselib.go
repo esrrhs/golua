@@ -550,7 +550,7 @@ func baseAssert(L *State) int {
 func baseSelect(L *State) int {
 	n := L.GetTop()
 	if L.Type(1) == LUA_TSTRING {
-		s, _ := L.ToString(1) /* lua_tostring */
+		s, _ := L.ToString(1)          /* lua_tostring */
 		if len(s) > 0 && s[0] == '#' { /* *lua_tostring(L, 1) == '#' */
 			L.PushInteger(int64(n - 1))
 			return 1
@@ -648,7 +648,6 @@ func baseToString(L *State) int {
 // 'loadstring' for the callee instead of whichever _G key Next finds first
 // (C shares one lua_CFunction pointer and is hash-order dependent).
 func baseLoadString(L *State) int { return baseLoad(L) }
-
 
 var baseFuncs = []Reg{
 	{Name: "assert", Func: baseAssert},

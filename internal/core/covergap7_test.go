@@ -53,7 +53,7 @@ f:close()
 -- io.input / output
 local oldin, oldout = io.input(), io.output()
 say(io.input(`+quote(p)+`))
-say(io.output(`+quote(filepath.Join(dir,"out.txt"))+`))
+say(io.output(`+quote(filepath.Join(dir, "out.txt"))+`))
 say(io.write("out"))
 io.output():close()
 io.input(oldin); io.output(oldout)

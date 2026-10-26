@@ -99,10 +99,10 @@ type FuncState struct {
 }
 
 type ConsControl struct {
-	v      expdesc
-	t      *expdesc
-	nh     int
-	na     int
+	v       expdesc
+	t       *expdesc
+	nh      int
+	na      int
 	tostore int
 }
 
@@ -577,7 +577,6 @@ func recfield(ls *LexState, cc *ConsControl) {
 	fs.freereg = reg
 }
 
-
 func closelistfield(fs *FuncState, cc *ConsControl) {
 	if cc.v.k == VVOID {
 		return
@@ -657,7 +656,6 @@ func constructor(ls *LexState, t *expdesc) {
 	fs.f.code[pc].B = luaO_int2fb(uint32(cc.na))
 	fs.f.code[pc].C = luaO_int2fb(uint32(cc.nh))
 }
-
 
 func parlist(ls *LexState) {
 	/* parlist -> [ param { ',' param } ] */
@@ -1199,15 +1197,15 @@ func test_then_block(ls *LexState, escapelist *int) {
 	var bl BlockCnt
 	fs := ls.fs
 	var v expdesc
-	var jf int /* instruction to skip 'then' code (if condition is false) */
+	var jf int    /* instruction to skip 'then' code (if condition is false) */
 	luaX_next(ls) /* skip IF or ELSEIF */
 	expr(ls, &v)  /* read condition */
 	checknext(ls, TK_THEN)
 	if ls.t.token == TK_GOTO || ls.t.token == TK_BREAK {
-		luaK_goiffalse(ls.fs, &v) /* will jump to label if condition is true */
-		enterblock(fs, &bl, false) /* must enter block before 'goto' */
-		gotostat(ls, v.t)          /* handle goto/break */
-		skipnoopstat(ls)           /* skip other no-op statements */
+		luaK_goiffalse(ls.fs, &v)    /* will jump to label if condition is true */
+		enterblock(fs, &bl, false)   /* must enter block before 'goto' */
+		gotostat(ls, v.t)            /* handle goto/break */
+		skipnoopstat(ls)             /* skip other no-op statements */
 		if block_follow(ls, false) { /* 'goto' is the entire block? */
 			leaveblock(fs)
 			return /* and that is it */

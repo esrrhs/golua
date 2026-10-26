@@ -100,9 +100,9 @@ golua/
 
 - **直译，而非重写。** `llex.c` 对应 `llex.go`，`lvm.c` 对应 `lvm.go`，
   依此类推。函数名、控制流与错误信息都遵循 C 源码，审校可以逐行对照。
-- **收集器是唯一的例外。** Lua 对象就是普通的 Go 值。弱表使用 Go 的弱指针，
-  `__gc` 与弱表条目的清理发生在周期边界：`Close()`、`collectgarbage`，
-  或分配越过阈值时。
+- **收集器是唯一的例外。** Lua 对象就是普通的 Go 值，生命周期完全由 Go 并发 GC
+  管理。弱表使用 Go 标准库 `weak.Pointer`，`__gc` 终结器通过 `runtime.AddCleanup`
+  入队并在 VM 执行路径或 `Close()` / `collectgarbage` 时触发。
 - **C API 是重导出，不是重实现。** `State` 上的方法才是实现；根包只做类型
   别名与包级函数转发。
 
@@ -149,25 +149,26 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 2.59× | global | 2.26× |
-| nop | 1.51× | array | 2.36× |
-| intloop | 2.00× | hash | 2.10× |
-| floatloop | 2.36× | metaindex | 1.90× |
-| bitwise | 2.48× | ipairs | 2.27× |
-| fib | 1.65× | concat | 3.08× |
-| tailcall | 2.01× | strings | 6.70× |
-| call3 | 1.67× | sort | 1.61× |
-| upvalue | 1.75× | yield | 1.40× |
-| method | 1.79× | alloc | 2.08× |
-| pcall | 1.83× |  |  |
+| startup | 2.44× | global | 2.29× |
+| nop | 1.80× | array | 2.39× |
+| intloop | 2.27× | hash | 1.73× |
+| floatloop | 2.55× | metaindex | 1.96× |
+| bitwise | 2.60× | ipairs | 1.99× |
+| fib | 1.57× | concat | 2.10× |
+| tailcall | 1.77× | strings | 1.30× |
+| call3 | 1.75× | sort | 1.76× |
+| upvalue | 1.71× | yield | 1.43× |
+| method | 2.09× | alloc | 1.94× |
+| pcall | 2.24× |  |  |
 
-多数字节码密集行大约 1.5–2.5×。`yield` 最接近 C；`concat` 与 `strings` 是离群值。`strings` 在栈上 `luaL_Buffer`（`initb`）对齐后仍约 6.7×：每次 `string.format("%d-…")` 仍走 Go 的 `fmt`/`strconv` 与短串 intern，而 C 是 `sprintf` 写进栈缓冲。`startup` 付的是 Go 运行时的成本。
+多数字节码密集行大约 1.3–2.5×。`strings`（1.30×）与 `yield`（1.43×）最接近 C：`string.format` 直接通过 `PrepBuffSize` + `strconv.AppendInt` 写入不逃逸的栈上 `luaL_Buffer`，并在分配前先查短串 intern 表。`startup` 付的是 Go 运行时的成本。
 
 ## 已知差异
 
-- **没有自己的收集器。** `collectgarbage` 驱动的是 Go 的 GC，作用范围是
-  整个进程而非单个 state，`collectgarbage("count")` 报的也是 Go 堆。
-  弱表条目与终结器在周期边界处理，而不是在某一次分配中途处理。
+- **没有自己的收集器。** 对象生命周期完全由 Go 并发 GC 自动管理
+  （`collectgarbage("collect")` 触发进程级 GC，`collectgarbage("count")`
+  报 Go 堆大小）。弱表条目通过 `weak.Pointer` 自动失效，终结器通过
+  `runtime.AddCleanup` 入队并在 VM 执行路径处理。
 - **C 模块需要 cgo。** 没有 cgo 就没有 `dlopen`，也没有 C 的 `setlocale`
   （小数点由内置表提供）；Windows 目前没有动态加载后端。
 - **平台决定的部分。** 带 cgo 时数学库调用宿主 libm，和 PUC-Lua 用的是

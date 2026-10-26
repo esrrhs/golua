@@ -91,7 +91,6 @@ func strReverse(L *State) int {
 	return 1
 }
 
-
 // strASCIILower/strASCIIUpper mimic the C library 'tolower'/'toupper'
 // in the "C" locale: only ASCII letters are converted.
 func strASCIILower(c byte) byte {
@@ -120,7 +119,6 @@ func strLower(L *State) int {
 	return 1
 }
 
-
 func strUpper(L *State) int {
 	s := L.CheckString(1)
 	n := len(s)
@@ -132,7 +130,6 @@ func strUpper(L *State) int {
 	b.PushResultSize(n)
 	return 1
 }
-
 
 func strRep(L *State) int {
 	s := L.CheckString(1)
@@ -163,7 +160,6 @@ func strRep(L *State) int {
 	}
 	return 1
 }
-
 
 func strByte(L *State) int {
 	s := L.CheckString(1)
@@ -203,7 +199,6 @@ func strChar(L *State) int {
 	return 1
 }
 
-
 // strDump dumps a function as a precompiled chunk (string.dump,
 // lstrlib.c). The 'writer' of the C code is a closure appending to a Go
 // buffer; 'lua_dump' returns non-zero when the value is not a Lua
@@ -224,7 +219,6 @@ func strDump(L *State) int {
 	b.PushResult()
 	return 1
 }
-
 
 // ---------------------------------------------------------------------
 // FLAG: strStringToNumber — not in 5.3.4 lstrlib.c
@@ -316,14 +310,11 @@ func strCaptureToClose(ms *strMatchState) int {
 // strClassEnd returns the offset just after the class starting at 'p'
 // (classend).
 func strClassEnd(ms *strMatchState, p int) int {
-	var c byte
-	if p < len(ms.p) {
-		c = ms.p[p]
-	}
+	c := ms.p[p]
 	p++
 	switch c {
 	case strEsc:
-		if p >= ms.pEnd {
+		if p == ms.pEnd {
 			ms.L.Error2("malformed pattern (ends with '%%')")
 		}
 		return p + 1
@@ -332,7 +323,7 @@ func strClassEnd(ms *strMatchState, p int) int {
 			p++
 		}
 		for { /* look for a ']' */
-			if p >= ms.pEnd {
+			if p == ms.pEnd {
 				ms.L.Error2("malformed pattern (missing ']')")
 			}
 			ch := ms.p[p]
@@ -367,8 +358,7 @@ func strIsSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r'
 }
 
-// strMatchClass tells whether 'c' belongs to the class 'cl' (match_class).
-func strMatchClass(c, cl byte) bool {
+func strMatchClassLocale(c, cl byte) bool {
 	var res bool
 	switch localeToLower(cl) {
 	case 'a':
@@ -397,6 +387,44 @@ func strMatchClass(c, cl byte) bool {
 		return cl == c
 	}
 	if localeIsLower(cl) {
+		return res
+	}
+	return !res
+}
+
+// strMatchClass tells whether 'c' belongs to the class 'cl' (match_class).
+func strMatchClass(c, cl byte) bool {
+	if !ctypeIsC.Load() {
+		return strMatchClassLocale(c, cl)
+	}
+	var res bool
+	switch cl | 0x20 {
+	case 'a':
+		res = strIsAlpha(c)
+	case 'c':
+		res = strIsCntrl(c)
+	case 'd':
+		res = strIsDigit(c)
+	case 'g':
+		res = strIsGraph(c)
+	case 'l':
+		res = strIsLower(c)
+	case 'p':
+		res = strIsPunct(c)
+	case 's':
+		res = strIsSpace(c)
+	case 'u':
+		res = strIsUpper(c)
+	case 'w':
+		res = strIsAlnum(c)
+	case 'x':
+		res = strIsXDigit(c)
+	case 'z':
+		res = (c == 0) /* deprecated option */
+	default:
+		return cl == c
+	}
+	if cl >= 'a' {
 		return res
 	}
 	return !res
@@ -439,23 +467,15 @@ func strSingleMatch(ms *strMatchState, s, p, ep int) bool {
 		return false
 	}
 	c := ms.src[s]
-	var pc byte
-	if p < len(ms.p) {
-		pc = ms.p[p]
-	}
-	switch pc {
+	switch ms.p[p] {
 	case '.':
 		return true /* matches any char */
 	case strEsc:
-		var cl byte
-		if p+1 < len(ms.p) {
-			cl = ms.p[p+1]
-		}
-		return strMatchClass(c, cl)
+		return strMatchClass(c, ms.p[p+1])
 	case '[':
 		return strMatchBracketClass(c, p, ep-1, ms.p)
 	default:
-		return pc == c
+		return ms.p[p] == c
 	}
 }
 
@@ -853,13 +873,12 @@ func strAddS(ms *strMatchState, b *Buffer, s, e int) {
 			} else {
 				strPushOneCapture(ms, int(news[i]-'1'), s, e)
 				strToLString(L, -1) /* if number, convert it to string */
-				L.Remove(-2)         /* remove original value */
-				b.AddValue()         /* add capture to accumulated result */
+				L.Remove(-2)        /* remove original value */
+				b.AddValue()        /* add capture to accumulated result */
 			}
 		}
 	}
 }
-
 
 // strAddValue adds the replacement value to the buffer (add_value).
 // 5.3.4: void; no "changed" identity flag (that is 5.4).
@@ -885,7 +904,6 @@ func strAddValue(ms *strMatchState, b *Buffer, s, e int, tr int) {
 	}
 	b.AddValue() /* add result to accumulator */
 }
-
 
 func strGsub(L *State) int {
 	src := L.CheckString(1) /* subject */
@@ -932,7 +950,6 @@ func strGsub(L *State) int {
 	return 2
 }
 
-
 // ---------------------------------------------------------------------
 // STRING FORMAT
 // ---------------------------------------------------------------------
@@ -940,11 +957,11 @@ func strGsub(L *State) int {
 const (
 	strMaxFormat  = 32
 	strMaxItem    = 120 + 308 /* 120 + DBL_MAX_10_EXP; MAX_ITEM in lstrlib.c */
-	strFmtFlagsF  = "-+#0 " /* valid flags for a, A, e, E, f, F, g, G */
-	strFmtFlagsX  = "-#0"   /* valid flags for o, x, X */
-	strFmtFlagsI  = "-+0 "  /* valid flags for d, i */
-	strFmtFlagsU  = "-0"    /* valid flags for u */
-	strFmtFlagsC  = "-"     /* valid flags for c, p, s */
+	strFmtFlagsF  = "-+#0 "   /* valid flags for a, A, e, E, f, F, g, G */
+	strFmtFlagsX  = "-#0"     /* valid flags for o, x, X */
+	strFmtFlagsI  = "-+0 "    /* valid flags for d, i */
+	strFmtFlagsU  = "-0"      /* valid flags for u */
+	strFmtFlagsC  = "-"       /* valid flags for c, p, s */
 	strFmtScan    = "123456789."
 	strMaxDecimal = ".6" /* default precision of the C 'f'/'e'/'g' */
 )
@@ -1187,7 +1204,12 @@ func strGetFormat(L *State, strfrmt string, i int) (string, int) {
 	if p >= len(strfrmt) {
 		L.Error2("invalid option '%%' to 'format'")
 	}
-	form := "%" + strfrmt[i:p+1]
+	var form string
+	if i > 0 && strfrmt[i-1] == strEsc {
+		form = strfrmt[i-1 : p+1]
+	} else {
+		form = "%" + strfrmt[i:p+1]
+	}
 	if len(form) >= strMaxFormat-10 {
 		L.Error2("invalid format (too long)")
 	}
@@ -1487,7 +1509,6 @@ func strAddLiteral(L *State, b *Buffer, arg int) {
 	}
 }
 
-
 // strToLString converts the value at 'idx' into a string, pushing the
 // result on the stack (luaL_tolstring).  The pushed string is left on
 // the stack.
@@ -1628,13 +1649,21 @@ func strFormat(L *State) int {
 		i = last + 1
 		switch spec {
 		case 'c':
+			c := byte(L.CheckInteger(arg))
 			strCheckFormat(L, form, strFmtFlagsC, false)
-			b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", string([]byte{byte(L.CheckInteger(arg))})))
+			if len(form) == 2 {
+				b.AddChar(c)
+			} else {
+				b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", string([]byte{c})))
+			}
 		case 'd', 'i':
 			/* C fetches the argument first */
 			n := L.CheckInteger(arg)
 			strCheckFormat(L, form, strFmtFlagsI, true)
-			if f := strParseFormat(form); n == 0 && f.prec == 0 {
+			if len(form) == 2 {
+				buff := b.PrepBuffSize(strMaxItem)
+				b.AddSize(len(strconv.AppendInt(buff[:0], n, 10)))
+			} else if f := strParseFormat(form); n == 0 && f.prec == 0 {
 				b.AddString(strFormatZeroInt(f))
 			} else {
 				b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", n))
@@ -1642,8 +1671,13 @@ func strFormat(L *State) int {
 		case 'u':
 			n := L.CheckInteger(arg)
 			strCheckFormat(L, form, strFmtFlagsU, true)
-			uform := strStripSignedFlags(form)
-			b.AddString(fmt.Sprintf(uform[:len(uform)-1]+"d", uint64(n)))
+			if len(form) == 2 {
+				buff := b.PrepBuffSize(strMaxItem)
+				b.AddSize(len(strconv.AppendUint(buff[:0], uint64(n), 10)))
+			} else {
+				uform := strStripSignedFlags(form)
+				b.AddString(fmt.Sprintf(uform[:len(uform)-1]+"d", uint64(n)))
+			}
 		case 'o', 'x', 'X':
 			n := L.CheckInteger(arg)
 			strCheckFormat(L, form, strFmtFlagsX, true)
@@ -1685,7 +1719,6 @@ func strFormat(L *State) int {
 	b.PushResult()
 	return 1
 }
-
 
 // ---------------------------------------------------------------------
 // PACK/UNPACK
@@ -1910,7 +1943,6 @@ func strPackInt(b *Buffer, n uint64, islittle bool, size int, neg bool) {
 	b.AddSize(size)
 }
 
-
 // strUnpackInt unpacks an integer with 'size' bytes (unpackint).
 func strUnpackInt(L *State, data string, pos int, islittle bool, size, issigned int) int64 {
 	var res uint64
@@ -1967,7 +1999,6 @@ func strPackBits(b *Buffer, bits uint64, n int, islittle bool) {
 	b.AddSize(n)
 }
 
-
 // strPadBytes appends 'n' padding bytes -- the tail of a 'cN' field.
 //
 // C pads it one byte at a time (lstrlib.c):
@@ -1993,7 +2024,6 @@ func strPadBytes(b *Buffer, n int) {
 		b.AddBytes(pad[:n])
 	}
 }
-
 
 func strUnpackBits(data string, pos, n int, islittle bool) uint64 {
 	var b [8]byte
@@ -2049,7 +2079,7 @@ func strPack(L *State) int {
 		case strKchar: /* fixed-size string */
 			s := L.CheckString(arg)
 			L.ArgCheck(len(s) <= size, arg, "string longer than given size")
-			b.AddString(s)             /* add string */
+			b.AddString(s)               /* add string */
 			strPadBytes(&b, size-len(s)) /* pad extra space */
 		case strKstring: /* strings with length count */
 			s := L.CheckString(arg)
@@ -2074,7 +2104,6 @@ func strPack(L *State) int {
 	b.PushResult()
 	return 1
 }
-
 
 func strPackSize(L *State) int {
 	fmtstr := strFmtOpts(L.CheckString(1)) /* format string */

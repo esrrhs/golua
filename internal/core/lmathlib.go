@@ -292,7 +292,7 @@ func mathType(L *State) int {
 ** {==================================================================
 ** Deprecated functions (for compatibility only)
 ** ===================================================================
-*/
+ */
 //
 // luaconf.h defines 'LUA_COMPAT_MATHLIB' and the reference build does
 // not turn it off, so 'math.sinh', 'math.cosh', 'math.tanh', 'math.pow',

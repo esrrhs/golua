@@ -12,4 +12,3 @@ func math2Abs(n float64) float64          { return math.Abs(n) }
 func math2Fmod(x, y float64) float64      { return libmFmod(x, y) }
 func math2Pow(x, y float64) float64       { return libmPow(x, y) }
 func math2Sqrt(x float64) float64         { return libmSqrt(x) }
-

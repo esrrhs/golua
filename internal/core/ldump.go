@@ -26,7 +26,7 @@ type DumpState struct {
 /*
 ** All high-level dumps go through dumpBlock of a prepared buffer; LE
 ** fixed widths replace C DumpVector/DumpVar host endianness (FLAG).
-*/
+ */
 
 func (D *DumpState) dumpBlock(b []byte) {
 	if D.status == 0 && len(b) > 0 {
@@ -215,11 +215,11 @@ func (D *DumpState) dumpHeader() {
 	D.dumpByte(dmpFormat)             /* LUAC_FORMAT */
 	D.dumpBlock([]byte(dmpData))      /* DumpLiteral(LUAC_DATA, D) */
 	/* C: sizeof(int/size_t/Instruction/lua_Integer/lua_Number) — FLAG fixed LE */
-	D.dumpByte(4) /* sizeof(int) */
-	D.dumpByte(8) /* sizeof(size_t) */
-	D.dumpByte(4) /* sizeof(Instruction) */
-	D.dumpByte(8) /* sizeof(lua_Integer) */
-	D.dumpByte(8) /* sizeof(lua_Number) */
+	D.dumpByte(4)         /* sizeof(int) */
+	D.dumpByte(8)         /* sizeof(size_t) */
+	D.dumpByte(4)         /* sizeof(Instruction) */
+	D.dumpByte(8)         /* sizeof(lua_Integer) */
+	D.dumpByte(8)         /* sizeof(lua_Number) */
 	D.dumpInteger(dmpInt) /* LUAC_INT */
 	D.dumpNumber(dmpNum)  /* LUAC_NUM */
 }

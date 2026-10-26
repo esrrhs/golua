@@ -225,7 +225,6 @@ func lua_rotate(p *C.lua_State, idx, n C.int) { stateOf(p).Rotate(int(idx), int(
 //export lua_copy
 func lua_copy(p *C.lua_State, from, to C.int) { stateOf(p).Copy(int(from), int(to)) }
 
-
 //export lua_pop
 func lua_pop(p *C.lua_State, n C.int) { stateOf(p).SetTop(-int(n) - 1) }
 
