@@ -481,7 +481,11 @@ func (L *State) PushLString(s string) string {
 }
 
 // PushBytes is a Go convenience ≈ lua_pushlstring for []byte.
-func (L *State) PushBytes(b []byte) { L.PushLString(string(b)) }
+func (L *State) PushBytes(b []byte) {
+	L.checkStack(1)
+	setsvalue(&L.stack[L.top], luaS_newlstrBytes(L, b))
+	L.top++
+}
 
 // PushFString is lua_pushfstring (formats then pushes; returns the string).
 func (L *State) PushFString(format string, args ...any) string {
@@ -576,7 +580,10 @@ func luaV_gettable(L *State, t *Value, keyIdx, valIdx int) {
 
 // auxgetstr is lapi.c auxgetstr: intern k once, fastget via luaH_getstr.
 func auxgetstr(L *State, t *Value, k string) int {
-	str := luaS_newlstr(L, k)
+	return auxgetts(L, t, luaS_newlstr(L, k))
+}
+
+func auxgetts(L *State, t *Value, str *TString) int {
 	var slot *Value
 	if ttistable(t) {
 		slot = luaH_getstr(L, hvalue(t), str)
@@ -757,7 +764,10 @@ func luaV_settable(L *State, t *Value, keyIdx, valIdx int) {
 
 // auxsetstr is lapi.c auxsetstr: intern k once, fastset via luaH_getstr.
 func auxsetstr(L *State, t *Value, k string) {
-	str := luaS_newlstr(L, k)
+	auxsetts(L, t, luaS_newlstr(L, k))
+}
+
+func auxsetts(L *State, t *Value, str *TString) {
 	var slot *Value
 	if ttistable(t) {
 		slot = luaH_getstr(L, hvalue(t), str)

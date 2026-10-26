@@ -151,19 +151,19 @@ const CDL_IDSIZE = 60
 // cdlTestUserData is luaL_testudata (lauxlib.c:245): it answers the
 // userdata at 'arg' when it carries the metatable registered under
 // 'tname', and nil otherwise; with 'check' it raises instead.
-func cdlTestUserData(L *State, arg int, tname string, check bool) unsafe.Pointer {
+func cdlTestUserData(L *State, arg int, tname *TString, check bool) unsafe.Pointer {
 	p := L.ToUserData(arg)
 	if p == nil || !L.GetMetaTable(arg) {
 		if check {
-			L.TypeError(arg, tname)
+			L.TypeError(arg, tname.val)
 		}
 		return nil
 	}
-	L.GetField(LUA_REGISTRYINDEX, tname) /* the registered metatable */
+	auxgetts(L, &L.g.registry, tname) /* the registered metatable */
 	if !L.RawEqual(-1, -2) {
 		L.Pop(2)
 		if check {
-			L.TypeError(arg, tname)
+			L.TypeError(arg, tname.val)
 		}
 		return nil
 	}

@@ -102,6 +102,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -123,38 +124,60 @@ import (
 const luaExtraSpace = unsafe.Sizeof(uintptr(0))
 
 func (L *State) statePtr() *C.lua_State {
-	if L.cstate == nil {
-		/* The block is LUA_EXTRASPACE bytes followed by the id:
-		   'lua_getextraspace' hands C the bytes *before* the pointer it
-		   was given, and PUC-Lua really does keep them there, so they
-		   have to exist and be addressable. */
-		size := unsafe.Sizeof(uintptr(0))
-		base := C.malloc(C.size_t(luaExtraSpace) + C.size_t(size))
-		if base == nil {
-			panic("lua: out of memory for a lua_State handle")
-		}
-		C.memset(base, 0, C.size_t(luaExtraSpace)+C.size_t(size))
-		block := unsafe.Pointer(uintptr(base) + luaExtraSpace)
-		tok := &cstateBlock{base: base, g: L.g}
-		tok.id = registerState(L)
-		*(*uintptr)(block) = tok.id
-		L.cstate = block
-		L.cstateBase = base
-		L.cstateTok = tok
-		cstateLive.Add(1)
-		L.g.trackCState(tok)
-		runtime.AddCleanup(L, func(t *cstateBlock) { t.release() }, tok)
+	if p := atomic.LoadPointer(&L.cstate); p != nil {
+		return (*C.lua_State)(p)
 	}
-	return (*C.lua_State)(L.cstate)
+	return L.statePtrSlow()
+}
+
+//go:noinline
+func (L *State) statePtrSlow() *C.lua_State {
+	/* The block is LUA_EXTRASPACE bytes followed by the id:
+	   'lua_getextraspace' hands C the bytes *before* the pointer it
+	   was given, and PUC-Lua really does keep them there, so they
+	   have to exist and be addressable. */
+	size := unsafe.Sizeof(uintptr(0))
+	base := C.malloc(C.size_t(luaExtraSpace) + C.size_t(size))
+	if base == nil {
+		panic("lua: out of memory for a lua_State handle")
+	}
+	C.memset(base, 0, C.size_t(luaExtraSpace)+C.size_t(size))
+	block := unsafe.Pointer(uintptr(base) + luaExtraSpace)
+	tok := &cstateBlock{base: base, g: L.g}
+	tok.id = registerState(L)
+	*(*uintptr)(block) = tok.id
+	L.cstateBase = base
+	L.cstateTok = tok
+	atomic.StorePointer(&L.cstate, block)
+	cstateLive.Add(1)
+	L.g.trackCState(tok)
+	runtime.AddCleanup(L, func(t *cstateBlock) { t.release() }, tok)
+	return (*C.lua_State)(block)
 }
 
 func stateOf(p *C.lua_State) *State {
+	if p != nil {
+		id := *(*uintptr)(unsafe.Pointer(p))
+		if L := stateActiveCache[id&stateCacheMask].Load(); L != nil && atomic.LoadPointer(&L.cstate) == unsafe.Pointer(p) {
+			return L
+		}
+	}
+	return stateOfSlow(p)
+}
+
+//go:noinline
+func stateOfSlow(p *C.lua_State) *State {
 	if p == nil {
 		panic("lua: C handed back a null lua_State")
 	}
-	L := stateByID(*(*uintptr)(unsafe.Pointer(p)))
+	id := *(*uintptr)(unsafe.Pointer(p))
+	L := stateByID(id)
 	if L == nil {
 		panic("lua: C handed back an unknown lua_State")
+	}
+	if cgoIsBusy() {
+		stateSlowDirty.Store(true)
+		stateActiveCache[id&stateCacheMask].Store(L)
 	}
 	return L
 }
@@ -178,6 +201,7 @@ func cgoReleaseState(L *State) {
 // cFunc wraps a C function pointer as the GoFunc the VM calls: the VM
 // sees an ordinary closure, and the closure crosses into C.
 func cFunc(f unsafe.Pointer) GoFunc {
+	cf := C.lua_CFunction(f)
 	return func(L *State) int {
 		// Entering C from a synchronous coroutine has to happen on the
 		// coroutine's own goroutine: lua_yieldk parks, and parking on
@@ -188,12 +212,21 @@ func cFunc(f unsafe.Pointer) GoFunc {
 		}
 		p := L.statePtr()
 		cgoEnter()
-		defer func() {
-			cgoLeave()
-			runtime.KeepAlive(L)
-		}()
-		return int(C.cdl_call_cfunction(C.lua_CFunction(f), p))
+		slot := *(*uintptr)(unsafe.Pointer(p)) & stateCacheMask
+		prev := stateActiveCache[slot].Load()
+		stateActiveCache[slot].Store(L)
+		defer cgoLeaveFunc(L, slot, prev)
+		return int(C.cdl_call_cfunction(cf, p))
 	}
+}
+
+func cgoLeaveFunc(L *State, slot uintptr, prev *State) {
+	if prev != nil && atomic.LoadPointer(&prev.cstate) == nil {
+		prev = nil
+	}
+	stateActiveCache[slot].Store(prev)
+	cgoLeave()
+	runtime.KeepAlive(L)
 }
 
 func cBool(b bool) C.int {
@@ -361,33 +394,31 @@ func lua_tolstring(p *C.lua_State, idx C.int, l *C.size_t) *C.char {
 // C.free at that moment is a use-after-free. The finalizer only detaches
 // the pointer; cgoFree returns it once no such call is in progress.
 func tsCStr(ts *TString) unsafe.Pointer {
-	p := unsafe.Pointer(C.CString(ts.val))
-	cstrMu.Lock()
-	if ts.cstr != nil {
-		old := ts.cstr
-		cstrMu.Unlock()
-		C.free(p)
-		return old
+	if p := atomic.LoadPointer(&ts.cstr); p != nil {
+		return p
 	}
-	ts.cstr = p
-	cstrMu.Unlock()
+	return tsCStrSlow(ts)
+}
+
+//go:noinline
+func tsCStrSlow(ts *TString) unsafe.Pointer {
+	p := unsafe.Pointer(C.CString(ts.val))
+	if !atomic.CompareAndSwapPointer(&ts.cstr, nil, p) {
+		C.free(p)
+		return atomic.LoadPointer(&ts.cstr)
+	}
 	runtime.SetFinalizer(ts, freeTStringC)
 	return p
 }
 
 func freeTStringC(t *TString) {
-	cstrMu.Lock()
-	p := t.cstr
-	t.cstr = nil
-	cstrMu.Unlock()
+	p := atomic.SwapPointer(&t.cstr, nil)
 	if p == nil {
 		return
 	}
 	cstrDetached.Add(1)
 	cgoFree(p)
 }
-
-var cstrMu sync.Mutex
 
 //export lua_tostring
 func lua_tostring(p *C.lua_State, idx C.int) *C.char { return lua_tolstring(p, idx, nil) }
@@ -464,26 +495,66 @@ func lua_pushnumber(p *C.lua_State, n C.lua_Number) { stateOf(p).PushNumber(floa
 //export lua_pushinteger
 func lua_pushinteger(p *C.lua_State, n C.lua_Integer) { stateOf(p).PushInteger(int64(n)) }
 
-// pushedCStr is the internal copy of the string just pushed. PUC-Lua
-// returns that, not the caller's buffer: the caller may free its own
-// memory and keep the pointer.
-func pushedCStr(L *State) *C.char {
-	v := index2value(L, -1)
-	if v == nil || !ttisstring(v) {
+// cStrBytes returns a transient byte slice viewing a NUL-terminated C
+// string without allocating on the Go heap or making a cgo call.
+// Callers must never retain the returned slice past the call.
+func cStrBytes(s *C.char) []byte {
+	if s == nil {
 		return nil
 	}
-	return (*C.char)(tsCStr(tsvalue(v)))
+	p := unsafe.Pointer(s)
+	n := 0
+	for *(*byte)(unsafe.Add(p, n)) != 0 {
+		n++
+	}
+	return unsafe.Slice((*byte)(p), n)
+}
+
+// cStrTString looks up or interns a NUL-terminated C string in L's
+// string table without allocating when a short string is already interned.
+func cStrTString(L *State, s *C.char) *TString {
+	b := cStrBytes(s)
+	if len(b) == 0 {
+		return luaS_newlstr(L, "")
+	}
+	return luaS_newlstrBytes(L, b)
+}
+
+// cStrGo converts a NUL-terminated C string to a Go string, reusing L's
+// interned short-string table to avoid heap allocation when possible.
+func cStrGo(L *State, s *C.char) string {
+	b := cStrBytes(s)
+	if len(b) == 0 {
+		return ""
+	}
+	if len(b) <= LUAI_MAXSHORTLEN {
+		return luaS_newlstrBytes(L, b).val
+	}
+	return string(b)
+}
+
+// cdlPushCBytes interns/creates a TString from b, pushes it onto L, and
+// returns the NUL-terminated internal copy C may keep.
+func cdlPushCBytes(L *State, b []byte) *C.char {
+	var ts *TString
+	if len(b) == 0 {
+		ts = luaS_newlstr(L, "")
+	} else {
+		ts = luaS_newlstrBytes(L, b)
+	}
+	L.checkStack(1)
+	setsvalue(&L.stack[L.top], ts)
+	L.top++
+	return (*C.char)(tsCStr(ts))
 }
 
 //export lua_pushlstring
 func lua_pushlstring(p *C.lua_State, s *C.char, l C.size_t) *C.char {
 	L := stateOf(p)
 	if s == nil || l == 0 {
-		L.PushString("")
-		return pushedCStr(L)
+		return cdlPushCBytes(L, nil)
 	}
-	L.PushBytes([]byte(C.GoStringN(s, C.int(l))))
-	return pushedCStr(L)
+	return cdlPushCBytes(L, unsafe.Slice((*byte)(unsafe.Pointer(s)), int(l)))
 }
 
 //export lua_pushstring
@@ -492,9 +563,7 @@ func lua_pushstring(p *C.lua_State, s *C.char) *C.char {
 		stateOf(p).PushNil()
 		return nil
 	}
-	L := stateOf(p)
-	L.PushString(C.GoString(s))
-	return pushedCStr(L)
+	return cdlPushCBytes(stateOf(p), cStrBytes(s))
 }
 
 //export lua_pushboolean
@@ -522,7 +591,9 @@ func lua_pushglobaltable(p *C.lua_State) { stateOf(p).PushGlobalTable() }
 
 //export lua_getglobal
 func lua_getglobal(p *C.lua_State, name *C.char) C.int {
-	return C.int(stateOf(p).GetGlobal(C.GoString(name)))
+	L := stateOf(p)
+	gt := luaH_getint(hvalue(&L.g.registry), LUA_RIDX_GLOBALS)
+	return C.int(auxgetts(L, gt, cStrTString(L, name)))
 }
 
 //export lua_gettable
@@ -530,7 +601,8 @@ func lua_gettable(p *C.lua_State, idx C.int) C.int { return C.int(stateOf(p).Get
 
 //export lua_getfield
 func lua_getfield(p *C.lua_State, idx C.int, k *C.char) C.int {
-	return C.int(stateOf(p).GetField(idxInt(idx), C.GoString(k)))
+	L := stateOf(p)
+	return C.int(auxgetts(L, index2value(L, idxInt(idx)), cStrTString(L, k)))
 }
 
 //export lua_geti
@@ -558,14 +630,19 @@ func lua_createtable(p *C.lua_State, narr, nrec C.int) { stateOf(p).CreateTable(
 func lua_newtable(p *C.lua_State) { stateOf(p).CreateTable(0, 0) }
 
 //export lua_setglobal
-func lua_setglobal(p *C.lua_State, name *C.char) { stateOf(p).SetGlobal(C.GoString(name)) }
+func lua_setglobal(p *C.lua_State, name *C.char) {
+	L := stateOf(p)
+	gt := luaH_getint(hvalue(&L.g.registry), LUA_RIDX_GLOBALS)
+	auxsetts(L, gt, cStrTString(L, name))
+}
 
 //export lua_settable
 func lua_settable(p *C.lua_State, idx C.int) { stateOf(p).SetTable(idxInt(idx)) }
 
 //export lua_setfield
 func lua_setfield(p *C.lua_State, idx C.int, k *C.char) {
-	stateOf(p).SetField(idxInt(idx), C.GoString(k))
+	L := stateOf(p)
+	auxsetts(L, index2value(L, idxInt(idx)), cStrTString(L, k))
 }
 
 //export lua_seti
@@ -817,7 +894,8 @@ func luaL_setfuncs(p *C.lua_State, l *C.luaL_Reg, nup C.int) {
 
 //export luaL_getsubtable
 func luaL_getsubtable(p *C.lua_State, idx C.int, fname *C.char) C.int {
-	return cBool(stateOf(p).GetSubTable(idxInt(idx), C.GoString(fname)))
+	L := stateOf(p)
+	return cBool(L.GetSubTable(idxInt(idx), cStrGo(L, fname)))
 }
 
 //export luaL_ref
@@ -876,12 +954,14 @@ func luaL_tolstring(p *C.lua_State, idx C.int, l *C.size_t) *C.char {
 
 //export luaL_callmeta
 func luaL_callmeta(p *C.lua_State, obj C.int, e *C.char) C.int {
-	return cBool(stateOf(p).CallMeta(idxInt(obj), C.GoString(e)))
+	L := stateOf(p)
+	return cBool(L.CallMeta(idxInt(obj), cStrGo(L, e)))
 }
 
 //export luaL_getmetafield
 func luaL_getmetafield(p *C.lua_State, obj C.int, e *C.char) C.int {
-	return cBool(stateOf(p).GetMetaField(idxInt(obj), C.GoString(e)) != LUA_TNIL)
+	L := stateOf(p)
+	return cBool(L.GetMetaField(idxInt(obj), cStrGo(L, e)) != LUA_TNIL)
 }
 
 //export luaL_where
@@ -1056,7 +1136,7 @@ func luaL_addlstring(b *C.luaL_Buffer, s *C.char, l C.size_t) {
 	if buf == nil || s == nil || l == 0 {
 		return
 	}
-	buf.AddBytes(C.GoBytes(unsafe.Pointer(s), C.int(l)))
+	buf.AddBytes(unsafe.Slice((*byte)(unsafe.Pointer(s)), int(l)))
 	bufLeave(b, buf)
 }
 
@@ -1066,7 +1146,7 @@ func luaL_addstring(b *C.luaL_Buffer, s *C.char) {
 	if buf == nil || s == nil {
 		return
 	}
-	buf.AddString(C.GoString(s))
+	buf.AddBytes(cStrBytes(s))
 	bufLeave(b, buf)
 }
 
@@ -1089,7 +1169,9 @@ func luaL_pushresult(b *C.luaL_Buffer) {
 	L := buf.L
 	/* PUC-Lua pushes 'B->b[0 .. B->n]' and takes the buffer's box off the
 	   stack: one value appears where one value was. */
-	L.PushString(buf.String())
+	L.checkStack(1)
+	setsvalue(&L.stack[L.top], luaS_newlstrBytes(L, buf.bytes()))
+	L.top++
 	buf.n = 0
 	/* PUC-Lua keeps the box directly under the top and removes it from
 	   there. Not from a remembered index: an extension may lua_remove
