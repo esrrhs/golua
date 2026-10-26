@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -246,6 +247,9 @@ func TestCompareAndArithEdges(t *testing.T) {
 
 func TestOfficialKillTree(t *testing.T) {
 	officialKillTree(nil)
+	if runtime.GOOS == "windows" {
+		t.Skip("unix process group test")
+	}
 	cmd := exec.Command("sleep", "60")
 	cmd.SysProcAttr = officialProcAttr()
 	if err := cmd.Start(); err != nil {

@@ -328,7 +328,7 @@ func addk(fs *FuncState, key, v *Value) int {
 	if ttisinteger(idx) {            /* is there an index there? */
 		k := int(ivalue(idx))
 		/* correct value? (warning: must distinguish floats from integers!) */
-		if k < fs.nk && ttype(&f.k[k]) == ttype(v) && luaV_rawequalobj(&f.k[k], v) {
+		if k < fs.nk && ttypetag(&f.k[k]) == ttypetag(v) && luaV_rawequalobj(&f.k[k], v) {
 			return k /* reuse index */
 		}
 	}

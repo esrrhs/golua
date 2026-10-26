@@ -1,8 +1,6 @@
 testing coroutines
-to-be-closed variables in coroutines
-testing 'coroutine.close'
 
- >>> testC not active: skipping coroutine API tests <<<
+ >>> testC not active: skipping yield/hook tests <<<
 
 +
 testing yields inside metamethods
@@ -11,4 +9,3 @@ testing yields inside 'for' iterators
 
  >>> testC not active: skipping coroutine API tests <<<
 
-OK

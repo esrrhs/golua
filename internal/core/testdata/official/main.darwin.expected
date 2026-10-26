@@ -1,10 +1,11 @@
 testing stand-alone interpreter
-progname: /tmp/refcap/lua
-Lua 5.4.9  Copyright (C) 1994-2026 Lua.org, PUC-Rio
-(temporary program file used in these tests: /tmp/lua_YOdDAx)
-testing warnings
-/tmp/refcap/lua: main.lua:385: assertion failed!
-stack traceback:
-	[C]: in function 'assert'
-	main.lua:385: in main chunk
-	[C]: in ?
+progname: /workspace/lua-sources/lua-5.3.4/src/lua
+Lua 5.3.4  Copyright (C) 1994-2017 Lua.org, PUC-Rio
+(temporary program file used in these tests: /tmp/lua_6cxa3c)
++
+testing Ctrl C
+(if test fails now, it may leave a Lua script running in background, pid 458546)
+done
+(if test fails now, it may leave a Lua script running in background, pid 458549)
+done (with 2 kills)
+OK

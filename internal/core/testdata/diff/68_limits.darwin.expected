@@ -23,15 +23,15 @@ refuse|c:1: too many local variables (limit is 200) in main function near '='
 refuse|c:1: too many local variables (limit is 200) in main function near '='
 == expression and nesting depth ==
 ok
-refuse|C stack overflow
+refuse|c:1: too many C levels (limit is 200) in main function near '('
 ok
-refuse|C stack overflow
-ok
-ok
+refuse|c:1: too many C levels (limit is 200) in main function near 'not'
 ok
 ok
-refuse|C stack overflow
-refuse|C stack overflow
+ok
+ok
+refuse|c:1: too many C levels (limit is 200) in main function near '{'
+refuse|c:1: too many C levels (limit is 200) in main function near '"a"'
 == table constructors ==
 ok
 ok
@@ -40,7 +40,7 @@ ok
 refuse|c:1: no visible label 'x' for <goto> at line 1
 refuse|c:1: label 'x' already defined on line 1
 ok
-refuse|c:1: break outside loop at line 1
+refuse|c:1: <break> at line 1 not inside a loop
 ok
 ok
 ok
@@ -64,8 +64,8 @@ refuse|c:1: hexadecimal digit expected near ''\x''
 refuse|c:1: hexadecimal digit expected near ''\x1''
 refuse|c:1: hexadecimal digit expected near ''\xZ'
 refuse|c:1: hexadecimal digit expected near ''\u{}'
-ok
-refuse|c:1: UTF-8 value too large near ''\u{ffffffff'
+refuse|c:1: UTF-8 value too large near ''\u{110000'
+refuse|c:1: UTF-8 value too large near ''\u{ffffff'
 refuse|c:1: decimal escape too large near ''\999''
 refuse|c:1: decimal escape too large near ''\400''
 refuse|c:1: <name> expected near '1'
@@ -77,9 +77,9 @@ refuse|c:1: <name> expected near '1'
 ok
 ok
 refuse|c:1: <name> expected near '1'
-refuse|c:1: unknown attribute 'bogus'
-refuse|c:1: attempt to assign to const variable 'a'
-ok
+refuse|c:1: unexpected symbol near '<'
+refuse|c:1: unexpected symbol near '<'
+refuse|c:1: unexpected symbol near '<'
 ok
 ok
 == string and table size limits ==
@@ -90,8 +90,8 @@ ok|"a"|0
 ok|"a"|-1
 ok|""|1073741824
 err|invalid value (nil) at index 1 in table for 'concat'
-ok|table: 0xADDR
-ok|table: 0xADDR|","|5|3
+ok|table: <ADDR>
+ok|table: <ADDR>|","|5|3
 err|invalid value (nil) at index 0 in table for 'concat'
 err|invalid value (nil) at index -1 in table for 'concat'
 ok|

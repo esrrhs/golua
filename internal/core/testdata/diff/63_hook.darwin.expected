@@ -3,20 +3,20 @@
 3
 0
 6
-20
-16
+21
+17
 9
-9
-9
+10
+10
 9
 5
 3
-5
+6
 5
 3
 18
 7
-10
+11
 8
 == call and return hooks ==
 nil@Lua:body:local:74 nil@Lua:leaf:upvalue:71 nil@C:sethook:field:-1
@@ -28,14 +28,14 @@ nil@C:sethook:field:-1 nil@Lua:body:local:79 nil@C:floor:field:-1 nil@C:floor:fi
 nil@C:sethook:field:-1 nil@Lua:body:local:80 nil@C:rep:method:-1 nil@C:rep:method:-1 nil@Lua:body:local:80 nil@C:sethook:field:-1
 nil@C:sethook:field:-1 nil@Lua:body:local:81 nil@C:pcall:global:-1 nil@Lua:nil::71 nil@Lua:nil::71 nil@C:pcall:global:-1 nil@Lua:body:local:81 nil@C:sethook:field:-1
 nil@C:sethook:field:-1 nil@Lua:body:local:82 nil@C:wrap:field:-1 nil@C:wrap:field:-1 nil@C:co:local:-1 nil@C:co:local:-1 nil@Lua:body:local:82 nil@C:sethook:field:-1
-nil@C:sethook:field:-1 nil@Lua:body:local:83 nil@C:setmetatable:global:-1 nil@C:setmetatable:global:-1 nil@Lua:index:metamethod:83 nil@Lua:index:metamethod:83 nil@Lua:body:local:83 nil@C:sethook:field:-1
+nil@C:sethook:field:-1 nil@Lua:body:local:83 nil@C:setmetatable:global:-1 nil@C:setmetatable:global:-1 nil@Lua:__index:metamethod:83 nil@Lua:__index:metamethod:83 nil@Lua:body:local:83 nil@C:sethook:field:-1
 nil@C:sethook:field:-1 nil@Lua:body:local:84 nil@Lua:nil::84 nil@Lua:nil::84 nil@C:sethook:field:-1
 == tail calls ==
 nil@C:sethook:field:-1 nil@Lua:body:local:88 nil@Lua:nil::87 nil@Lua:nil::71 nil@Lua:nil::71 nil@C:sethook:field:-1
 == line hooks ==
 nil@Lua:record:local:65 nil@Lua:body:local:92 nil@Lua:body:local:93 nil@Lua:body:local:94 nil@Lua:record:local:66
 nil@Lua:record:local:65 nil@Lua:body:local:97 nil@Lua:record:local:66
-nil@Lua:record:local:65 nil@Lua:body:local:98 nil@Lua:body:local:98 nil@Lua:body:local:98 nil@Lua:record:local:66
+nil@Lua:record:local:65 nil@Lua:body:local:98 nil@Lua:body:local:98 nil@Lua:body:local:98 nil@Lua:body:local:98 nil@Lua:record:local:66
 nil@Lua:record:local:65 nil@Lua:body:local:99 nil@Lua:record:local:66
 nil@Lua:record:local:65 nil@Lua:body:local:100 nil@Lua:record:local:66
 nil@Lua:record:local:65 nil@Lua:body:local:92 nil@Lua:body:local:92 nil@Lua:body:local:93 nil@Lua:body:local:94 nil@Lua:record:local:66 nil@C:sethook:field:-1
@@ -48,20 +48,20 @@ nil@C:sethook:field:-1 nil@Lua:body:local:107 nil@Lua:nil::72 nil@Lua:nil::71 ni
 nil@C:sethook:field:-1 nil@Lua:record:local:65 nil@Lua:body:local:109 nil@Lua:body:local:109 nil@Lua:nil::72 nil@Lua:nil::72 nil@Lua:nil::71 nil@Lua:nil::71 nil@Lua:nil::71 nil@Lua:record:local:66 nil@C:sethook:field:-1
 == count hooks mixed with the others ==
 10
-nil@C:sethook:field:-1 nil@Lua:mixed:local:114 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:116 nil@Lua:mixed:local:116 nil@Lua:mixed:local:116 nil@C:sethook:field:-1
+nil@C:sethook:field:-1 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:115 nil@Lua:mixed:local:116 nil@C:sethook:field:-1
 == who the hook is called with ==
 "line"|127
 "call"|nil
 "count"|nil
 == hooks and coroutines ==
 true	4
-true	function: 0xADDR	cr	0
+true	function: <ADDR>	cr	0
 false|"63_hook.lua:162: from hook"
 false|"63_hook.lua:162: from hook"
 false|"63_hook.lua:162: from hook"
 false|"63_hook.lua:162: from hook"
-false|table: 0xADDR
-function: 0xADDR	l	0
+false|table: <ADDR>
+function: <ADDR>	l	0
 == sethook argument checking ==
 true
 true

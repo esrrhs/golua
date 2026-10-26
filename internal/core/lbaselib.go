@@ -46,7 +46,6 @@ func baseWriteString(s string, l int) {
 // baseWriteLine is lua_writeline: newline + fflush(stdout).
 func baseWriteLine() {
 	baseWriteString("\n", 1)
-	os.Stdout.Sync() /* fflush(stdout) */
 }
 
 func basePrint(L *State) int {
@@ -643,12 +642,6 @@ func baseToString(L *State) int {
 // library registration
 // ---------------------------------------------------------------------
 
-// baseLoadString is the LUA_COMPAT_LOADSTRING alias. Distinct GoFunc so
-// light-C identity differs from baseLoad; ArgError then reports 'load' or
-// 'loadstring' for the callee instead of whichever _G key Next finds first
-// (C shares one lua_CFunction pointer and is hash-order dependent).
-func baseLoadString(L *State) int { return baseLoad(L) }
-
 var baseFuncs = []Reg{
 	{Name: "assert", Func: baseAssert},
 	{Name: "collectgarbage", Func: baseCollectGarbage},
@@ -658,8 +651,6 @@ var baseFuncs = []Reg{
 	{Name: "ipairs", Func: baseIPairs},
 	{Name: "loadfile", Func: baseLoadFile},
 	{Name: "load", Func: baseLoad},
-	/* LUA_COMPAT_LOADSTRING (default-compat alias of load) */
-	{Name: "loadstring", Func: baseLoadString},
 	{Name: "next", Func: baseNext},
 	{Name: "pairs", Func: basePairs},
 	{Name: "pcall", Func: basePCall},

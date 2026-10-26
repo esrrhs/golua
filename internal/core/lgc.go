@@ -394,11 +394,6 @@ func (L *State) gcStep() bool {
 		if gcWeakCount.Load() != 0 {
 			L.gcClearThreadStack()
 		}
-		L.gcAwaitPending()
-		if L.hasPending() {
-			L.runFinalizers()
-			return true
-		}
 	}
 	if L.g.gcDebt < gcStepDebt {
 		return false
@@ -581,6 +576,9 @@ func (L *State) takeCloseObject() (Value, bool) {
 
 // gcIsWatched says whether an object still waits for its '__gc'.
 func gcIsWatched(v *Value) bool {
+	if v.p == nil {
+		return false
+	}
 	switch ttypetag(v) {
 	case LUA_VTABLE:
 		return hvalue(v).finalized

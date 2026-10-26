@@ -9,7 +9,7 @@ a day is a day	true
 epoch is a number	true
 month 13	2024	1	1
 hour 25	2023	1	2	1
-false	field 'year' missing in date table
-false	field 'month' missing in date table
+false	field 'day' missing in date table
+false	field 'day' missing in date table
 false	field 'day' missing in date table
 done

@@ -1,3 +1,4 @@
-Lua warning: @on
-Lua warning: ZZZ
-Lua warning: last
+lua: 20_warnings.lua:4: attempt to call a nil value (global 'warn')
+stack traceback:
+	20_warnings.lua:4: in main chunk
+	[C]: in ?

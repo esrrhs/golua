@@ -37,11 +37,11 @@ olleh	5
 ABC
  3.14|42   |00007|ff|FF|10|A|str|"a\"b\
 "
-42 -42 42 1.500000 1.5 1.500000e+00 1.500000E+00 0xADDR.8p+0 0X1.8P+0
+42 -42 42 1.500000 1.5 1.500000e+00 1.500000E+00 <ADDR>.8p+0 0X1.8P+0
 a          b c         |
 false	bad argument #2 to 'string.format' (number expected, got string)
-false	invalid conversion '%y' to 'format'
-false	invalid conversion specification: '%1000000d'
+false	invalid option '%y' to 'format'
+false	invalid format (width or precision too long)
 10	16	10.5	10
 2	255	35	3
 nil	nil	nil

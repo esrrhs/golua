@@ -81,7 +81,9 @@ func osSetAllFields(L *State, t time.Time) {
 	osSetField(L, "hour", t.Hour())
 	osSetField(L, "day", t.Day())
 	osSetField(L, "month", int(t.Month()))
-	osSetField(L, "year", t.Year())
+	/* 5.3.4 loslib.c setfield(L, "year", stm->tm_year + 1900):
+	   addition happens in C int before promotion to lua_Integer. */
+	osSetField(L, "year", int(int32(t.Year()-1900)+1900))
 	osSetField(L, "wday", int(t.Weekday())+1)
 	osSetField(L, "yday", t.YearDay())
 	isdst := 0
@@ -94,16 +96,7 @@ func osSetAllFields(L *State, t time.Time) {
 // tIsDST reports whether t falls in the daylight-saving time of its
 // location.
 func tIsDST(t time.Time) bool {
-	_, offset := t.Zone()
-	_, janOffset := time.Date(t.Year(), 1, 1, 0, 0, 0, 0, t.Location()).Zone()
-	_, julOffset := time.Date(t.Year(), 7, 1, 0, 0, 0, 0, t.Location()).Zone()
-	if janOffset == julOffset {
-		return false
-	}
-	if janOffset > julOffset {
-		return offset == janOffset
-	}
-	return offset == julOffset
+	return t.IsDST()
 }
 
 // tHasDSTRules reports whether the location of t ever keeps daylight-

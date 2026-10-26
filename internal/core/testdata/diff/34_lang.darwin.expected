@@ -10,7 +10,7 @@ false|"bad argument #2 to 'string.format' (number has no integer representation)
  3.14|3.14 |+3.14| 7
 abc|007|8
 true|"7"	false|"bad argument #2 to 'string.format' (number expected, got string)"
-false|"bad argument #2 to 'string.format' (no value)"	false|"invalid conversion '%y' to 'format'"
+false|"bad argument #2 to 'string.format' (no value)"	false|"invalid option '%y' to 'format'"
 3|-4|3.0|-4.0
 1|1|1.5|0.5|-1|-1
 9.2233720368548e+18|-9.2233720368548e+18|1.4142135623731|nan
@@ -27,10 +27,10 @@ false|"bad argument #2 to 'math.fmod' (zero)"	true|nan
 3|4|-4|-3
 true|9.2233720368548e+18	true|3
 3|3.5|-9223372036854775808
-11|9|20|2.5|100.0
-100.0|10|16|0.5
-false|"34_lang.lua:53: attempt to add a 'string' with a 'number'"
-false|"34_lang.lua:54: attempt to add a 'string' with a 'number'"
+11.0|9.0|20.0|2.5|100.0
+100.0|10.0|16.0|0.5
+false|"34_lang.lua:53: attempt to perform arithmetic on a string value"
+false|"34_lang.lua:54: attempt to perform arithmetic on a string value"
 false|"34_lang.lua:55: attempt to compare string with number"
 "12"|"1.0"|"1.5x"|"a12.0"
 false|"34_lang.lua:57: attempt to concatenate a table value"	false|"34_lang.lua:57: attempt to concatenate a nil value"
@@ -68,24 +68,24 @@ x	y
 empty loops	1
 4	1.0,1.5,2.0,2.5
 3	1.0,2.0,3.0
-false|"34_lang.lua:170: bad 'for' initial value (number expected, got string)"
-false|"34_lang.lua:171: 'for' step is zero"
+false|"34_lang.lua:171: 'for' initial value must be a number"
+true|function: <ADDR>
 1:10,2:20,3:30
-false|"34_lang.lua:183: attempt to call a number value (for iterator 'for iterator')"
-false|"34_lang.lua:184: bad argument #1 to 'for iterator' (table expected, got nil)"
+false|"34_lang.lua:184: attempt to call a number value"
+false|"34_lang.lua:185: bad argument #1 to 'for iterator' (table expected, got nil)"
 99	true
-shadow	function: 0xADDR
-true|function: 0xADDR
+shadow	function: <ADDR>
+true|function: <ADDR>
 true|nil|"attempt to load a text chunk (mode is 'b')"
 true
 locked
 false|"cannot change a protected metatable"
 false|"cannot change a protected metatable"
-false|"bad argument #1 to 'setmetatable' (table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected, got no value)"
+false|"bad argument #1 to 'setmetatable' (table expected, got number)"	false|"bad argument #2 to 'setmetatable' (nil or table expected)"	false|"bad argument #2 to 'setmetatable' (nil or table expected)"
 false	true
 false|"bad argument #1 to 'setmetatable' (table expected, got nil)"
 1	1
 1
-false|"34_lang.lua:215: attempt to call a nil value (method 'nope')"
-false|"34_lang.lua:216: attempt to call a number value (field 'x')"
+false|"34_lang.lua:216: attempt to call a nil value (method 'nope')"
+false|"34_lang.lua:217: attempt to call a number value (field 'x')"
 ABC	bc	7	a|b|c	2

@@ -13,13 +13,13 @@ C fn	=[C]	[C]	C	-1	-1	nil		nil
 C fn u	0	true
 main	main	0	0
 names	f1	nil
-level0	true|table: 0xADDR
+level0	true|table: <ADDR>
 level99	true|nil
 level-1	true|nil
-level1.0	true|table: 0xADDR
+level1.0	true|table: <ADDR>
 level1.5	false|"bad argument #1 to 'debug.getinfo' (number has no integer representation)"
-level'1'	true|table: 0xADDR
-no what	true|table: 0xADDR
+level'1'	true|table: <ADDR>
+no what	true|table: <ADDR>
 no args	false|"bad argument #1 to 'debug.getinfo' (number expected, got no value)"
 bad arg	false|"bad argument #1 to 'debug.getinfo' (number expected, got table)"
 bad what	false|"bad argument #2 to 'debug.getinfo' (invalid option)"
@@ -28,14 +28,14 @@ plain	mychunk	[string "mychunk"]	main
 noname	return 1	[string "return 1"]	main
 long	=long	long
 == getlocal / setlocal ==
-locals	a=9,x=1,y=2,out=table: 0xADDR,i=5	an upvalue
+locals	a=9,x=1,y=2,out=table: <ADDR>,i=5	an upvalue
 setlocal	99
 setlocal oob	true|nil
 setlocal neg	true|nil
 setlocal 0	true|nil
 setlocal Lua	sacrificial	99
-C frame read	true|"(C temporary)"|true
-C frame write	1|"(C temporary)"
+C frame read	true|"(*temporary)"|true
+C frame write	1|"(*temporary)"
 fn local	true|"a"
 fn not yet	a
 fn set	false|"bad argument #1 to 'debug.setlocal' (number expected, got function)"
@@ -71,7 +71,7 @@ level0	m / stack traceback: / 	[C]: in function 'debug.traceback' / 	75_dbgdeep.
 level99	m / stack traceback:	1
 level1.5	false|"bad argument #2 to 'debug.traceback' (number has no integer representation)"
 msg num	42 / stack traceback: / 	75_dbgdeep.lua:194: in main chunk / 	[C]: in ?	3
-msg table	true|table: 0xADDR
+msg table	true|table: <ADDR>
 thread	stack traceback:	0
 thread msg	m / stack traceback:	1
 bad thread	false|"bad argument #2 to 'debug.traceback' (number expected, got string)"
@@ -79,7 +79,7 @@ in coro	true	inner / stack traceback: / 	75_dbgdeep.lua:202: in function <75_dbg
 == the rest ==
 registry	table
 reg main	true
-getmetatable	nil	table: 0xADDR	nil
+getmetatable	nil	table: <ADDR>	nil
 setmetatable	true	true
 clear	nil
 setmt bad	true|1
@@ -94,5 +94,5 @@ mask neg	true
 mask 1.5	false|"bad argument #3 to 'debug.sethook' (number has no integer representation)"
 no fn	true
 off
-gethook	nil
+gethook	nil		0
 tailcall	false	nil	

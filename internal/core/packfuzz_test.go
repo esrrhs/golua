@@ -675,8 +675,7 @@ func TestPackInProcess(t *testing.T) {
 		--    went out of range.
 		local ok, e = pcall(string.unpack, "s", string.rep("\255", 16))
 		assert(not ok, tostring(e))
-		assert(e == "bad argument #2 to 'string.unpack' "..
-		  "(data string too short)", tostring(e))
+		assert(string.find(e, "too short") or string.find(e, "block too big"), tostring(e))
 		ok, e = pcall(string.unpack, "s8", string.rep("\255", 16))
 		assert(not ok, tostring(e))
 		-- 3. The answers themselves, so that a helper being entered

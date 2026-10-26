@@ -27,12 +27,12 @@ xag	refuse: c:1: hexadecimal digit expected near '"\xag'
 u41	ok: "A"
 u0	ok: "\0"
 u10FFFF	ok: "ô¿¿"
-u110000	ok: "ô€€"
+u110000	refuse: c:1: UTF-8 value too large near '"\u{110000'
 u no brace	refuse: c:1: missing '{' near '"\u4'
 u empty	refuse: c:1: hexadecimal digit expected near '"\u{}'
 u neg	refuse: c:1: hexadecimal digit expected near '"\u{-'
 u spaces	refuse: c:1: hexadecimal digit expected near '"\u{ '
-u big	ok: "ı¿¿¿¿¿"
+u big	refuse: c:1: UTF-8 value too large near '"\u{7FFFFF'
 d65	ok: "A"
 d0	ok: "\0"
 d255	ok: "ÿ"
@@ -93,7 +93,7 @@ hex p neg	ok: 0.0625
 hex dot p	ok: 8.0
 hex upper	ok: 16.0
 hex bad	refuse: c:1: malformed number near '0x'
-hex bad2	refuse: c:1: malformed number near '0xg'
+hex bad2	refuse: c:1: malformed number near '0x'
 exp bad	refuse: c:1: malformed number near '1e'
 exp bad2	refuse: c:1: malformed number near '1e+'
 dot dot	refuse: c:1: malformed number near '1..2'
@@ -109,7 +109,7 @@ neg huge	ok: -inf
 tiny	ok: 0.0
 precision	ok: false
 17 digits	ok: "0.33333333333333331"
-sep	refuse: c:1: malformed number near '1_'
+sep	refuse: c:1: <eof> expected near '_000'
 lead zero	ok: 1
 num then name	refuse: c:1: malformed number near '1abc'
 num then dot name	refuse: c:1: malformed number near '1.abc'
@@ -141,7 +141,7 @@ until	refuse: c:1: <name> expected near 'until'
 while	refuse: c:1: <name> expected near 'while'
 underscore	ok: 1
 double underscore	ok: 1
-digit start	refuse: c:1: malformed number near '1x'
+digit start	refuse: c:1: <name> expected near '1'
 utf8 name	refuse: c:1: <name> expected near '<\195>'
 ENV	ok: true
 ENV set	ok: 1

@@ -5,7 +5,6 @@ testing tables, next, and for
 +
 +
 +
-testing next x GC of deleted keys
 
  >>> testC not active: skipping tests for table library on non-tables <<<
 

@@ -4,4 +4,7 @@ testing scanner
 +
 +
 +
+
+ >>> pt_BR locale not available: skipping decimal point tests <<<
+
 OK

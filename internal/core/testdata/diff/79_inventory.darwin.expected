@@ -1,8 +1,9 @@
-== _G (37) ==
+== _G (36) ==
   _G : table
   _VERSION : string
   arg : table
   assert : function
+  bit32 : table
   collectgarbage : function
   coroutine : table
   debug : table
@@ -13,7 +14,6 @@
   ipairs : function
   load : function
   loadfile : function
-  loadstring : function
   math : table
   next : function
   os : table
@@ -34,7 +34,6 @@
   tostring : function
   type : function
   utf8 : table
-  warn : function
   xpcall : function
 == string (17) ==
   byte : function
@@ -125,7 +124,7 @@
   setlocale : function
   time : function
   tmpname : function
-== debug (17) ==
+== debug (16) ==
   debug : function
   gethook : function
   getinfo : function
@@ -134,7 +133,6 @@
   getregistry : function
   getupvalue : function
   getuservalue : function
-  setcstacklimit : function
   sethook : function
   setlocal : function
   setmetatable : function
@@ -143,8 +141,7 @@
   traceback : function
   upvalueid : function
   upvaluejoin : function
-== coroutine (8) ==
-  close : function
+== coroutine (7) ==
   create : function
   isyieldable : function
   resume : function
@@ -200,7 +197,7 @@
   __ipairs : true
   __metatable : true
 == version-visible constants ==
-  _VERSION	Lua 5.4
+  _VERSION	Lua 5.3
   math.pi	3.1415926535898	huge	inf
   maxinteger	9223372036854775807	mininteger	-9223372036854775808
   package.config	"/\
@@ -209,7 +206,7 @@
 !\
 -\
 "
-  utf8.charpattern	"[\0-\127Â-ý][€-¿]*"
+  utf8.charpattern	"[\0-\127Â-ô][€-¿]*"
 == collectgarbage options ==
   collect : true
   stop : true
@@ -219,8 +216,8 @@
   setpause : true
   setstepmul : true
   isrunning : true
-  incremental : true
-  generational : true
+  incremental : false
+  generational : false
 == os.exit signature ==
   os.exit	function
   C fn nparams	0	isvararg	true	what	C

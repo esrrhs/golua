@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -546,6 +547,10 @@ say(nrep)
 
 return table.concat(out, "\n")
 `)
+	nanSpell := "-nan"
+	if runtime.GOOS == "darwin" {
+		nanSpell = "nan"
+	}
 	want := strings.Join([]string{
 		"(ab)",
 		"abc",
@@ -561,7 +566,7 @@ return table.concat(out, "\n")
 		"10",
 		"inf",
 		"-inf",
-		"-nan",
+		nanSpell,
 		"0x",
 		"4",
 		"4",

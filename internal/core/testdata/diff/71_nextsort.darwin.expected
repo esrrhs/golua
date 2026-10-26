@@ -37,7 +37,7 @@ pairs clear	1:1,2:2,3:3,5:5
 ipairs grow	1:1,2:2,3:3,4:4,5:5,6:6,7:7
 len	5
 len after	4
-len hole	4
+len hole	2
 len gap	3
 len back	50
 == table.sort: arguments ==
@@ -64,7 +64,7 @@ true
 true
 false|"71_nextsort.lua:201: invalid order function for sorting"
 false|"71_nextsort.lua:205: boom"
-false|table: 0xADDR
+false|table: <ADDR>
 true
 false|"attempt to yield from outside a coroutine"
 nargs	true	ok	2:2<3 2:1<2

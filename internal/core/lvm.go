@@ -67,10 +67,8 @@ func luaV_mod(L *State, m, n int64) int64 {
 // never raises: 'luai_nummod' is plain 'fmod', so '1.0 % 0.0' is NaN.
 func luaV_modf(L *State, m, n float64) float64 {
 	r := math2Fmod(m, n)
-	/* luai_nummod: give the result the same sign as the divisor.  The
-	   test must not multiply the two operands, or it misfires when the
-	   product underflows to zero (as it does for very small numbers). */
-	if (r > 0 && n < 0) || (r < 0 && n > 0) {
+	/* 5.3.4 luai_nummod (llimits.h): { (m) = l_mathop(fmod)(a,b); if ((m)*(b) < 0) (m) += (b); } */
+	if r*n < 0 {
 		r += n
 	}
 	return r
