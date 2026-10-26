@@ -283,12 +283,12 @@ func TestLuacDumpOpenFailAndListingDefault(t *testing.T) {
 		t.Fatalf("%q", errb.String())
 	}
 	// load error
-	out.Reset(); errb.Reset()
+	out.Reset()
+	errb.Reset()
 	if code := Luac([]string{"luac", "-p", filepath.Join(dir, "missing.lua")}, &out, &errb); code == 0 {
 		t.Fatal("expected load fail")
 	}
 }
-
 
 func TestLoadlibPackagePathNotString(t *testing.T) {
 	got := runChunk(t, `

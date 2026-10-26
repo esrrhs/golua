@@ -116,7 +116,7 @@ func filterpc(pc, jmptarget int) int {
 // findsetreg tries to find the last instruction before lastpc that
 // modified register reg (ldebug.c 5.3.4).
 func findsetreg(p *Proto, lastpc, reg int) int {
-	setreg := -1 /* keep last instruction that changed 'reg' */
+	setreg := -1   /* keep last instruction that changed 'reg' */
 	jmptarget := 0 /* any code before this address is conditional */
 	/* Go bounds: C assumes a valid lastpc (loop is pc < lastpc). */
 	if lastpc < 0 {
@@ -197,7 +197,7 @@ func knameRK(p *Proto, pc, c int, name *string) {
 		}
 		/* else no reasonable name found */
 	} else { /* 'c' is a register */
-		what := getobjname(p, pc, c, name) /* search for 'c' */
+		what := getobjname(p, pc, c, name)   /* search for 'c' */
 		if len(what) > 0 && what[0] == 'c' { /* found a constant name? */
 			return /* 'name' already filled */
 		}

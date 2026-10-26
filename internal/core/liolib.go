@@ -300,6 +300,7 @@ func (e ioCErrno) Error() string { return e.msg }
 // both leave EBADF behind.  The number is 9 on every platform we build
 // for, and 'strerror' spells it the same way too.
 var ioErrBadFd = ioCErrno{en: 9, msg: "bad file descriptor"}
+
 /* EINVAL: glibc popen rejects modes other than r/w(/e). */
 var errPopenMode = ioCErrno{en: 22, msg: "invalid argument"}
 
@@ -1301,7 +1302,7 @@ func ioLines(L *State) int {
 		toclose = true /* close it after iteration */
 	}
 	ioAuxLines(L, toclose) /* push iteration function */
-	return 1 /* 5.3.4: only the iterator (closing is via upvalue) */
+	return 1               /* 5.3.4: only the iterator (closing is via upvalue) */
 }
 
 // ioReadline is the iteration function of 'lines'.

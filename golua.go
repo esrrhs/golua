@@ -69,7 +69,7 @@ func OpenOS(L *State) int                        { return core.OpenOS(L) }
 func OpenString(L *State) int                    { return core.OpenString(L) }
 func OpenMath(L *State) int                      { return core.OpenMath(L) }
 func OpenUTF8(L *State) int                      { return core.OpenUTF8(L) }
-func OpenBit32(L *State) int                      { return core.OpenBit32(L) }
+func OpenBit32(L *State) int                     { return core.OpenBit32(L) }
 func OpenDebug(L *State) int                     { return core.OpenDebug(L) }
 func OpenTable(L *State) int                     { return core.OpenTable(L) }
 func Luac(argv []string, out, err io.Writer) int { return core.Luac(argv, out, err) }
@@ -348,21 +348,21 @@ const (
 	MAXVARS        = core.MAXVARS
 	UNARY_PRIORITY = core.UNARY_PRIORITY
 
-	VVOID     = core.VVOID
-	VNIL      = core.VNIL
-	VTRUE     = core.VTRUE
-	VFALSE    = core.VFALSE
-	VK        = core.VK
-	VKFLT     = core.VKFLT
-	VKINT     = core.VKINT
-	VNONRELOC = core.VNONRELOC
-	VLOCAL    = core.VLOCAL
-	VUPVAL    = core.VUPVAL
-	VINDEXED  = core.VINDEXED
-	VJMP      = core.VJMP
+	VVOID      = core.VVOID
+	VNIL       = core.VNIL
+	VTRUE      = core.VTRUE
+	VFALSE     = core.VFALSE
+	VK         = core.VK
+	VKFLT      = core.VKFLT
+	VKINT      = core.VKINT
+	VNONRELOC  = core.VNONRELOC
+	VLOCAL     = core.VLOCAL
+	VUPVAL     = core.VUPVAL
+	VINDEXED   = core.VINDEXED
+	VJMP       = core.VJMP
 	VRELOCABLE = core.VRELOCABLE
-	VCALL     = core.VCALL
-	VVARARG   = core.VVARARG
+	VCALL      = core.VCALL
+	VVARARG    = core.VVARARG
 )
 
 // ---------------------------------------------------------------------------

@@ -107,9 +107,9 @@ constants and functions from `internal/core`, so the import path is
   `lvm.go`, and so on. Function names, control flow and error messages
   follow the C source, which makes review a line-by-line exercise.
 - **The collector is the exception.** Lua objects are ordinary Go
-  values. Weak tables use Go weak pointers, and `__gc`/weak-entry
-  clearing run at cycle boundaries: `Close()`, `collectgarbage`, or an
-  allocation crossing a threshold.
+  values owned by Go's concurrent GC. Weak tables use Go weak pointers
+  (`weak.Pointer`), and `__gc` finalizers are queued by `runtime.AddCleanup`
+  and drained on the VM execution path or at `Close()` / `collectgarbage`.
 - **The C API is re-exported, not reimplemented.** Methods on `State`
   are the implementation; the root package aliases the types and
   forwards the package-level functions.
@@ -160,26 +160,27 @@ One run on an Intel Xeon (8 cores), PUC-Lua **5.3.4** against a cgo build of thi
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 2.59× | global | 2.26× |
-| nop | 1.51× | array | 2.36× |
-| intloop | 2.00× | hash | 2.10× |
-| floatloop | 2.36× | metaindex | 1.90× |
-| bitwise | 2.48× | ipairs | 2.27× |
-| fib | 1.65× | concat | 3.08× |
-| tailcall | 2.01× | strings | 6.70× |
-| call3 | 1.67× | sort | 1.61× |
-| upvalue | 1.75× | yield | 1.40× |
-| method | 1.79× | alloc | 2.08× |
-| pcall | 1.83× |  |  |
+| startup | 2.44× | global | 2.29× |
+| nop | 1.80× | array | 2.39× |
+| intloop | 2.27× | hash | 1.73× |
+| floatloop | 2.55× | metaindex | 1.96× |
+| bitwise | 2.60× | ipairs | 1.99× |
+| fib | 1.57× | concat | 2.10× |
+| tailcall | 1.77× | strings | 1.30× |
+| call3 | 1.75× | sort | 1.76× |
+| upvalue | 1.71× | yield | 1.43× |
+| method | 2.09× | alloc | 1.94× |
+| pcall | 2.24× |  |  |
 
-Most bytecode-heavy rows sit around 1.5–2.5×. `yield` is closest to C; `concat` and `strings` are the outliers. `strings` stays ~6.7× even with a C-shaped stack-local `luaL_Buffer` (`initb`): each `string.format("%d-…")` still goes through Go `fmt`/`strconv` and short-string interning, unlike C's `sprintf` into the stack buffer. `startup` pays for the Go runtime.
+Most bytecode-heavy rows sit around 1.3–2.5×. `strings` (1.30×) and `yield` (1.43×) are closest to C: `string.format` formats directly into a non-escaping stack-local `luaL_Buffer` via `PrepBuffSize` + `strconv.AppendInt` and checks the short-string intern table before allocating. `startup` pays for the Go runtime.
 
 ## Known differences
 
-- **No collector of its own.** `collectgarbage` drives Go's GC, which
-  covers the whole process rather than one state; `collectgarbage("count")`
-  reports the Go heap. Weak entries and finalizers are handled at cycle
-  boundaries, not during an individual allocation.
+- **No collector of its own.** Object lifetime is managed entirely by
+  Go's concurrent GC (`collectgarbage("collect")` triggers a cycle across
+  the process; `collectgarbage("count")` reports the Go heap). Weak entries
+  clear automatically via `weak.Pointer` and finalizers are queued by
+  `runtime.AddCleanup`.
 - **C modules need cgo.** Without cgo there is no `dlopen` and no C
   `setlocale` (a built-in table supplies the decimal point); Windows has
   no dynamic-loader backend at all.

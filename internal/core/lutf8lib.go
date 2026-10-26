@@ -239,7 +239,7 @@ func utf8IterAux(L *State) int {
 	if n < 0 { /* first iteration? */
 		n = 0 /* start from here */
 	} else if n < int64(length) {
-		n++ /* skip current byte */
+		n++                           /* skip current byte */
 		for utf8IsContAt(s, int(n)) { /* and its continuations */
 			n++
 		}
@@ -276,7 +276,7 @@ var utf8Funcs = []Reg{
 
 /* luaopen_utf8 */
 func OpenUTF8(L *State) int {
-	L.NewLib(utf8Funcs) /* luaL_newlib */
+	L.NewLib(utf8Funcs)            /* luaL_newlib */
 	L.PushLString(utf8CharPattern) /* lua_pushlstring(L, UTF8PATT, sizeof-1) */
 	L.SetField(-2, "charpattern")
 	return 1

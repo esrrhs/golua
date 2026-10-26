@@ -5,19 +5,20 @@
 // index (C: descending TValue* linked list); close walks from the high end.
 //
 // Header macros (lfunc.h) not defined here:
-//   MAXUPVAL (255)     → lopcodes.go (relocated; same value)
-//   sizeCclosure /
-//   sizeLclosure       → N/A under Go slice allocation
-//   isintwups(L)       → omitted (twups / Go GC)
-//   upisopen(up)       → uv.open (index-stack Spec)
+//
+//	MAXUPVAL (255)     → lopcodes.go (relocated; same value)
+//	sizeCclosure /
+//	sizeLclosure       → N/A under Go slice allocation
+//	isintwups(L)       → omitted (twups / Go GC)
+//	upisopen(up)       → uv.open (index-stack Spec)
 package core
 
 // UpVal is an upvalue: either open (pointing to a stack slot) or closed.
 // C (lfunc.h): TValue *v + refcount + union { open{next,touched} | value }.
 // Go: index-stack specialization (intentional); no refcount / twups (Go GC).
 type UpVal struct {
-	open bool  // ≡ upisopen: true while value lives in L.stack[idx]
-	idx  int   // stack index while open (C: v → StkId)
+	open bool // ≡ upisopen: true while value lives in L.stack[idx]
+	idx  int  // stack index while open (C: v → StkId)
 	L    *State
 	v    Value // closed slot (C: u.value); open reads via upvalValue → stack
 }

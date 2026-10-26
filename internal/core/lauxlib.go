@@ -3,7 +3,6 @@ package core
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 	"unsafe"
 )
@@ -370,6 +369,12 @@ const LUAL_BUFFERSIZE = 8192
 // bufInitSize is an alias kept for older call sites / cgo comments.
 const bufInitSize = LUAL_BUFFERSIZE
 
+// bufStackSize is the stack-embedded initial scratch size in Buffer (>= MAX_ITEM).
+// Buffers <= bufStackSize stay 100% on the Go stack without zeroing a full 8 KiB
+// array per call; sizes up to LUAL_BUFFERSIZE grow lazily without pushing a UBox,
+// and sizes > LUAL_BUFFERSIZE push a UBox exactly as PUC-Lua 5.3.4 does.
+const bufStackSize = 512
+
 // Buffer is luaL_Buffer (lauxlib.h):
 //
 //	typedef struct luaL_Buffer {
@@ -386,7 +391,7 @@ type Buffer struct {
 	size  int    // B->size
 	n     int    // B->n
 	L     *State
-	initb [LUAL_BUFFERSIZE]byte // B->initb
+	initb [bufStackSize]byte // B->initb (stack-local fast scratch)
 
 	// When buffonstack (b no longer aliases initb): UBox on the Lua stack
 	// plus grown storage. boxBuf is the pure-Go block; scratch/slen are the
@@ -417,20 +422,28 @@ func bufFinalize(b *Buffer) {
 }
 
 // buffonstack is C's '#define buffonstack(B) ((B)->b != (B)->initb)'.
+// While using initb, B.b is nil and B.boxPtr is 0 (avoiding a self-pointer
+// B.b = B.initb[:] that would force stack-local Buffers to the Go heap).
 func (B *Buffer) buffonstack() bool {
-	if len(B.b) == 0 {
-		return false
+	return B.boxPtr != 0
+}
+
+// bytes returns the active slice of written bytes (B.b[:B.n] when grown,
+// B.initb[:B.n] while on embedded initb).
+func (B *Buffer) bytes() []byte {
+	if B.b != nil {
+		return B.b[:B.n]
 	}
-	return unsafe.Pointer(&B.b[0]) != unsafe.Pointer(&B.initb[0])
+	return B.initb[:B.n]
 }
 
 // BuffInit is luaL_buffinit: B starts on embedded initb, nothing on the
 // Lua stack. Prefer this with a stack-local Buffer for hot callers.
 func (L *State) BuffInit(B *Buffer) {
 	B.L = L
-	B.b = B.initb[:]
+	B.b = nil
 	B.n = 0
-	B.size = LUAL_BUFFERSIZE
+	B.size = bufStackSize
 	B.boxPtr = 0
 	B.boxBuf = nil
 	/* scratch/cblock left for the cgo export to configure after BuffInit */
@@ -468,11 +481,8 @@ func (B *Buffer) newBox(newsize int) {
 		if p == nil && newsize > 0 {
 			B.L.Error2("not enough memory for buffer allocation")
 		}
-		if p != nil {
-			runtime.SetFinalizer(B, bufFinalize) /* Go GC stand-in for UBox.__gc */
-			if B.n > 0 {
-				copy(unsafe.Slice((*byte)(p), newsize)[:B.n], B.b[:B.n])
-			}
+		if p != nil && B.n > 0 {
+			copy(unsafe.Slice((*byte)(p), newsize)[:B.n], B.bytes())
 		}
 		B.scratch = p
 		B.slen = newsize
@@ -484,7 +494,7 @@ func (B *Buffer) newBox(newsize int) {
 		return
 	}
 	grown := make([]byte, newsize)
-	copy(grown, B.b[:B.n])
+	copy(grown, B.bytes())
 	B.boxBuf = grown
 	B.b = grown
 }
@@ -510,7 +520,7 @@ func (B *Buffer) resizeBox(newsize int) {
 		return
 	}
 	grown := make([]byte, newsize)
-	copy(grown, B.b[:B.n])
+	copy(grown, B.bytes())
 	B.boxBuf = grown
 	B.b = grown
 }
@@ -522,7 +532,7 @@ func (B *Buffer) growTo(newsize int) {
 	} else {
 		B.newBox(newsize)
 	}
-	B.size = newsize
+	B.size = -1 /* box capacity is len(B.b); negative disables initb fast path */
 }
 
 // freeBox is resizebox(L, idx, 0): drop grown storage after pushresult.
@@ -537,17 +547,28 @@ func (B *Buffer) freeBox() {
 	B.size = 0
 }
 
-// room is luaL_prepbuffsize: returns a slice of at least sz free bytes
-// at &B.b[B.n], growing via size*2 / n+sz like C.
-func (B *Buffer) room(sz int) []byte {
+// growRoom handles the slow path of room when space is insufficient or cblock
+// needs initial C allocation, keeping room small enough to inline on hot paths.
+func (B *Buffer) growRoom(sz int) []byte {
 	/* cgo: Go initb is not stable for C to hold; leave initb on first prep
 	   so buffonstack becomes true and scratch is C memory (cdlopen room(0)). */
 	if B.cblock && !B.buffonstack() && reallocBlock != nil {
-		B.growTo(B.size)
+		B.growTo(LUAL_BUFFERSIZE)
 	}
-	if B.size-B.n < sz { /* not enough space? */
-		newsize := B.size * 2 /* double buffer size */
-		if newsize-B.n < sz { /* not big enough? */
+	cursize := len(B.b)
+	if B.b == nil {
+		if !B.cblock && sz <= LUAL_BUFFERSIZE-B.n {
+			grown := make([]byte, LUAL_BUFFERSIZE)
+			copy(grown, B.initb[:B.n])
+			B.b = grown
+			B.size = -1
+			return B.b[B.n : B.n+sz]
+		}
+		cursize = LUAL_BUFFERSIZE
+	}
+	if cursize-B.n < sz { /* not enough space? */
+		newsize := cursize * 2 /* double buffer size */
+		if newsize-B.n < sz {  /* not big enough? */
 			newsize = B.n + sz
 		}
 		if newsize < B.n || newsize-B.n < sz {
@@ -555,26 +576,69 @@ func (B *Buffer) room(sz int) []byte {
 		}
 		B.growTo(newsize)
 	}
-	return B.b[B.n : B.n+sz]
+	if B.b != nil {
+		return B.b[B.n : B.n+sz]
+	}
+	return B.initb[B.n : B.n+sz]
+}
+
+// room is luaL_prepbuffsize: returns a slice of at least sz free bytes
+// at &B.b[B.n], growing via size*2 / n+sz like C.
+func (B *Buffer) room(sz int) []byte {
+	if !B.cblock && sz <= B.size-B.n {
+		return B.initb[B.n:]
+	}
+	return B.growRoom(sz)
+}
+
+//go:noinline
+func (B *Buffer) addStringSlow(s string) {
+	if len(s) > 0 {
+		copy(B.growRoom(len(s)), s)
+		B.n += len(s)
+	}
 }
 
 // AddString is luaL_addstring.
 func (B *Buffer) AddString(s string) {
-	B.AddBytes([]byte(s))
+	if len(s) <= B.size-B.n {
+		B.n += copy(B.initb[B.n:], s)
+	} else {
+		B.addStringSlow(s)
+	}
+}
+
+//go:noinline
+func (B *Buffer) addBytesSlow(p []byte) {
+	if len(p) > 0 {
+		copy(B.growRoom(len(p)), p)
+		B.n += len(p)
+	}
 }
 
 // AddBytes is luaL_addlstring (length-explicit; Go []byte stand-in).
 func (B *Buffer) AddBytes(p []byte) {
-	if len(p) > 0 { /* avoid copy when p can be empty/nil — C: if (l > 0) */
-		copy(B.room(len(p)), p)
-		B.AddSize(len(p))
+	if len(p) <= B.size-B.n {
+		B.n += copy(B.initb[B.n:], p)
+	} else {
+		B.addBytesSlow(p)
 	}
+}
+
+//go:noinline
+func (B *Buffer) addCharSlow(c byte) {
+	B.growRoom(1)[0] = c
+	B.n++
 }
 
 // AddChar is luaL_addchar.
 func (B *Buffer) AddChar(c byte) {
-	B.room(1)[0] = c
-	B.n++
+	if B.n < B.size {
+		B.initb[B.n] = c
+		B.n++
+		return
+	}
+	B.addCharSlow(c)
 }
 
 // AddValue adds the value on top of the stack, converted to a string
@@ -604,7 +668,7 @@ func (B *Buffer) String() string {
 	if B.n == 0 {
 		return ""
 	}
-	return string(B.b[:B.n])
+	return string(B.bytes())
 }
 
 // PushResult finishes the buffer and pushes the resulting string
@@ -612,7 +676,9 @@ func (B *Buffer) String() string {
 // the UBox — one value out where the box was.
 func (B *Buffer) PushResult() {
 	L := B.L
-	L.PushString(B.String())
+	L.checkStack(1)
+	setsvalue(&L.stack[L.top], luaS_newlstrBytes(L, B.bytes()))
+	L.top++
 	if B.buffonstack() {
 		B.freeBox() /* resizebox(L, -2, 0) */
 		if B.boxPtr != 0 && L.GetTop() >= 2 {
@@ -633,7 +699,12 @@ func (B *Buffer) PushResultSize(sz int) {
 }
 
 // PrepBuffSize is luaL_prepbuffsize: returns a slice of at least sz free bytes.
-func (B *Buffer) PrepBuffSize(sz int) []byte { return B.room(sz) }
+func (B *Buffer) PrepBuffSize(sz int) []byte {
+	if sz <= B.size-B.n {
+		return B.initb[B.n:]
+	}
+	return B.growRoom(sz)
+}
 
 // BuffInitSize is luaL_buffinitsize: buffinit then prepbuffsize.
 // Heap form for callers that need a *Buffer; stack-local sites can
@@ -932,7 +1003,8 @@ func (L *State) OpenLib(libname string, l []Reg, nup int) {
 // GSub replaces every occurrence of p in s with r, pushes the result,
 // and returns it (luaL_gsub).
 func (L *State) GSub(s, p, r string) string {
-	b := L.NewBuffer()
+	var b Buffer
+	L.BuffInit(&b)
 	for {
 		i := strings.Index(s, p)
 		if i < 0 {

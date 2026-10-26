@@ -40,12 +40,12 @@ func (L *State) RequireF(modname string, openf GoFunc, glb bool) {
 	L.GetSubTable(LUA_REGISTRYINDEX, pkLoadedTable) /* LOADED table */
 	L.GetField(-1, modname)                         /* LOADED[modname] */
 	if !L.ToBoolean(-1) {                           /* package not already loaded? */
-		L.Pop(1) /* remove field */
-		L.PushGoClosure(openf, 0)                    /* ≡ lua_pushcfunction */
-		L.PushString(modname)                       /* argument to open function */
-		L.Call(1, 1)                                /* call 'openf' to open module */
-		L.PushValue(-1)                             /* make copy of module (call result) */
-		L.SetField(-3, modname)                     /* LOADED[modname] = module */
+		L.Pop(1)                  /* remove field */
+		L.PushGoClosure(openf, 0) /* ≡ lua_pushcfunction */
+		L.PushString(modname)     /* argument to open function */
+		L.Call(1, 1)              /* call 'openf' to open module */
+		L.PushValue(-1)           /* make copy of module (call result) */
+		L.SetField(-3, modname)   /* LOADED[modname] = module */
 	}
 	L.Remove(-2) /* remove LOADED table */
 	if glb {

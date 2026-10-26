@@ -120,9 +120,9 @@ func pmainDriver(argv []string) int {
 func pmain(L *lua.State) int {
 	argcN, _ := L.ToInteger(1)
 	argc := int(argcN) /* lua_tointeger(L, 1) */
-	argv := pmainArgv           /* C: (char **)lua_touserdata(L, 2) */
+	argv := pmainArgv  /* C: (char **)lua_touserdata(L, 2) */
 	args, script := collectArgs(argv)
-	L.CheckVersion() /* luaL_checkversion: interpreter has correct version */
+	L.CheckVersion()                    /* luaL_checkversion: interpreter has correct version */
 	if len(argv) > 0 && argv[0] != "" { /* argv[0] && argv[0][0] */
 		progName = argv[0]
 	}
@@ -141,9 +141,9 @@ func pmain(L *lua.State) int {
 	/* lua.c opens the libraries here, not before 'pmain': the packages
 	   read LUA_PATH from the environment, and '-E' must already have
 	   signalled that they should not. */
-	L.OpenLibs() /* open standard libraries */
+	L.OpenLibs()                          /* open standard libraries */
 	createArgTable(L, argv, argc, script) /* create table 'arg' */
-	if args&hasEnv == 0 { /* no option '-E'? */
+	if args&hasEnv == 0 {                 /* no option '-E'? */
 		if !handleLuaInit() { /* run LUA_INIT */
 			L.PushBoolean(false)
 			return 1 /* error running LUA_INIT */
@@ -233,7 +233,7 @@ func optChar(a string) byte {
 func collectArgs(argv []string) (args, script int) {
 	for i := 1; i < len(argv); i++ {
 		a := argv[i]
-		script = i /* *first = i */
+		script = i                      /* *first = i */
 		if len(a) == 0 || a[0] != '-' { /* not an option? */
 			return args, script /* stop handling options */
 		}
@@ -318,7 +318,7 @@ func createArgTable(L *lua.State, argv []string, argc, script int) {
 	if script == argc { /* no script name? */
 		script = 0
 	}
-	narg := argc - (script + 1) /* number of positive indices */
+	narg := argc - (script + 1)   /* number of positive indices */
 	L.CreateTable(narg, script+1) /* lua_createtable(narg, script+1) */
 	for i := 0; i < argc; i++ {
 		L.PushString(argv[i])

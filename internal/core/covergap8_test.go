@@ -179,7 +179,6 @@ return a, b, c, d, #big
 	c.printConstant(f, 3)
 }
 
-
 func TestFuncNameFromCodeMetamethods(t *testing.T) {
 	// Errors that name metamethods via funcNameFromCode
 	got := runChunk(t, `

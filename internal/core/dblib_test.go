@@ -29,7 +29,7 @@ func dbGlobalString(t *testing.T, L *State, name string) string {
 }
 
 func TestDebugTraceback(t *testing.T) {
-		L := newDebugState(t)
+	L := newDebugState(t)
 	if err := L.DoString("tb = debug.traceback()"); err != nil {
 		t.Fatalf("DoString: %v", err)
 	}

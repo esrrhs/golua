@@ -23,29 +23,29 @@ Intel Xeon (8 cores), **PUC-Lua 5.3.4** against a cgo build of this tree (Go 1.2
 
 | workload | PUC-Lua | golua | ratio | what runs |
 | --- | ---: | ---: | ---: | --- |
-| startup | 1.38 ms | 3.58 ms | 2.59× | a new process, no script body |
-| nop | 25.7 ns | 38.8 ns | 1.51× | `return 0` |
-| intloop | 169 ms | 338 ms | 2.00× | integer sum |
-| floatloop | 228 ms | 538 ms | 2.36× | float multiply-add |
-| bitwise | 241 ms | 597 ms | 2.48× | and, xor, shift |
-| fib | 63.1 ms | 104 ms | 1.65× | recursive Fibonacci |
-| tailcall | 155 ms | 310 ms | 2.01× | countdown tail call |
-| call3 | 234 ms | 390 ms | 1.67× | `return a + b + c` |
-| upvalue | 405 ms | 710 ms | 1.75× | `n = n + 1` |
-| method | 246 ms | 440 ms | 1.79× | `object:add(constant)` |
-| pcall | 94.8 ms | 174 ms | 1.83× | `pcall` of an identity |
-| global | 180 ms | 407 ms | 2.26× | `_G.g = _G.g + i` |
-| array | 192 ms | 454 ms | 2.36× | dense integer keys |
-| hash | 200 ms | 420 ms | 2.10× | short-string key lookup |
-| metaindex | 142 ms | 269 ms | 1.90× | stable integer field |
-| ipairs | 155 ms | 352 ms | 2.27× | base `ipairs`, dense array |
-| concat | 89.7 ms | 276 ms | 3.08× | loop-invariant `a .. b` |
-| strings | 81.5 ms | 547 ms | 6.70× | format, concat, gmatch |
-| sort | 72.9 ms | 117 ms | 1.61× | `table.sort`, Lua comparator |
-| yield | 139 ms | 195 ms | 1.40× | `yield` of `1..n`, then sum |
-| alloc | 131 ms | 271 ms | 2.08× | four-element constructor |
+| startup | 1.18 ms | 2.89 ms | 2.44× | a new process, no script body |
+| nop | 22.3 ns | 40.2 ns | 1.80× | `return 0` |
+| intloop | 158 ms | 359 ms | 2.27× | integer sum |
+| floatloop | 237 ms | 604 ms | 2.55× | float multiply-add |
+| bitwise | 233 ms | 606 ms | 2.60× | and, xor, shift |
+| fib | 67.9 ms | 107 ms | 1.57× | recursive Fibonacci |
+| tailcall | 154 ms | 272 ms | 1.77× | countdown tail call |
+| call3 | 221 ms | 386 ms | 1.75× | `return a + b + c` |
+| upvalue | 395 ms | 677 ms | 1.71× | `n = n + 1` |
+| method | 219 ms | 459 ms | 2.09× | `object:add(constant)` |
+| pcall | 90.7 ms | 204 ms | 2.24× | `pcall` of an identity |
+| global | 180 ms | 412 ms | 2.29× | `_G.g = _G.g + i` |
+| array | 198 ms | 473 ms | 2.39× | dense integer keys |
+| hash | 192 ms | 331 ms | 1.73× | short-string key lookup |
+| metaindex | 138 ms | 272 ms | 1.96× | stable integer field |
+| ipairs | 156 ms | 311 ms | 1.99× | base `ipairs`, dense array |
+| concat | 86.4 ms | 182 ms | 2.10× | loop-invariant `a .. b` |
+| strings | 71.8 ms | 93.1 ms | 1.30× | format, concat, gmatch |
+| sort | 71.0 ms | 125 ms | 1.76× | `table.sort`, Lua comparator |
+| yield | 134 ms | 191 ms | 1.43× | `yield` of `1..n`, then sum |
+| alloc | 121 ms | 234 ms | 1.94× | four-element constructor |
 
-Most rows are interpreter-bound and land between about 1.5× and 2.5×. `yield` is closest to C; `concat` (~3×) and `strings` (~6.7×) are the outliers. `strings` keeps that gap after a C-shaped stack-local `luaL_Buffer` (`initb`): each `string.format("%d-…")` still uses Go `fmt`/`strconv` plus short-string interning, not C's `sprintf` into the stack buffer. Process startup is dominated by the Go runtime.
+Most rows are interpreter-bound and land between about 1.3× and 2.5×. `strings` (1.30×) and `yield` (1.43×) are closest to C: `string.format` writes directly into a non-escaping stack-local `luaL_Buffer` via `PrepBuffSize` + `strconv.AppendInt` and checks the short-string intern table before allocating. Process startup is dominated by the Go runtime.
 
 ## run.sh
 

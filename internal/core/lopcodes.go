@@ -65,12 +65,12 @@ func newAx(op, ax int) Instruction {
 
 // Opcodes (lopcodes.h), ORDER OP — same order as PUC-Lua 5.3.4 (47 ops).
 const (
-	OP_MOVE = iota /* A B     R(A) := R(B) */
-	OP_LOADK       /* A Bx    R(A) := Kst(Bx) */
-	OP_LOADKX      /* A       R(A) := Kst(extra arg) */
-	OP_LOADBOOL    /* A B C   R(A) := (Bool)B; if (C) pc++ */
-	OP_LOADNIL     /* A B     R(A), R(A+1), ..., R(A+B) := nil */
-	OP_GETUPVAL    /* A B     R(A) := UpValue[B] */
+	OP_MOVE     = iota /* A B     R(A) := R(B) */
+	OP_LOADK           /* A Bx    R(A) := Kst(Bx) */
+	OP_LOADKX          /* A       R(A) := Kst(extra arg) */
+	OP_LOADBOOL        /* A B C   R(A) := (Bool)B; if (C) pc++ */
+	OP_LOADNIL         /* A B     R(A), R(A+1), ..., R(A+B) := nil */
+	OP_GETUPVAL        /* A B     R(A) := UpValue[B] */
 
 	OP_GETTABUP /* A B C   R(A) := UpValue[B][RK(C)] */
 	OP_GETTABLE /* A B C   R(A) := R(B)[RK(C)] */
@@ -214,7 +214,7 @@ func opName(op int) string {
 /*
 ** size and position of opcode arguments (lopcodes.h).
 ** 5.3 layout in a packed word: OP:6 A:8 C:9 B:9 (Bx=C+B, Ax=C+B+A).
-*/
+ */
 const (
 	SIZE_C  = 9
 	SIZE_B  = 9

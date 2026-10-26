@@ -23,29 +23,29 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 
 | 负载 | PUC-Lua | golua | 比值 | 实际在做的事 |
 | --- | ---: | ---: | ---: | --- |
-| startup | 1.38 ms | 3.58 ms | 2.59× | 新进程，没有脚本正文 |
-| nop | 25.7 ns | 38.8 ns | 1.51× | `return 0` |
-| intloop | 169 ms | 338 ms | 2.00× | 整数求和 |
-| floatloop | 228 ms | 538 ms | 2.36× | 浮点乘加 |
-| bitwise | 241 ms | 597 ms | 2.48× | 与、异或、移位 |
-| fib | 63.1 ms | 104 ms | 1.65× | 递归 Fibonacci |
-| tailcall | 155 ms | 310 ms | 2.01× | 倒计时尾调用 |
-| call3 | 234 ms | 390 ms | 1.67× | `return a + b + c` |
-| upvalue | 405 ms | 710 ms | 1.75× | `n = n + 1` |
-| method | 246 ms | 440 ms | 1.79× | `object:add(常数)` |
-| pcall | 94.8 ms | 174 ms | 1.83× | 对恒等函数做 `pcall` |
-| global | 180 ms | 407 ms | 2.26× | `_G.g = _G.g + i` |
-| array | 192 ms | 454 ms | 2.36× | 稠密整数键 |
-| hash | 200 ms | 420 ms | 2.10× | 短字符串键查找 |
-| metaindex | 142 ms | 269 ms | 1.90× | 稳定的整数字段 |
-| ipairs | 155 ms | 352 ms | 2.27× | 标准 `ipairs`，稠密数组 |
-| concat | 89.7 ms | 276 ms | 3.08× | 循环不改变的 `a .. b` |
-| strings | 81.5 ms | 547 ms | 6.70× | format、concat、gmatch |
-| sort | 72.9 ms | 117 ms | 1.61× | `table.sort`，比较函数是 Lua |
-| yield | 139 ms | 195 ms | 1.40× | `yield` 出 `1..n` 再求和 |
-| alloc | 131 ms | 271 ms | 2.08× | 四元构造器 |
+| startup | 1.18 ms | 2.89 ms | 2.44× | 新进程，没有脚本正文 |
+| nop | 22.3 ns | 40.2 ns | 1.80× | `return 0` |
+| intloop | 158 ms | 359 ms | 2.27× | 整数求和 |
+| floatloop | 237 ms | 604 ms | 2.55× | 浮点乘加 |
+| bitwise | 233 ms | 606 ms | 2.60× | 与、异或、移位 |
+| fib | 67.9 ms | 107 ms | 1.57× | 递归 Fibonacci |
+| tailcall | 154 ms | 272 ms | 1.77× | 倒计时尾调用 |
+| call3 | 221 ms | 386 ms | 1.75× | `return a + b + c` |
+| upvalue | 395 ms | 677 ms | 1.71× | `n = n + 1` |
+| method | 219 ms | 459 ms | 2.09× | `object:add(常数)` |
+| pcall | 90.7 ms | 204 ms | 2.24× | 对恒等函数做 `pcall` |
+| global | 180 ms | 412 ms | 2.29× | `_G.g = _G.g + i` |
+| array | 198 ms | 473 ms | 2.39× | 稠密整数键 |
+| hash | 192 ms | 331 ms | 1.73× | 短字符串键查找 |
+| metaindex | 138 ms | 272 ms | 1.96× | 稳定的整数字段 |
+| ipairs | 156 ms | 311 ms | 1.99× | 标准 `ipairs`，稠密数组 |
+| concat | 86.4 ms | 182 ms | 2.10× | 循环不改变的 `a .. b` |
+| strings | 71.8 ms | 93.1 ms | 1.30× | format、concat、gmatch |
+| sort | 71.0 ms | 125 ms | 1.76× | `table.sort`，比较函数是 Lua |
+| yield | 134 ms | 191 ms | 1.43× | `yield` 出 `1..n` 再求和 |
+| alloc | 121 ms | 234 ms | 1.94× | 四元构造器 |
 
-多数字节码密集行大约 1.5–2.5×。`yield` 最接近 C；`concat`（约 3×）与 `strings`（约 6.7×）是离群值。`strings` 在栈上 `luaL_Buffer`（`initb`）对齐后仍保持该差距：每次 `string.format("%d-…")` 仍走 Go 的 `fmt`/`strconv` 与短串 intern，而不是 C 那样 `sprintf` 写进栈缓冲。进程启动主要是 Go 运行时的成本。
+多数字节码密集行大约 1.3–2.5×。`strings`（1.30×）与 `yield`（1.43×）最接近 C：`string.format` 直接通过 `PrepBuffSize` + `strconv.AppendInt` 写入不逃逸的栈上 `luaL_Buffer`，并在分配前先查短串 intern 表。进程启动主要是 Go 运行时的成本。
 
 ## run.sh
 
