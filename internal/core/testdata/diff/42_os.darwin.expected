@@ -92,9 +92,9 @@ true|true
 true|true|"exit"|0
 true|nil|"exit"|3
 true|nil|"exit"|1
-sh: 1: 42: not found
+sh: 42: command not found
 true|nil|"exit"|127
-sh: 1: no_such_command_xyz: not found
+sh: no_such_command_xyz: command not found
 true|nil|"exit"|127
 == clock and tmpname ==
 number

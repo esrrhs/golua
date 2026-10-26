@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -1087,9 +1088,12 @@ func strPadField(f strFmtSpec, s string) string {
 // one character -- where Go took the first three characters.
 func strFormatS(form, s string) string {
 	f := strParseFormat(form)
-	f.zero = false
 	if f.prec >= 0 && len(s) > f.prec {
 		s = s[:f.prec] /* the precision is a byte count */
+	}
+	f.prec = -1
+	if runtime.GOOS != "darwin" {
+		f.zero = false
 	}
 	return strPadField(f, s)
 }
@@ -1656,7 +1660,10 @@ func strFormat(L *State) int {
 				b.AddChar(c)
 			} else {
 				f := strParseFormat(form)
-				f.zero = false
+				f.prec = -1
+				if runtime.GOOS != "darwin" {
+					f.zero = false
+				}
 				b.AddString(strPadField(f, string([]byte{c})))
 			}
 		case 'd', 'i':
