@@ -3,6 +3,7 @@
 [![License](https://img.shields.io/github/license/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Release](https://img.shields.io/github/v/release/esrrhs/golua)](https://github.com/esrrhs/golua/releases)
+[![codecov](https://codecov.io/gh/esrrhs/golua/graph/badge.svg)](https://codecov.io/gh/esrrhs/golua)
 
 `golua` is a **line-by-line Go translation of PUC-Lua 5.3.4**. The lexer,
 parser, code generator, VM, standard library, C API and the `lua`/`luac`
