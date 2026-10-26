@@ -124,6 +124,7 @@ func (L *State) GetTop() int { return L.top - (L.ci.funcIdx + 1) }
 func (L *State) SetTop(idx int) {
 	ci := L.ci
 	funcIdx := ci.funcIdx
+	oldTop := L.top
 	var diff int
 	if idx >= 0 {
 		/* api_check: idx <= ci.top - (func+1) omitted / soft */
@@ -142,6 +143,11 @@ func (L *State) SetTop(idx int) {
 		luaF_close(L, newtop, closeKTOP, false)
 	}
 	L.top = newtop /* correct top only after closing any upvalue/tbc */
+	if L.top < oldTop && !isLua(ci) {
+		for i := L.top; i < oldTop; i++ {
+			setnilvalue(&L.stack[i])
+		}
+	}
 }
 
 // tbcAtOrAbove reports whether any to-be-closed level is >= level
@@ -276,6 +282,7 @@ func (L *State) XMove(from *State, n int) {
 	from.top -= n
 	for i := 0; i < n; i++ {
 		L.stack[L.top] = from.stack[from.top+i]
+		setnilvalue(&from.stack[from.top+i])
 		L.top++
 	}
 }
@@ -569,7 +576,7 @@ func (L *State) PushGlobalTable() {
 func luaV_gettable(L *State, t *Value, keyIdx, valIdx int) {
 	slot := vmFastGet(L, t, &L.stack[keyIdx])
 	if slot != nil && !isempty(slot) {
-		L.stack[valIdx] = *slot
+		L.stack[valIdx] = slotVal(slot)
 		return
 	}
 	luaV_finishget(L, t, &L.stack[keyIdx], valIdx, slot)
@@ -583,7 +590,7 @@ func auxgetstr(L *State, t *Value, k string) int {
 	slot := vmFastGet(L, t, &key)
 	if slot != nil && !isempty(slot) {
 		L.checkStack(1)
-		L.stack[L.top] = *slot
+		L.stack[L.top] = slotVal(slot)
 		L.top++
 	} else {
 		L.checkStack(1)
@@ -612,7 +619,7 @@ func (L *State) GetI(idx int, n int64) int {
 	slot := vmFastGeti(t, n)
 	L.checkStack(1)
 	if slot != nil && !isempty(slot) {
-		L.stack[L.top] = *slot
+		L.stack[L.top] = slotVal(slot)
 	} else {
 		var aux Value
 		setivalue(&aux, n)
@@ -628,7 +635,7 @@ func finishrawget(L *State, val *Value) int {
 	if isempty(val) { /* avoid copying empty items to the stack */
 		setnilvalue(&L.stack[L.top])
 	} else {
-		L.stack[L.top] = *val
+		L.stack[L.top] = slotVal(val)
 	}
 	L.top++
 	return ttype(&L.stack[L.top-1])
@@ -746,7 +753,7 @@ func (L *State) GetUserValue(idx, n int) int {
 func luaV_settable(L *State, t *Value, keyIdx, valIdx int) {
 	slot := vmFastGet(L, t, &L.stack[keyIdx])
 	if slot != nil && !isempty(slot) {
-		*slot = L.stack[valIdx] /* luaV_finishfastset; barrier omitted (Go GC) */
+		luaH_setSlotVal(hvalue(t), slot, &L.stack[valIdx]) /* luaV_finishfastset; barrier omitted (Go GC) */
 		return
 	}
 	luaV_finishset(L, t, &L.stack[keyIdx], &L.stack[valIdx], slot)
@@ -759,8 +766,9 @@ func auxsetstr(L *State, t *Value, k string) {
 	setsvalue(&key, str)
 	slot := vmFastGet(L, t, &key)
 	if slot != nil && !isempty(slot) {
-		*slot = L.stack[L.top-1] /* luaV_finishfastset; barrier omitted */
-		L.top--                  /* pop value */
+		luaH_setSlotVal(hvalue(t), slot, &L.stack[L.top-1]) /* luaV_finishfastset; barrier omitted */
+		L.top--                                             /* pop value */
+		setnilvalue(&L.stack[L.top])
 		return
 	}
 	L.checkStack(1)
@@ -768,6 +776,8 @@ func auxsetstr(L *State, t *Value, k string) {
 	L.top++
 	luaV_finishset(L, t, &L.stack[L.top-1], &L.stack[L.top-2], slot)
 	L.top -= 2 /* pop value and key */
+	setnilvalue(&L.stack[L.top])
+	setnilvalue(&L.stack[L.top+1])
 }
 
 // SetTable does t[k] = v (lua_settable).
@@ -775,6 +785,8 @@ func (L *State) SetTable(idx int) {
 	t := index2value(L, idx)
 	luaV_settable(L, t, L.top-2, L.top-1)
 	L.top -= 2 /* pop index and value */
+	setnilvalue(&L.stack[L.top])
+	setnilvalue(&L.stack[L.top+1])
 }
 
 // SetField does t[k] = v for a string key (lua_setfield → auxsetstr).
@@ -787,13 +799,14 @@ func (L *State) SetI(idx int, n int64) {
 	t := index2value(L, idx)
 	slot := vmFastGeti(t, n)
 	if slot != nil && !isempty(slot) {
-		*slot = L.stack[L.top-1] /* luaV_finishfastset; barrier omitted */
+		luaH_setSlotVal(hvalue(t), slot, &L.stack[L.top-1]) /* luaV_finishfastset; barrier omitted */
 	} else {
 		var aux Value
 		setivalue(&aux, n)
 		luaV_finishset(L, t, &aux, &L.stack[L.top-1], slot)
 	}
 	L.top-- /* pop value */
+	setnilvalue(&L.stack[L.top])
 }
 
 // aux_rawset is lapi.c aux_rawset: t[key] = top-1, pop n, invalidate TM cache.
@@ -804,6 +817,9 @@ func aux_rawset(L *State, idx int, key *Value, n int) {
 	invalidateTMcache(t)
 	/* luaC_barrierback omitted (Go GC) */
 	L.top -= n
+	for i := 0; i < n; i++ {
+		setnilvalue(&L.stack[L.top+i])
+	}
 }
 
 // RawSet does t[k] = v without metamethods (lua_rawset).
@@ -825,6 +841,7 @@ func (L *State) RawSetI(idx int, n int64) {
 	luaH_setint(L, t, n, &L.stack[L.top-1])
 	/* luaC_barrierback omitted (Go GC) */
 	L.top--
+	setnilvalue(&L.stack[L.top])
 }
 
 // SetMetaTable sets the metatable of the value at idx (lua_setmetatable).
@@ -844,9 +861,9 @@ func (L *State) SetMetaTable(idx int) int {
 	switch ttype(v) { /* ttnov */
 	case LUA_TTABLE:
 		hvalue(v).metatable = mt
+		luaC_checkWeakMode(L, hvalue(v), mt) /* Go weak-table bridge */
 		if mt != nil {
-			luaC_checkFinalizer(L, v, mt)        /* barrier omitted (Go GC) */
-			luaC_checkWeakMode(L, hvalue(v), mt) /* Go weak-table bridge */
+			luaC_checkFinalizer(L, v, mt) /* barrier omitted (Go GC) */
 		}
 	case LUA_TUSERDATA:
 		uvalue(v).metatable = mt
@@ -857,6 +874,7 @@ func (L *State) SetMetaTable(idx int) int {
 		L.g.mt[ttype(v)] = mt
 	}
 	L.top--
+	setnilvalue(&L.stack[L.top])
 	return 1
 }
 
@@ -868,15 +886,18 @@ func (L *State) SetUserValue(idx, n int) int {
 	val := L.stack[L.top-1]
 	if !ttisfulluserdata(v) {
 		L.top--
+		setnilvalue(&L.stack[L.top])
 		return 0
 	}
 	u := uvalue(v)
 	if n <= 0 || n > int(u.nuvalue) {
 		L.top--
+		setnilvalue(&L.stack[L.top])
 		return 0
 	}
 	u.uv[n-1] = val
 	L.top--
+	setnilvalue(&L.stack[L.top])
 	return 1
 }
 

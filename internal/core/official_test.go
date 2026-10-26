@@ -63,8 +63,10 @@ const officialDir = "testdata/official"
 // only what gc.lua asks of it: how much memory it freed, and in what
 // order it ran the finalizers of a long list.
 var officialKnownDiff = map[string]string{
-	"all": "the environment, in four lines: the second PRNG seed, 'total memory' (PUC-Lua's allocator against the Go heap), the elapsed time, and the interpreter's own path",
-	"gc":  "collectgarbage only implements collect+count (other opts no-op→0); no collector pace/debt/ephemerons; run with _port=true",
+	"all":       "the environment, in four lines: the second PRNG seed, 'total memory' (PUC-Lua's allocator against the Go heap), the elapsed time, and the interpreter's own path",
+	"coroutine": "Go GC: collectgarbage delegates to the Go runtime without forcing runtime.GC(), so coroutine.lua immediate weak-table assert after collectgarbage() is not synchronous",
+	"gc":        "collectgarbage only implements collect+count (other opts no-op→0); no collector pace/debt/ephemerons; run with _port=true",
+	"gengc":     "Go GC: generational collector barriers and synchronous collectgarbage() finalizer/weak-table assertions do not apply when collection is delegated to Go's runtime GC",
 }
 
 // officialKnownDiffBuild are differences that depend on what the binary

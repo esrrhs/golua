@@ -171,10 +171,10 @@ func luaT_objtypename(L *State, o *Value) string {
 func luaT_callTM(L *State, f, p1, p2, p3 *Value) {
 	L.migrateNested()
 	funcIdx := L.top
-	L.stack[funcIdx] = *f    /* push function (assume EXTRA_STACK) */
-	L.stack[funcIdx+1] = *p1 /* 1st argument */
-	L.stack[funcIdx+2] = *p2 /* 2nd argument */
-	L.stack[funcIdx+3] = *p3 /* 3rd argument */
+	L.stack[funcIdx] = slotVal(f)    /* push function (assume EXTRA_STACK) */
+	L.stack[funcIdx+1] = slotVal(p1) /* 1st argument */
+	L.stack[funcIdx+2] = slotVal(p2) /* 2nd argument */
+	L.stack[funcIdx+3] = slotVal(p3) /* 3rd argument */
 	L.top = funcIdx + 4
 	/* metamethod may yield only when called from Lua code */
 	if isLuacode(L.ci) {
@@ -193,9 +193,9 @@ func luaT_callTMres(L *State, f, p1, p2 *Value, res int) {
 	L.migrateNested()
 	result := res /* C: ptrdiff_t result = savestack(L, res) */
 	funcIdx := L.top
-	L.stack[funcIdx] = *f    /* push function (assume EXTRA_STACK) */
-	L.stack[funcIdx+1] = *p1 /* 1st argument */
-	L.stack[funcIdx+2] = *p2 /* 2nd argument */
+	L.stack[funcIdx] = slotVal(f)    /* push function (assume EXTRA_STACK) */
+	L.stack[funcIdx+1] = slotVal(p1) /* 1st argument */
+	L.stack[funcIdx+2] = slotVal(p2) /* 2nd argument */
 	L.top = funcIdx + 3
 	/* metamethod may yield only when called from Lua code */
 	if isLuacode(L.ci) {

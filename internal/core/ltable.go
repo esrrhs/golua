@@ -131,6 +131,17 @@ func keyisdead(n *node) bool { return n.keytt == LUA_TDEADKEY }
 ** values. (ltable.c equalkey)
  */
 func equalkey(k1 *Value, n *node, deadok bool) bool {
+	if n.keytt >= BIT_WEAK {
+		if weakPtrDead(n.kp) {
+			setempty(&n.val)
+			setdeadkey(n)
+			return false
+		}
+		if k1.tt != (n.keytt &^ BIT_WEAK) {
+			return false
+		}
+		return gcvalue(k1) == resolveWeakPtr(n.keytt, n.kp)
+	}
 	if (k1.tt != n.keytt) && !(deadok && keyisdead(n) && iscollectable(k1)) {
 		return false /* cannot be same key */
 	}
@@ -207,7 +218,11 @@ func limitasasize(t *Table) uint32 { return t.alimit }
 ** See explanation about 'deadok' in equalkey. (ltable.c getgeneric)
  */
 func getgeneric(L *State, t *Table, key *Value, deadok bool) *Value {
+	mode := t.syncWeakMode()
 	if i := getGenericNode(L, t, key, deadok); i >= 0 {
+		if mode&weakVal != 0 {
+			return checkSlot(&t.nodes[i].val)
+		}
 		return &t.nodes[i].val
 	}
 	return &absentKey
@@ -267,19 +282,33 @@ func findIndex(L *State, t *Table, key *Value, asize uint32) uint32 {
 // luaH_next traverses a table (ltable.c). The key is at 'keyIdx' and the
 // value is written at 'keyIdx + 1' (index-stack adaptation of StkId).
 func luaH_next(L *State, t *Table, keyIdx int) bool {
+	mode := t.syncWeakMode()
 	asize := luaH_realasize(t)
 	i := findIndex(L, t, &L.stack[keyIdx], asize) /* find original key */
 	for ; i < asize; i++ {                        /* try first array part */
-		if !isempty(&t.array[i]) { /* a non-empty entry? */
+		v := checkSlot(&t.array[i])
+		if !isempty(v) { /* a non-empty entry? */
 			setivalue(&L.stack[keyIdx], int64(i)+1)
-			L.stack[keyIdx+1] = t.array[i]
+			L.stack[keyIdx+1] = slotVal(v)
 			return true
 		}
 	}
 	for j := int(i) - int(asize); j < sizenode(t); j++ { /* hash part */
-		if !isempty(&t.nodes[j].val) { /* a non-empty entry? */
-			getnodekey(&L.stack[keyIdx], &t.nodes[j])
-			L.stack[keyIdx+1] = t.nodes[j].val
+		nd := &t.nodes[j]
+		_ = cleanNodeKey(nd)
+		v := checkSlot(&nd.val)
+		if !isempty(v) { /* a non-empty entry? */
+			getnodekey(&L.stack[keyIdx], nd)
+			if ttisdeadkey(&L.stack[keyIdx]) {
+				setnilvalue(&L.stack[keyIdx])
+				continue
+			}
+			L.stack[keyIdx+1] = slotVal(v)
+			if mode != 0 {
+				for k := keyIdx + 2; k < len(L.stack); k++ {
+					setnilvalue(&L.stack[k])
+				}
+			}
 			return true
 		}
 	}
@@ -340,13 +369,14 @@ func reinsert(L *State, ot, t *Table) {
 	size := sizenode(ot)
 	for j := 0; j < size; j++ {
 		old := &ot.nodes[j]
-		if !isempty(&old.val) {
+		var k Value
+		getnodekey(&k, old)
+		v := checkSlot(&old.val)
+		if !isempty(v) && !ttisnil(&k) && !ttisdeadkey(&k) {
 			/* doesn't need barrier/invalidate cache, as entry was
 			   already present in the table */
-			var k Value
-			getnodekey(&k, old)
-			v := old.val
-			luaH_set(L, t, &k, &v)
+			val := slotVal(v)
+			luaH_set(L, t, &k, &val)
 		}
 	}
 }
@@ -374,6 +404,10 @@ func exchangehashpart(t1, t2 *Table) {
 ** clear new slice → reinsert old hash.
  */
 func luaH_resize(L *State, t *Table, newasize uint32, nhsize uint32) {
+	mode := t.syncWeakMode()
+	oldFlags := t.flags
+	oldCachedMode := t.cachedMode
+	oldModeCached := t.modeCached
 	oldasize := setlimittosize(t)
 	newt := &Table{} /* to keep the new hash part */
 	/* create new hash part with appropriate size into 'newt' */
@@ -381,10 +415,16 @@ func luaH_resize(L *State, t *Table, newasize uint32, nhsize uint32) {
 	if newasize < oldasize { /* will array shrink? */
 		t.alimit = newasize       /* pretend array has new size... */
 		exchangehashpart(t, newt) /* and new hash */
+		t.flags = oldFlags &^ byte(BITRAS)
+		t.cachedMode = oldCachedMode
+		t.modeCached = true
+		t.weakMode = mode
 		/* re-insert into the new hash the elements from vanishing slice */
 		for i := newasize; i < oldasize; i++ {
-			if !isempty(&t.array[i]) {
-				luaH_setint(L, t, int64(i)+1, &t.array[i])
+			v := checkSlot(&t.array[i])
+			if !isempty(v) {
+				val := slotVal(v)
+				luaH_setint(L, t, int64(i)+1, &val)
 			}
 		}
 		t.alimit = oldasize       /* restore current size... */
@@ -405,8 +445,16 @@ func luaH_resize(L *State, t *Table, newasize uint32, nhsize uint32) {
 	for i := oldasize; i < newasize; i++ { /* clear new slice of the array */
 		setempty(&t.array[i])
 	}
+	t.flags = oldFlags &^ byte(BITRAS)
+	t.cachedMode = oldCachedMode
+	t.modeCached = true
+	t.weakMode = mode
 	/* re-insert elements from old hash part into new parts */
 	reinsert(L, newt, t) /* 'newt' now has the old hash */
+	t.flags = oldFlags &^ byte(BITRAS)
+	t.cachedMode = oldCachedMode
+	t.modeCached = oldModeCached
+	t.weakMode = mode
 	/* freehash omitted (Go GC) */
 }
 
@@ -466,7 +514,7 @@ func numusearray(t *Table, nums *[MAXABITS + 1]uint32) uint32 {
 		}
 		/* count elements in range (2^(lg - 1), 2^lg] */
 		for ; i <= lim; i++ {
-			if !isempty(&t.array[i-1]) {
+			if !isempty(checkSlot(&t.array[i-1])) {
 				lc++
 			}
 		}
@@ -483,7 +531,9 @@ func numusehash(t *Table, nums *[MAXABITS + 1]uint32, pna *uint32) int {
 	for i > 0 {
 		i--
 		n := &t.nodes[i]
-		if !isempty(&n.val) {
+		kdead := cleanNodeKey(n)
+		v := checkSlot(&n.val)
+		if !isempty(v) && !kdead {
 			if keyisinteger(n) {
 				ause += countint(keyival(n), nums)
 			}
@@ -554,7 +604,10 @@ func luaH_newarray4(L *State) *Table {
 
 // invalidateTMcache invalidates the metamethod cache of a table
 // (ltable.h: flags &= ~maskflags — preserves BITRAS).
-func invalidateTMcache(t *Table) { t.flags &= ^maskflags }
+func invalidateTMcache(t *Table) {
+	t.flags &= ^maskflags
+	t.modeCached = false
+}
 
 // luaH_free is a no-op: the Go GC reclaims the table (ltable.c IGNORE).
 // The blank assignment is an executable statement so coverage can see a call.
@@ -566,6 +619,7 @@ func getfreepos(t *Table) int {
 	if !isdummy(t) {
 		for t.lastfree > 0 {
 			t.lastfree--
+			_ = cleanNodeKey(&t.nodes[t.lastfree])
 			if keyisnil(&t.nodes[t.lastfree]) {
 				return t.lastfree
 			}
@@ -584,6 +638,7 @@ func getfreepos(t *Table) int {
 ** 5.4.9: do not insert nil values (early return). Barriers omitted (Go GC).
  */
 func luaH_newkey(L *State, t *Table, key, value *Value) {
+	mode := t.syncWeakMode()
 	if ttisnil(key) {
 		luaG_runerror(L, "table index is nil")
 		return
@@ -603,6 +658,10 @@ func luaH_newkey(L *State, t *Table, key, value *Value) {
 		return /* do not insert nil values */
 	}
 	mp := mainpositionTV(L, t, key)
+	if !isdummy(t) {
+		_ = cleanNodeKey(&t.nodes[mp])
+		_ = checkSlot(&t.nodes[mp].val)
+	}
 	if !isempty(&t.nodes[mp].val) || isdummy(t) { /* main position is taken? */
 		f := getfreepos(t) /* get a free place */
 		if f < 0 {         /* cannot find a free place? */
@@ -633,9 +692,9 @@ func luaH_newkey(L *State, t *Table, key, value *Value) {
 			mp = f
 		}
 	}
-	setnodekey(&t.nodes[mp], key)
+	setnodekeyMode(&t.nodes[mp], key, mode)
 	/* luaC_barrierback omitted (Go GC) */
-	t.nodes[mp].val = *value
+	storeValMode(&t.nodes[mp].val, value, mode)
 }
 
 /*
@@ -648,16 +707,25 @@ func luaH_newkey(L *State, t *Table, key, value *Value) {
 func luaH_getint(t *Table, key int64) *Value {
 	alimit := t.alimit
 	if uint64(key)-1 < uint64(alimit) { /* 'key' in [1, t->alimit]? */
+		if t.metatable != nil && t.syncWeakMode()&weakVal != 0 {
+			return checkSlot(&t.array[key-1])
+		}
 		return &t.array[key-1]
 	} else if !isrealasize(t) && /* key still may be in the array part? */
 		(((uint64(key) - 1) &^ uint64(alimit-1)) < uint64(alimit)) {
 		t.alimit = uint32(key) /* probably '#t' is here now */
+		if t.metatable != nil && t.syncWeakMode()&weakVal != 0 {
+			return checkSlot(&t.array[key-1])
+		}
 		return &t.array[key-1]
 	}
 	/* key is not in the array part; check the hash */
 	n := hashint(t, key)
 	for { /* check whether 'key' is somewhere in the chain */
 		if keyisinteger(&t.nodes[n]) && keyival(&t.nodes[n]) == key {
+			if t.metatable != nil && t.syncWeakMode()&weakVal != 0 {
+				return checkSlot(&t.nodes[n].val)
+			}
 			return &t.nodes[n].val /* that's it */
 		}
 		nx := t.nodes[n].next
@@ -677,6 +745,9 @@ func luaH_getshortstr(t *Table, key *TString) *Value {
 	for { /* check whether 'key' is somewhere in the chain */
 		if keyisshrstr(&t.nodes[n]) &&
 			luaS_eqshrstr(keystrval(&t.nodes[n]), key) { /* C: eqshrstr; Go content FLAG */
+			if t.metatable != nil && t.syncWeakMode()&weakVal != 0 {
+				return checkSlot(&t.nodes[n].val)
+			}
 			return &t.nodes[n].val /* that's it */
 		}
 		nx := t.nodes[n].next
@@ -757,11 +828,47 @@ func luaH_get(L *State, t *Table, key *Value) *Value {
 ** Beware: when using this function you probably need to check a GC
 ** barrier and invalidate the TM cache. (ltable.c luaH_finishset — 5.4.9)
  */
+func luaH_strengthenSlotKey(t *Table, slot *Value) {
+	first := uintptr(unsafe.Pointer(&t.nodes[0]))
+	end := first + uintptr(len(t.nodes))*unsafe.Sizeof(t.nodes[0])
+	sp := uintptr(unsafe.Pointer(slot))
+	if sp >= first && sp < end {
+		idx := (sp - first) / unsafe.Sizeof(t.nodes[0])
+		strengthenNodeKey(&t.nodes[idx])
+	}
+}
+
+// luaH_setSlotVal writes value into an already-located non-empty slot of t.
+func luaH_setSlotVal(t *Table, slot, value *Value) {
+	if t.metatable == nil && uint8(value.tt-1) < BIT_WEAK-1 {
+		*slot = *value
+	} else {
+		luaH_setSlotValSlow(t, slot, value)
+	}
+}
+
+func luaH_setSlotValSlow(t *Table, slot, value *Value) {
+	mode := t.syncWeakMode()
+	storeValMode(slot, value, mode)
+	if ttisnil(value) && len(t.nodes) > 0 {
+		first := uintptr(unsafe.Pointer(&t.nodes[0]))
+		end := first + uintptr(len(t.nodes))*unsafe.Sizeof(t.nodes[0])
+		sp := uintptr(unsafe.Pointer(slot))
+		if sp >= first && sp < end {
+			idx := (sp - first) / unsafe.Sizeof(t.nodes[0])
+			weakenNodeKey(&t.nodes[idx])
+		}
+	}
+}
+
 func luaH_finishset(L *State, t *Table, key, slot, value *Value) {
 	if isabstkey(slot) {
 		luaH_newkey(L, t, key, value)
 	} else {
-		*slot = *value
+		luaH_setSlotVal(t, slot, value)
+		if !ttisnil(value) && key.tt&BIT_ISCOLLECTABLE != 0 && ttypetag(key) != LUA_VSHRSTR && t.weakMode&weakKey == 0 && len(t.nodes) > 0 {
+			luaH_strengthenSlotKey(t, slot)
+		}
 	}
 }
 
@@ -781,7 +888,7 @@ func luaH_setint(L *State, t *Table, key int64, value *Value) {
 		setivalue(&k, key)
 		luaH_newkey(L, t, &k, value)
 	} else {
-		*p = *value
+		luaH_setSlotVal(t, p, value)
 	}
 }
 
@@ -824,7 +931,7 @@ func hashSearch(t *Table, j uint64) uint64 {
 func binsearch(array []Value, i, j uint32) uint32 {
 	for j-i > 1 { /* binary search */
 		m := (i + j) / 2
-		if isempty(&array[m-1]) {
+		if isempty(checkSlot(&array[m-1])) {
 			j = m
 		} else {
 			i = m
@@ -841,10 +948,11 @@ func binsearch(array []Value, i, j uint32) uint32 {
 ** (ltable.c luaH_getn — 5.4.9)
  */
 func luaH_getn(t *Table) uint64 {
+	t.syncWeakMode()
 	limit := t.alimit
-	if limit > 0 && isempty(&t.array[limit-1]) { /* (1)? */
+	if limit > 0 && isempty(checkSlot(&t.array[limit-1])) { /* (1)? */
 		/* there must be a boundary before 'limit' */
-		if limit >= 2 && !isempty(&t.array[limit-2]) {
+		if limit >= 2 && !isempty(checkSlot(&t.array[limit-2])) {
 			/* 'limit - 1' is a boundary; can it be a new limit? */
 			if ispow2realasize(t) && !ispow2u(limit-1) {
 				t.alimit = limit - 1
@@ -864,12 +972,12 @@ func luaH_getn(t *Table) uint64 {
 	/* 'limit' is zero or present in table */
 	if !limitequalsasize(t) { /* (2)? */
 		/* 'limit' > 0 and array has more elements after 'limit' */
-		if isempty(&t.array[limit]) { /* 'limit + 1' is empty? */
+		if isempty(checkSlot(&t.array[limit])) { /* 'limit + 1' is empty? */
 			return uint64(limit) /* this is the boundary */
 		}
 		/* else, try last element in the array */
 		limit = luaH_realasize(t)
-		if isempty(&t.array[limit-1]) { /* empty? */
+		if isempty(checkSlot(&t.array[limit-1])) { /* empty? */
 			/* there must be a boundary in the array after old limit,
 			   and it must be a valid new limit */
 			boundary := binsearch(t.array, t.alimit, limit)

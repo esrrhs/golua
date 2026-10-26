@@ -154,6 +154,7 @@ type globalState struct {
 	memErrMsg  *TString
 	gcDebt     int  // allocations since the last collector step
 	closing    bool // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
+	closed     bool // true after closeFinalizers finishes; late Go finalizers are dropped
 
 	// pendingRun is the queue of finalizers handed over by Go and not
 	// run yet -- see runFinalizers, which a nested lua_close has to be
@@ -504,6 +505,7 @@ func (L *State) shrinkStack() {
 func (L *State) allocCI() *CallInfo {
 	if n := len(L.ciPool); n > 0 {
 		ci := L.ciPool[n-1]
+		L.ciPool[n-1] = nil
 		L.ciPool = L.ciPool[:n-1]
 		*ci = CallInfo{}
 		return ci

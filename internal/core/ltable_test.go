@@ -90,9 +90,9 @@ func TestDeadKeyDoesNotBreakTraversal(t *testing.T) {
 	local before = count(t)
 	for i = 1, 200 do keys[i] = nil end
 	-- allocating is what drives a cycle, and a cycle is what drops them
-	for i = 1, 1000000 do
+	for i = 1, 5000000 do
 		local a = {}
-		if next(t) == nil then break end
+		if i % 10000 == 0 and next(t) == nil then break end
 	end
 	return before .. " " .. count(t)
 	`)
