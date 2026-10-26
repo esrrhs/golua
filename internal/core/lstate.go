@@ -146,6 +146,7 @@ type globalState struct {
 	memErrMsg  *TString
 	gcDebt     int  // allocations since the last collector step
 	closing    bool // 'gcstp & GCSTPCLS': no new '__gc' once the state closes
+	closed     bool // true once closeFinalizers has finished draining
 
 	// pendingRun is the queue of finalizers handed over by Go and not
 	// run yet -- see runFinalizers, which a nested lua_close has to be
@@ -429,7 +430,7 @@ func (L *State) reallocStack(newsize int) {
 // Size math uses C's *total* stacksize (= usable + EXTRA_STACK).
 func (L *State) growStackNoRaise(n int, raise bool) bool {
 	size := L.stackSize() + EXTRA_STACK /* C: L->stacksize */
-	if size > LUAI_MAXSTACK { /* error after extra size? */
+	if size > LUAI_MAXSTACK {           /* error after extra size? */
 		if raise {
 			luaD_throw(L, LUA_ERRERR)
 		}
@@ -548,7 +549,7 @@ func NewState() *State {
 	L.ci = &L.baseCI
 	L.baseCI.funcIdx = 0
 	L.baseCI.top = L.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
-	L.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
+	L.baseCI.callstatus = 0             /* C level (no CIST_LUA) */
 	L.baseCI.nresults = 0
 	L.baseCI.prev = nil
 	L.baseCI.next = nil
@@ -716,7 +717,7 @@ func (L *State) NewThread() *State {
 	L1.ci = &L1.baseCI
 	L1.baseCI.funcIdx = 0
 	L1.baseCI.top = L1.top + LUA_MINSTACK /* stack_init: ci->top = L->top + LUA_MINSTACK */
-	L1.baseCI.callstatus = 0 /* C level (no CIST_LUA) */
+	L1.baseCI.callstatus = 0              /* C level (no CIST_LUA) */
 	L1.baseCI.nresults = 0
 	L1.baseCI.prev = nil
 	L1.baseCI.next = nil
@@ -964,6 +965,16 @@ func (L *State) Resume(from *State, nargs int) int {
 			co.top = co.ci.funcIdx + 1
 			if co.ci.funcIdx == 0 {
 				setnilvalue(&co.stack[0])
+			}
+		}
+		if resp.status != LUA_YIELD {
+			for i := co.top; i < len(co.stack); i++ {
+				setnilvalue(&co.stack[i])
+			}
+			if co.co != nil {
+				clear(co.co.args)
+				co.co.args = co.co.args[:0]
+				clear(co.co.vals)
 			}
 		}
 		return int(resp.status)

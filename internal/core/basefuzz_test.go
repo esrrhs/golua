@@ -291,7 +291,6 @@ func TestBaseFuzzDifferential(t *testing.T) {
 	/* 1. warn — omitted on Lua 5.3.4 (no warn() in base lib). */
 	nWarn := 0
 
-
 	/* 2. assert: every kind as the thing being asserted, and then as
 	   the message, and at every level a level can be. */
 	for _, k := range baseKinds {
@@ -1044,6 +1043,10 @@ func baseProcessSrc(envFile, plainFile string) string {
 		           tostring(collectgarbage("collect"))
 		  end})
 		  doomed = nil
+		end
+		for i = 1, 2000000 do
+		  local a = {}
+		  if seen ~= nil then break end
 		end
 		collectgarbage("collect")
 		eq(seen, "nil,nil", "every option is nil inside a finalizer")

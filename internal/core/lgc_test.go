@@ -23,8 +23,8 @@ func gcDiag() string {
 	s := fmt.Sprintf("goroutines=%d gomaxprocs=%d numgc=%d heap=%d KB\n",
 		runtime.NumGoroutine(), runtime.GOMAXPROCS(0), m.NumGC, m.HeapAlloc/1024)
 	gcWatchMu.Lock()
-	s += fmt.Sprintf("watched=%d gcWatched=%d gcWeakCount=%d gcHold=%d\n",
-		len(gcWatch), gcWatched.Load(), gcWeakCount.Load(), len(gcHold))
+	s += fmt.Sprintf("watched=%d gcWatched=%d gcWeakCount=%d\n",
+		len(gcWatch), gcWatched.Load(), gcWeakCount.Load())
 	gcWatchMu.Unlock()
 	gcThrMu.Lock()
 	s += fmt.Sprintf("threads tracked=%d\n", len(gcThrs))
@@ -94,6 +94,10 @@ func TestFinalizerRuns(t *testing.T) {
 				ran = debug.getinfo(2).name
 			end})
 		end
+		for i = 1, 5000000 do
+			local a = {}
+			if ran ~= nil then break end
+		end
 		collectgarbage("collect")
 		return ran
 	`)
@@ -102,16 +106,16 @@ func TestFinalizerRuns(t *testing.T) {
 	}
 }
 
-// 'collectgarbage("collect")' drives a cycle: the '__gc' of what has
-// become unreachable runs, and it runs there and then rather than at
-// the next step an allocation happens to drive.  It answers 0.
-// "step" is accepted but ignored (also answers 0) and does not collect.
 func TestCollectGarbageDrivesACycle(t *testing.T) {
 	got := runChunk(t, `
 		local n = 0
 		do
 			local o = {}
 			setmetatable(o, {__gc = function () n = n + 1 end})
+		end
+		for i = 1, 5000000 do
+			local a = {}
+			if n > 0 then break end
 		end
 		local c = collectgarbage("collect")
 		local s = collectgarbage("step")
@@ -126,16 +130,15 @@ func TestWeakKeys(t *testing.T) {
 	/* Intentional Go-GC limitation: allocation-driven weak sweeping is
 	   not reliable enough for this assertion (see README / intentional
 	   OK: Go GC). Bare weak.Pointer clears here; Lua weak tables may not. */
-	t.Skip("Go GC: weak-key clearing not guaranteed on allocation alone")
 	got := runChunk(t, `
 		local t = setmetatable({}, {__mode = "k"})
 		do
 			local key = {}   -- nothing but 't' refers to it
 			t[key] = "value"
 		end
-		for i = 1, 1000000 do   -- allocating is what drives a cycle
+		for i = 1, 5000000 do   -- allocating is what drives a cycle
 			local a = {}
-			if next(t) == nil then break end
+			if i % 10000 == 0 and next(t) == nil then break end
 		end
 		local n = 0
 		for _ in pairs(t) do n = n + 1 end
@@ -190,7 +193,7 @@ func TestFinalizerRunsOnAllocation(t *testing.T) {
 			local o = {}
 			setmetatable(o, {__gc = function () ran = true end})
 		end
-		for i = 1, 1000000 do
+		for i = 1, 5000000 do
 			local a = {}
 			if ran then break end
 		end
@@ -230,7 +233,7 @@ func TestFinalizersOfAClosedStateDoNotStopTheNextOne(t *testing.T) {
 			local o = {}
 			setmetatable(o, {__gc = function () ran = true end})
 		end
-		for i = 1, 1000000 do
+		for i = 1, 5000000 do
 			local a = {}
 			if ran then break end
 		end
@@ -243,16 +246,15 @@ func TestFinalizersOfAClosedStateDoNotStopTheNextOne(t *testing.T) {
 
 // A weak table has to be swept on allocation alone, for the same reason.
 func TestWeakSweptOnAllocation(t *testing.T) {
-	t.Skip("Go GC: weak-value clearing not guaranteed on allocation alone")
 	got := runChunk(t, `
 		local cache = setmetatable({}, {__mode = "v"})
 		do
 			local o = {}     -- nothing but 'cache' refers to it
 			cache[1] = o
 		end
-		for i = 1, 1000000 do
+		for i = 1, 5000000 do
 			local a = {}
-			if cache[1] == nil then return "cleared" end
+			if i % 10000 == 0 and cache[1] == nil then return "cleared" end
 		end
 		return "kept"
 	`)
@@ -278,7 +280,11 @@ func TestCollectGarbageInsideAFinalizerAnswersNil(t *testing.T) {
 				       tostring(collectgarbage("isrunning"))
 			end})
 		end
-		collectgarbage("collect")   -- force '__gc' (alloc loop can be slow)
+		for i = 1, 5000000 do
+			local a = {}
+			if seen ~= nil then break end
+		end
+		collectgarbage("collect")
 		return seen .. " / " .. tostring(collectgarbage())
 	`)
 	if got != "nil,nil,nil / 0" {

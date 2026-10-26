@@ -17,6 +17,7 @@ import (
 	"strings"
 	"unicode/utf8"
 	"unsafe"
+	"weak"
 )
 
 // Basic type tags (lua.h).
@@ -75,6 +76,7 @@ func UpvalueIndex(i int) int { return LUA_REGISTRYINDEX - i }
 // Bits in a value tag (lobject.h).
 const (
 	BIT_ISCOLLECTABLE = 1 << 6
+	BIT_WEAK          = 1 << 7 // Go-GC weak-table slot marker
 )
 
 // makevariant builds (t | (v<<4)). Name is 5.4; 5.3.4 inlines the same
@@ -92,10 +94,10 @@ func novariant(t int) int      { return t & 0x0F }
 // LUA_TUPVAL: Go-GC bookkeeping tag, not in 5.3.4 typenames.
 const (
 	/* 5.3.4 primary */
-	LUA_TNUMFLT = LUA_TNUMBER | (0 << 4) // 3  float
-	LUA_TNUMINT = LUA_TNUMBER | (1 << 4) // 19 integer
-	LUA_TSHRSTR = LUA_TSTRING | (0 << 4) // 4
-	LUA_TLNGSTR = LUA_TSTRING | (1 << 4) // 20
+	LUA_TNUMFLT = LUA_TNUMBER | (0 << 4)   // 3  float
+	LUA_TNUMINT = LUA_TNUMBER | (1 << 4)   // 19 integer
+	LUA_TSHRSTR = LUA_TSTRING | (0 << 4)   // 4
+	LUA_TLNGSTR = LUA_TSTRING | (1 << 4)   // 20
 	LUA_TLCL    = LUA_TFUNCTION | (0 << 4) // 6
 	LUA_TLCF    = LUA_TFUNCTION | (1 << 4) // 22
 	LUA_TCCL    = LUA_TFUNCTION | (2 << 4) // 38
@@ -193,6 +195,7 @@ func ttypetag(v *Value) int { return int(v.tt) & 0x3F }
 
 func ttisnil(v *Value) bool       { return ttype(v) == LUA_TNIL }
 func ttisstrictnil(v *Value) bool { return v.tt == LUA_VNIL }
+
 // isabstkey reports whether 'v' is the not-found sentinel (ltable.c:
 // slot == luaO_nilobject). 5.3.4 uses pointer identity, not a tag.
 func isabstkey(v *Value) bool { return v == &luaO_nilobject }
@@ -203,10 +206,11 @@ func isempty(v *Value) bool { return ttisnil(v) }
 func ttisboolean(v *Value) bool { return v.tt == LUA_TBOOLEAN } /* checktag LUA_TBOOLEAN */
 func ttisfalse(v *Value) bool   { return ttisboolean(v) && v.i == 0 }
 func ttistrue(v *Value) bool    { return ttisboolean(v) && v.i != 0 }
+
 /* l_isfalse: nil or boolean false (lobject.h). */
-func isFalse(v *Value) bool  { return ttisnil(v) || (ttisboolean(v) && v.i == 0) }
+func isFalse(v *Value) bool   { return ttisnil(v) || (ttisboolean(v) && v.i == 0) }
 func l_isfalse(v *Value) bool { return isFalse(v) }
-func bvalue(v *Value) bool   { return v.i != 0 } /* val_(o).b when ttisboolean */
+func bvalue(v *Value) bool    { return v.i != 0 } /* val_(o).b when ttisboolean */
 
 func ttisnumber(v *Value) bool  { return ttype(v) == LUA_TNUMBER }
 func ttisinteger(v *Value) bool { return v.tt == LUA_VNUMINT }
@@ -245,15 +249,15 @@ func nvalue(v *Value) float64 {
 	}
 	return fltvalue(v)
 }
-func tsvalue(v *Value) *TString       { return (*TString)(v.p) }
-func hvalue(v *Value) *Table          { return (*Table)(v.p) }
-func clLvalue(v *Value) *LClosure     { return (*LClosure)(v.p) }
-func clCvalue(v *Value) *CClosure     { return (*CClosure)(v.p) }
-func fvalue(v *Value) GoFunc          { return *(*GoFunc)(unsafe.Pointer(&v.p)) }
-func uvalue(v *Value) *Udata          { return (*Udata)(v.p) }
-func pvalue(v *Value) unsafe.Pointer  { return v.p }
-func thvalue(v *Value) *State         { return (*State)(v.p) }
-func gcvalue(v *Value) unsafe.Pointer { return v.p }
+func tsvalue(v *Value) *TString         { return (*TString)(v.p) }
+func hvalue(v *Value) *Table            { return (*Table)(v.p) }
+func clLvalue(v *Value) *LClosure       { return (*LClosure)(v.p) }
+func clCvalue(v *Value) *CClosure       { return (*CClosure)(v.p) }
+func fvalue(v *Value) GoFunc            { return *(*GoFunc)(unsafe.Pointer(&v.p)) }
+func uvalue(v *Value) *Udata            { return (*Udata)(v.p) }
+func pvalue(v *Value) unsafe.Pointer    { return v.p }
+func thvalue(v *Value) *State           { return (*State)(v.p) }
+func gcvalue(v *Value) unsafe.Pointer   { return v.p }
 func deadvalue(v *Value) unsafe.Pointer { return v.p } /* ttisdeadkey: gc field only */
 
 func iscollectable(v *Value) bool { return v.tt&BIT_ISCOLLECTABLE != 0 }
@@ -264,7 +268,7 @@ func iscollectable(v *Value) bool { return v.tt&BIT_ISCOLLECTABLE != 0 }
 // ---------------------------------------------------------------------
 
 func setnilvalue(v *Value) { *v = Value{tt: LUA_TNIL} }
-func setempty(v *Value)    { setnilvalue(v) } /* 5.3.4: empty == nil */
+func setempty(v *Value)    { setnilvalue(v) }      /* 5.3.4: empty == nil */
 func setabstkey(v *Value)  { *v = luaO_nilobject } /* rarely used; prefer &luaO_nilobject */
 /* setbvalue: LUA_TBOOLEAN + b in i (lobject.h setbvalue). */
 func setbfvalue(v *Value) { *v = Value{tt: LUA_TBOOLEAN, i: 0} }
@@ -295,7 +299,7 @@ func setthvalue(v *Value, th *State)     { *v = Value{tt: ctb(LUA_VTHREAD), p: u
 func setclLvalue(v *Value, cl *LClosure) { *v = Value{tt: ctb(LUA_VLCL), p: unsafe.Pointer(cl)} }
 func setclCvalue(v *Value, cl *CClosure) { *v = Value{tt: ctb(LUA_VCCL), p: unsafe.Pointer(cl)} }
 
-func setobj(v1, v2 *Value) { *v1 = *v2 }
+func setobj(v1, v2 *Value)  { *v1 = *v2 }
 func setdeadvalue(v *Value) { *v = Value{tt: LUA_TDEADKEY} }
 
 // ---------------------------------------------------------------------
@@ -344,9 +348,11 @@ func setnodekey(n *node, k *Value) {
 
 // getnodekey copies a key into a TValue. Name is 5.4; 5.3.4 reads TKey.nk.
 func getnodekey(dst *Value, n *node) {
-	dst.p = n.kp
-	dst.i = n.ki
-	dst.tt = n.keytt
+	if n.keytt < BIT_WEAK {
+		dst.p, dst.i, dst.tt = n.kp, n.ki, n.keytt
+	} else {
+		getnodekeyWeak(dst, n)
+	}
 }
 
 // setnilkey empties a node's key (≡ setnilvalue on gkey). 5.4 name.
@@ -355,19 +361,22 @@ func setnilkey(n *node) { n.keytt = LUA_VNIL; n.kp = nil; n.ki = 0 }
 // Table is a Lua table: an array part plus an open-addressing hash part.
 // 5.3.4 field is sizearray — not 5.4 alimit/BITRAS.
 type Table struct {
-	flags     byte   // 1<<p means tagmethod(p) is not present
-	lsizenode byte   // log2 of size of 'node' array
-	sizearray uint32 // size of array part (lobject.h 5.3.4)
-	array     []Value
-	nodes     []node
-	lastfree  int
-	metatable *Table
-	weakMode  byte // Go-only: "k"/"v"/"kv" bits (C walks GC weak lists)
-	finalized bool // Go-only: Go finalizer armed for '__gc'
+	flags       byte   // 1<<p means tagmethod(p) is not present
+	lsizenode   byte   // log2 of size of 'node' array
+	sizearray   uint32 // size of array part (lobject.h 5.3.4)
+	array       []Value
+	nodes       []node
+	lastfree    int
+	metatable   *Table
+	weakMode    byte // Go-only: "k"/"v"/"kv" bits (C walks GC weak lists)
+	cachedMode  byte // Go-only: cached __mode when this table is used as a metatable
+	modeCached  bool // Go-only: whether cachedMode is valid
+	weakTracked bool // Go-only: whether this table is in gcWeakTables
+	finalized   bool // Go-only: Go finalizer armed for '__gc'
 }
 
 func sizenode(t *Table) int { return 1 << t.lsizenode }
-func twoto(x byte) int          { return 1 << x }
+func twoto(x byte) int      { return 1 << x }
 
 // ---------------------------------------------------------------------
 // Udata (lobject.h)
@@ -380,14 +389,14 @@ func twoto(x byte) int          { return 1 << x }
 // finalized/finSet/finL/bufID are Go-GC bookkeeping (IGNORE for C parity).
 type Udata struct {
 	metatable *Table
-	user      Value          // single uservalue (C user_ + ttuv_)
-	val       any            // Go payload ≈ C getudatamem blob (SPEC)
-	finalized bool           // being watched: its '__gc' is to run
-	finSet    bool           // the Go finalizer has been set, which happens once
-	cblock    unsafe.Pointer // the C block behind it, if it has one
-	len       int            // its size in bytes: what lua_rawlen answers
-	finL      *State         // its state, which the finalizer needs
-	bufID     int            // luaL_Buffer slot, freed with the userdata
+	user      Value               // single uservalue (C user_ + ttuv_)
+	val       any                 // Go payload ≈ C getudatamem blob (SPEC)
+	finalized bool                // being watched: its '__gc' is to run
+	finSet    bool                // the Go finalizer has been set, which happens once
+	cblock    unsafe.Pointer      // the C block behind it, if it has one
+	len       int                 // its size in bytes: what lua_rawlen answers
+	finL      weak.Pointer[State] // its state (weak so Udata never pins State in a cycle)
+	bufID     int                 // luaL_Buffer slot, freed with the userdata
 }
 
 // setuservalue / getuservalue (lobject.h 5.3.4 macros).
@@ -412,7 +421,6 @@ type LocVar struct {
 	endpc   int
 }
 
-
 // Proto is a function prototype.
 type Proto struct {
 	numparams    byte
@@ -436,9 +444,9 @@ type Proto struct {
 	// lineinfo holds the absolute source line of each instruction.
 	// 5.3.4 C stores signed line deltas; absolute form is equivalent.
 	lineinfo []int32
-	locvars     []LocVar
-	source      *TString
-	cache       *LClosure /* last-created closure of this proto (5.3 reuse) */
+	locvars  []LocVar
+	source   *TString
+	cache    *LClosure /* last-created closure of this proto (5.3 reuse) */
 }
 
 // ---------------------------------------------------------------------
@@ -610,11 +618,11 @@ func luaO_utf8esc(x uint32) []byte {
 		buff[UTF8BUFFSZ-1] = byte(x)
 	} else { /* need continuation bytes */
 		mfb := uint32(0x3f) /* maximum that fits in first byte */
-		for { /* add continuation bytes */
+		for {               /* add continuation bytes */
 			buff[UTF8BUFFSZ-n] = byte(0x80 | (x & 0x3f))
 			n++
-			x >>= 6 /* remove added bits */
-			mfb >>= 1 /* now there is one less bit available in first byte */
+			x >>= 6         /* remove added bits */
+			mfb >>= 1       /* now there is one less bit available in first byte */
 			if !(x > mfb) { /* C: while (x > mfb) — done when x fits */
 				break
 			}
@@ -1044,58 +1052,65 @@ func pushfString(L *State, format string, args ...any) *TString {
 			break
 		}
 		switch format[i+1] {
-		case 's': { /* zero-terminated string — C strlen */
-			a := next()
-			if a == nil {
-				b.WriteString("(null)")
-			} else {
-				b.WriteString(luaCStr(toStringAny(a)))
+		case 's':
+			{ /* zero-terminated string — C strlen */
+				a := next()
+				if a == nil {
+					b.WriteString("(null)")
+				} else {
+					b.WriteString(luaCStr(toStringAny(a)))
+				}
 			}
-		}
-		case 'c': { /* an 'int' as a character (5.3.4: lisprint or '<\\d>') */
-			a := next()
-			c := byte(toIntAny(a))
-			if lisprint(int(c)) {
-				b.WriteByte(c)
-			} else { /* non-printable character; print its code */
-				b.WriteString(fmt.Sprintf("<\\%d>", c))
+		case 'c':
+			{ /* an 'int' as a character (5.3.4: lisprint or '<\\d>') */
+				a := next()
+				c := byte(toIntAny(a))
+				if lisprint(int(c)) {
+					b.WriteByte(c)
+				} else { /* non-printable character; print its code */
+					b.WriteString(fmt.Sprintf("<\\%d>", c))
+				}
 			}
-		}
-		case 'd': { /* an 'int' — C setivalue + top2str */
-			a := next()
-			var tmp Value
-			setivalue(&tmp, toIntAny(a))
-			b.WriteString(tostringbuff(&tmp))
-		}
-		case 'I': { /* a 'lua_Integer' — C setivalue + top2str */
-			a := next()
-			var tmp Value
-			setivalue(&tmp, toIntAny(a))
-			b.WriteString(tostringbuff(&tmp))
-		}
-		case 'f': { /* a 'lua_Number' — C setfltvalue + top2str */
-			a := next()
-			var f float64
-			switch v := a.(type) {
-			case float64:
-				f = v
-			case float32:
-				f = float64(v)
-			default:
-				f = float64(toIntAny(a))
+		case 'd':
+			{ /* an 'int' — C setivalue + top2str */
+				a := next()
+				var tmp Value
+				setivalue(&tmp, toIntAny(a))
+				b.WriteString(tostringbuff(&tmp))
 			}
-			var tmp Value
-			setfltvalue(&tmp, f)
-			b.WriteString(tostringbuff(&tmp))
-		}
-		case 'p': { /* a pointer */
-			a := next()
-			b.WriteString("0x" + strconv.FormatUint(uint64(toPtrAny(a)), 16))
-		}
-		case 'U': { /* an 'int' as a UTF-8 sequence */
-			a := next()
-			b.Write(luaO_utf8esc(uint32(toIntAny(a))))
-		}
+		case 'I':
+			{ /* a 'lua_Integer' — C setivalue + top2str */
+				a := next()
+				var tmp Value
+				setivalue(&tmp, toIntAny(a))
+				b.WriteString(tostringbuff(&tmp))
+			}
+		case 'f':
+			{ /* a 'lua_Number' — C setfltvalue + top2str */
+				a := next()
+				var f float64
+				switch v := a.(type) {
+				case float64:
+					f = v
+				case float32:
+					f = float64(v)
+				default:
+					f = float64(toIntAny(a))
+				}
+				var tmp Value
+				setfltvalue(&tmp, f)
+				b.WriteString(tostringbuff(&tmp))
+			}
+		case 'p':
+			{ /* a pointer */
+				a := next()
+				b.WriteString("0x" + strconv.FormatUint(uint64(toPtrAny(a)), 16))
+			}
+		case 'U':
+			{ /* an 'int' as a UTF-8 sequence */
+				a := next()
+				b.Write(luaO_utf8esc(uint32(toIntAny(a))))
+			}
 		case '%':
 			b.WriteByte('%')
 		default:
