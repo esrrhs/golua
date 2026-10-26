@@ -188,16 +188,7 @@ func osSetAllFields(L *State, t time.Time) {
 
 // tIsDST reports whether t falls in daylight-saving time of its location.
 func tIsDST(t time.Time) bool {
-	_, offset := t.Zone()
-	_, janOffset := time.Date(t.Year(), 1, 1, 0, 0, 0, 0, t.Location()).Zone()
-	_, julOffset := time.Date(t.Year(), 7, 1, 0, 0, 0, 0, t.Location()).Zone()
-	if janOffset == julOffset {
-		return false
-	}
-	if janOffset > julOffset {
-		return offset == janOffset
-	}
-	return offset == julOffset
+	return t.IsDST()
 }
 
 // tHasDSTRules reports whether the location ever keeps DST (mktime honour

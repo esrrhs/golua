@@ -234,6 +234,7 @@ func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 		ci.ypcall = true
 		status := LUA_OK
 		n0 := L.nYields
+		oldNCcalls := L.nCcalls
 		func() {
 			defer func() {
 				r := recover()
@@ -244,6 +245,7 @@ func lua_pcallk(p *C.lua_State, nargs, nresults, msgh C.int, ctx C.lua_KContext,
 				if !ok {
 					panic(r) /* not a Lua error: let it out */
 				}
+				L.nCcalls = oldNCcalls
 				status = e.status
 			}()
 			luaD_call(L, funcIdx, int(nresults))

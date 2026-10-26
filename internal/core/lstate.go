@@ -934,6 +934,11 @@ func (L *State) coMain() {
 			status, closed = L.coRun(req.args, req.ccalls)
 		}
 		L.dead = true
+		if status == LUA_OK {
+			for i := L.top; i < len(L.stack); i++ {
+				setnilvalue(&L.stack[i])
+			}
+		}
 		if closed {
 			/* luaE_resetthread leaves the thread with status LUA_OK,
 			   so the error from '__close' is reported only once: a
@@ -1180,7 +1185,7 @@ func resumeError(L *State, msg string) int {
 // back one lands on the opcode itself. No effect once the coroutine
 // has been promoted, or outside the interpreter.
 func (L *State) migrateNested() {
-	if L.co == nil || !L.co.sync || !L.inVM {
+	if L.co == nil || !L.co.sync || !L.inVM || !yieldable(L) {
 		return
 	}
 	if ci := L.ci; ci != nil && isLua(ci) && ci.savedpc > 0 {
@@ -1317,6 +1322,9 @@ func (L *State) resumeSync(ccalls int) (resp resumeResp) {
 			return
 		}
 		L.dead = true
+		for i := L.top; i < len(L.stack); i++ {
+			setnilvalue(&L.stack[i])
+		}
 		L.co.vals = append(L.co.vals[:0], L.stack[:L.top]...)
 		resp.status = LUA_OK
 		resp.vals = L.co.vals
@@ -1334,6 +1342,9 @@ func (L *State) resumeSync(ccalls int) (resp resumeResp) {
 		return
 	}
 	L.dead = true
+	for i := L.top; i < len(L.stack); i++ {
+		setnilvalue(&L.stack[i])
+	}
 	L.co.vals = append(L.co.vals[:0], L.stack[:L.top]...)
 	resp.status = LUA_OK
 	resp.vals = L.co.vals

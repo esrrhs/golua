@@ -342,7 +342,7 @@ func tryfuncTM(L *State, funcIdx int) {
 		L.stack[p] = L.stack[p-1]
 	}
 	L.top++
-	L.stack[funcIdx] = *tm /* metamethod is the new function to be called */
+	L.stack[funcIdx] = slotVal(tm) /* metamethod is the new function to be called */
 }
 
 // hastocloseCfunc, codeNresults and decodeNresults are lapi.h's: whether
@@ -465,7 +465,7 @@ func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
 	   coroutine.yield. Any other Go function can call back into Lua,
 	   establish an error boundary, or expose the live stack through the
 	   debug API. Move its already-pushed frame before entering it. */
-	if L.co != nil && L.co.sync && L.inVM &&
+	if L.co != nil && L.co.sync && L.inVM && yieldable(L) &&
 		funcptr(f) != funcptr(coYield) {
 		ci.migrateFunc = f
 		panic(&migrateAbort{})

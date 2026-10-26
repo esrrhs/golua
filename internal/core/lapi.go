@@ -1056,6 +1056,7 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 		oldAllow := L.allowhook
 		ci.ypcall = true /* CIST_YPCALL */
 		status = LUA_OK
+		oldNCcalls := L.nCcalls
 		func() {
 			defer func() {
 				r := recover()
@@ -1066,6 +1067,7 @@ func (L *State) pcallK(nargs, nresults, msgh int, k bool) int {
 				if !ok {
 					panic(r) /* yieldAbort / migrateAbort */
 				}
+				L.nCcalls = oldNCcalls
 				status = e.status
 			}()
 			luaD_call(L, funcIdx, nresults) /* bare call, not luaD_pcall */

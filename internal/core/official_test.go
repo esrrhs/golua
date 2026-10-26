@@ -67,6 +67,7 @@ var officialKnownDiff = map[string]string{
 	"coroutine": "Go GC: collectgarbage delegates to the Go runtime without forcing runtime.GC(), so coroutine.lua immediate weak-table assert after collectgarbage() is not synchronous",
 	"gc":        "collectgarbage only implements collect+count (other opts no-op→0); no collector pace/debt/ephemerons; run with _port=true",
 	"gengc":     "Go GC: generational collector barriers and synchronous collectgarbage() finalizer/weak-table assertions do not apply when collection is delegated to Go's runtime GC",
+	"locals":    "Go GC: collectgarbage delegates to the Go runtime without forcing runtime.GC(), so tracegc's finalizer dot at collectgarbage() before OK is deferred to state close",
 }
 
 // officialKnownDiffBuild are differences that depend on what the binary
@@ -382,12 +383,12 @@ func TestOfficialSuite(t *testing.T) {
 
 		if w == g {
 			same++
-			if why, ok := officialNoT[base]; ok {
+			if noTWhy, ok := officialNoT[base]; ok {
 				/* It matches, but it matches vacuously: say so every
 				   time, so that "27 identical" is never read as
 				   "27 files' worth of assertions ran". */
 				vacuous++
-				t.Logf("%-12s IDENTICAL BUT EMPTY: %s", base, why)
+				t.Logf("%-12s IDENTICAL BUT EMPTY: %s", base, noTWhy)
 			} else if known {
 				t.Logf("%-12s NOW IDENTICAL (was a known difference: %s)", base, why)
 			}

@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -343,6 +344,7 @@ func TestCoverGap23ForceCloseDoneAfterSend(t *testing.T) {
 			<-started
 			return
 		}
+		runtime.Gosched()
 	}
 	t.Fatal("could not hit done-after-send")
 }

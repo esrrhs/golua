@@ -962,8 +962,13 @@ func ioReadChars(L *State, s *ioStream, n int64) bool {
 	}
 	/* C: luaL_prepbuffsize(&b, n) then fread of n. Counts too large to
 	   allocate fail with the same OOM message (closer than empty+fail). */
-	if n > int64(1)<<30 {
+	if n > int64(1)<<31 {
 		luaG_runerror(L, "not enough memory")
+	}
+	if n > 1<<20 {
+		b, _ := io.ReadAll(io.LimitReader(s.bufferedReader(), n))
+		L.PushString(string(b))
+		return len(b) > 0
 	}
 	buf := make([]byte, n)
 	nr, _ := io.ReadFull(s.bufferedReader(), buf)

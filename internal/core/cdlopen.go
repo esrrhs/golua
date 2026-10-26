@@ -684,7 +684,7 @@ func lua_load(p *C.lua_State, reader C.lua_Reader, data unsafe.Pointer,
 	chunkname, mode *C.char) C.int {
 	L := stateOf(p)
 	name := C.GoString(chunkname)
-	m := ""
+	m := "bt"
 	if mode != nil {
 		m = C.GoString(mode)
 	}
@@ -909,7 +909,7 @@ func luaL_loadstring(p *C.lua_State, s *C.char) C.int {
 
 //export luaL_loadbufferx
 func luaL_loadbufferx(p *C.lua_State, buff *C.char, sz C.size_t, name, mode *C.char) C.int {
-	m := ""
+	m := "bt"
 	if mode != nil {
 		m = C.GoString(mode)
 	}

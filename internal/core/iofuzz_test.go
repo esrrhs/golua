@@ -506,6 +506,15 @@ func TestIOFuzzDifferential(t *testing.T) {
 	emit("gcclose/write", `pcall(function()
     do local f = assert(io.open("gc.tmp", "wb")) f:write("hi") end
     collectgarbage() collectgarbage()
+    if slurp("gc.tmp") ~= "hi" then
+      for i = 1, 5000000 do
+        local a = {}
+        if i % 10000 == 0 then
+          collectgarbage()
+          if slurp("gc.tmp") == "hi" then break end
+        end
+      end
+    end
     return hex(slurp("gc.tmp"))
   end)`)
 	emit("gcclose/read", `pcall(function()

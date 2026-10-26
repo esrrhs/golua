@@ -65,7 +65,9 @@ func testCdlPushEmpty(L *State) {
 }
 
 func testCFuncMigrate(L *State) {
-	f := cFunc(unsafe.Pointer(uintptr(1)))
+	p := C.malloc(1)
+	defer C.free(p)
+	f := cFunc(p)
 	co := L.NewThread()
 	co.co.sync = true
 	co.co.live = false
