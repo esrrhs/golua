@@ -26,6 +26,7 @@ import "C"
 import (
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -294,16 +295,20 @@ func init() {
 		k := C.lua_KFunction(ci.cK)
 		p := L.statePtr()
 		cgoEnter()
-		defer func() {
-			cgoLeave()
-			runtime.KeepAlive(L)
-		}()
+		slot := *(*uintptr)(unsafe.Pointer(p)) & stateCacheMask
+		prev := stateActiveCache[slot].Load()
+		stateActiveCache[slot].Store(L)
+		defer cgoLeaveFunc(L, slot, prev)
 		return int(C.cdl_call_kfunction(k, p, C.int(status),
 			C.lua_KContext(ci.cCtx)))
 	}
 	cgoOnQuiet = func() {
+		if !cgoArDirty.Load() {
+			return
+		}
 		cgoArMu.Lock()
-		cgoArs = map[uintptr]*dbAr{}
+		clear(cgoArs)
+		cgoArDirty.Store(false)
 		cgoArMu.Unlock()
 	}
 }
@@ -380,10 +385,12 @@ func lua_sethook(p *C.lua_State, f C.lua_Hook, mask, count C.int) {
 		fillDebug(&cAr, ar)
 		p := L.statePtr()
 		cgoEnter()
+		slot := *(*uintptr)(unsafe.Pointer(p)) & stateCacheMask
+		prev := stateActiveCache[slot].Load()
+		stateActiveCache[slot].Store(L)
 		defer func() {
-			cgoLeave()
+			cgoLeaveFunc(L, slot, prev)
 			runtime.KeepAlive(&cAr)
-			runtime.KeepAlive(L)
 		}()
 		C.cdl_call_hook(f, p, &cAr)
 	}, int(mask), int(count))
@@ -402,13 +409,15 @@ func lua_gethookcount(p *C.lua_State) C.int { return C.int(stateOf(p).GetHookCou
 // hands the same pointer to lua_getstack and then to lua_getinfo and
 // lua_getlocal, so the address of the record is the key.
 var (
-	cgoArMu sync.Mutex
-	cgoArs  = map[uintptr]*dbAr{}
+	cgoArMu    sync.Mutex
+	cgoArs     = map[uintptr]*dbAr{}
+	cgoArDirty atomic.Bool
 )
 
 func putAr(c *C.lua_Debug, ar *dbAr) {
 	cgoArMu.Lock()
 	cgoArs[uintptr(unsafe.Pointer(c))] = ar
+	cgoArDirty.Store(true)
 	cgoArMu.Unlock()
 }
 
@@ -557,40 +566,45 @@ func luaL_checkoption(p *C.lua_State, arg C.int, def *C.char, lst **C.char) C.in
 
 //export luaL_checkudata
 func luaL_checkudata(p *C.lua_State, arg C.int, tname *C.char) unsafe.Pointer {
-	return cdlTestUserData(stateOf(p), int(arg), C.GoString(tname), true)
+	L := stateOf(p)
+	return cdlTestUserData(L, int(arg), cStrTString(L, tname), true)
 }
 
 //export luaL_testudata
 func luaL_testudata(p *C.lua_State, arg C.int, tname *C.char) unsafe.Pointer {
-	return cdlTestUserData(stateOf(p), int(arg), C.GoString(tname), false)
+	L := stateOf(p)
+	return cdlTestUserData(L, int(arg), cStrTString(L, tname), false)
 }
 
 //export luaL_newmetatable
 func luaL_newmetatable(p *C.lua_State, tname *C.char) C.int {
 	L := stateOf(p)
-	name := C.GoString(tname)
-	if L.GetField(LUA_REGISTRYINDEX, name) != LUA_TNIL {
+	ts := cStrTString(L, tname)
+	if auxgetts(L, &L.g.registry, ts) != LUA_TNIL {
 		return 0 /* name already in use */
 	}
 	L.Pop(1)
 	L.CreateTable(0, 2)
-	L.PushString(name)
+	L.checkStack(1)
+	setsvalue(&L.stack[L.top], ts)
+	L.top++
 	L.SetField(-2, "__name")
 	L.PushValue(-1)
-	L.SetField(LUA_REGISTRYINDEX, name)
+	auxsetts(L, &L.g.registry, ts)
 	return 1
 }
 
 //export luaL_setmetatable
 func luaL_setmetatable(p *C.lua_State, tname *C.char) {
 	L := stateOf(p)
-	L.GetField(LUA_REGISTRYINDEX, C.GoString(tname))
+	auxgetts(L, &L.g.registry, cStrTString(L, tname))
 	L.SetMetaTable(-2)
 }
 
 //export luaL_getmetatable
 func luaL_getmetatable(p *C.lua_State, tname *C.char) {
-	stateOf(p).GetField(LUA_REGISTRYINDEX, C.GoString(tname))
+	L := stateOf(p)
+	auxgetts(L, &L.g.registry, cStrTString(L, tname))
 }
 
 //export luaL_loadfilex
@@ -700,13 +714,11 @@ func luaopen_package(p *C.lua_State) C.int { return C.int(OpenPackage(stateOf(p)
 func cdl_pushlstring_cb(p *C.lua_State, s *C.char, n C.size_t) *C.char {
 	L := stateOf(p)
 	if s == nil || n == 0 {
-		L.PushString("")
-	} else {
-		L.PushBytes([]byte(C.GoStringN(s, C.int(n))))
+		return cdlPushCBytes(L, nil)
 	}
 	/* The pointer C keeps is the string's own copy, not the scratch
 	   buffer lua_pushfstring formatted into. */
-	return pushedCStr(L)
+	return cdlPushCBytes(L, unsafe.Slice((*byte)(unsafe.Pointer(s)), int(n)))
 }
 
 //export cdl_error_prepare_cb
