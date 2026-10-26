@@ -143,18 +143,18 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 ## 性能
 
-一次运行，机器是 Linux x86_64（Intel Xeon，内核 6.12.94+）：PUC-Lua 5.4.7 对比 cgo 构建（Go 1.27.3）。移植本身跟踪 Lua 5.4.9。比值是 golua / PUC-Lua，小于 1 表示更快。每一行 `p < 0.0001`。计时方式以及每一行测量的是什么，见 [bench/README_CN.md](bench/README_CN.md)。
+一次运行，机器是 Linux x86_64（Intel Xeon，内核 6.12.94+）：PUC-Lua 5.4.9 对比 cgo 构建（Go 1.27.3）。比值是 golua / PUC-Lua，小于 1 表示更快。计时方式以及每一行测量的是什么，见 [bench/README_CN.md](bench/README_CN.md)。
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 2.38× | fib | 2.73× |
-| nop | 2.93× | concat | 2.67× |
-| hash | 2.08× | yield | 1.31× |
-| intloop | 2.41× | pcall | 2.34× |
-| floatloop | 2.85× | upvalue | 2.22× |
-| bitwise | 3.42× | global | 2.25× |
+| startup | 2.35× | fib | 2.95× |
+| nop | 2.92× | concat | 2.24× |
+| hash | 2.01× | yield | 1.26× |
+| intloop | 2.48× | pcall | 2.65× |
+| floatloop | 2.78× | upvalue | 2.36× |
+| bitwise | 3.27× | global | 2.39× |
 | array | 2.99× | ipairs | 2.59× |
-| strings | 3.28× | tailcall | 2.48× |
+| strings | 1.25× | tailcall | 2.65× |
 | sort | 1.55× | metaindex | 1.78× |
 |  |  | method | 2.50× |
 |  |  | call3 | 3.09× |
@@ -164,11 +164,11 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 ## 已知差异
 
-- **没有自己的收集器。** `collectgarbage` 只实现 `"collect"` 与 `"count"`
-  （其余已知选项名接受但忽略并返回 `0`；未知名仍报错）。驱动的是 Go 的
-  GC，作用范围是整个进程而非单个 state，`collectgarbage("count")` 报的也是
-  Go 堆。C API `lua_gc` 仍可能真正驱动收集——Lua 与 C 可能不一致。
-  弱表条目与终结器在周期边界处理，而不是在某一次分配中途处理。
+- **没有自己的收集器。** 内存回收完全交由 Go 运行时 GC 自动管理（不主动触发
+  `runtime.GC()`）。`collectgarbage` 只实现 `"collect"` 与 `"count"`
+  （其余已知选项名接受但忽略并返回 `0`；未知名仍报错）。`"collect"` 负责排空
+  已就绪的 `__gc` 终结器并清理已被 Go GC 回收的弱表槽位，`collectgarbage("count")`
+  报的是 Go 堆大小。弱表键值直接使用 Go 标准库 `weak.Pointer`。
 - **C 模块需要 cgo。** 没有 cgo 就没有 `dlopen`，也没有 C 的 `setlocale`
   （小数点由内置表提供）；Windows 目前没有动态加载后端。
 - **平台决定的部分。** 带 cgo 时数学库调用宿主 libm，和 PUC-Lua 用的是

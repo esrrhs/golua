@@ -156,18 +156,18 @@ differential, third-party and fuzz suites with `LUA_REF` pointing at it.
 
 ## Performance
 
-One run on Linux x86_64 (Intel Xeon, kernel 6.12.94+): PUC-Lua 5.4.7 against a cgo build (Go 1.27.3). The port tracks Lua 5.4.9. The ratio is golua / PUC-Lua; below 1 is faster. Every row had `p < 0.0001`. Timing and what each row measures are in [bench/README.md](bench/README.md).
+One run on Linux x86_64 (Intel Xeon, kernel 6.12.94+): PUC-Lua 5.4.9 against a cgo build (Go 1.27.3). The ratio is golua / PUC-Lua; below 1 is faster. Timing and what each row measures are in [bench/README.md](bench/README.md).
 
 | workload | ratio | workload | ratio |
 | --- | ---: | --- | ---: |
-| startup | 2.38× | fib | 2.73× |
-| nop | 2.93× | concat | 2.67× |
-| hash | 2.08× | yield | 1.31× |
-| intloop | 2.41× | pcall | 2.34× |
-| floatloop | 2.85× | upvalue | 2.22× |
-| bitwise | 3.42× | global | 2.25× |
+| startup | 2.35× | fib | 2.95× |
+| nop | 2.92× | concat | 2.24× |
+| hash | 2.01× | yield | 1.26× |
+| intloop | 2.48× | pcall | 2.65× |
+| floatloop | 2.78× | upvalue | 2.36× |
+| bitwise | 3.27× | global | 2.39× |
 | array | 2.99× | ipairs | 2.59× |
-| strings | 3.28× | tailcall | 2.48× |
+| strings | 1.25× | tailcall | 2.65× |
 | sort | 1.55× | metaindex | 1.78× |
 |  |  | method | 2.50× |
 |  |  | call3 | 3.09× |
@@ -177,14 +177,13 @@ Every listed workload is slower on this run. The interpreter stays line-faithful
 
 ## Known differences
 
-- **No collector of its own.** `collectgarbage` only implements
-  `"collect"` and `"count"` (other known option names are accepted but
-  ignored and push `0`; unknown names still error). It drives Go's GC,
-  which covers the whole process rather than one state;
-  `collectgarbage("count")` reports the Go heap. The C API `lua_gc` may
-  still drive a real cycle — Lua and C can diverge. Weak entries and
-  finalizers are handled at cycle boundaries, not during an individual
-  allocation.
+- **No collector of its own.** Memory management is delegated completely to
+  Go's runtime garbage collector (no artificial `runtime.GC()` cycles).
+  `collectgarbage` only implements `"collect"` and `"count"` (other known
+  option names are accepted but ignored and push `0`; unknown names still
+  error). `"collect"` drains pending `__gc` finalizers and cleans dead
+  weak-table slots already reclaimed by Go's GC; `"count"` reports the Go
+  heap. Weak table entries use Go's `weak.Pointer` directly.
 - **C modules need cgo.** Without cgo there is no `dlopen` and no C
   `setlocale` (a built-in table supplies the decimal point); Windows has
   no dynamic-loader backend at all.

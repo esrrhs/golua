@@ -29,12 +29,12 @@ Dense integer arrays are written and read one element at a time. `string.format`
 | --- | ---: | ---: | ---: | --- |
 | startup | 1.44 ms | 3.43 ms | 2.38× | a new process, no script body |
 | nop | 17.6 ns | 51.4 ns | 2.93× | `return 0` |
-| hash | 178 ms | 371 ms | 2.08× | short-string key lookup |
+| hash | 158 ms | 318 ms | 2.01× | short-string key lookup |
 | intloop | 128 ms | 309 ms | 2.41× | integer sum |
 | floatloop | 142 ms | 405 ms | 2.85× | float multiply-add |
 | bitwise | 139 ms | 477 ms | 3.42× | and, xor, shift |
 | array | 120 ms | 358 ms | 2.99× | dense integer keys |
-| strings | 71.2 ms | 234 ms | 3.28× | format, concat, gmatch |
+| strings | 69.6 ms | 86.9 ms | 1.25× | format, concat, gmatch |
 | sort | 73.4 ms | 114 ms | 1.55× | `table.sort`, Lua comparator |
 
 A process starts in 3.43 ms against 1.44 ms. Most of that gap is the Go runtime. `return 0` still costs 51.4 ns against 17.6 ns, because the loop that issues the call is dispatched in Go. The hash row builds its keys once and then looks them up. A Go hash node is larger than the C node, and short-string equality and the collector are a large share of a profile of this lookup. The array loops still touch every slot; `strings` still formats one string per index.
@@ -46,7 +46,7 @@ These rows exercise one common bytecode pattern each. The checksum stays the sam
 | workload | PUC-Lua | golua | ratio | shape |
 | --- | ---: | ---: | ---: | --- |
 | fib | 42.7 ms | 117 ms | 2.73× | direct Fibonacci, `n` in 0..45 |
-| concat | 81.2 ms | 217 ms | 2.67× | loop-invariant `a .. b` |
+| concat | 78.3 ms | 176 ms | 2.24× | loop-invariant `a .. b` |
 | yield | 133 ms | 174 ms | 1.31× | `yield` of `1..n`, then sum |
 | pcall | 74.5 ms | 175 ms | 2.34× | `pcall` of an identity |
 | upvalue | 361 ms | 802 ms | 2.22× | `n = n + 1` |

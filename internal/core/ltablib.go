@@ -146,13 +146,14 @@ func tableConcat(L *State) int {
 	sep := L.OptString(2, "")
 	i := L.OptInteger(3, 1)
 	last = L.OptInteger(4, last)
-	b := L.NewBuffer()
+	var b Buffer
+	L.BuffInit(&b)
 	for ; i < last; i++ {
-		tableAddField(L, b, i)
+		tableAddField(L, &b, i)
 		b.AddString(sep)
 	}
 	if i == last { /* add last value (if interval was not empty) */
-		tableAddField(L, b, i)
+		tableAddField(L, &b, i)
 	}
 	b.PushResult()
 	return 1

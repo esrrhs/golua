@@ -129,7 +129,8 @@ func pkSetPath(L *State, fieldname, envname, dft string) {
 	} else if dftmark := strings.Index(path, pkPathSep+pkPathSep); dftmark < 0 {
 		L.PushString(path) /* nothing to change */
 	} else { /* path contains a ";;": insert default path in its place */
-		b := L.NewBuffer()
+		var b Buffer
+		L.BuffInit(&b)
 		if dftmark > 0 { /* is there a prefix before ';;'? */
 			b.AddString(path[:dftmark]) /* add it */
 			b.AddChar(pkPathSep[0])
@@ -332,7 +333,8 @@ func pkReadable(filename string) bool {
 //
 // for each name in path (pusherrornotfound).
 func pkPushErrorNotFound(L *State, path string) {
-	b := L.NewBuffer()
+	var b Buffer
+	L.BuffInit(&b)
 	b.AddString("no file '")
 	b.AddGSub(path, pkPathSep, "'\n\tno file '")
 	b.AddString("'")
@@ -357,7 +359,8 @@ func pkSearchPath(L *State, name, path, sep, dirsep string) bool {
 		name = L.GSub(name, sep, dirsep) /* replace it by 'dirsep' */
 	}
 	/* add path to the buffer, replacing marks ('?') with the file name */
-	b := L.NewBuffer()
+	var b Buffer
+	L.BuffInit(&b)
 	b.AddGSub(path, pkPathMark, name)
 	pathname := b.String()
 	/* Empty pathname: C getnextfilename returns NULL immediately (no
@@ -484,7 +487,8 @@ func pkFindLoader(L *State, name string) {
 	if L.GetField(UpvalueIndex(1), "searchers") != LUA_TTABLE {
 		L.Error2("'package.searchers' must be a table")
 	}
-	msg := L.NewBuffer() /* to build error message */
+	var msg Buffer /* to build error message */
+	L.BuffInit(&msg)
 	/*  iterate over available searchers to find a loader */
 	for i := 1; ; i++ {
 		msg.AddString("\n\t")                   /* error-message prefix */

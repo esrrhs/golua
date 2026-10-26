@@ -14,7 +14,6 @@
 package core
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -76,11 +75,13 @@ func strSub(L *State) int {
 func strReverse(L *State) int {
 	s := L.CheckString(1)
 	n := len(s)
-	b := make([]byte, n)
+	var b Buffer
+	L.BuffInit(&b)
+	p := b.PrepBuffSize(n)
 	for i := 0; i < n; i++ {
-		b[i] = s[n-i-1]
+		p[i] = s[n-i-1]
 	}
-	L.PushString(string(b))
+	b.PushResultSize(n)
 	return 1
 }
 
@@ -102,21 +103,27 @@ func strASCIIUpper(c byte) byte {
 
 func strLower(L *State) int {
 	s := L.CheckString(1)
-	b := []byte(s)
-	for i := range b {
-		b[i] = localeToLower(b[i])
+	n := len(s)
+	var b Buffer
+	L.BuffInit(&b)
+	p := b.PrepBuffSize(n)
+	for i := 0; i < n; i++ {
+		p[i] = localeToLower(s[i])
 	}
-	L.PushString(string(b))
+	b.PushResultSize(n)
 	return 1
 }
 
 func strUpper(L *State) int {
 	s := L.CheckString(1)
-	b := []byte(s)
-	for i := range b {
-		b[i] = localeToUpper(b[i])
+	n := len(s)
+	var b Buffer
+	L.BuffInit(&b)
+	p := b.PrepBuffSize(n)
+	for i := 0; i < n; i++ {
+		p[i] = localeToUpper(s[i])
 	}
-	L.PushString(string(b))
+	b.PushResultSize(n)
 	return 1
 }
 
@@ -131,16 +138,22 @@ func strRep(L *State) int {
 	} else if l+lsep < l || l+lsep > strMaxSize/int(n) { /* may overflow? */
 		return L.Error2("resulting string too large")
 	} else {
-		var sb strings.Builder
+		totallen := int(n)*l + int(n-1)*lsep
+		var b Buffer
+		L.BuffInit(&b)
+		p := b.PrepBuffSize(totallen)
+		pos := 0
 		for n > 1 { /* first n-1 copies (followed by separator) */
-			sb.WriteString(s)
+			copy(p[pos:], s)
+			pos += l
 			if lsep > 0 { /* empty copy is not that cheap */
-				sb.WriteString(sep)
+				copy(p[pos:], sep)
+				pos += lsep
 			}
 			n--
 		}
-		sb.WriteString(s) /* last copy (not followed by separator) */
-		L.PushString(sb.String())
+		copy(p[pos:], s) /* last copy (not followed by separator) */
+		b.PushResultSize(totallen)
 	}
 	return 1
 }
@@ -167,13 +180,15 @@ func strByte(L *State) int {
 
 func strChar(L *State) int {
 	n := L.GetTop() /* number of arguments */
-	b := make([]byte, 0, n)
+	var b Buffer
+	L.BuffInit(&b)
+	p := b.PrepBuffSize(n)
 	for i := 1; i <= n; i++ {
 		c := uint64(L.CheckInteger(i))
 		L.ArgCheck(c <= 255, i, "value out of range")
-		b = append(b, byte(c))
+		p[i-1] = byte(c)
 	}
-	L.PushString(string(b))
+	b.PushResultSize(n)
 	return 1
 }
 
@@ -384,8 +399,7 @@ func strIsSpace(c byte) bool {
 	return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r'
 }
 
-// strMatchClass tells whether 'c' belongs to the class 'cl' (match_class).
-func strMatchClass(c, cl byte) bool {
+func strMatchClassLocale(c, cl byte) bool {
 	var res bool
 	switch localeToLower(cl) {
 	case 'a':
@@ -414,6 +428,44 @@ func strMatchClass(c, cl byte) bool {
 		return cl == c
 	}
 	if localeIsLower(cl) {
+		return res
+	}
+	return !res
+}
+
+// strMatchClass tells whether 'c' belongs to the class 'cl' (match_class).
+func strMatchClass(c, cl byte) bool {
+	if !ctypeIsC.Load() {
+		return strMatchClassLocale(c, cl)
+	}
+	var res bool
+	switch cl | 0x20 {
+	case 'a':
+		res = strIsAlpha(c)
+	case 'c':
+		res = strIsCntrl(c)
+	case 'd':
+		res = strIsDigit(c)
+	case 'g':
+		res = strIsGraph(c)
+	case 'l':
+		res = strIsLower(c)
+	case 'p':
+		res = strIsPunct(c)
+	case 's':
+		res = strIsSpace(c)
+	case 'u':
+		res = strIsUpper(c)
+	case 'w':
+		res = strIsAlnum(c)
+	case 'x':
+		res = strIsXDigit(c)
+	case 'z':
+		res = (c == 0) /* deprecated option */
+	default:
+		return cl == c
+	}
+	if cl >= 'a' {
 		return res
 	}
 	return !res
@@ -927,7 +979,8 @@ func strGsub(L *State) int {
 	}
 	var ms strMatchState
 	strPrepState(&ms, L, src, len(src), pat, len(pat))
-	b := L.NewBuffer()
+	var b Buffer
+	L.BuffInit(&b)
 	lastmatch := -1 /* end of last match */
 	pos := 0        /* current position in the subject */
 	var n int64     /* replacement count */
@@ -937,7 +990,7 @@ func strGsub(L *State) int {
 		e, ok := strMatch(&ms, pos, 0)
 		if ok && e != lastmatch { /* match? */
 			n++
-			if strAddValue(&ms, b, pos, e, tr) {
+			if strAddValue(&ms, &b, pos, e, tr) {
 				changed = true
 			}
 			pos = e
@@ -968,12 +1021,12 @@ func strGsub(L *State) int {
 
 const (
 	strMaxFormat  = 32
-	strMaxItem    = 120
-	strFmtFlagsF  = "-+#0 " /* valid flags for a, A, e, E, f, F, g, G */
-	strFmtFlagsX  = "-#0"   /* valid flags for o, x, X */
-	strFmtFlagsI  = "-+0 "  /* valid flags for d, i */
-	strFmtFlagsU  = "-0"    /* valid flags for u */
-	strFmtFlagsC  = "-"     /* valid flags for c, p, s */
+	strMaxItem    = 120 + 308 /* 120 + DBL_MAX_10_EXP; MAX_ITEM in lstrlib.c */
+	strFmtFlagsF  = "-+#0 "   /* valid flags for a, A, e, E, f, F, g, G */
+	strFmtFlagsX  = "-#0"     /* valid flags for o, x, X */
+	strFmtFlagsI  = "-+0 "    /* valid flags for d, i */
+	strFmtFlagsU  = "-0"      /* valid flags for u */
+	strFmtFlagsC  = "-"       /* valid flags for c, p, s */
 	strFmtScan    = "123456789."
 	strMaxDecimal = ".6" /* default precision of the C 'f'/'e'/'g' */
 )
@@ -1191,9 +1244,17 @@ func strGetFormat(L *State, strfrmt string, i int) (string, int) {
 	}
 	var form string
 	if i+l <= len(strfrmt) {
-		form = "%" + strfrmt[i:i+l]
+		if i > 0 && strfrmt[i-1] == strEsc {
+			form = strfrmt[i-1 : i+l]
+		} else {
+			form = "%" + strfrmt[i:i+l]
+		}
 	} else {
-		form = "%" + strfrmt[i:]
+		if i > 0 && strfrmt[i-1] == strEsc {
+			form = strfrmt[i-1:]
+		} else {
+			form = "%" + strfrmt[i:]
+		}
 	}
 	return form, i + l - 1
 }
@@ -1605,7 +1666,8 @@ func strFormat(L *State) int {
 	top := L.GetTop()
 	arg := 1
 	strfrmt := L.CheckString(arg)
-	b := L.NewBuffer()
+	var b Buffer
+	L.BuffInit(&b)
 	i := 0
 	for i < len(strfrmt) {
 		if strfrmt[i] != strEsc {
@@ -1633,7 +1695,12 @@ func strFormat(L *State) int {
 		switch spec {
 		case 'c':
 			strCheckFormat(L, form, strFmtFlagsC, false)
-			b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", string([]byte{byte(L.CheckInteger(arg))})))
+			c := byte(L.CheckInteger(arg))
+			if len(form) == 2 {
+				b.AddChar(c)
+			} else {
+				b.AddString(fmt.Sprintf(form[:len(form)-1]+"s", string([]byte{c})))
+			}
 		case 'd', 'i':
 			/* C fetches the argument first -- 'intcase' is
 			   'luaL_checkinteger(L, arg); checkformat(...)' -- so a
@@ -1643,7 +1710,10 @@ func strFormat(L *State) int {
 			   not "invalid conversion specification". */
 			n := L.CheckInteger(arg)
 			strCheckFormat(L, form, strFmtFlagsI, true)
-			if f := strParseFormat(form); n == 0 && f.prec == 0 {
+			if len(form) == 2 {
+				buff := b.PrepBuffSize(strMaxItem)
+				b.AddSize(len(strconv.AppendInt(buff[:0], n, 10)))
+			} else if f := strParseFormat(form); n == 0 && f.prec == 0 {
 				/* C's printf still writes the sign when there are no
 				   digits to write; Go's fmt returns before it gets
 				   there.  See strFormatZeroInt. */
@@ -1654,7 +1724,12 @@ func strFormat(L *State) int {
 		case 'u':
 			n := L.CheckInteger(arg) /* as in 'intcase': value first */
 			strCheckFormat(L, form, strFmtFlagsU, true)
-			b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", uint64(n)))
+			if len(form) == 2 {
+				buff := b.PrepBuffSize(strMaxItem)
+				b.AddSize(len(strconv.AppendUint(buff[:0], uint64(n), 10)))
+			} else {
+				b.AddString(fmt.Sprintf(form[:len(form)-1]+"d", uint64(n)))
+			}
 		case 'o', 'x', 'X':
 			n := L.CheckInteger(arg) /* as in 'intcase': value first */
 			strCheckFormat(L, form, strFmtFlagsX, true)
@@ -1680,7 +1755,7 @@ func strFormat(L *State) int {
 			if len(form) > 2 { /* modifiers? */
 				return L.Error2("specifier '%%q' cannot have modifiers")
 			}
-			strAddLiteral(L, b, arg)
+			strAddLiteral(L, &b, arg)
 		case 's':
 			s := strToLString(L, arg)
 			if len(form) == 2 { /* no modifiers? */
@@ -1904,7 +1979,7 @@ func strGetDetails(h *strHeader, totalsize int, fmt string, i *int, psize, ntoal
 
 // strPackInt packs the integer 'n' with 'size' bytes and the given
 // endianness (packint).
-func strPackInt(buf *bytes.Buffer, n uint64, islittle bool, size int, neg bool) {
+func strPackInt(buf *Buffer, n uint64, islittle bool, size int, neg bool) {
 	var b [8]byte
 	if islittle {
 		binary.LittleEndian.PutUint64(b[:], n)
@@ -1913,9 +1988,9 @@ func strPackInt(buf *bytes.Buffer, n uint64, islittle bool, size int, neg bool) 
 	}
 	if size <= 8 {
 		if islittle {
-			buf.Write(b[:size])
+			buf.AddBytes(b[:size])
 		} else {
-			buf.Write(b[8-size:])
+			buf.AddBytes(b[8-size:])
 		}
 		return
 	}
@@ -1924,15 +1999,15 @@ func strPackInt(buf *bytes.Buffer, n uint64, islittle bool, size int, neg bool) 
 		pad = strMC /* negative number needs sign extension */
 	}
 	if islittle {
-		buf.Write(b[:])
+		buf.AddBytes(b[:])
 		for i := 8; i < size; i++ {
-			buf.WriteByte(pad)
+			buf.AddChar(pad)
 		}
 	} else {
 		for i := 0; i < size-8; i++ {
-			buf.WriteByte(pad)
+			buf.AddChar(pad)
 		}
-		buf.Write(b[:])
+		buf.AddBytes(b[:])
 	}
 }
 
@@ -1978,39 +2053,25 @@ func strUnpackInt(L *State, data string, pos int, islittle bool, size, issigned 
 
 // strPackBits writes the low 'n' bytes of 'bits' with the given
 // endianness (copywithendian).
-func strPackBits(buf *bytes.Buffer, bits uint64, n int, islittle bool) {
+func strPackBits(buf *Buffer, bits uint64, n int, islittle bool) {
 	var b [8]byte
 	if islittle {
 		binary.LittleEndian.PutUint64(b[:], bits)
-		buf.Write(b[:n])
+		buf.AddBytes(b[:n])
 	} else {
 		binary.BigEndian.PutUint64(b[:], bits)
-		buf.Write(b[8-n:])
+		buf.AddBytes(b[8-n:])
 	}
 }
 
 // strPadBytes appends 'n' padding bytes -- the tail of a 'cN' field.
-//
-// C pads it one byte at a time (lstrlib.c):
-//
-//	while (len++ < (size_t)size)
-//	  luaL_addchar(&b, LUAL_PACKPADBYTE);
-//
-// and 'n' can be enormous: 'string.pack("c1000000000000", 1)' asks for a
-// gigabyte, and PUC-Lua spends a couple of seconds producing it.  The loop
-// is written in chunks, and 'n' bytes are never materialised as one slice,
-// because a straight transliteration that grows the string on every step
-// would be quadratic and would never finish.
-func strPadBytes(buf *bytes.Buffer, n int) {
-	const chunk = 64 * 1024
-	pad := make([]byte, chunk)
-	for n >= chunk {
-		buf.Write(pad)
-		n -= chunk
+func strPadBytes(buf *Buffer, n int) {
+	if n <= 0 {
+		return
 	}
-	if n > 0 {
-		buf.Write(pad[:n])
-	}
+	dst := buf.PrepBuffSize(n)
+	clear(dst[:n])
+	buf.AddSize(n)
 }
 
 func strUnpackBits(data string, pos, n int, islittle bool) uint64 {
@@ -2033,14 +2094,15 @@ func strPack(L *State) int {
 	   absent argument sits where that nil is, so 'string.pack("B")'
 	   reports "number expected, got nil" instead of "got no value". */
 	L.PushNil()
-	var buf bytes.Buffer
+	var buf Buffer
+	L.BuffInit(&buf)
 	totalsize := 0 /* accumulate total size of result */
 	for i := 0; i < len(fmtstr); {
 		var size, ntoalign int
 		opt := strGetDetails(&h, totalsize, fmtstr, &i, &size, &ntoalign)
 		totalsize += ntoalign + size
 		for j := 0; j < ntoalign; j++ {
-			buf.WriteByte(strPackPadByte) /* fill alignment */
+			buf.AddChar(strPackPadByte) /* fill alignment */
 		}
 		arg++
 		switch opt {
@@ -2066,29 +2128,29 @@ func strPack(L *State) int {
 		case strKchar: /* fixed-size string */
 			s := L.CheckString(arg)
 			L.ArgCheck(len(s) <= size, arg, "string longer than given size")
-			buf.WriteString(s)             /* add string */
+			buf.AddString(s)               /* add string */
 			strPadBytes(&buf, size-len(s)) /* pad extra space */
 		case strKstring: /* strings with length count */
 			s := L.CheckString(arg)
 			L.ArgCheck(size >= strPackAlignSize || len(s) < 1<<uint(size*strNB),
 				arg, "string length does not fit in given size")
 			strPackInt(&buf, uint64(len(s)), h.islittle, size, false) /* pack length */
-			buf.WriteString(s)
+			buf.AddString(s)
 			totalsize += len(s)
 		case strKzstr: /* zero-terminated string */
 			s := L.CheckString(arg)
 			L.ArgCheck(strings.IndexByte(s, 0) < 0, arg, "string contains zeros")
-			buf.WriteString(s)
-			buf.WriteByte(0) /* add zero at the end */
+			buf.AddString(s)
+			buf.AddChar(0) /* add zero at the end */
 			totalsize += len(s) + 1
 		case strKpadding:
-			buf.WriteByte(strPackPadByte)
+			buf.AddChar(strPackPadByte)
 			fallthrough
 		case strKpaddalign, strKnop:
 			arg-- /* undo increment */
 		}
 	}
-	L.PushString(buf.String())
+	buf.PushResult()
 	return 1
 }
 

@@ -29,12 +29,12 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 | --- | ---: | ---: | ---: | --- |
 | startup | 1.44 ms | 3.43 ms | 2.38× | 新进程，没有脚本正文 |
 | nop | 17.6 ns | 51.4 ns | 2.93× | `return 0` |
-| hash | 178 ms | 371 ms | 2.08× | 短字符串键查找 |
+| hash | 158 ms | 318 ms | 2.01× | 短字符串键查找 |
 | intloop | 128 ms | 309 ms | 2.41× | 整数求和 |
 | floatloop | 142 ms | 405 ms | 2.85× | 浮点乘加 |
 | bitwise | 139 ms | 477 ms | 3.42× | 与、异或、移位 |
 | array | 120 ms | 358 ms | 2.99× | 稠密整数键 |
-| strings | 71.2 ms | 234 ms | 3.28× | format、concat、gmatch |
+| strings | 69.6 ms | 86.9 ms | 1.25× | format、concat、gmatch |
 | sort | 73.4 ms | 114 ms | 1.55× | `table.sort`，比较函数是 Lua |
 
 一次进程启动是 3.43 ms 对 1.44 ms，差距主要在 Go 运行时。`return 0` 仍然是 51.4 ns 对 17.6 ns，因为发出这次调用的循环本身还在 Go 里分派。hash 先把键造好，计的是之后的查找。Go 的哈希节点比 C 的大，短字符串相等判断和收集器在这次查找的剖析里占了很大一块。数组循环每个槽仍会碰到；`strings` 每个下标仍生成一条字符串。
@@ -46,7 +46,7 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 | 负载 | PUC-Lua | golua | 比值 | 形状 |
 | --- | ---: | ---: | ---: | --- |
 | fib | 42.7 ms | 117 ms | 2.73× | 直接递归的 Fibonacci，`n` 在 0..45 |
-| concat | 81.2 ms | 217 ms | 2.67× | 循环不改变的 `a .. b` |
+| concat | 78.3 ms | 176 ms | 2.24× | 循环不改变的 `a .. b` |
 | yield | 133 ms | 174 ms | 1.31× | `yield` 出 `1..n` 再求和 |
 | pcall | 74.5 ms | 175 ms | 2.34× | 对恒等函数做 `pcall` |
 | upvalue | 361 ms | 802 ms | 2.22× | `n = n + 1` |
