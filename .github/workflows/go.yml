@@ -43,7 +43,14 @@ jobs:
         run: go build -v ./...
 
       - name: Test
-        run: go test ./...
+        run: go test -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage reports to Codecov
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.txt
 
       # The race detector needs cgo, so it runs on Linux and macOS only.
       - name: Test with the race detector
@@ -82,7 +89,14 @@ jobs:
         run: go build ./...
 
       - name: Test
-        run: go test ./...
+        run: go test -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage reports to Codecov
+        if: runner.os == 'Linux'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.txt
 
       # A cross-compile is the other thing cgo takes away.  Build for
       # every target this package claims, without any toolchain but Go's.

@@ -3,6 +3,7 @@
 [![License](https://img.shields.io/github/license/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/esrrhs/golua)](https://github.com/esrrhs/golua)
 [![Release](https://img.shields.io/github/v/release/esrrhs/golua)](https://github.com/esrrhs/golua/releases)
+[![codecov](https://codecov.io/gh/esrrhs/golua/graph/badge.svg)](https://codecov.io/gh/esrrhs/golua)
 
 `golua` 是 **PUC-Lua 5.3.4 的逐行 Go 直译**。词法分析、语法分析、代码生成、
 虚拟机、标准库、C API 以及 `lua`/`luac` 两个命令行工具都按 C 源码逐文件对应，
