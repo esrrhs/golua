@@ -106,6 +106,7 @@ func (L *State) GetTop() int { return L.top - (L.ci.funcIdx + 1) }
 
 // SetTop sets the top of the stack (lua_settop).
 func (L *State) SetTop(idx int) {
+	oldTop := L.top
 	if idx >= 0 {
 		for L.top < L.ci.funcIdx+1+idx {
 			setnilvalue(&L.stack[L.top])
@@ -114,6 +115,11 @@ func (L *State) SetTop(idx int) {
 		L.top = L.ci.funcIdx + 1 + idx
 	} else {
 		L.top += idx + 1 /* 'subtract' index (index is negative) */
+	}
+	if L.top < oldTop && !isLua(L.ci) {
+		for i := L.top; i < oldTop; i++ {
+			setnilvalue(&L.stack[i])
+		}
 	}
 }
 
@@ -245,6 +251,7 @@ func (L *State) XMove(from *State, n int) {
 	from.top -= n
 	for i := 0; i < n; i++ {
 		L.stack[L.top] = from.stack[from.top+i]
+		setnilvalue(&from.stack[from.top+i])
 		L.top++
 	}
 }
@@ -558,7 +565,7 @@ func luaV_gettable(L *State, t *Value, keyIdx, valIdx int) {
 	if ttistable(t) {
 		slot = luaH_get(L, hvalue(t), &L.stack[keyIdx])
 		if !ttisnil(slot) {
-			L.stack[valIdx] = *slot
+			L.stack[valIdx] = slotVal(slot)
 			return
 		}
 	} else {
@@ -575,7 +582,7 @@ func auxgetstr(L *State, t *Value, k string) int {
 		slot = luaH_getstr(L, hvalue(t), str)
 		if !ttisnil(slot) {
 			L.checkStack(1)
-			L.stack[L.top] = *slot
+			L.stack[L.top] = slotVal(slot)
 			L.top++
 			return ttype(&L.stack[L.top-1])
 		}
@@ -609,7 +616,7 @@ func (L *State) GetI(idx int, n int64) int {
 		slot = luaH_getint(hvalue(t), n)
 		if !ttisnil(slot) {
 			L.checkStack(1)
-			L.stack[L.top] = *slot
+			L.stack[L.top] = slotVal(slot)
 			L.top++
 			return ttype(&L.stack[L.top-1])
 		}
@@ -630,7 +637,7 @@ func (L *State) RawGet(idx int) int {
 		panic("table expected")
 	}
 	/* C: setobj2s(L, L->top - 1, luaH_get(...)); absent → luaO_nilobject (nil) */
-	L.stack[L.top-1] = *luaH_get(L, hvalue(t), &L.stack[L.top-1])
+	L.stack[L.top-1] = slotVal(luaH_get(L, hvalue(t), &L.stack[L.top-1]))
 	return ttype(&L.stack[L.top-1])
 }
 
@@ -641,7 +648,7 @@ func (L *State) RawGetI(idx int, n int64) int {
 		panic("table expected")
 	}
 	L.checkStack(1)
-	L.stack[L.top] = *luaH_getint(hvalue(t), n) /* absent → nilobject */
+	L.stack[L.top] = slotVal(luaH_getint(hvalue(t), n)) /* absent → nilobject */
 	L.top++
 	return ttype(&L.stack[L.top-1])
 }
@@ -655,7 +662,7 @@ func (L *State) RawGetP(idx int, p unsafe.Pointer) int {
 	L.checkStack(1)
 	var k Value
 	setpvalue(&k, p)
-	L.stack[L.top] = *luaH_get(L, hvalue(t), &k) /* absent → nilobject */
+	L.stack[L.top] = slotVal(luaH_get(L, hvalue(t), &k)) /* absent → nilobject */
 	L.top++
 	return ttype(&L.stack[L.top-1])
 }
@@ -739,7 +746,7 @@ func luaV_settable(L *State, t *Value, keyIdx, valIdx int) {
 	if ttistable(t) {
 		slot = luaH_get(L, hvalue(t), &L.stack[keyIdx])
 		if !ttisnil(slot) {
-			*slot = L.stack[valIdx] /* luaC_barrierback omitted (Go GC) */
+			luaH_setSlotVal(hvalue(t), slot, &L.stack[valIdx]) /* luaC_barrierback omitted (Go GC) */
 			return
 		}
 	} else {
@@ -755,7 +762,7 @@ func auxsetstr(L *State, t *Value, k string) {
 	if ttistable(t) {
 		slot = luaH_getstr(L, hvalue(t), str)
 		if !ttisnil(slot) {
-			*slot = L.stack[L.top-1]
+			luaH_setSlotVal(hvalue(t), slot, &L.stack[L.top-1])
 			L.top-- /* pop value */
 			return
 		}
@@ -788,7 +795,7 @@ func (L *State) SetI(idx int, n int64) {
 	if ttistable(t) {
 		slot = luaH_getint(hvalue(t), n)
 		if !ttisnil(slot) {
-			*slot = L.stack[L.top-1]
+			luaH_setSlotVal(hvalue(t), slot, &L.stack[L.top-1])
 			L.top-- /* pop value */
 			return
 		}
@@ -810,7 +817,7 @@ func (L *State) RawSet(idx int) {
 	}
 	key := L.stack[L.top-2]
 	val := L.stack[L.top-1]
-	*luaH_set(L, hvalue(t), &key) = val
+	luaH_setval(L, hvalue(t), &key, &val)
 	invalidateTMcache(hvalue(t))
 	L.top -= 2
 }
@@ -836,7 +843,7 @@ func (L *State) RawSetP(idx int, p unsafe.Pointer) {
 	val := L.stack[L.top-1]
 	var k Value
 	setpvalue(&k, p)
-	*luaH_set(L, hvalue(t), &k) = val /* C: no invalidateTMcache on rawsetp */
+	luaH_setval(L, hvalue(t), &k, &val) /* C: no invalidateTMcache on rawsetp */
 	/* luaC_barrierback omitted (Go GC) */
 	L.top--
 }
@@ -858,9 +865,9 @@ func (L *State) SetMetaTable(idx int) int {
 	switch ttype(v) { /* ttnov */
 	case LUA_TTABLE:
 		hvalue(v).metatable = mt
+		luaC_checkWeakMode(L, hvalue(v), mt) /* Go weak-table bridge */
 		if mt != nil {
-			luaC_checkFinalizer(L, v, mt)        /* barrier omitted (Go GC) */
-			luaC_checkWeakMode(L, hvalue(v), mt) /* Go weak-table bridge */
+			luaC_checkFinalizer(L, v, mt) /* barrier omitted (Go GC) */
 		}
 	case LUA_TUSERDATA:
 		uvalue(v).metatable = mt
@@ -871,6 +878,7 @@ func (L *State) SetMetaTable(idx int) int {
 		L.g.mt[ttype(v)] = mt
 	}
 	L.top--
+	setnilvalue(&L.stack[L.top])
 	return 1
 }
 
@@ -882,6 +890,7 @@ func (L *State) SetUserValue(idx, n int) int {
 	val := L.stack[L.top-1]
 	if !ttisfulluserdata(v) || n != 1 {
 		L.top--
+		setnilvalue(&L.stack[L.top])
 		return 0
 	}
 	uvalue(v).user = val /* setuservalue; barrier omitted (Go GC) */

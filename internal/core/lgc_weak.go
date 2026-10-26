@@ -1,7 +1,6 @@
 package core
 
 import (
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -9,27 +8,14 @@ import (
 )
 
 // Weak tables (lgc.c's 'cleartable' and 'luaC_checkfinalizer' for
-// '__mode').
+// '__mode'), delegated directly to the Go runtime via weak.Pointer.
 //
-// A weak table holds its keys or its values without keeping them alive.
-// Lua's collector can tell whether an object is still reachable, because
-// it walks the object graph itself; Go's collector knows only what the
-// Go heap says, and a weak table necessarily holds a strong Go reference
-// to every entry -- so as far as Go is concerned nothing in it is ever
-// garbage.
-//
-// The answer is to take the references away and ask Go again:
-//
-//  1. every weak reference in every weak table is replaced by a
-//     'weak.Pointer' and its slot is emptied;
-//  2. Go collects.  An object that only the table referred to is now
-//     really unreachable, so it goes -- and its weak pointer goes with
-//     it.  Anything else survives, and its weak pointer still resolves.
-//  3. the entries whose weak pointer is gone are removed, the rest are
-//     put back.
-//
-// Step 2 needs two cycles: a weak pointer is cleared in the cycle after
-// the one that frees its object.
+// Weak keys and weak values of collectable object types (Table, Udata,
+// LClosure, CClosure, State) are stored inside Table nodes and array
+// slots as weak.Pointer handles tagged with BIT_WEAK. Because the table
+// never holds strong Go references to its weak keys or weak values,
+// Go's runtime garbage collector naturally reclaims unreachable entries
+// on its own schedule without artificial runtime.GC() cycles.
 
 // weakKey / weakVal are the two halves of a table's '__mode'.
 const (
@@ -38,14 +24,10 @@ const (
 )
 
 // weakRef is a weak reference to a collectable object; 'dead' says the
-// object is gone.  Only tables, userdata, closures and threads can be
+// object is gone. Only tables, userdata, closures and threads can be
 // weak: numbers, strings and booleans are values, not objects.
 type weakRef interface {
 	dead() bool
-	// value rebuilds the tagged value of a survivor.  Nothing may hold a
-	// strong reference to the object while Go collects -- not even the
-	// sweep itself -- or the object could never be seen as garbage; the
-	// weak pointer is the only place it can come back from.
 	value() Value
 }
 
@@ -54,7 +36,9 @@ type weakTableRef struct {
 	g *globalState // set for gcWatch entries; nil for weak-table keys
 }
 
-func (r weakTableRef) dead() bool { return r.w.Value() == nil }
+func (r weakTableRef) dead() bool {
+	return weakPtrDead(*(*unsafe.Pointer)(unsafe.Pointer(&r.w)))
+}
 func (r weakTableRef) value() Value {
 	return makeTableValue(r.w.Value())
 }
@@ -64,7 +48,9 @@ type weakUdataRef struct {
 	g *globalState // set for gcWatch entries; nil for weak-table keys
 }
 
-func (r weakUdataRef) dead() bool { return r.w.Value() == nil }
+func (r weakUdataRef) dead() bool {
+	return weakPtrDead(*(*unsafe.Pointer)(unsafe.Pointer(&r.w)))
+}
 func (r weakUdataRef) value() Value {
 	return makeUdataValue(r.w.Value())
 }
@@ -118,101 +104,377 @@ func makeWeakRef(v *Value) weakRef {
 	return nil /* numbers, strings and booleans are never weak */
 }
 
+// makeWeakPtr converts a strong collectable object pointer into the
+// underlying weak.Pointer handle word. Returns (p, false) for types
+// that are never weak in Lua (numbers, strings, booleans, light
+// userdata, light C functions).
+func makeWeakPtr(tt uint8, p unsafe.Pointer) (unsafe.Pointer, bool) {
+	if p == nil {
+		return nil, false
+	}
+	switch int(tt) & 0x3F {
+	case LUA_VTABLE:
+		wp := weak.Make((*Table)(p))
+		return *(*unsafe.Pointer)(unsafe.Pointer(&wp)), true
+	case LUA_VUSERDATA:
+		wp := weak.Make((*Udata)(p))
+		return *(*unsafe.Pointer)(unsafe.Pointer(&wp)), true
+	case LUA_VLCL:
+		wp := weak.Make((*LClosure)(p))
+		return *(*unsafe.Pointer)(unsafe.Pointer(&wp)), true
+	case LUA_VCCL:
+		wp := weak.Make((*CClosure)(p))
+		return *(*unsafe.Pointer)(unsafe.Pointer(&wp)), true
+	case LUA_VTHREAD:
+		wp := weak.Make((*State)(p))
+		return *(*unsafe.Pointer)(unsafe.Pointer(&wp)), true
+	}
+	return p, false
+}
+
+// resolveWeakPtr resolves a weak.Pointer handle word back to a strong
+// object pointer, or returns nil if Go's GC has reclaimed the object.
+func resolveWeakPtr(tt uint8, wp unsafe.Pointer) unsafe.Pointer {
+	if wp == nil {
+		return nil
+	}
+	switch int(tt) & 0x3F {
+	case LUA_VTABLE:
+		w := *(*weak.Pointer[Table])(unsafe.Pointer(&wp))
+		return unsafe.Pointer(w.Value())
+	case LUA_VUSERDATA:
+		w := *(*weak.Pointer[Udata])(unsafe.Pointer(&wp))
+		return unsafe.Pointer(w.Value())
+	case LUA_VLCL:
+		w := *(*weak.Pointer[LClosure])(unsafe.Pointer(&wp))
+		return unsafe.Pointer(w.Value())
+	case LUA_VCCL:
+		w := *(*weak.Pointer[CClosure])(unsafe.Pointer(&wp))
+		return unsafe.Pointer(w.Value())
+	case LUA_VTHREAD:
+		w := *(*weak.Pointer[State])(unsafe.Pointer(&wp))
+		return unsafe.Pointer(w.Value())
+	}
+	return wp
+}
+
+// weakPtrDead checks whether a weak.Pointer handle word has been cleared
+// by Go's GC without converting it to a strong pointer (which would shade
+// the object during concurrent mark phase).
+func weakPtrDead(wp unsafe.Pointer) bool {
+	return wp == nil || (*atomic.Uintptr)(wp).Load() == 0
+}
+
+// cleanNodeKey checks whether a weak node key has been collected by Go's GC
+// without shading it. Returns true if the node key is nil or dead.
+func cleanNodeKey(n *node) bool {
+	if n.keytt == LUA_VNIL || n.keytt == LUA_TDEADKEY {
+		return true
+	}
+	if n.keytt&BIT_WEAK != 0 && weakPtrDead(n.kp) {
+		setnilvalue(&n.val)
+		setdeadkey(n, nil)
+		return true
+	}
+	return false
+}
+
+// getnodekeyWeak is the slow path of getnodekey for BIT_WEAK keys.
+func getnodekeyWeak(dst *Value, n *node) {
+	p := resolveWeakPtr(n.keytt, n.kp)
+	if p == nil {
+		setnilvalue(&n.val)
+		setdeadkey(n, nil)
+		*dst = Value{tt: LUA_TDEADKEY}
+		return
+	}
+	dst.p = p
+	dst.i = n.ki
+	dst.tt = n.keytt &^ BIT_WEAK
+}
+
+// checkSlot checks whether a table value slot holding a weak reference
+// has been collected by Go's GC (without shading a live weak target).
+func checkSlot(v *Value) *Value {
+	if v.tt&BIT_WEAK != 0 {
+		return checkSlotSlow(v)
+	}
+	return v
+}
+
+func checkSlotSlow(v *Value) *Value {
+	if weakPtrDead(v.p) {
+		setnilvalue(v)
+	}
+	return v
+}
+
+// slotVal reads a Value from a table slot and returns a strong Value
+// suitable for placing on the Lua stack.
+func slotVal(v *Value) Value {
+	if v.tt&BIT_WEAK != 0 {
+		return slotValSlow(v)
+	}
+	return *v
+}
+
+func slotValSlow(v *Value) Value {
+	p := resolveWeakPtr(v.tt, v.p)
+	if p == nil {
+		setnilvalue(v)
+		return luaO_nilobject
+	}
+	return Value{tt: v.tt &^ BIT_WEAK, p: p, i: v.i}
+}
+
+func weakenVal(v *Value) {
+	if v.tt&BIT_WEAK != 0 {
+		if weakPtrDead(v.p) {
+			setnilvalue(v)
+		}
+		return
+	}
+	if wp, ok := makeWeakPtr(v.tt, v.p); ok {
+		v.p = wp
+		v.tt |= BIT_WEAK
+	}
+}
+
+func strengthenVal(v *Value) {
+	if v.tt&BIT_WEAK == 0 {
+		return
+	}
+	p := resolveWeakPtr(v.tt, v.p)
+	if p == nil {
+		setnilvalue(v)
+		return
+	}
+	v.p = p
+	v.tt &^= BIT_WEAK
+}
+
+func weakenNodeKey(n *node) {
+	if n.keytt&BIT_WEAK != 0 {
+		if weakPtrDead(n.kp) {
+			setnilvalue(&n.val)
+			setdeadkey(n, nil)
+		}
+		return
+	}
+	if wp, ok := makeWeakPtr(n.keytt, n.kp); ok {
+		n.kp = wp
+		n.keytt |= BIT_WEAK
+	}
+}
+
+func strengthenNodeKey(n *node) {
+	if n.keytt&BIT_WEAK == 0 {
+		return
+	}
+	p := resolveWeakPtr(n.keytt, n.kp)
+	if p == nil {
+		setnilvalue(&n.val)
+		setdeadkey(n, nil)
+		return
+	}
+	n.kp = p
+	n.keytt &^= BIT_WEAK
+}
+
+func storeValMode(dst, src *Value, mode byte) {
+	sv := slotVal(src)
+	*dst = sv
+	if mode&weakVal != 0 {
+		weakenVal(dst)
+	}
+}
+
+func setnodekeyMode(n *node, k *Value, mode byte) {
+	sk := slotVal(k)
+	setnodekey(n, &sk)
+	if mode&weakKey != 0 {
+		weakenNodeKey(n)
+	}
+}
+
+const gcWeakPruneMin = 256
+
 var (
-	gcWeakMu     sync.Mutex
-	gcWeakTables []weak.Pointer[Table] // the weak tables themselves, weakly
-	gcWeakCount  atomic.Int32          // nonzero while any weak table exists
+	gcWeakMu        sync.Mutex
+	gcWeakTables    []weak.Pointer[Table] // the weak tables themselves, weakly
+	gcWeakNextPrune = gcWeakPruneMin
+	gcWeakCount     atomic.Int32 // nonzero while any weak table exists
 )
+
+// parseWeakModeTable reads TM_MODE from mt without needing a State,
+// caching the result on mt until invalidateTMcache clears modeCached.
+func parseWeakModeTable(mt *Table) byte {
+	if mt == nil {
+		return 0
+	}
+	if mt.modeCached {
+		return mt.cachedMode
+	}
+	if (mt.flags & (1 << uint(TM_MODE))) != 0 {
+		mt.cachedMode = 0
+		mt.modeCached = true
+		return 0
+	}
+	var tm *Value
+	for i := range mt.nodes {
+		nd := &mt.nodes[i]
+		if nd.keytt == ctb(LUA_VSHRSTR) && (*TString)(nd.kp).val == "__mode" {
+			tm = checkSlot(&nd.val)
+			break
+		}
+	}
+	if tm == nil || ttisnil(tm) {
+		mt.flags |= byte(1 << uint(TM_MODE))
+		mt.cachedMode = 0
+		mt.modeCached = true
+		return 0
+	}
+	var mode byte
+	if ttisstring(tm) {
+		s := tsvalue(tm).val
+		for i := 0; i < len(s); i++ {
+			switch s[i] {
+			case 'k':
+				mode |= weakKey
+			case 'v':
+				mode |= weakVal
+			}
+		}
+	}
+	mt.cachedMode = mode
+	mt.modeCached = true
+	return mode
+}
 
 // parseWeakMode reads TM_MODE from mt the way traversetable does each mark.
 // Returns 0 for nil mt, non-string __mode, or a mode without 'k'/'v'.
 func parseWeakMode(L *State, mt *Table) byte {
-	if mt == nil {
-		return 0
-	}
-	tm := luaH_getshortstr(mt, L.g.tmNames[TM_MODE])
-	if !ttisstring(tm) {
-		return 0
-	}
-	mode := 0
-	s := tsvalue(tm).val
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case 'k':
-			mode |= weakKey
-		case 'v':
-			mode |= weakVal
-		}
-	}
-	return byte(mode)
+	_ = L
+	return parseWeakModeTable(mt)
 }
 
-// luaC_checkWeakMode is the '__mode' half of setmetatable: a table whose
-// metatable has a weak '__mode' starts to be swept.
-//
-// C re-reads TM_MODE every mark (traversetable); nil mt / non-weak mode
-// means a strong table. Always clear weakMode first so setmetatable(t, nil)
-// or a metatable without '__mode' stops weak sweeping. Dedup list membership
-// so repeated setmetatable does not sweep the same table twice per cycle.
-func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
-	t.weakMode = parseWeakMode(L, mt)
-	if t.weakMode == 0 {
+func gcTrackWeakTable(t *Table) {
+	if t.weakTracked {
+		gcWeakCount.Store(1)
 		return
 	}
+	t.weakTracked = true
 	gcWeakMu.Lock()
-	for _, wp := range gcWeakTables {
-		if wp.Value() == t {
-			gcWeakMu.Unlock()
-			gcWeakCount.Store(1)
-			return
+	if len(gcWeakTables) >= gcWeakNextPrune {
+		alive := gcWeakTables[:0]
+		for i := range gcWeakTables {
+			p := *(*unsafe.Pointer)(unsafe.Pointer(&gcWeakTables[i]))
+			if !weakPtrDead(p) {
+				alive = append(alive, gcWeakTables[i])
+			}
 		}
+		gcWeakTables = alive
+		gcWeakNextPrune = len(gcWeakTables)*2 + gcWeakPruneMin
 	}
 	gcWeakTables = append(gcWeakTables, weak.Make(t))
 	gcWeakMu.Unlock()
 	gcWeakCount.Store(1)
 }
 
-// weakSlot is one weak reference taken out of a table for the duration of
-// a sweep: the node it lives in, the slot to put a survivor back into,
-// and the weak pointer that will say whether the object survived.  A key
-// slot has no 'v': a node's key is not a full Value, so a survivor is
-// put back with 'setnodekey' instead.
-type weakSlot struct {
-	n     *node // nil for a slot of the array part
-	v     *Value
-	isKey bool
-	w     weakRef
+// syncWeakMode ensures t.weakMode and its stored entries match its
+// current metatable's __mode. Fast inlineable check when metatable is nil.
+func (t *Table) syncWeakMode() byte {
+	if t.metatable == nil && t.weakMode == 0 {
+		return 0
+	}
+	return t.syncWeakModeSlow()
 }
 
-// gcSweepWeak is clearkeys/clearvalues (lgc.c): drop weak-table entries whose
-// object is no longer reachable from anywhere else. Runs from the collector
-// step, as in C.
-//
-// Ephemeron note (__mode="k"): C marks a value only when its key is already
-// marked (traverseephemeron + convergeephemerons). Leaving nd.val strong
-// across runtime.GC lets a value→key cycle keep the key alive, so the entry
-// never clears. During the detach window we therefore also weaken collectable
-// values for weak-key-only tables.
-//
-// Residuals (NOT 完全对齐 — do not rubber-stamp; see NOTES FLAG):
-//  - No convergeephemerons fixed point: a strong value reachable only via an
-//    alive weak key may be cleared in the detach window (Go has no ephemeron map).
-//  - No atomic-phase iscleared ordering: C clearvalues → separatetobefnz →
-//    markbeingfnz → clearkeys keeps objects about to run __gc as weak keys
-//    for that cycle; Go weak.Pointer nils as soon as the Go finalizer is
-//    queued, so a finalizable weak key can vanish in the same cycle as __gc.
+func (t *Table) syncWeakModeSlow() byte {
+	mt := t.metatable
+	if mt == nil {
+		if t.weakMode != 0 {
+			t.applyWeakMode(0)
+		}
+		return 0
+	}
+	if mt.modeCached && mt.cachedMode == t.weakMode {
+		return t.weakMode
+	}
+	mode := parseWeakModeTable(mt)
+	if mode != t.weakMode {
+		t.applyWeakMode(mode)
+	}
+	return mode
+}
+
+// applyWeakMode converts existing entries in t to weak or strong
+// references according to mode, and cleans any dead weak entries.
+func (t *Table) applyWeakMode(mode byte) {
+	t.weakMode = mode
+	if mode != 0 {
+		gcTrackWeakTable(t)
+	}
+	for i := range t.array {
+		v := &t.array[i]
+		if v.tt&BIT_WEAK != 0 && weakPtrDead(v.p) {
+			setnilvalue(v)
+			continue
+		}
+		if mode&weakVal != 0 {
+			weakenVal(v)
+		} else {
+			strengthenVal(v)
+		}
+	}
+	for i := range t.nodes {
+		nd := &t.nodes[i]
+		kdead := cleanNodeKey(nd)
+		v := checkSlot(&nd.val)
+		if ttisnil(v) {
+			if !kdead {
+				weakenNodeKey(nd)
+			}
+			continue
+		}
+		if mode&weakKey != 0 {
+			weakenNodeKey(nd)
+		} else {
+			strengthenNodeKey(nd)
+		}
+		if mode&weakVal != 0 {
+			weakenVal(&nd.val)
+		} else {
+			strengthenVal(&nd.val)
+		}
+	}
+}
+
+// luaC_checkWeakMode is the '__mode' half of setmetatable: a table whose
+// metatable has a weak '__mode' stores its weak keys/values as weak.Pointer.
+func luaC_checkWeakMode(L *State, t *Table, mt *Table) {
+	mode := parseWeakModeTable(mt)
+	if mode != 0 && L != nil && L.g != nil {
+		L.g.gcDebt = 0
+	}
+	t.applyWeakMode(mode)
+}
+
+// gcSweepWeak cleans dead weak entries (already collected by Go's runtime
+// GC) across all tracked weak tables and prunes dead/non-weak tables from
+// gcWeakTables. It never calls runtime.GC().
 func (L *State) gcSweepWeak() {
+	_ = L
 	if gcWeakCount.Load() == 0 {
 		return
 	}
-	var slots []weakSlot
 	gcWeakMu.Lock()
-	tables := make([]*Table, 0, len(gcWeakTables))
+	snap := append([]weak.Pointer[Table](nil), gcWeakTables...)
 	alive := gcWeakTables[:0]
-	for _, wp := range gcWeakTables {
-		if t := wp.Value(); t != nil {
-			tables = append(tables, t)
-			alive = append(alive, wp)
+	for i := range gcWeakTables {
+		p := *(*unsafe.Pointer)(unsafe.Pointer(&gcWeakTables[i]))
+		if !weakPtrDead(p) {
+			alive = append(alive, gcWeakTables[i])
 		}
 	}
 	gcWeakTables = alive
@@ -222,123 +484,47 @@ func (L *State) gcSweepWeak() {
 		gcWeakCount.Store(0)
 		return
 	}
-	/* Re-parse TM_MODE each sweep (≈ traversetable); note non-weak for prune. */
-	weakStill := make(map[*Table]struct{}, len(tables))
-	for _, t := range tables {
-		mode := parseWeakMode(L, t.metatable)
-		t.weakMode = mode
-		if mode == 0 {
+	anyWeak := false
+	for i := range snap {
+		p := *(*unsafe.Pointer)(unsafe.Pointer(&snap[i]))
+		if weakPtrDead(p) {
 			continue
 		}
-		weakStill[t] = struct{}{}
-		for i := range t.nodes {
-			nd := &t.nodes[i]
-			if isempty(&nd.val) { /* no entry? */
-				continue
-			}
-			if mode&weakKey != 0 {
-				var kv Value
-				getnodekey(&kv, nd)
-				if w := makeWeakRef(&kv); w != nil {
-					slots = append(slots, weakSlot{n: nd, isKey: true, w: w})
-					setnilkey(nd)
-					/* ephemeron approx: do not leave the value strong across GC */
-					if mode&weakVal == 0 {
-						if vw := makeWeakRef(&nd.val); vw != nil {
-							slots = append(slots, weakSlot{n: nd, v: &nd.val, w: vw})
-							setnilvalue(&nd.val)
-						}
-					}
-				}
-			}
-			if mode&weakVal != 0 {
-				if w := makeWeakRef(&nd.val); w != nil {
-					slots = append(slots, weakSlot{n: nd, v: &nd.val, w: w})
-					setnilvalue(&nd.val)
-				}
-			}
-		}
-		/* array part: clearvalues walks sizearray the same way */
-		if mode&weakVal != 0 {
-			for i := range t.array {
-				if w := makeWeakRef(&t.array[i]); w != nil {
-					slots = append(slots, weakSlot{v: &t.array[i], w: w})
-					setnilvalue(&t.array[i])
-				}
-			}
-		}
-	}
-	/* Prune tables that are no longer weak; keep concurrent appends. */
-	gcWeakMu.Lock()
-	filtered := gcWeakTables[:0]
-	for _, wp := range gcWeakTables {
-		t := wp.Value()
+		t := snap[i].Value()
 		if t == nil {
 			continue
 		}
-		if _, ok := weakStill[t]; ok || t.weakMode != 0 {
-			/* in this sweep's weak set, or registered after we unlocked */
-			filtered = append(filtered, wp)
+		mode := parseWeakModeTable(t.metatable)
+		t.applyWeakMode(mode)
+		if mode != 0 {
+			anyWeak = true
 		}
 	}
-	gcWeakTables = filtered
-	if len(filtered) == 0 {
-		gcWeakCount.Store(0)
-	}
-	gcWeakMu.Unlock()
-	if len(slots) == 0 {
-		return
-	}
-	/* the slots above 'top' would hold the objects alive: see gcStep */
-	for i := L.top; i < len(L.stack); i++ {
-		setnilvalue(&L.stack[i])
-	}
-	runtime.GC()
-	runtime.GC() /* the second cycle is the one that clears the pointer */
-	for i := range slots {
-		s := &slots[i]
-		if !s.w.dead() { /* still reachable from somewhere: put it back */
-			sv := s.w.value()
-			if s.isKey {
-				setnodekey(s.n, &sv)
-			} else {
-				/* C allweak: clearkeys nils the value when the key dies.
-				   Do not resurrect a live value into a DEADKEY node. */
-				if s.n != nil && s.n.keytt == LUA_TDEADKEY {
-					continue
+	if !anyWeak {
+		gcWeakMu.Lock()
+		keep := gcWeakTables[:0]
+		for i := range gcWeakTables {
+			p := *(*unsafe.Pointer)(unsafe.Pointer(&gcWeakTables[i]))
+			if !weakPtrDead(p) {
+				if t := gcWeakTables[i].Value(); t != nil {
+					if t.weakMode != 0 {
+						keep = append(keep, gcWeakTables[i])
+					} else {
+						t.weakTracked = false
+					}
 				}
-				*s.v = sv
 			}
-			continue
 		}
-		if s.n == nil { /* the array part: the entry simply goes */
-			setnilvalue(s.v)
-			continue
+		gcWeakTables = keep
+		if len(keep) == 0 {
+			gcWeakCount.Store(0)
 		}
-		if s.isKey {
-			/* clearkeys: nil value + removeentry → setdeadvalue.
-			   FLAG Go-GC: C keeps gkey's gc pointer; after runtime.GC the
-			   object is reclaimed, so storing that address as unsafe.Pointer
-			   is illegal ("marked free object"). kp=nil; findindex dead-key
-			   arm stays inert (TestDeadKeyDoesNotBreakTraversal skipped). */
-			setnilvalue(&s.n.val)
-			setdeadkey(s.n, nil)
-			continue
-		}
-		/* clearvalues / ephemeron value death: nil the value.
-		   removeentry only deadens unmarked (still-nil) keys — a restored
-		   or already-dead key stays as-is (C: valiswhite on gkey). */
-		setnilvalue(&s.n.val)
-		if s.n.keytt == LUA_VNIL {
-			setdeadkey(s.n, nil)
-		}
+		gcWeakMu.Unlock()
 	}
 }
 
 // setdeadkey is C's setdeadvalue on gkey after removeentry: mark the key
-// dead. C keeps the collectable pointer for findindex deadvalue==gcvalue;
-// callers may pass it when the object is still live. Weak-sweep death
-// must pass nil (Go GC FLAG — see gcSweepWeak).
+// dead.
 func setdeadkey(n *node, gc unsafe.Pointer) {
 	n.keytt = LUA_TDEADKEY
 	n.kp = gc

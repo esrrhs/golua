@@ -40,7 +40,7 @@ func luaV_div(L *State, m, n int64) int64 {
 		}
 		return -m /* n == -1; avoid overflow with 0x8000... // -1 */
 	}
-	q := m / n /* perform C division */
+	q := m / n                 /* perform C division */
 	if (m^n) < 0 && m%n != 0 { /* 'm/n' would be negative non-integer? */
 		q-- /* correct result for different rounding */
 	}
@@ -174,7 +174,7 @@ func luaV_finishget(L *State, t, key *Value, val int, slot *Value) {
 		t = tm /* else try to access 'tm[key]' */
 		slot = vmFastGet(L, t, key)
 		if slot != nil && !isempty(slot) {
-			L.stack[val] = *slot
+			L.stack[val] = slotVal(slot)
 			return
 		}
 	}
@@ -190,7 +190,7 @@ func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 			h := hvalue(t)
 			tm = fasttm(L, h.metatable, TM_NEWINDEX)
 			if tm == nil { /* no metamethod? */
-				*luaH_set(L, h, key) = *val /* 5.3.4: nilobject→newkey then setobj2t */
+				luaH_setval(L, h, key, val) /* 5.3.4: nilobject→newkey then setobj2t */
 				invalidateTMcache(h)
 				return
 			}
@@ -208,7 +208,7 @@ func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 		t = tm /* else repeat assignment over 'tm' */
 		slot = vmFastGet(L, t, key)
 		if slot != nil && !isempty(slot) {
-			*slot = *val
+			luaH_setSlotVal(hvalue(t), slot, val)
 			return
 		}
 	}
@@ -220,10 +220,10 @@ func luaV_finishset(L *State, t, key, val *Value, slot *Value) {
 // slot (may be luaO_nilobject). No specialized key dispatch here — that
 // lives inside luaH_get, matching C's macro + f=luaH_get.
 func vmFastGet(L *State, t, key *Value) *Value {
-	if !ttistable(t) {
+	if t.tt != ctb(LUA_VTABLE) {
 		return nil
 	}
-	return luaH_get(L, hvalue(t), key)
+	return luaH_get(L, (*Table)(t.p), key)
 }
 
 // getcached returns p.cache if it has the same upvalues the new closure would.
@@ -422,7 +422,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				rc := rkVal(L, base, k, i.C)
 				slot := vmFastGet(L, upval, rc)
 				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
+					L.stack[ra] = slotVal(slot)
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, upval, rc, ra, slot)
@@ -433,7 +433,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				rc := rkVal(L, base, k, i.C)
 				slot := vmFastGet(L, rb, rc)
 				if slot != nil && !isempty(slot) {
-					L.stack[ra] = *slot
+					L.stack[ra] = slotVal(slot)
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishget(L, rb, rc, ra, slot)
@@ -445,7 +445,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				rc := rkVal(L, base, k, i.C)
 				slot := vmFastGet(L, upval, rb)
 				if slot != nil && !isempty(slot) {
-					*slot = *rc
+					luaH_setSlotVal(hvalue(upval), slot, rc)
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, upval, rb, rc, slot)
@@ -458,7 +458,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				rc := rkVal(L, base, k, i.C)
 				slot := vmFastGet(L, &L.stack[ra], rb)
 				if slot != nil && !isempty(slot) {
-					*slot = *rc
+					luaH_setSlotVal(hvalue(&L.stack[ra]), slot, rc)
 				} else {
 					savestate(L, ci, pc)
 					luaV_finishset(L, &L.stack[ra], rb, rc, slot)
@@ -472,6 +472,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 					luaH_resize(L, t, uint32(luaO_fb2int(b)), uint32(luaO_fb2int(c)))
 				}
 				/* PUC luaC_checkGC after allocation; metamethod may run Lua. */
+				ci.savedpc = pc
 				if L.gcAfterAlloc() {
 					continue
 				}
@@ -484,7 +485,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				if ttistable(rb) {
 					slot = luaH_getstr(L, hvalue(rb), tsvalue(rc))
 					if !ttisnil(slot) {
-						L.stack[ra] = *slot
+						L.stack[ra] = slotVal(slot)
 					} else {
 						savestate(L, ci, pc)
 						luaV_finishget(L, rb, rc, ra, slot)
@@ -679,9 +680,9 @@ func luaV_execute(L *State, ci *CallInfo) {
 					L.top = ofunc + (L.top - nfunc)
 					oci.top = L.top /* correct top */
 					oci.savedpc = nci.savedpc
-					oci.callstatus |= CIST_TAIL /* function was tail called */
+					oci.callstatus |= CIST_TAIL     /* function was tail called */
 					oci.nExtraArgs = nci.nExtraArgs /* FLAG: Go CI field; not in 5.3.4 CallInfo */
-					L.ci = oci /* remove new frame */
+					L.ci = oci                      /* remove new frame */
 					ci = oci
 					restart = true
 					break loop /* restart luaV_execute over new Lua function */
@@ -789,6 +790,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 				} else {
 					pushclosure(L, p, cl.upvals, base, ra)
 				}
+				ci.savedpc = pc
 				if L.gcAfterAlloc() {
 					continue
 				}

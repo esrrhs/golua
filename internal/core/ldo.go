@@ -8,6 +8,7 @@
 //     fastYield); resume/yield/unroll/parser live in lstate.go / lapi.go
 //   - no lua_Alloc / lua_lock / lua_unlock
 //   - setTraps: Go VM hook recheck after lua_sethook (5.3.4 polls hookmask)
+//
 // Stack sizes in luaD_* match C total (incl. EXTRA_STACK); reallocStack is usable.
 package core
 
@@ -111,7 +112,7 @@ func luaD_reallocstack(L *State, newsize int) {
 // All size math uses C's total-stacksize convention, then luaD_reallocstack.
 func luaD_growstack(L *State, n int) {
 	size := L.stackSize() + EXTRA_STACK /* C: L->stacksize (total) */
-	if size > LUAI_MAXSTACK { /* error after extra size? */
+	if size > LUAI_MAXSTACK {           /* error after extra size? */
 		luaD_throw(L, LUA_ERRERR)
 		return
 	}
@@ -159,7 +160,7 @@ func luaD_shrinkstack(L *State) {
 		goodsize = LUAI_MAXSTACK /* respect stack limit */
 	}
 	stacksize := L.stackSize() + EXTRA_STACK /* C: L->stacksize (total) */
-	if stacksize > LUAI_MAXSTACK { /* had been handling stack overflow? */
+	if stacksize > LUAI_MAXSTACK {           /* had been handling stack overflow? */
 		luaE_freeCI(L) /* free all CIs (list grew because of an error) */
 	} else {
 		luaE_shrinkCI(L) /* shrink list */
@@ -301,6 +302,9 @@ func tryfuncTM(L *State, funcIdx int) {
 func moveresults(L *State, firstResult, res, nres, wanted int) int {
 	switch wanted { /* handle typical cases separately */
 	case 0: /* nothing to move */
+		if nres > 0 {
+			setnilvalue(&L.stack[firstResult])
+		}
 		/* fall through to set top */
 	case 1: /* one result needed */
 		if nres == 0 { /* no results? */
@@ -481,9 +485,15 @@ func luaD_call(L *State, funcIdx, nResults int) {
 	if L.nCcalls >= LUAI_MAXCCALLS {
 		stackerror(L)
 	}
+	callerCI := L.ci
 	if luaD_precall(L, funcIdx, nResults) == 0 { /* is a Lua function? */
 		L.ci.callstatus |= CIST_FRESH /* fresh invocation of luaV_execute */
-		luaV_execute(L, L.ci) /* call it */
+		luaV_execute(L, L.ci)         /* call it */
+		if callerCI != nil && !isLua(callerCI) && L.ci == callerCI && L.top < callerCI.top {
+			for i := L.top; i < callerCI.top && i < len(L.stack); i++ {
+				setnilvalue(&L.stack[i])
+			}
+		}
 	}
 	L.nCcalls--
 }
