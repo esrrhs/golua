@@ -43,6 +43,7 @@ jobs:
         run: go build -v ./...
 
       - name: Test
+        shell: bash
         run: go test -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage reports to Codecov
@@ -89,6 +90,7 @@ jobs:
         run: go build ./...
 
       - name: Test
+        shell: bash
         run: go test -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage reports to Codecov
