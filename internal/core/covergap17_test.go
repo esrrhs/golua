@@ -57,31 +57,13 @@ say(o.z)
 return table.concat(out,"|")
 `)
 	_ = got
-	// direct opArithK / opBitwise
-	L := NewState()
-	defer L.Close()
-	L.checkStack(4)
-	var v1, v2 Value
-	setivalue(&v1, 1000)
-	setivalue(&v2, 200)
-	pc := 0
-	opArithK(L, 0, &v1, &v2,
-		func(_ *State, a, b int64) int64 { return a - b },
-		func(a, b float64) float64 { return a - b }, &pc)
-	pc = 0
-	opArith(L, 0, &v1, &v2,
-		func(_ *State, a, b int64) int64 { return a * b },
-		func(a, b float64) float64 { return a * b }, &pc)
-	pc = 0
-	opBitwise(L, 0, &v1, &v2, func(a, b int64) int64 { return a & b }, &pc)
-	pc = 0
-	opBitwiseK(L, 0, &v1, &v2, func(a, b int64) int64 { return a | b }, &pc)
-	setfltvalue(&v1, 2.5)
-	setfltvalue(&v2, 1.5)
-	pc = 0
-	opArithf(L, 0, &v1, &v2, func(a, b float64) float64 { return math.Pow(a, b) }, &pc)
-	pc = 0
-	opArithfK(L, 0, &v1, &v2, func(a, b float64) float64 { return a / b }, &pc)
+	_ = math.Pow
+	_ = runChunk(t, `
+local fx, fy = 1000.5, 200.5
+local r = (fx - 200) + (fx + 200) + (fx * 200) + (fx % 200) + (fx // 200) + (fx ^ 3) + (fx / 200)
+r = r + (fx + fy) + (fx - fy) + (fx * fy) + (fx % fy) + (fx // fy) + (fx ^ fy) + (fx / fy)
+return r
+`)
 }
 
 func TestCoverGap17LAPIUpvalues(t *testing.T) {

@@ -19,7 +19,7 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 
 ## 根 README 里的那一次
 
-机器是 Linux x86_64（Intel Xeon，内核 6.12.94+），PUC-Lua 5.4.7 对比这棵树的 cgo 构建（Go 1.27.3）。移植本身跟踪 Lua 5.4.9。每一行 `p < 0.0001`。startup 的波动最大：golua 那一侧的变异系数是 18%，其余几行是几个百分点。`CGO_ENABLED=0` 的进程启动另计，不在这次运行里。
+机器是 Linux x86_64（Intel Xeon，内核 6.12.94+），PUC-Lua 5.4.9 对比这棵树的 cgo 构建（Go 1.27.3）。移植本身跟踪 Lua 5.4.9。每一行 `p < 0.0001`。startup 的波动最大：golua 那一侧的变异系数是 18%，其余几行是几个百分点。`CGO_ENABLED=0` 的进程启动另计，不在这次运行里。
 
 ### 该做的计算还在做
 
@@ -28,16 +28,16 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 | 负载 | PUC-Lua | golua | 比值 | 实际在做的事 |
 | --- | ---: | ---: | ---: | --- |
 | startup | 1.44 ms | 3.43 ms | 2.38× | 新进程，没有脚本正文 |
-| nop | 17.6 ns | 51.4 ns | 2.93× | `return 0` |
+| nop | 16.6 ns | 34.9 ns | 2.11× | `return 0` |
 | hash | 158 ms | 318 ms | 2.01× | 短字符串键查找 |
-| intloop | 128 ms | 309 ms | 2.41× | 整数求和 |
-| floatloop | 142 ms | 405 ms | 2.85× | 浮点乘加 |
-| bitwise | 139 ms | 477 ms | 3.42× | 与、异或、移位 |
+| intloop | 111 ms | 259 ms | 2.32× | 整数求和 |
+| floatloop | 130 ms | 304 ms | 2.33× | 浮点乘加 |
+| bitwise | 131 ms | 342 ms | 2.61× | 与、异或、移位 |
 | array | 120 ms | 358 ms | 2.99× | 稠密整数键 |
 | strings | 69.6 ms | 86.9 ms | 1.25× | format、concat、gmatch |
 | sort | 73.4 ms | 114 ms | 1.55× | `table.sort`，比较函数是 Lua |
 
-一次进程启动是 3.43 ms 对 1.44 ms，差距主要在 Go 运行时。`return 0` 仍然是 51.4 ns 对 17.6 ns，因为发出这次调用的循环本身还在 Go 里分派。hash 先把键造好，计的是之后的查找。Go 的哈希节点比 C 的大，短字符串相等判断和收集器在这次查找的剖析里占了很大一块。数组循环每个槽仍会碰到；`strings` 每个下标仍生成一条字符串。
+一次进程启动是 3.43 ms 对 1.44 ms，差距主要在 Go 运行时。`return 0` 仍然是 34.9 ns 对 16.6 ns，因为发出这次调用的循环本身还在 Go 里分派。hash 先把键造好，计的是之后的查找。Go 的哈希节点比 C 的大，短字符串相等判断和收集器在这次查找的剖析里占了很大一块。数组循环每个槽仍会碰到；`strings` 每个下标仍生成一条字符串。
 
 ### 调用与分配形状
 
@@ -45,18 +45,18 @@ ONLY="fib hash" sh bench/compare.sh /usr/local/bin/lua ./lua
 
 | 负载 | PUC-Lua | golua | 比值 | 形状 |
 | --- | ---: | ---: | ---: | --- |
-| fib | 42.7 ms | 117 ms | 2.73× | 直接递归的 Fibonacci，`n` 在 0..45 |
+| fib | 38.5 ms | 87.1 ms | 2.27× | 直接递归的 Fibonacci，`n` 在 0..45 |
 | concat | 78.3 ms | 176 ms | 2.24× | 循环不改变的 `a .. b` |
 | yield | 133 ms | 174 ms | 1.31× | `yield` 出 `1..n` 再求和 |
-| pcall | 74.5 ms | 175 ms | 2.34× | 对恒等函数做 `pcall` |
-| upvalue | 361 ms | 802 ms | 2.22× | `n = n + 1` |
+| pcall | 74.8 ms | 181 ms | 2.42× | 对恒等函数做 `pcall` |
+| upvalue | 344 ms | 725 ms | 2.11× | `n = n + 1` |
 | global | 152 ms | 343 ms | 2.25× | `_G.g = _G.g + i` |
-| ipairs | 139 ms | 359 ms | 2.59× | 标准 `ipairs`，稠密数组 |
-| tailcall | 114 ms | 283 ms | 2.48× | 倒计时尾调用 |
+| ipairs | 135 ms | 309 ms | 2.30× | 标准 `ipairs`，稠密数组 |
+| tailcall | 114 ms | 215 ms | 1.89× | 倒计时尾调用 |
 | metaindex | 120 ms | 213 ms | 1.78× | 稳定的整数字段 |
-| method | 211 ms | 529 ms | 2.50× | `object:add(常数)` |
-| call3 | 169 ms | 523 ms | 3.09× | `return a + b + c` |
-| alloc | 98.1 ms | 213 ms | 2.17× | 四元构造器 |
+| method | 200 ms | 372 ms | 1.86× | `object:add(常数)` |
+| call3 | 170 ms | 363 ms | 2.14× | `return a + b + c` |
+| alloc | 96.7 ms | 206 ms | 2.13× | 四元构造器 |
 
 `fib` 是 `n < 2` / `fib(n-1) + fib(n-2)` 的递归形状，整数 `n` 从 0 到 45。`concat` 在循环里连接两个字符串。`yield` 用 `coroutine.wrap` 对 `i = 1, n` 做 `yield` 再求和。其余几行分别练 `pcall`、upvalue、全局变量、`ipairs`、尾调用、元方法、方法调用、多参数调用和小表构造——路径与 PUC-Lua 相同，多出的是 Go 分派开销。
 

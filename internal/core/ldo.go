@@ -426,19 +426,17 @@ func luaD_poscall(L *State, ci *CallInfo, nres int) {
 
 // next_ci is next_ci (ldo.c): reuse free CI or extend.
 func next_ci(L *State) *CallInfo {
-	if L.ci != nil && L.ci.next != nil {
-		L.ci = L.ci.next
-		return L.ci
+	if L.ci.next != nil {
+		return L.ci.next
 	}
-	return L.extendCI()
+	return luaE_extendCI(L, true)
 }
 
-// prepCallInfo prepares the CallInfo for a new call (ldo.c).
-//
-// FLAG: also clears Go-only fields (goCont, migrateFunc, nExtraArgs,
-// savedpc) so a recycled CI from the pool cannot leak a continuation.
-func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
-	ci := next_ci(L) /* new frame */
+// prepCallInfo prepares the CallInfo for a new call (ldo.c l_sinline).
+// Takes ci from next_ci(L) so both next_ci and prepCallInfo stay within
+// Go's 80-node inliner budget (matching C's macro + l_sinline).
+func prepCallInfo(L *State, ci *CallInfo, funcIdx, nret int, mask uint16, top int) *CallInfo {
+	L.ci = ci
 	ci.funcIdx = funcIdx
 	ci.nresults = nret
 	ci.callstatus = mask
@@ -458,7 +456,7 @@ func prepCallInfo(L *State, funcIdx, nret int, mask uint16, top int) *CallInfo {
 //   - fastYield early return skips poscall; Resume finishes the frame.
 func precallC(L *State, funcIdx, nresults int, f GoFunc) int {
 	L.checkStack(LUA_MINSTACK) /* ensure minimum stack size (C: checkstackGCp) */
-	ci := prepCallInfo(L, funcIdx, nresults, CIST_C, L.top+LUA_MINSTACK)
+	ci := prepCallInfo(L, next_ci(L), funcIdx, nresults, CIST_C, L.top+LUA_MINSTACK)
 	if L.hookmask&dbMaskCall != 0 { /* is call hook on? */
 		narg := L.top - funcIdx - 1
 		luaD_hook(L, hookCall, -1, 1, narg)
@@ -505,8 +503,7 @@ retry:
 		nfixparams := int(p.numparams)
 		fsize := int(p.maxstacksize)
 		L.checkStack(fsize) /* C: checkstackGCp */
-		ci := prepCallInfo(L, funcIdx, nresults, 0, funcIdx+1+fsize)
-		/* ci->u.l.savedpc = p->code; Go: savedpc index 0 */
+		ci := prepCallInfo(L, next_ci(L), funcIdx, nresults, 0, funcIdx+1+fsize)
 		for ; narg < nfixparams; narg++ {
 			setnilvalue(&L.stack[L.top])
 			L.top++

@@ -147,18 +147,18 @@ CI 分三个作业，覆盖 Linux、macOS 与 Windows。`PUC-Lua suites` 作业�
 
 | 负载 | 比值 | 负载 | 比值 |
 | --- | ---: | --- | ---: |
-| startup | 2.35× | fib | 2.95× |
-| nop | 2.92× | concat | 2.24× |
-| hash | 2.01× | yield | 1.26× |
-| intloop | 2.48× | pcall | 2.65× |
-| floatloop | 2.78× | upvalue | 2.36× |
-| bitwise | 3.27× | global | 2.39× |
-| array | 2.99× | ipairs | 2.59× |
-| strings | 1.25× | tailcall | 2.65× |
+| startup | 2.38× | fib | 2.27× |
+| nop | 2.11× | concat | 2.24× |
+| hash | 2.01× | yield | 1.31× |
+| intloop | 2.32× | pcall | 2.42× |
+| floatloop | 2.33× | upvalue | 2.11× |
+| bitwise | 2.61× | global | 2.25× |
+| array | 2.99× | ipairs | 2.30× |
+| strings | 1.25× | tailcall | 1.89× |
 | sort | 1.55× | metaindex | 1.78× |
-|  |  | method | 2.50× |
-|  |  | call3 | 3.09× |
-|  |  | alloc | 2.17× |
+|  |  | method | 1.86× |
+|  |  | call3 | 2.14× |
+|  |  | alloc | 2.13× |
 
 这次运行里列出的负载都更慢。解释器保持与 PUC-Lua 5.4.9 行级对齐（没有 Go 侧专用捷径），校验和相同。
 
