@@ -36,10 +36,20 @@ const stateCacheMask = 255
 
 var (
 	cgoMu         sync.Mutex
-	cgoActive     = make([]cgoGEntry, 0, 16) // active goroutine id -> enter depth
+	cgoActive     = make([]cgoGEntry, 0, 16) // active goroutine id -> enter depth (slow path)
 	cgoParked     = map[int64][]int{}        // stack of depths stashed by nested parks
 	cgoDefer      []unsafe.Pointer
 	cgoDeferSpare []unsafe.Pointer
+
+	// Single-goroutine fast path: exclusive owner skips cgoMu.
+	// While cgoSolo != 0 that goroutine's depth lives only in cgoSoloDepth
+	// (not mirrored in cgoActive). Other goroutines use cgoActive under
+	// cgoMu; both count as busy. Park/unpark always take the slow path.
+	cgoSolo      atomic.Int64 // owning goid, or 0
+	cgoSoloDepth int32        // depth for cgoSolo owner only (same goroutine)
+	cgoSlowN     atomic.Int32 // len(cgoActive)
+	cgoParkN     atomic.Int32 // number of keys in cgoParked
+	cgoDeferN    atomic.Int32 // len(cgoDefer); lets leave skip the mutex
 
 	// stateActiveCache caches active *State pointers only while a cgo call
 	// is on the stack, avoiding stateRegMu and weak.Pointer.Value() on
@@ -74,17 +84,31 @@ func cgoGoid() int64 {
 	return int64(goid.Get())
 }
 
-func cgoBusyLocked() bool { return len(cgoActive) > 0 }
+func cgoBusyLocked() bool {
+	return len(cgoActive) > 0 || cgoSolo.Load() != 0
+}
 
 func cgoIsBusy() bool {
-	cgoMu.Lock()
-	busy := len(cgoActive) > 0
-	cgoMu.Unlock()
-	return busy
+	return cgoSolo.Load() != 0 || cgoSlowN.Load() != 0
 }
 
 func cgoEnter() {
 	id := cgoGoid()
+	if cgoSolo.Load() == id {
+		cgoSoloDepth++
+		return
+	}
+	/* Take the exclusive fast path only when no slow-path actives exist.
+	   That keeps cgoSolo and cgoActive disjoint for this goroutine after
+	   unpark (which restores into cgoActive). */
+	if cgoSlowN.Load() == 0 && cgoSolo.CompareAndSwap(0, id) {
+		cgoSoloDepth = 1
+		return
+	}
+	cgoEnterSlow(id)
+}
+
+func cgoEnterSlow(id int64) {
 	cgoMu.Lock()
 	for i := range cgoActive {
 		if cgoActive[i].id == id {
@@ -94,6 +118,7 @@ func cgoEnter() {
 		}
 	}
 	cgoActive = append(cgoActive, cgoGEntry{id: id, depth: 1})
+	cgoSlowN.Store(int32(len(cgoActive)))
 	cgoMu.Unlock()
 }
 
@@ -112,34 +137,52 @@ func cgoFlushBatch(batch []unsafe.Pointer) {
 
 func cgoLeave() {
 	id := cgoGoid()
-	cgoMu.Lock()
-	if len(cgoActive) == 1 && cgoActive[0].id == id && cgoActive[0].depth == 1 {
-		cgoActive = cgoActive[:0]
-		if stateSlowDirty.Load() {
-			clearStateActiveCache()
+	if cgoSolo.Load() == id {
+		cgoSoloDepth--
+		if cgoSoloDepth > 0 {
+			return
 		}
-		if len(cgoDefer) == 0 {
-			onQuiet := len(cgoParked) == 0 && cgoArDirty.Load()
-			cgoMu.Unlock()
-			if onQuiet && cgoOnQuiet != nil {
+		cgoSolo.Store(0)
+		/* Common case: single goroutine, no deferred frees, clean cache. */
+		if cgoDeferN.Load() == 0 && cgoSlowN.Load() == 0 && !stateSlowDirty.Load() {
+			if cgoParkN.Load() == 0 && cgoArDirty.Load() && cgoOnQuiet != nil {
 				cgoOnQuiet()
 			}
 			return
 		}
-	} else {
-		for i := len(cgoActive) - 1; i >= 0; i-- {
-			if cgoActive[i].id == id {
-				if cgoActive[i].depth > 1 {
-					cgoActive[i].depth--
-				} else {
-					last := len(cgoActive) - 1
-					cgoActive[i] = cgoActive[last]
-					cgoActive = cgoActive[:last]
-				}
-				break
+		cgoFlushIfQuiet()
+		return
+	}
+	cgoLeaveSlow(id)
+}
+
+func cgoLeaveSlow(id int64) {
+	cgoMu.Lock()
+	for i := len(cgoActive) - 1; i >= 0; i-- {
+		if cgoActive[i].id == id {
+			if cgoActive[i].depth > 1 {
+				cgoActive[i].depth--
+				cgoMu.Unlock()
+				return
 			}
+			last := len(cgoActive) - 1
+			cgoActive[i] = cgoActive[last]
+			cgoActive = cgoActive[:last]
+			cgoSlowN.Store(int32(len(cgoActive)))
+			break
 		}
 	}
+	cgoFinishLeaveLocked()
+}
+
+// cgoFlushIfQuiet runs deferred frees / cache clear / OnQuiet when no
+// active cgo call remains. Solo is already cleared by the caller.
+func cgoFlushIfQuiet() {
+	cgoMu.Lock()
+	cgoFinishLeaveLocked()
+}
+
+func cgoFinishLeaveLocked() {
 	var batch []unsafe.Pointer
 	quiet := !cgoBusyLocked()
 	if quiet {
@@ -147,6 +190,7 @@ func cgoLeave() {
 			batch = cgoDefer
 			cgoDefer = cgoDeferSpare
 			cgoDeferSpare = nil
+			cgoDeferN.Store(0)
 		}
 		if stateSlowDirty.Load() {
 			clearStateActiveCache()
@@ -173,17 +217,25 @@ func cgoPark() {
 	id := cgoGoid()
 	cgoMu.Lock()
 	n := 0
-	for i := len(cgoActive) - 1; i >= 0; i-- {
-		if cgoActive[i].id == id {
-			n = cgoActive[i].depth
-			last := len(cgoActive) - 1
-			cgoActive[i] = cgoActive[last]
-			cgoActive = cgoActive[:last]
-			break
+	if cgoSolo.Load() == id {
+		n = int(cgoSoloDepth)
+		cgoSoloDepth = 0
+		cgoSolo.Store(0)
+	} else {
+		for i := len(cgoActive) - 1; i >= 0; i-- {
+			if cgoActive[i].id == id {
+				n = cgoActive[i].depth
+				last := len(cgoActive) - 1
+				cgoActive[i] = cgoActive[last]
+				cgoActive = cgoActive[:last]
+				cgoSlowN.Store(int32(len(cgoActive)))
+				break
+			}
 		}
 	}
 	if n > 0 {
 		cgoParked[id] = append(cgoParked[id], n)
+		cgoParkN.Store(int32(len(cgoParked)))
 	}
 	var batch []unsafe.Pointer
 	quiet := !cgoBusyLocked()
@@ -192,6 +244,7 @@ func cgoPark() {
 			batch = cgoDefer
 			cgoDefer = cgoDeferSpare
 			cgoDeferSpare = nil
+			cgoDeferN.Store(0)
 		}
 		clearStateActiveCache()
 	} else {
@@ -204,6 +257,8 @@ func cgoPark() {
 }
 
 // cgoUnpark restores the most recent park for this goroutine.
+// Always restores onto the slow path (cgoActive) so solo and cgoActive
+// stay disjoint for this goroutine.
 func cgoUnpark() {
 	id := cgoGoid()
 	cgoMu.Lock()
@@ -215,6 +270,7 @@ func cgoUnpark() {
 		} else {
 			cgoParked[id] = stack[:n-1]
 		}
+		cgoParkN.Store(int32(len(cgoParked)))
 		found := false
 		for i := range cgoActive {
 			if cgoActive[i].id == id {
@@ -226,6 +282,7 @@ func cgoUnpark() {
 		if !found {
 			cgoActive = append(cgoActive, cgoGEntry{id: id, depth: depth})
 		}
+		cgoSlowN.Store(int32(len(cgoActive)))
 	}
 	cgoMu.Unlock()
 }
@@ -244,6 +301,7 @@ func cgoFree(p unsafe.Pointer) {
 		return
 	}
 	cgoDefer = append(cgoDefer, p)
+	cgoDeferN.Store(int32(len(cgoDefer)))
 	cgoMu.Unlock()
 }
 
