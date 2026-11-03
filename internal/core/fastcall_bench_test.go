@@ -1,4 +1,4 @@
-//go:build cgo && unix && amd64
+//go:build cgo && linux && amd64
 
 package core
 
@@ -38,6 +38,16 @@ func BenchmarkFFIEmptyFastCall(b *testing.B) {
 	}
 }
 
+func BenchmarkFFIEmptyRawCall(b *testing.B) {
+	fn := ffiEmptyFn()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if int(fastcall.RawCall0(fn)) != 42 {
+			b.Fatal("bad")
+		}
+	}
+}
+
 func BenchmarkFFIAdd1Cgo(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		if ffiAdd1C(i) != i+1 {
@@ -67,13 +77,29 @@ func BenchmarkFFIAdd1FastCall(b *testing.B) {
 	}
 }
 
+func BenchmarkFFIAdd1RawCall(b *testing.B) {
+	fn := ffiAdd1Fn()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if int(fastcall.RawCall1(fn, uintptr(i))) != i+1 {
+			b.Fatal("bad")
+		}
+	}
+}
+
 func TestFastCallDirect(t *testing.T) {
 	fn := ffiEmptyFn()
 	if got := int(fastcall.Call0(fn)); got != 42 {
 		t.Fatalf("Call0: got %d", got)
 	}
+	if got := int(fastcall.RawCall0(fn)); got != 42 {
+		t.Fatalf("RawCall0: got %d", got)
+	}
 	fn1 := ffiAdd1Fn()
 	if got := int(fastcall.Call1(fn1, 41)); got != 42 {
 		t.Fatalf("Call1: got %d", got)
+	}
+	if got := int(fastcall.RawCall1(fn1, 41)); got != 42 {
+		t.Fatalf("RawCall1: got %d", got)
 	}
 }

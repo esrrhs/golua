@@ -108,7 +108,7 @@ func TestCJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := []string{"-O2", "-std=c99", "-DNDEBUG", "-shared", "-fPIC", "-I" + inc,
+	args := []string{"-O2", "-std=gnu99", "-DNDEBUG", "-shared", "-fPIC", "-I" + inc,
 		"-o", filepath.Join(work, "cjson.so")}
 	args = append(args, names...)
 	if hasUndefinedDynamicLookup() {
