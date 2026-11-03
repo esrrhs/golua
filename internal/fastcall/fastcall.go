@@ -7,8 +7,11 @@ import (
 	"unsafe"
 )
 
+// fn is uintptr (same ABI as unsafe.Pointer) so go vet does not flag
+// unsafe.Pointer(abi0uintptr); mirrors ebitengine/purego.
+//
 //go:linkname runtime_cgocall runtime.cgocall
-func runtime_cgocall(fn, arg unsafe.Pointer) int32
+func runtime_cgocall(fn uintptr, arg unsafe.Pointer) int32
 
 // Addresses of the C-ABI trampolines (see fastcall_linux_amd64.s).
 var (
@@ -50,7 +53,7 @@ func Call0(fn uintptr) uintptr {
 	a := call0Pool.Get().(*call0Args)
 	a.fn = fn
 	a.r1 = 0
-	runtime_cgocall(unsafe.Pointer(call0ABI0), unsafe.Pointer(a))
+	runtime_cgocall(call0ABI0, unsafe.Pointer(a))
 	r := a.r1
 	call0Pool.Put(a)
 	return r
@@ -62,7 +65,7 @@ func Call1(fn, a1 uintptr) uintptr {
 	a.fn = fn
 	a.a1 = a1
 	a.r1 = 0
-	runtime_cgocall(unsafe.Pointer(call1ABI0), unsafe.Pointer(a))
+	runtime_cgocall(call1ABI0, unsafe.Pointer(a))
 	r := a.r1
 	call1Pool.Put(a)
 	return r
@@ -75,7 +78,7 @@ func Call2(fn, a1, a2 uintptr) uintptr {
 	a.a1 = a1
 	a.a2 = a2
 	a.r1 = 0
-	runtime_cgocall(unsafe.Pointer(call2ABI0), unsafe.Pointer(a))
+	runtime_cgocall(call2ABI0, unsafe.Pointer(a))
 	r := a.r1
 	call2Pool.Put(a)
 	return r
