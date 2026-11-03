@@ -34,9 +34,11 @@
 //     the life of the block, so a coroutine C had only looked at could
 //     never be collected.
 //
-//   - Go cannot call a C function pointer, so every call into an
-//     extension goes through a trampoline in cdlbridge.h, which is
-//     ordinary C and can.
+//   - Calling a C function pointer from Go normally goes through a
+//     trampoline in cdlbridge.h (cgo). callCFunction abstracts that;
+//     -tags golua_purego swaps in purego.SyscallN (still cgocall), and
+//     -tags golua_fastc tries a raw Go-stack CALL (unsafe; breaks
+//     //export re-entry — see internal/fastcall).
 //
 // This file carries the core of the API -- stack, types, conversion,
 // push, get/set, call, and most of the auxiliary library.
@@ -201,7 +203,6 @@ func cgoReleaseState(L *State) {
 // cFunc wraps a C function pointer as the GoFunc the VM calls: the VM
 // sees an ordinary closure, and the closure crosses into C.
 func cFunc(f unsafe.Pointer) GoFunc {
-	cf := C.lua_CFunction(f)
 	return func(L *State) int {
 		// Entering C from a synchronous coroutine has to happen on the
 		// coroutine's own goroutine: lua_yieldk parks, and parking on
@@ -216,7 +217,7 @@ func cFunc(f unsafe.Pointer) GoFunc {
 		prev := stateActiveCache[slot].Load()
 		stateActiveCache[slot].Store(L)
 		defer cgoLeaveFunc(L, slot, prev)
-		return int(C.cdl_call_cfunction(cf, p))
+		return callCFunction(f, p)
 	}
 }
 
