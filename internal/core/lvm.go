@@ -32,33 +32,62 @@ func upvalValue(uv *UpVal) *Value {
 // luaV_div is integer floor division 'm // n' (lvm.c 5.3.4).
 // C division truncates toward zero; floor(q)==trunc(q) when q>=0 or
 // integral, otherwise floor(q)==trunc(q)-1.
+//
+// Positive divisors are the common path (constant step / loop moduli).
+// Handle them first so the rare n<=0 overflow cases stay off the hot branch.
 func luaV_div(L *State, m, n int64) int64 {
-	if uint64(n)+1 <= 1 { /* special cases: -1 or 0 */
-		if n == 0 {
-			luaG_runerror(L, "attempt to divide by zero")
-			return 0
+	if n > 0 {
+		if m >= 0 {
+			return m / n
 		}
-		return -m /* n == -1; avoid overflow with 0x8000... // -1 */
+		q := m / n
+		/* toward-zero → floor when the truncated quotient is too high */
+		if m%n != 0 {
+			q--
+		}
+		return q
 	}
-	q := m / n                 /* perform C division */
-	if (m^n) < 0 && m%n != 0 { /* 'm/n' would be negative non-integer? */
-		q-- /* correct result for different rounding */
+	if n == 0 {
+		luaG_runerror(L, "attempt to divide by zero")
+		return 0
+	}
+	if n == -1 {
+		return -m /* avoid overflow with 0x8000... // -1 */
+	}
+	q := m / n
+	if (m^n) < 0 && m%n != 0 {
+		q--
 	}
 	return q
 }
 
 // luaV_mod is integer modulus 'm % n' (lvm.c 5.3.4).
+//
+// Positive divisors dominate real code (e.g. i%k with k constant > 0).
+// For n>0 Go's a%b has the sign of a, so correcting a negative remainder
+// is enough; the n<=0 overflow cases stay on the cold path.
 func luaV_mod(L *State, m, n int64) int64 {
-	if uint64(n)+1 <= 1 { /* special cases: -1 or 0 */
-		if n == 0 {
-			luaG_runerror(L, "attempt to perform 'n%%0'")
-			return 0
+	if n > 0 {
+		/* Non-negative dividend: Go % already matches Lua floor-mod. */
+		if m >= 0 {
+			return m % n
 		}
+		r := m % n
+		if r < 0 {
+			r += n
+		}
+		return r
+	}
+	if n == 0 {
+		luaG_runerror(L, "attempt to perform 'n%%0'")
+		return 0
+	}
+	if n == -1 {
 		return 0 /* m % -1 == 0; avoid overflow with 0x8000... % -1 */
 	}
 	r := m % n
 	if r != 0 && (m^n) < 0 { /* 'm/n' would be non-integer negative? */
-		r += n /* correct result for different rounding */
+		r += n
 	}
 	return r
 }
@@ -498,6 +527,42 @@ func luaV_execute(L *State, ci *CallInfo) {
 				OP_BAND, OP_BOR, OP_BXOR, OP_SHL, OP_SHR:
 				rb := rkVal(L, base, k, i.B)
 				rc := rkVal(L, base, k, i.C)
+				/* Integer arithmetic is the common path for loops; do it
+				   here so we skip vmBinOp's second opcode switch. */
+				if ttisinteger(rb) && ttisinteger(rc) {
+					switch i.Op {
+					case OP_ADD:
+						setivalue(&L.stack[ra], ivalue(rb)+ivalue(rc))
+						continue
+					case OP_SUB:
+						setivalue(&L.stack[ra], ivalue(rb)-ivalue(rc))
+						continue
+					case OP_MUL:
+						setivalue(&L.stack[ra], ivalue(rb)*ivalue(rc))
+						continue
+					case OP_MOD:
+						setivalue(&L.stack[ra], luaV_mod(L, ivalue(rb), ivalue(rc)))
+						continue
+					case OP_IDIV:
+						setivalue(&L.stack[ra], luaV_div(L, ivalue(rb), ivalue(rc)))
+						continue
+					case OP_BAND:
+						setivalue(&L.stack[ra], ivalue(rb)&ivalue(rc))
+						continue
+					case OP_BOR:
+						setivalue(&L.stack[ra], ivalue(rb)|ivalue(rc))
+						continue
+					case OP_BXOR:
+						setivalue(&L.stack[ra], ivalue(rb)^ivalue(rc))
+						continue
+					case OP_SHL:
+						setivalue(&L.stack[ra], luaV_shiftl(ivalue(rb), ivalue(rc)))
+						continue
+					case OP_SHR:
+						setivalue(&L.stack[ra], luaV_shiftl(ivalue(rb), -ivalue(rc)))
+						continue
+					}
+				}
 				if !vmBinOp(L, i.Op, &L.stack[ra], rb, rc) {
 					savestate(L, ci, pc)
 					tm := binOpTM(i.Op)

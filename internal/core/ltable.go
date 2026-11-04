@@ -507,20 +507,23 @@ func luaH_newkey(L *State, t *Table, key *Value) *Value {
 func luaH_getint(t *Table, key int64) *Value {
 	/* (1 <= key && key <= t->sizearray) */
 	if uint64(key)-1 < uint64(t.sizearray) {
+		slot := &t.array[key-1]
 		if t.metatable != nil && t.syncWeakMode()&weakVal != 0 {
-			return checkSlot(&t.array[key-1])
+			return checkSlot(slot)
 		}
-		return &t.array[key-1]
+		return slot
 	}
+	nodes := t.nodes
 	n := hashint(t, key)
 	for {
-		if t.nodes[n].keytt == LUA_VNUMINT && t.nodes[n].ki == key {
+		nd := &nodes[n]
+		if nd.keytt == LUA_VNUMINT && nd.ki == key {
 			if t.metatable != nil && t.syncWeakMode()&weakVal != 0 {
-				return checkSlot(&t.nodes[n].val)
+				return checkSlot(&nd.val)
 			}
-			return &t.nodes[n].val
+			return &nd.val
 		}
-		nx := t.nodes[n].next
+		nx := nd.next
 		if nx == 0 {
 			return &luaO_nilobject
 		}
@@ -528,17 +531,28 @@ func luaH_getint(t *Table, key int64) *Value {
 	}
 }
 
+// shrstrKeytt is ctb(LUA_VSHRSTR) as a const so the shortstr get hot path
+// does not recompute the collectable tag on every node probe.
+const shrstrKeytt = uint8(LUA_VSHRSTR) | BIT_ISCOLLECTABLE
+
 // luaH_getshortstr searches a short-string key (ltable.c).
+//
+// Interned shorts compare by pointer identity (C eqshrstr). After a Go
+// intern-table flush equal shorts may be distinct objects, so hash+content
+// remains the fallback — but the identity check is first and dominates.
 func luaH_getshortstr(t *Table, key *TString) *Value {
+	nodes := t.nodes
 	n := hashstr(t, key)
+	keyp := unsafe.Pointer(key)
 	for {
-		if t.nodes[n].keytt == ctb(LUA_VSHRSTR) && luaS_eqshrstr((*TString)(t.nodes[n].kp), key) {
+		nd := &nodes[n]
+		if nd.keytt == shrstrKeytt && (nd.kp == keyp || luaS_eqshrstr((*TString)(nd.kp), key)) {
 			if t.metatable != nil && t.syncWeakMode()&weakVal != 0 {
-				return checkSlot(&t.nodes[n].val)
+				return checkSlot(&nd.val)
 			}
-			return &t.nodes[n].val
+			return &nd.val
 		}
-		nx := t.nodes[n].next
+		nx := nd.next
 		if nx == 0 {
 			return &luaO_nilobject
 		}
@@ -554,13 +568,15 @@ func luaH_getshortstr(t *Table, key *TString) *Value {
 // a constant index while the key must remain the same TString object.
 func luaH_getstrkey(L *State, t *Table, key *TString) *TString {
 	if key.tt == LUA_VSHRSTR {
+		nodes := t.nodes
 		n := hashstr(t, key)
+		keyp := unsafe.Pointer(key)
 		for {
-			if t.nodes[n].keytt == ctb(LUA_VSHRSTR) &&
-				luaS_eqshrstr((*TString)(t.nodes[n].kp), key) {
-				return (*TString)(t.nodes[n].kp)
+			nd := &nodes[n]
+			if nd.keytt == shrstrKeytt && (nd.kp == keyp || luaS_eqshrstr((*TString)(nd.kp), key)) {
+				return (*TString)(nd.kp)
 			}
-			nx := t.nodes[n].next
+			nx := nd.next
 			if nx == 0 {
 				return nil
 			}
