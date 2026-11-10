@@ -148,7 +148,11 @@ jobs:
         shell: bash
         run: |
           set -e
-          curl -sSfL -o lua-5.3.4.tar.gz https://www.lua.org/ftp/lua-5.3.4.tar.gz
+          # Hosted runners can see transient TLS/connection resets from lua.org.
+          # Retry the same source with bounded connect/transfer timeouts.
+          curl --retry 3 --retry-all-errors --retry-delay 2 \
+            --connect-timeout 20 --max-time 90 \
+            -sSfL -o lua-5.3.4.tar.gz https://www.lua.org/ftp/lua-5.3.4.tar.gz
           tar zxf lua-5.3.4.tar.gz
           # 'posix' on purpose, and not the platform's own target: it is
           # the one build that is the same everywhere, and it leaves
