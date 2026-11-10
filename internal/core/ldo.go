@@ -313,24 +313,17 @@ func moveresults(L *State, firstResult, res, nres, wanted int) int {
 			L.stack[res] = L.stack[firstResult] /* move it to proper place */
 		}
 	case LUA_MULTRET:
-		for i := 0; i < nres; i++ { /* move all results to correct place */
-			L.stack[res+i] = L.stack[firstResult+i]
-		}
+		// Results share the stack with their destination; copy is overlap-safe
+		// and performs the Go GC bulk write barrier for collectable values.
+		copy(L.stack[res:res+nres], L.stack[firstResult:firstResult+nres])
 		L.top = res + nres
 		return 0 /* wanted == LUA_MULTRET */
 	default:
 		if wanted <= nres { /* enough results? */
-			for i := 0; i < wanted; i++ {
-				L.stack[res+i] = L.stack[firstResult+i]
-			}
+			copy(L.stack[res:res+wanted], L.stack[firstResult:firstResult+wanted])
 		} else { /* not enough results; use all of them plus nils */
-			i := 0
-			for ; i < nres; i++ {
-				L.stack[res+i] = L.stack[firstResult+i]
-			}
-			for ; i < wanted; i++ {
-				setnilvalue(&L.stack[res+i])
-			}
+			copy(L.stack[res:res+nres], L.stack[firstResult:firstResult+nres])
+			clear(L.stack[res+nres : res+wanted])
 		}
 	}
 	L.top = res + wanted /* top points after the last result */
