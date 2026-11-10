@@ -386,6 +386,7 @@ func luaV_execute(L *State, ci *CallInfo) {
 		code []Instruction
 		k    []Value
 		pc   int
+		base int
 	)
 	var trap bool
 	restart := true
@@ -395,6 +396,9 @@ func luaV_execute(L *State, ci *CallInfo) {
 		code = cl.p.code
 		k = cl.p.k
 		pc = ci.savedpc
+		// A frame base is an index, not a pointer into the growable stack.
+		// Only frame creation/tail-call merging changes it; both restart here.
+		base = ci.base
 		trap = L.hookmask != 0
 		if trap {
 			trap = luaG_tracecall(L, ci)
@@ -415,9 +419,8 @@ func luaV_execute(L *State, ci *CallInfo) {
 			pc++
 			/* C vmfetch: i = *(ci->u.l.savedpc++); keep savedpc past
 			   the current insn so luaG_runerror/currentline see it
-			   even when the op errors before the loop-end update. */
+			   even when the opcode raises an error. */
 			ci.savedpc = pc
-			base := ci.base
 			ra := base + i.A
 
 			switch i.Op {
@@ -882,7 +885,8 @@ func luaV_execute(L *State, ci *CallInfo) {
 			default:
 				luaG_runerror(L, "unknown opcode %d", i.Op)
 			}
-			ci.savedpc = pc
+			// The next fetch (or traceexec) saves pc before any observable work.
+			// Reentry/yield paths above save it explicitly before leaving the loop.
 		}
 	}
 }
